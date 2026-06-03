@@ -1,0 +1,128 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files (never commit secrets)
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Test / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# SQLite databases (agent state, session log) — ignore by default,
+# add specific committed fixtures with explicit path overrides if needed
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Local agent runtime data
+data/
+runtime/
+
+# Skill / memory backups during strip phase
+skills.backup/
+memory.backup/
+
+# Hermes source clone staging (Phase 1)
+hermes-source/
+
+# Lockfiles for pip — debate, but skip for now
+# (uncomment if using poetry/pdm with lockfile)
+# poetry.lock
+# pdm.lock
+
+# Additional patterns selectively merged from upstream Hermes
+# (NousResearch/hermes-agent .gitignore)
+
+# Additional env file variants
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production.local
+
+# SSH / cert / private key files (security)
+*.pem
+*.ppk
+privvy*
+
+# Node.js (we'll use this when integrating Virtuals acp-cli + dgclaw-skill)
+node_modules/
+
+# Git worktrees
+.worktrees/
+
+# Temp output dirs
+tmp/
+temp_vision_images/
+
+# Local CLI config (may contain sensitive SSH paths)
+cli-config.yaml
+
+# Hermes Skills Hub local state (lives in ~/.hermes/skills/.hub/ at runtime,
+# but ignore here too in case it leaks into the repo)
+skills/.hub/
+
+# Hermes web UI build artifacts
+hermes_cli/web_dist/
+web/public/fonts/
+web/public/ds-assets/
+
+# ML training logs (Hermes RL/Atropos environments)
+wandb/
+
+# models.dev cache
+models-dev-upstream/
+
+# Release script temp
+.release_notes.md
+
+# Nix dev shells (some upstream contributors use these; harmless for us)
+.direnv/
+.nix-stamps/
+result
+
+# ── Private working docs (operator-local, never published) ──────────────
+CLAUDE.md
+TODO.md
+PLANNING.md
+OSS_V2.md
+MAP.md
+.plans/

@@ -1,0 +1,7 @@
+name: plutus-trade-safety
+version: 1.0.0
+description: "HALT kill-switch + Telegram trade notifications for hermes-trader. Blocks trade-emitting tools when ~/.hermes-trader/HALT exists; posts a one-line message to the operator's Telegram chat after every successful trade."
+author: "hermes-trader"
+hooks:
+  - pre_tool_call
+  - post_tool_call
