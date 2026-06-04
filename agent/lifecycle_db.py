@@ -37,7 +37,14 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-DEFAULT_DB_PATH = get_hermes_home() / "lifecycle.db"
+def _default_db_path() -> Path:
+    """Resolve the default DB path at CALL time, not import time.
+
+    A frozen import-time constant here once let the test suite bypass the
+    per-test HERMES_HOME isolation (env redirects happen after module
+    import) and write fake trades into the real lifecycle.db.
+    """
+    return get_hermes_home() / "lifecycle.db"
 
 SCHEMA_VERSION = 2
 
@@ -419,7 +426,7 @@ class LifecycleDB:
     _CHECKPOINT_EVERY_N_WRITES = 50
 
     def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
+        self.db_path = Path(db_path) if db_path else _default_db_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.Lock()

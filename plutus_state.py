@@ -29,7 +29,23 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-DEFAULT_DB_PATH = get_hermes_home() / "state.db"
+def _default_db_path() -> Path:
+    """Resolve the default DB path at CALL time, not import time.
+
+    A frozen import-time constant bypasses per-test HERMES_HOME isolation
+    (env redirects happen after module import) — the same bug class that
+    let the test suite write into the real lifecycle.db.
+    """
+    return get_hermes_home() / "state.db"
+
+
+def __getattr__(name: str):
+    # Back-compat: DEFAULT_DB_PATH used to be a module-level constant frozen
+    # at import time. External importers (and monkeypatching tests) still
+    # reference it; resolve lazily on access instead.
+    if name == "DEFAULT_DB_PATH":
+        return _default_db_path()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 SCHEMA_VERSION = 8
 
@@ -143,7 +159,7 @@ class SessionDB:
     _CHECKPOINT_EVERY_N_WRITES = 50
 
     def __init__(self, db_path: Path = None):
-        self.db_path = db_path or DEFAULT_DB_PATH
+        self.db_path = db_path or _default_db_path()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._lock = threading.Lock()
