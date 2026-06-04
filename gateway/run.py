@@ -11107,7 +11107,10 @@ def _start_cron_ticker(
         try:
             cron_tick(verbose=False, adapters=adapters, loop=loop, gateway=gateway)
         except Exception as e:
-            logger.debug("Cron tick error: %s", e)
+            # ERROR, not debug: a swallowed tick exception means scheduled
+            # trading beats silently stop firing — the exact failure class
+            # this project exists to never let happen quietly.
+            logger.error("Cron tick error: %s", e, exc_info=True)
 
         tick_count += 1
 
