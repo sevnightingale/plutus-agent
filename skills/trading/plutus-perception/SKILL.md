@@ -38,6 +38,8 @@ I do NOT re-read these. They ARE the context I plan from.
 
 The kick-off prompt tells me my `scope` parameter (standard | weekly) and the `for_main_beat_at_unix` ts to tag my output observation with.
 
+**The kick-off prompt may also include an External context block** — the spawn harness auto-loads an optional operator-side JSON file (see `agent/subagent_spawn.py::_load_external_context`) into the prompt when one exists, so plutus-main does not have to pass it. The block appears under an "## External context (age <X>h, <fresh|STALE>)" header followed by a fenced ```json block. When present, this is ancillary market context from an operator-side process (a daily market-conditions brief, a separate intelligence agent, an external research feed). Typical fields the JSON carries: `macro_context.state`, `macro_context.key_indicators`, `macro_context.dominant_signals`, `narrative_context.state`, `narrative_context.drivers`, `polymarket_shifts`, `x_panel_callouts`. It is **additional context for the market read, not core trading data** — I incorporate it into the digest's narrative synthesis but I do NOT let it override actual measured data points (a social-panel callout claiming "BTC put OI at 60K" does not substitute for my own hl_orderbook fetch). If absent, no flag needed — operator-side briefs are typically 1×/day at most, so many beats run without one.
+
 ---
 
 ## Scope parameter
@@ -52,6 +54,23 @@ If scope is missing or unknown, default to `standard`.
 ---
 
 ## Procedure (in order)
+
+### Step 0.5 — Parse External context block (no tool calls)
+
+If the kick-off prompt includes a "## External context" block, parse the inlined JSON. Hold these fields in memory for Step 4:
+
+- `macro_context.state` — one-sentence regime read (if present)
+- `macro_context.key_indicators` — operator's quoted snapshot of SPX/BTC/10Y/etc.
+- `macro_context.dominant_signals` — list of macro pattern reads
+- `narrative_context.state` — one-sentence narrative read
+- `narrative_context.drivers` — list of narrative drivers
+- `polymarket_shifts` — list of `{question, yes_pct, delta_pp}` entries (top shifts)
+- `x_panel_callouts` — list of `{account, observation}` entries (panel highlights)
+- `generated_at` + age flag from the header
+
+If the block is absent, this step is a no-op. If the block is STALE (header so indicates), still incorporate it into the digest but flag as `external_context: STALE (Xh)` in the digest data_quality section.
+
+This step has zero tool-call cost — the content is already in my prompt.
 
 ### Step 1 — Build fetch plan (no tool calls)
 
@@ -101,6 +120,18 @@ Scope: <standard|weekly>
 Watchlist: [BTC, HYPE]
 Strategies perceived: [support-hold]
 Fresh fetches: <count> · Failed: [<dp names>] · Broken-list retests: <count>
+External context: <fresh Xh | STALE Xh | not_present>
+
+## External context (ancillary market context, only if present)
+- Macro state: <one-sentence regime read from macro_context.state>
+- Key indicators (external): SPX <value>, NDX 24h <%>, US10Y <%>, BTC <value>, WTI <value>, Gold <value>
+- Dominant signals (external): <3-5 from macro_context.dominant_signals — bullet each>
+- Narrative state: <narrative_context.state>
+- Narrative drivers: <3-5 from narrative_context.drivers — bullet each>
+- Top Polymarket shifts: <top 3-5 from polymarket_shifts by abs(delta_pp), format "<question>: <yes_pct>% YES (<+/-X.Xpp>)">
+- Social-panel highlights: <top 2-4 from x_panel_callouts, format "<account>: <observation truncated to 1 line>">
+
+(If no External context block in kick-off, omit this section entirely — do NOT fabricate one.)
 
 ## Macro
 - VIX <value> (<classification>, trend <↑|↓|flat> from <prior>)
@@ -189,6 +220,9 @@ After the digest write succeeds, my work is done. The final assistant response c
 - ❌ `cronjob` (create/delete) — main owns cron orchestration
 - ❌ `spawn_subagent` — I am a sub-agent; sub-agents do not spawn further sub-agents in v1
 - ❌ Inventing data: if a fetch fails, FLAG IT in `failed_dps`. Do NOT pattern-match a value from WORLDVIEW prose or imagine a reading
+- ❌ Using the External context brief as a substitute for measured data. If a brief was inlined, its `macro_context.key_indicators` (SPX/BTC/etc.) are the external author's sourcing, not mine. If my `fetch_data_point` for hl_price returns a value, that is canonical. The external author's BTC value goes in the External context section of the digest, not in the BTC per-asset section. The two can disagree slightly (the brief may be hours older than my fetch); when they disagree by more than 2%, surface it in the anomalies section.
+- ❌ Treating `x_panel_callouts` as primary data. They are aggregated observations from social media accounts — high engagement does not equal high signal. Include them in the External context section as context for main's narrative reasoning; do NOT cite them in per-asset readings.
+- ❌ Fabricating an External context block when the kick-off prompt didn't include one. If absent, the digest simply has no "External context" section. Do NOT compose one from WORLDVIEW prose
 
 ## Allowed (everything I actually need)
 
