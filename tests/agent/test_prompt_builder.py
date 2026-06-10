@@ -491,15 +491,17 @@ class TestBuildNousSubscriptionPrompt:
 
 
 class TestBuildContextFilesPrompt:
-    def test_empty_dir_loads_seeded_global_soul(self, tmp_path):
+    def test_empty_dir_and_home_loads_nothing(self, tmp_path):
+        """No cwd context files and no PLUTUS.md → empty prompt. Identity
+        seeding was removed with SOUL.md; blackboards come from
+        ensure_runtime_files at first boot, never from the prompt builder."""
         from unittest.mock import patch
 
         fake_home = tmp_path / "fake_home"
         fake_home.mkdir()
         with patch("pathlib.Path.home", return_value=fake_home):
             result = build_context_files_prompt(cwd=str(tmp_path))
-        assert "Project Context" in result
-        assert "plutus-agent" in result
+        assert result == ""
 
     def test_loads_agents_md(self, tmp_path):
         (tmp_path / "AGENTS.md").write_text("Use Ruff for linting.")
@@ -512,31 +514,31 @@ class TestBuildContextFilesPrompt:
         result = build_context_files_prompt(cwd=str(tmp_path))
         assert "type hints" in result
 
-    def test_loads_soul_md_from_hermes_home_only(self, tmp_path, monkeypatch):
+    def test_loads_plutus_md_from_hermes_home_only(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes_home"))
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
-        (hermes_home / "SOUL.md").write_text("Be concise and friendly.", encoding="utf-8")
-        (tmp_path / "SOUL.md").write_text("cwd soul should be ignored", encoding="utf-8")
+        (hermes_home / "PLUTUS.md").write_text("Doctrine: one position at a time.", encoding="utf-8")
+        (tmp_path / "PLUTUS.md").write_text("cwd identity should be ignored", encoding="utf-8")
         result = build_context_files_prompt(cwd=str(tmp_path))
-        assert "Be concise and friendly." in result
-        assert "cwd soul should be ignored" not in result
+        assert "Doctrine: one position at a time." in result
+        assert "cwd identity should be ignored" not in result
 
-    def test_soul_md_has_no_wrapper_text(self, tmp_path, monkeypatch):
+    def test_plutus_md_has_no_wrapper_text(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes_home"))
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
-        (hermes_home / "SOUL.md").write_text("Be concise and friendly.", encoding="utf-8")
+        (hermes_home / "PLUTUS.md").write_text("Doctrine: one position at a time.", encoding="utf-8")
         result = build_context_files_prompt(cwd=str(tmp_path))
-        assert "Be concise and friendly." in result
-        assert "If SOUL.md is present" not in result
-        assert "## SOUL.md" not in result
+        assert "Doctrine: one position at a time." in result
+        assert "If PLUTUS.md is present" not in result
+        assert "## PLUTUS.md" not in result
 
-    def test_empty_soul_md_adds_nothing(self, tmp_path, monkeypatch):
+    def test_empty_plutus_md_adds_nothing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes_home"))
         hermes_home = tmp_path / "hermes_home"
         hermes_home.mkdir()
-        (hermes_home / "SOUL.md").write_text("\n\n", encoding="utf-8")
+        (hermes_home / "PLUTUS.md").write_text("\n\n", encoding="utf-8")
         result = build_context_files_prompt(cwd=str(tmp_path))
         assert result == ""
 

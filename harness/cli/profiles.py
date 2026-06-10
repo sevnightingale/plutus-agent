@@ -11,7 +11,7 @@ zero migration needed.
 Usage::
 
     hermes profile create coder          # fresh profile + bundled skills
-    hermes profile create coder --clone  # also copy config, .env, SOUL.md
+    hermes profile create coder --clone  # also copy config, .env, PLUTUS.md
     hermes profile create coder --clone-all  # full copy of source profile
     coder chat                           # use via wrapper alias
     hermes -p coder chat                 # or via flag
@@ -53,12 +53,12 @@ _PROFILE_DIRS = [
 _CLONE_CONFIG_FILES = [
     "config.yaml",
     ".env",
-    "SOUL.md",
+    "PLUTUS.md",
 ]
 
 # Subdirectory files copied during --clone (path relative to profile root).
 # Memory files are part of the agent's curated identity — just as important
-# as SOUL.md for continuity when cloning a profile.
+# as PLUTUS.md for continuity when cloning a profile.
 _CLONE_SUBDIR_FILES = [
     "memories/MEMORY.md",
     "memories/USER.md",
@@ -388,7 +388,7 @@ def create_profile(
     clone_all:
         If True, do a full copytree of the source (all state).
     clone_config:
-        If True, copy only config files (config.yaml, .env, SOUL.md).
+        If True, copy only config files (config.yaml, .env, PLUTUS.md).
     no_alias:
         If True, skip wrapper script creation.
 
@@ -450,16 +450,8 @@ def create_profile(
                     dst.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(src, dst)
 
-    # Seed a default SOUL.md so the user has a file to customize immediately.
-    # Skipped when the profile already has one (from --clone / --clone-all).
-    soul_path = profile_dir / "SOUL.md"
-    if not soul_path.exists():
-        try:
-            from harness.cli.default_soul import DEFAULT_SOUL_MD
-            soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
-        except Exception:
-            pass  # best-effort — don't fail profile creation over this
-
+    # Identity (PLUTUS.md) is not seeded here — ensure_runtime_files creates
+    # the blackboards at first boot; --clone carries an existing one over.
     return profile_dir
 
 

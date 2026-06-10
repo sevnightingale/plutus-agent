@@ -141,13 +141,13 @@ class TestCreateProfile:
         # Create source config files in default profile
         (default_home / "config.yaml").write_text("model: test")
         (default_home / ".env").write_text("KEY=val")
-        (default_home / "SOUL.md").write_text("Be helpful.")
+        (default_home / "PLUTUS.md").write_text("Doctrine: be helpful.")
 
         profile_dir = create_profile("coder", clone_config=True, no_alias=True)
 
         assert (profile_dir / "config.yaml").read_text() == "model: test"
         assert (profile_dir / ".env").read_text() == "KEY=val"
-        assert (profile_dir / "SOUL.md").read_text() == "Be helpful."
+        assert (profile_dir / "PLUTUS.md").read_text() == "Doctrine: be helpful."
 
     def test_clone_all_copies_entire_tree(self, profile_env):
         tmp_path = profile_env
@@ -177,8 +177,9 @@ class TestCreateProfile:
         # No error; optional files just not copied
         assert not (profile_dir / "config.yaml").exists()
         assert not (profile_dir / ".env").exists()
-        # SOUL.md is always seeded with the default even when clone source lacks it
-        assert (profile_dir / "SOUL.md").exists()
+        # Identity is no longer seeded — ensure_runtime_files owns creation
+        assert not (profile_dir / "PLUTUS.md").exists()
+        assert not (profile_dir / "SOUL.md").exists()
 
 
 # ===================================================================

@@ -510,27 +510,20 @@ def run_doctor(args):
             else:
                 check_warn(f"{_DHH}/{subdir_name}/ not found", "(will be created on first use)")
     
-    # Check for SOUL.md persona file
-    soul_path = hermes_home / "SOUL.md"
-    if soul_path.exists():
-        content = soul_path.read_text(encoding="utf-8").strip()
-        # Check if it's just the template comments (no real content)
-        lines = [l for l in content.splitlines() if l.strip() and not l.strip().startswith(("<!--", "-->", "#"))]
-        if lines:
-            check_ok(f"{_DHH}/SOUL.md exists (persona configured)")
+    # Check for PLUTUS.md — the identity/doctrine blackboard (replaced SOUL.md)
+    plutus_path = hermes_home / "PLUTUS.md"
+    if plutus_path.exists():
+        content = plutus_path.read_text(encoding="utf-8").strip()
+        if content:
+            check_ok(f"{_DHH}/PLUTUS.md exists (identity + doctrine)")
         else:
-            check_info(f"{_DHH}/SOUL.md exists but is empty — edit it to customize personality")
+            check_warn(f"{_DHH}/PLUTUS.md is empty", "(delete it and re-run setup or the gateway to recreate)")
     else:
-        check_warn(f"{_DHH}/SOUL.md not found", "(create it to give Plutus a custom personality)")
+        check_warn(f"{_DHH}/PLUTUS.md not found", "(run setup, or start the gateway — boot creates the blackboards)")
         if should_fix:
-            soul_path.parent.mkdir(parents=True, exist_ok=True)
-            soul_path.write_text(
-                "# plutus-agent Persona\n\n"
-                "<!-- Edit this file to customize how Plutus communicates. -->\n\n"
-                "You are Plutus, a helpful AI assistant.\n",
-                encoding="utf-8",
-            )
-            check_ok(f"Created {_DHH}/SOUL.md with basic template")
+            from harness.runtime_templates import ensure_runtime_files
+            created = ensure_runtime_files(hermes_home)
+            check_ok(f"Runtime bootstrap created: {', '.join(created) or 'nothing'}")
             fixed_count += 1
     
     # Check memory directory

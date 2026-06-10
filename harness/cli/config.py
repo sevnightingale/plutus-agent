@@ -62,7 +62,6 @@ _EXTRA_ENV_KEYS = frozenset({
 import yaml
 
 from harness.cli.colors import Colors, color
-from harness.cli.default_soul import DEFAULT_SOUL_MD
 
 
 # =============================================================================
@@ -288,35 +287,17 @@ def _secure_file(path):
         pass
 
 
-def _ensure_default_soul_md(home: Path) -> None:
-    """Seed a default SOUL.md into HERMES_HOME if the user doesn't have one yet."""
-    soul_path = home / "SOUL.md"
-    if soul_path.exists():
-        return
-    soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
-    _secure_file(soul_path)
-
-
-def _ensure_default_worldview_md(home: Path) -> None:
-    """Seed a default WORLDVIEW.md into HERMES_HOME if absent.
-
-    Mirrors ``_ensure_default_soul_md``. WORLDVIEW.md is the cross-session
-    bridge — Plutus's read-of-the-world it had refined. Idempotent.
-    """
-    from harness.cli.default_worldview import DEFAULT_WORLDVIEW_MD
-    wv_path = home / "WORLDVIEW.md"
-    if wv_path.exists():
-        return
-    wv_path.write_text(DEFAULT_WORLDVIEW_MD, encoding="utf-8")
-    _secure_file(wv_path)
-
-
 def ensure_hermes_home():
-    """Ensure ~/.hermes directory structure exists with secure permissions.
+    """Ensure the runtime home directory structure exists with secure perms.
 
     In managed mode (NixOS), dirs are created by the activation script with
     setgid + group-writable (2770). We skip mkdir and set umask(0o007) so
-    any files created (e.g. SOUL.md) are group-writable (0660).
+    any files created are group-writable (0660).
+
+    Identity/blackboard files (PLUTUS.md etc.) are NOT seeded here — they
+    are created by harness.runtime_templates.ensure_runtime_files at wizard
+    first-boot and gateway boot (the legacy default SOUL.md/WORLDVIEW.md
+    seeding was removed with the rebuild).
     """
     home = get_hermes_home()
     if is_managed():
@@ -332,12 +313,10 @@ def ensure_hermes_home():
             d = home / subdir
             d.mkdir(parents=True, exist_ok=True)
             _secure_dir(d)
-        _ensure_default_soul_md(home)
-        _ensure_default_worldview_md(home)
 
 
 def _ensure_hermes_home_managed(home: Path):
-    """Managed-mode variant: verify dirs exist (activation creates them), seed SOUL.md."""
+    """Managed-mode variant: verify dirs exist (activation creates them)."""
     if not home.is_dir():
         raise RuntimeError(
             f"HERMES_HOME {home} does not exist. "
@@ -350,9 +329,6 @@ def _ensure_hermes_home_managed(home: Path):
                 f"{d} does not exist. "
                 "Run 'sudo nixos-rebuild switch' first."
             )
-    # Inside umask(0o007) scope — SOUL.md / WORLDVIEW.md will be created as 0660
-    _ensure_default_soul_md(home)
-    _ensure_default_worldview_md(home)
 
 
 # =============================================================================

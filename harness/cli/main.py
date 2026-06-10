@@ -1140,7 +1140,7 @@ def cmd_chat(args):
     if getattr(args, "ignore_user_config", False):
         os.environ["HERMES_IGNORE_USER_CONFIG"] = "1"
 
-    # --ignore-rules: skip auto-injection of AGENTS.md/SOUL.md/.cursorrules
+    # --ignore-rules: skip auto-injection of AGENTS.md/PLUTUS.md/.cursorrules
     # (rules), memory entries, and any preloaded skills coming from user config.
     # Maps to AIAgent(skip_context_files=True, skip_memory=True).
     if getattr(args, "ignore_rules", False):
@@ -6367,7 +6367,7 @@ def cmd_profile(args):
                 if clone_all:
                     print(f"Full copy from {source_label}.")
                 else:
-                    print(f"Cloned config, .env, SOUL.md from {source_label}.")
+                    print(f"Cloned config, .env, PLUTUS.md from {source_label}.")
 
             # Seed bundled skills (skip if --clone-all already copied them)
             if not clone_all:
@@ -6415,13 +6415,13 @@ def cmd_profile(args):
             print(f"  {name} gateway start      Start the messaging gateway")
             if clone or clone_all:
                 print(f"\n  Edit {profile_dir_display}/.env for different API keys")
-                print(f"  Edit {profile_dir_display}/SOUL.md for different personality")
+                print(f"  Edit {profile_dir_display}/PLUTUS.md for a different identity/doctrine")
             else:
                 print(
                     f"\n  ⚠ This profile has no API keys yet. Run '{name} setup' first,"
                 )
                 print(f"    or it will inherit keys from your shell environment.")
-                print(f"  Edit {profile_dir_display}/SOUL.md to customize personality")
+                print(f"  Edit {profile_dir_display}/PLUTUS.md to customize identity/doctrine")
             print()
 
         except (ValueError, FileExistsError, FileNotFoundError) as e:
@@ -6466,7 +6466,7 @@ def cmd_profile(args):
             f".env:    {'exists' if (profile_dir / '.env').exists() else 'not configured'}"
         )
         print(
-            f"SOUL.md: {'exists' if (profile_dir / 'SOUL.md').exists() else 'not configured'}"
+            f"PLUTUS.md: {'exists' if (profile_dir / 'PLUTUS.md').exists() else 'not configured'}"
         )
         if wrapper.exists():
             print(f"Alias:   {wrapper}")
@@ -6716,7 +6716,7 @@ For more help on a command:
         "--ignore-rules",
         action="store_true",
         default=False,
-        help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills",
+        help="Skip auto-injection of AGENTS.md, PLUTUS.md, .cursorrules, memory, and preloaded skills",
     )
     parser.add_argument(
         "--tui",
@@ -6867,7 +6867,7 @@ For more help on a command:
         "--ignore-rules",
         action="store_true",
         default=argparse.SUPPRESS,
-        help="Skip auto-injection of AGENTS.md, SOUL.md, .cursorrules, memory, and preloaded skills. Combine with --ignore-user-config for a fully isolated run.",
+        help="Skip auto-injection of AGENTS.md, PLUTUS.md, .cursorrules, memory, and preloaded skills. Combine with --ignore-user-config for a fully isolated run.",
     )
     chat_parser.add_argument(
         "--source",
@@ -8584,7 +8584,7 @@ Examples:
     profile_create.add_argument(
         "--clone",
         action="store_true",
-        help="Copy config.yaml, .env, SOUL.md from active profile",
+        help="Copy config.yaml, .env, PLUTUS.md from active profile",
     )
     profile_create.add_argument(
         "--clone-all",

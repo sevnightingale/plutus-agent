@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Context file scanning — detect prompt injection in AGENTS.md, .cursorrules,
-# SOUL.md before they get injected into the system prompt.
+# PLUTUS.md before they get injected into the system prompt.
 # ---------------------------------------------------------------------------
 
 _CONTEXT_THREAT_PATTERNS = [
@@ -914,7 +914,7 @@ def build_nous_subscription_prompt(valid_tool_names: "set[str] | None" = None) -
 
 
 # =========================================================================
-# Context files (SOUL.md, AGENTS.md, .cursorrules)
+# Context files (PLUTUS.md, AGENTS.md, .cursorrules)
 # =========================================================================
 
 def _truncate_content(content: str, filename: str, max_chars: int = CONTEXT_FILE_MAX_CHARS) -> str:
@@ -929,31 +929,32 @@ def _truncate_content(content: str, filename: str, max_chars: int = CONTEXT_FILE
     return head + marker + tail
 
 
-def load_soul_md() -> Optional[str]:
-    """Load SOUL.md from HERMES_HOME and return its content, or None.
+def load_plutus_md() -> Optional[str]:
+    """Load PLUTUS.md from HERMES_HOME and return its content, or None.
 
-    Used as the agent identity (slot #1 in the system prompt).  When this
-    returns content, ``build_context_files_prompt`` should be called with
-    ``skip_soul=True`` so SOUL.md isn't injected twice.
+    PLUTUS.md (doctrine + live state + lessons) IS the agent identity —
+    slot #1 in the system prompt; it replaced the legacy SOUL.md in the
+    rebuild. When this returns content, ``build_context_files_prompt``
+    should be called with ``skip_identity=True`` so it isn't injected twice.
     """
     try:
         from harness.cli.config import ensure_hermes_home
         ensure_hermes_home()
     except Exception as e:
-        logger.debug("Could not ensure HERMES_HOME before loading SOUL.md: %s", e)
+        logger.debug("Could not ensure HERMES_HOME before loading PLUTUS.md: %s", e)
 
-    soul_path = get_hermes_home() / "SOUL.md"
-    if not soul_path.exists():
+    plutus_path = get_hermes_home() / "PLUTUS.md"
+    if not plutus_path.exists():
         return None
     try:
-        content = soul_path.read_text(encoding="utf-8").strip()
+        content = plutus_path.read_text(encoding="utf-8").strip()
         if not content:
             return None
-        content = _scan_context_content(content, "SOUL.md")
-        content = _truncate_content(content, "SOUL.md")
+        content = _scan_context_content(content, "PLUTUS.md")
+        content = _truncate_content(content, "PLUTUS.md")
         return content
     except Exception as e:
-        logger.debug("Could not read SOUL.md from %s: %s", soul_path, e)
+        logger.debug("Could not read PLUTUS.md from %s: %s", plutus_path, e)
         return None
 
 
@@ -1042,7 +1043,7 @@ def _load_cursorrules(cwd_path: Path) -> str:
     return _truncate_content(cursorrules_content, ".cursorrules")
 
 
-def build_context_files_prompt(cwd: Optional[str] = None, skip_soul: bool = False) -> str:
+def build_context_files_prompt(cwd: Optional[str] = None, skip_identity: bool = False) -> str:
     """Discover and load context files for the system prompt.
 
     Priority (first found wins — only ONE project context type is loaded):
@@ -1051,11 +1052,11 @@ def build_context_files_prompt(cwd: Optional[str] = None, skip_soul: bool = Fals
       3. CLAUDE.md / claude.md   (cwd only)
       4. .cursorrules / .cursor/rules/*.mdc  (cwd only)
 
-    SOUL.md from HERMES_HOME is independent and always included when present.
-    Each context source is capped at 20,000 chars.
+    PLUTUS.md from HERMES_HOME is independent and always included when
+    present. Each context source is capped at 20,000 chars.
 
-    When *skip_soul* is True, SOUL.md is not included here (it was already
-    loaded via ``load_soul_md()`` for the identity slot).
+    When *skip_identity* is True, PLUTUS.md is not included here (it was
+    already loaded via ``load_plutus_md()`` for the identity slot).
     """
     if cwd is None:
         cwd = os.getcwd()
@@ -1073,11 +1074,11 @@ def build_context_files_prompt(cwd: Optional[str] = None, skip_soul: bool = Fals
     if project_context:
         sections.append(project_context)
 
-    # SOUL.md from HERMES_HOME only — skip when already loaded as identity
-    if not skip_soul:
-        soul_content = load_soul_md()
-        if soul_content:
-            sections.append(soul_content)
+    # PLUTUS.md from HERMES_HOME only — skip when already loaded as identity
+    if not skip_identity:
+        identity_content = load_plutus_md()
+        if identity_content:
+            sections.append(identity_content)
 
     if not sections:
         return ""

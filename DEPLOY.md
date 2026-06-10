@@ -56,10 +56,10 @@ Append whatever the wizard didn't already write; no duplicate keys.
 
 Identity continuity (optional, recommended):
 
-- `SOUL.md` — still injected into main's system prompt. Copy from the
-  backup AFTER pruning sections the desk now owns (cron architecture,
-  session mechanics, cognitive architecture — PLUTUS.md + AGENT.md
-  recipes replace them). Keep the identity sections.
+- `SOUL.md` is DEAD — PLUTUS.md is the identity file the prompt builder
+  injects now. Do not copy it back. If the old SOUL.md has personality
+  lines worth keeping (nature, disposition, relationships), fold them into
+  the new PLUTUS.md "## Doctrine" zone by hand — that zone is yours.
 - `memories/` (MEMORY.md, USER.md) — built-in memory tool store; copy as-is.
 - `auth.json` — provider credentials; copy back to skip re-auth.
 

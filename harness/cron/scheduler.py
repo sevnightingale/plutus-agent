@@ -1241,7 +1241,7 @@ def _legacy_run_job(
             enabled_toolsets=job.get("enabled_toolsets") or None,
             disabled_toolsets=["cronjob", "messaging", "clarify"],
             quiet_mode=True,
-            skip_context_files=True,  # Don't inject SOUL.md/AGENTS.md from scheduler cwd
+            skip_context_files=True,  # No cwd AGENTS.md/CLAUDE.md walk (PLUTUS.md identity still loads from HERMES_HOME)
             skip_memory=True,  # Cron system prompts would corrupt user representations
             platform="cron",
             session_id=_cron_session_id,

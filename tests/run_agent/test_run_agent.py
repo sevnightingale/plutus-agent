@@ -800,8 +800,8 @@ class TestHydrateTodoStore:
 class TestBuildSystemPrompt:
     def test_always_has_identity(self, agent):
         prompt = agent._build_system_prompt()
-        # A seeded SOUL.md provides identity; DEFAULT_AGENT_IDENTITY is only the
-        # fallback. Either way the prompt must carry the plutus-agent identity.
+        # PLUTUS.md provides identity when present; DEFAULT_AGENT_IDENTITY is
+        # the fallback. Either way the prompt must carry the plutus-agent identity.
         assert "plutus-agent" in prompt
 
     def test_includes_system_message(self, agent):

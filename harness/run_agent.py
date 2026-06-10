@@ -95,7 +95,7 @@ from harness.agent.model_metadata import (
 from harness.agent.context_compressor import ContextCompressor
 from harness.agent.subdirectory_hints import SubdirectoryHintTracker
 from harness.agent.prompt_caching import apply_anthropic_cache_control
-from harness.agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
+from harness.agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_plutus_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
 from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
 from harness.agent.codex_responses_adapter import (
     _derive_responses_function_call_id as _codex_derive_responses_function_call_id,
@@ -796,7 +796,7 @@ class AIAgent:
                 output_config.format instead of a trailing-assistant prefill.
             platform (str): The interface platform the user is on (e.g. "cli", "telegram", "discord", "whatsapp").
                 Used to inject platform-specific formatting hints into the system prompt.
-            skip_context_files (bool): If True, skip auto-injection of cwd-walked context files (AGENTS.md / CLAUDE.md / .cursorrules). Does NOT skip Plutus identity files (SOUL.md, WORLDVIEW.md, strategy library) which read from HERMES_HOME explicitly and always load.
+            skip_context_files (bool): If True, skip auto-injection of cwd-walked context files (AGENTS.md / CLAUDE.md / .cursorrules). Does NOT skip the Plutus identity (PLUTUS.md), which reads from HERMES_HOME explicitly and always loads.
                 into the system prompt. Use this for batch processing and data generation to avoid
                 polluting trajectories with user-specific persona or project instructions.
         """
@@ -3950,35 +3950,29 @@ class AIAgent:
         is stable across all turns in a session, maximizing prefix cache hits.
         """
         # Layers (in order):
-        #   1. Agent identity — SOUL.md when available, else DEFAULT_AGENT_IDENTITY
+        #   1. Agent identity — PLUTUS.md when available, else DEFAULT_AGENT_IDENTITY
         #   2. User / gateway system prompt (if provided)
         #   3. Persistent memory (frozen snapshot)
         #   4. Skills guidance (if skills tools are loaded)
-        #   5. Context files (AGENTS.md, .cursorrules — SOUL.md excluded here when used as identity)
+        #   5. Context files (AGENTS.md, .cursorrules — PLUTUS.md excluded here when used as identity)
         #   6. Current date & time (frozen at build time)
         #   7. Platform-specific formatting hint
 
-        # SOUL.md / WORLDVIEW.md / strategy library are PLUTUS IDENTITY,
-        # not generic cwd-walked context. They read explicitly from
-        # HERMES_HOME (not cwd) so they're safe to load even in cron-fired
-        # sessions where skip_context_files=True is set to suppress the
-        # cwd AGENTS.md/CLAUDE.md walker. Without these, cron sessions
-        # would operate as default "Hermes Agent" and have no worldview /
-        # current strategies — defeating the whole point of the
-        # cross-session bridge architecture.
-        _soul_loaded = False
-        _soul_content = load_soul_md()
-        if _soul_content:
-            prompt_parts = [_soul_content]
-            _soul_loaded = True
+        # PLUTUS.md (doctrine + live state + lessons) IS the identity — it
+        # replaced SOUL.md/WORLDVIEW.md in the rebuild. It reads explicitly
+        # from HERMES_HOME (not cwd) so it loads even in cron-fired sessions
+        # where skip_context_files=True suppresses the cwd AGENTS.md/CLAUDE.md
+        # walker. Desk children don't come through here at all — spawn_agent
+        # assembles their context from AGENT.md reads.
+        _identity_loaded = False
+        _identity_content = load_plutus_md()
+        if _identity_content:
+            prompt_parts = [_identity_content]
+            _identity_loaded = True
 
-        if not _soul_loaded:
-            # Fallback to hardcoded identity
+        if not _identity_loaded:
+            # Pre-wizard / bare-CLI runs: hardcoded default identity
             prompt_parts = [DEFAULT_AGENT_IDENTITY]
-
-        # (WORLDVIEW.md + v1 strategy-block injection removed in the rebuild —
-        # desk context is assembled per-agent by the spawn mechanism from
-        # PLUTUS.md zones and the status-gated strategy loader. R2.)
 
         # Tool-aware behavioral guidance: only inject when the tools are loaded
         tool_guidance = []
@@ -4077,7 +4071,7 @@ class AIAgent:
             _term_cwd = (os.getenv("TERMINAL_CWD") or "").strip()
             _context_cwd = _term_cwd if _term_cwd not in ("", ".", "auto", "cwd") else str(get_hermes_home())
             context_files_prompt = build_context_files_prompt(
-                cwd=_context_cwd, skip_soul=_soul_loaded)
+                cwd=_context_cwd, skip_identity=_identity_loaded)
             if context_files_prompt:
                 prompt_parts.append(context_files_prompt)
 
