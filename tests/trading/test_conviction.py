@@ -24,7 +24,7 @@ class TestComputeConviction:
         # (0.4*1 + 0.3*0.5 + 0.3*0) / 1.0 = 0.55
         assert r.conviction == pytest.approx(0.55)
         assert r.missing == []
-        assert not r.actionable  # below the 0.65 global threshold
+        assert r.actionable  # clears the 0.50 gate; conviction sizes, not vetoes
 
     def test_missing_dp_excluded_not_defaulted(self):
         r = compute_conviction(W, [_s("hl_funding(symbol=BTC)", 1.0)])
@@ -75,6 +75,26 @@ class TestUpdateWeights:
     def test_unknown_dp_ignored(self):
         out = update_weights(W, {"nope": 1.0})
         assert out == {k: round(v, 4) for k, v in W.items()}
+
+
+class TestTargetLeverage:
+    def test_bands(self):
+        lev = engine.target_leverage
+        assert lev(0.49) is None          # below the gate: no trade
+        assert lev(None) is None
+        assert lev(0.50) == 2.0
+        assert lev(0.599) == 2.0
+        assert lev(0.60) == 5.0
+        assert lev(0.70) == 7.0
+        assert lev(0.80) == 10.0
+        assert lev(1.0) == 10.0           # top band is inclusive
+
+    def test_bands_cover_threshold_to_one(self):
+        """The band table starts at the gate and tiles [threshold, 1.0]."""
+        assert engine.LEVERAGE_BANDS[0][0] == engine.GLOBAL_CONVICTION_THRESHOLD
+        for (_, hi, _), (lo, _, _) in zip(engine.LEVERAGE_BANDS,
+                                          engine.LEVERAGE_BANDS[1:]):
+            assert hi == lo               # no gaps, no overlaps
 
 
 class TestNormalizers:

@@ -19,12 +19,35 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-GLOBAL_CONVICTION_THRESHOLD = 0.65  # calibration-review retunes with evidence
+GLOBAL_CONVICTION_THRESHOLD = 0.50  # operator-set 2026-06-10: graduation is
+# the binary gate (the strategy proved its edge); conviction above the
+# threshold is the SIZING dial, not a veto. Reflect reviews sizing-vs-
+# performance and these retune with evidence.
+
+# Conviction-banded target leverage — notional as a multiple of unified
+# account value (hl_account_state equity_usd). Bands are half-open [lo, hi);
+# conviction 1.0 takes the top band.
+LEVERAGE_BANDS = (
+    (0.50, 0.60, 2.0),
+    (0.60, 0.70, 5.0),
+    (0.70, 0.80, 7.0),
+    (0.80, 1.00, 10.0),
+)
 
 # Weight-update discipline (inherited, evidence-tested in v1)
 WEIGHT_ALPHA = 0.05
 WEIGHT_CAP = 0.30
 WEIGHT_SUM_MAX = 1.0
+
+
+def target_leverage(conviction: Optional[float]) -> Optional[float]:
+    """Band lookup. Below the global threshold → None (no trade)."""
+    if conviction is None or conviction < GLOBAL_CONVICTION_THRESHOLD:
+        return None
+    for lo, hi, lev in LEVERAGE_BANDS:
+        if lo <= conviction < hi:
+            return lev
+    return LEVERAGE_BANDS[-1][2]
 
 
 @dataclass

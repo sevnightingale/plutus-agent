@@ -260,12 +260,15 @@ def record_trade(conn, *, decision_id, venue, symbol, side, size, fill_price,
 
 
 def open_position(conn, *, venue, symbol, side, size, opening_trade_id,
-                  opened_at=None) -> int:
+                  opened_at=None, entry_account_value=None,
+                  leverage=None) -> int:
     cur = conn.execute(
         """INSERT INTO positions (venue, symbol, side, size, opening_trade_id,
-           status, opened_at) VALUES (?,?,?,?,?,'open',?)""",
+           status, opened_at, entry_account_value, leverage)
+           VALUES (?,?,?,?,?,'open',?,?,?)""",
         (venue, symbol, side, size, opening_trade_id,
-         opened_at if opened_at is not None else time.time()),
+         opened_at if opened_at is not None else time.time(),
+         entry_account_value, leverage),
     )
     conn.commit()
     return cur.lastrowid

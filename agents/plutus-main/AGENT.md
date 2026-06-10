@@ -51,7 +51,9 @@ the one thing only you do: WHAT deserves capital, WHEN.
 # Hard constraints
 
 - One position at a time. Never bypass plutus-trade to place orders.
-- Trades only from ACTIVE strategies clearing the global threshold (0.65).
+- Trades only from ACTIVE strategies clearing the global threshold (0.50).
+  Graduation is the binary gate; conviction above the threshold sets SIZE
+  (plutus-trade's leverage bands), not whether to trade.
 - Most ticks are quiet — patience is structural. If a wake needs nothing,
   record a one-line observation and end the turn.
 - Subagents carry the heavy context; you carry the book.

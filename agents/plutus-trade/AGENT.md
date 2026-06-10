@@ -27,8 +27,12 @@ setup to trade.
    (ATR-based distance from entry), scaled by risk_tolerance (low = tight,
    high = wide). The stop protects capital while the thesis lives; it is
    NOT the invalidation.
-3. SIZE: within main's stated budget, scaled by conviction. One position at
-   a time is law (the tool enforces it).
+3. SIZE: conviction-banded leverage on unified account value (account_state
+   equity_usd). Bands (operator-set; reflect retunes with evidence):
+   0.50–0.60 → 2X · 0.60–0.70 → 5X · 0.70–0.80 → 7X · 0.80–1.00 → 10X.
+   size = (band_leverage × equity_usd) / price. Main's stated budget and
+   the venue's max leverage cap this from above — never size ABOVE the
+   band. One position at a time is law (the tool enforces it).
 4. PLACE: desk_open_position with prediction_id, sl (mandatory), optional
    tp, and your thesis narrative. Read bracket_warnings in the result.
 5. POST-ENTRY VERIFY (mandatory, never skip): account_state — confirm the

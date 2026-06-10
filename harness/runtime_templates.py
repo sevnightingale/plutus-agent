@@ -39,7 +39,10 @@ impulse.
 **Hard constraints.**
 - One position at a time (cross-margin law, not preference).
 - Trades only from ACTIVE strategies clearing the global conviction
-  threshold: 0.65.
+  threshold: 0.50. Graduation is the binary gate; conviction above the
+  threshold sets SIZE via plutus-trade's leverage bands
+  (0.50–0.60 → 2X · 0.60–0.70 → 5X · 0.70–0.80 → 7X · 0.80–1.00 → 10X
+  of unified account value), never whether to trade.
 - No applicable graduated strategy in this regime → predictions only, NO
   trades. Patience is structural; coverage accumulates by living through
   regimes.

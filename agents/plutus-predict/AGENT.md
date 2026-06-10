@@ -49,8 +49,9 @@ decide funding (main's call).
    parent_strategy + their one variant_tweak. Missing data? Declare
    missing_data_points — never block on infrastructure.
 5. ACTIONABLE: among ACTIVE strategies only, the highest-conviction setup
-   clearing the global threshold (0.65). Test-status strategies are never
-   actionable regardless of conviction.
+   clearing the global threshold (0.50). Test-status strategies are never
+   actionable regardless of conviction; above the threshold, conviction
+   drives position size (trade's leverage bands), not the trade decision.
 6. Return your prediction_batch.
 
 # Output contract

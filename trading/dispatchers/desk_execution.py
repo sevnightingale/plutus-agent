@@ -98,6 +98,23 @@ def _desk_open(args: Dict[str, Any]) -> str:
     except Exception as exc:
         return tool_error(f"venue order failed: {type(exc).__name__}: {exc}")
 
+    # Measure realized leverage at entry (reflect reviews sizing-vs-
+    # performance). A failed equity read NEVER blocks the lifecycle write
+    # after a real fill — it is recorded as missing and reported.
+    from trading.integrations.hyperliquid.venue import hl_account_state
+    notional = fill["fill_price"] * fill.get("size", size)
+    entry_account_value = leverage = None
+    sizing_warning = None
+    try:
+        equity = float(hl_account_state()["equity_usd"])
+        if equity > 0:
+            entry_account_value = equity
+            leverage = round(notional / equity, 3)
+        else:
+            sizing_warning = "equity_usd <= 0 — leverage not recorded"
+    except Exception as exc:
+        sizing_warning = f"account_state failed ({type(exc).__name__}: {exc}) — leverage not recorded"
+
     thesis_id = write.record_thesis(
         conn, prediction_id=pred["id"], symbol=symbol,
         text_md=args["thesis"], agent="plutus-trade",
@@ -124,6 +141,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
     position_id = write.open_position(
         conn, venue="hyperliquid", symbol=symbol, side=side,
         size=fill.get("size", size), opening_trade_id=trade_id,
+        entry_account_value=entry_account_value, leverage=leverage,
     )
 
     return tool_result({
@@ -132,6 +150,10 @@ def _desk_open(args: Dict[str, Any]) -> str:
         "thesis_id": thesis_id,
         "fill": {"price": fill["fill_price"], "size": fill.get("size", size),
                  "slippage_bp": fill.get("slippage_bp")},
+        "sizing": {"notional_usd": round(notional, 2),
+                   "entry_account_value": entry_account_value,
+                   "leverage": leverage,
+                   **({"warning": sizing_warning} if sizing_warning else {})},
         "sl": {"price": sl, "order_id": fill.get("sl_order_id"),
                "on_venue": bool(fill.get("sl_order_id"))},
         "tp": {"price": args.get("tp"), "order_id": fill.get("tp_order_id")},

@@ -33,6 +33,7 @@ def _run_query(args: Dict[str, Any]) -> str:
             conn, params.get("strategy_name")),
         "last_action_runs": lambda: queries.last_action_runs(conn),
         "timescale_mix": lambda: queries.timescale_mix(conn, float(params["since_ts"])),
+        "sizing_performance": lambda: queries.sizing_performance(conn),
     }
     if name not in _QUERIES:
         return tool_error(f"unknown query {name!r} — available: {sorted(_QUERIES)}")
@@ -53,7 +54,7 @@ registry.register(
             "recent_outcomes {limit} | calibration {strategy_name?, "
             "regime_tag?, timescale?} | strategy_stats {name} | "
             "strategy_book | support_score_performance {strategy_name?} | "
-            "last_action_runs | timescale_mix {since_ts}."
+            "last_action_runs | timescale_mix {since_ts} | sizing_performance."
         ),
         "parameters": {
             "type": "object",

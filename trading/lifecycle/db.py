@@ -172,7 +172,9 @@ CREATE TABLE IF NOT EXISTS positions (
     status TEXT NOT NULL DEFAULT 'open',
     opened_at REAL NOT NULL,
     closed_at REAL,
-    perceived_at REAL
+    perceived_at REAL,
+    entry_account_value REAL,             -- unified equity_usd measured at open
+    leverage REAL                         -- notional_at_fill / entry_account_value
 );
 
 CREATE TABLE IF NOT EXISTS position_evaluations (

@@ -217,3 +217,26 @@ def timescale_mix(conn: sqlite3.Connection, since_ts: float) -> dict:
         """SELECT timescale, COUNT(*) AS n FROM predictions
            WHERE ts >= ? GROUP BY timescale""", (since_ts,)).fetchall()
     return {r["timescale"]: r["n"] for r in rows}
+
+
+def sizing_performance(conn: sqlite3.Connection) -> list:
+    """Closed-position performance per conviction band (floored to 0.1 — the
+    sizing dial's input), with the leverage actually realized at entry —
+    reflect's evidence for retuning the conviction→leverage bands. Rows with
+    no opening-decision conviction group under NULL; shown, never dropped."""
+    return _rows(conn.execute(
+        """SELECT CAST(d.conviction * 10 AS INT) / 10.0 AS conviction_band,
+                  COUNT(*) AS n,
+                  SUM(CASE WHEN o.realized_pnl_usd > 0 THEN 1 ELSE 0 END) AS wins,
+                  ROUND(AVG(p.leverage), 2) AS avg_leverage,
+                  ROUND(MAX(p.leverage), 2) AS max_leverage,
+                  ROUND(SUM(o.realized_pnl_usd), 4) AS sum_pnl_usd,
+                  ROUND(AVG(o.r_multiple), 3) AS avg_r_multiple,
+                  ROUND(MIN(o.r_multiple), 3) AS worst_r,
+                  ROUND(AVG(o.mae_pct), 3) AS avg_mae_pct
+           FROM positions p
+           JOIN outcomes o ON o.position_id = p.id
+           LEFT JOIN trades tr ON tr.id = p.opening_trade_id
+           LEFT JOIN decisions d ON d.id = tr.decision_id
+           WHERE p.status='closed'
+           GROUP BY conviction_band ORDER BY conviction_band"""))

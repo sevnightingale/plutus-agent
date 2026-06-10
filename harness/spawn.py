@@ -155,7 +155,8 @@ RETURN_CONTRACTS: Dict[str, List[str]] = {
     "prediction_batch": ["predictions", "actionable", "slots"],
     "trade_report": ["ok", "fill", "sl", "verify"],
     "ops_report": ["resolved", "wakes_enqueued"],
-    "reflect_report": ["status_changes", "weight_updates", "seed_report"],
+    "reflect_report": ["status_changes", "weight_updates", "sizing_review",
+                       "seed_report"],
 }
 
 
