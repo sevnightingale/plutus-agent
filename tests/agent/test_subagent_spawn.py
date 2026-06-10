@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from harness.agent.lifecycle_db import get_lifecycle_db, reset_lifecycle_db_singleton
+from trading.lifecycle.db import get_lifecycle_db, reset_lifecycle_db_singleton
 from harness.agent.subagent_spawn import (
     spawn_subagent_blocking,
     _build_subagent_prompt,
@@ -19,7 +19,7 @@ from harness.agent.subagent_spawn import (
 )
 
 # Force registration so we can write observations.
-import harness.tools.lifecycle.event_types  # noqa: F401
+import trading.lifecycle.queries.event_types  # noqa: F401
 
 
 @pytest.fixture()
@@ -200,11 +200,11 @@ class TestPerceptionDigestSessionIdDefaulting:
     def test_defaults_session_id_perception_from_context(self, db, monkeypatch):
         # Simulate the spawn helper's set_session_vars by monkeypatching
         # session_id_from_context to return a known value.
-        from harness.tools.dispatchers import _helpers
+        from trading.dispatchers import _helpers
         monkeypatch.setattr(_helpers, "session_id_from_context",
                             lambda: "ctx-supplied-session")
 
-        from harness.tools.core import event_registry
+        from trading.perception.core import event_registry
         evt = event_registry.lookup("perception_digest")
         result = evt.fn(
             for_main_beat_at_unix=time.time(),
@@ -222,11 +222,11 @@ class TestPerceptionDigestSessionIdDefaulting:
         assert tags["session_id_perception"] == "ctx-supplied-session"
 
     def test_explicit_session_id_perception_overrides_context(self, db, monkeypatch):
-        from harness.tools.dispatchers import _helpers
+        from trading.dispatchers import _helpers
         monkeypatch.setattr(_helpers, "session_id_from_context",
                             lambda: "ctx-supplied-session")
 
-        from harness.tools.core import event_registry
+        from trading.perception.core import event_registry
         evt = event_registry.lookup("perception_digest")
         result = evt.fn(
             for_main_beat_at_unix=time.time(),

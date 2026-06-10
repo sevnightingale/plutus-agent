@@ -86,9 +86,9 @@ Both are optional — the default install does Hyperliquid trading without them.
 
 - `PLUTUS.md` — the agent's mind: cognitive architecture, lifecycle, perception/action/learning
 - `TRADING.md` — **canonical** trade-execution mechanics (wallets, on-chain registration, the silent-failure mode, recovery)
-- `AGENTS.md` — developer guide for working on the harness source
 - `LINEAGE.md` — upstream fork point + attribution
-- `CONTRIBUTING.md` / `SECURITY.md` — how to contribute and how to report vulnerabilities
+- `SECURITY.md` — how to report vulnerabilities
+- `docs/legacy/` — pre-rebuild docs (developer guide, contributing) — stale during the rebuild
 
 ## License
 

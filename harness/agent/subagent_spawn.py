@@ -462,7 +462,7 @@ def spawn_subagent_blocking(
         }
 
     # Look for the result observation.
-    from harness.agent.lifecycle_db import get_lifecycle_db
+    from trading.lifecycle.db import get_lifecycle_db
     db = get_lifecycle_db()
     obs = _query_result_observation(
         db, sub_session_id, expected_event_type, spawn_ts,

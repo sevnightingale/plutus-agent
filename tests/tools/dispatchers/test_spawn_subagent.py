@@ -15,7 +15,7 @@ import pytest
 from harness.tools.registry import registry as tool_registry
 
 # Force registration.
-import harness.tools.dispatchers.spawn_subagent  # noqa: F401
+import trading.dispatchers.spawn_subagent  # noqa: F401
 
 
 def _call(args: dict) -> dict:
@@ -46,7 +46,7 @@ class TestSpawnSubagentValidation:
     def test_unknown_skill_with_toolsets_proceeds(self):
         # Should NOT hit the no-default-toolset error; should reach the
         # actual spawn (which we mock to avoid real AIAgent construction).
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.return_value = {
                 "ok": True,
                 "observation_id": 1,
@@ -68,7 +68,7 @@ class TestSpawnSubagentValidation:
 
 class TestSpawnSubagentDelegation:
     def test_plutus_perception_uses_defaults(self):
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.return_value = {
                 "ok": True,
                 "observation_id": 42,
@@ -98,7 +98,7 @@ class TestSpawnSubagentDelegation:
             assert kwargs["for_main_beat_at_unix"] == 1779300000.0
 
     def test_explicit_model_overrides_default(self):
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.return_value = {
                 "ok": True, "observation_id": 1, "session_id": "x",
                 "duration_s": 1.0, "final_response": "", "error": None,
@@ -112,7 +112,7 @@ class TestSpawnSubagentDelegation:
             assert mock_spawn.call_args.kwargs["model"] == "deepseek-v4-pro"
 
     def test_explicit_toolsets_override_default(self):
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.return_value = {
                 "ok": True, "observation_id": 1, "session_id": "x",
                 "duration_s": 1.0, "final_response": "", "error": None,
@@ -126,7 +126,7 @@ class TestSpawnSubagentDelegation:
             assert mock_spawn.call_args.kwargs["enabled_toolsets"] == ["perception"]
 
     def test_subagent_failure_returns_ok_false(self):
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.return_value = {
                 "ok": False,
                 "observation_id": None,
@@ -146,7 +146,7 @@ class TestSpawnSubagentDelegation:
             assert "timeout" in result["error"].lower()
 
     def test_dispatcher_internal_exception_returns_error(self):
-        with patch("harness.tools.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
+        with patch("trading.dispatchers.spawn_subagent.spawn_subagent_blocking") as mock_spawn:
             mock_spawn.side_effect = RuntimeError("provider resolution failed")
             result = _call({
                 "skill": "plutus-perception",

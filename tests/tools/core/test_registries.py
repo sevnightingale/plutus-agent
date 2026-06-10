@@ -8,7 +8,7 @@ reset clears.
 
 import pytest
 
-from harness.tools.core import (
+from trading.perception.core import (
     account_registry,
     alert_registry,
     data_point_registry,

@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from harness.agent.lifecycle_db import SCHEMA_VERSION, LifecycleDB
+from trading.lifecycle.db import SCHEMA_VERSION, LifecycleDB
 from harness.constants import get_hermes_home
 
 

@@ -109,7 +109,7 @@ plutus-agent = "harness.cli.main:main"
 "harness.cli" = ["web_dist/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["harness", "harness.*"]
+include = ["harness", "harness.*", "trading", "trading.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

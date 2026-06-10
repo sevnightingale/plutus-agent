@@ -29,7 +29,7 @@ def _check(label: str, ok: Optional[bool], detail: str = "") -> str:
 
 def _check_acp_installed() -> Tuple[bool, str]:
     try:
-        from harness.tools.integrations.acp import _cli
+        from trading.integrations.acp import _cli
         if not _cli.is_installed():
             return False, "run `npm install -g @virtuals-protocol/acp-cli`"
         try:
@@ -43,7 +43,7 @@ def _check_acp_installed() -> Tuple[bool, str]:
 
 def _check_acp_configured() -> Tuple[Optional[bool], str]:
     try:
-        from harness.tools.integrations.acp import _cli
+        from trading.integrations.acp import _cli
         if not _cli.is_installed():
             return None, "acp not installed"
         try:
@@ -99,8 +99,8 @@ def _parse_acp_balance_for_usdc(balance: dict, chain_id: str) -> float:
 
 def _check_acp_wallet_balance() -> Tuple[Optional[bool], str]:
     try:
-        from harness.tools.integrations.acp import _cli
-        from harness.tools.integrations.acp.data_points import DEFAULT_CHAIN_ID
+        from trading.integrations.acp import _cli
+        from trading.integrations.acp.data_points import DEFAULT_CHAIN_ID
         if not _cli.is_installed():
             return None, "acp not installed"
         balance = _cli.acp("wallet", "balance", "--chain-id", DEFAULT_CHAIN_ID)
@@ -111,14 +111,14 @@ def _check_acp_wallet_balance() -> Tuple[Optional[bool], str]:
 
 
 def _check_dgclaw_installed() -> Tuple[bool, str]:
-    from harness.tools.integrations.dgclaw import _cli
+    from trading.integrations.dgclaw import _cli
     if _cli.is_installed():
         return True, str(_cli.get_root())
     return False, f"missing at {_cli.get_root()} — run `dgclaw_install`"
 
 
 def _check_dgclaw_joined() -> Tuple[bool, str]:
-    from harness.tools.integrations.dgclaw import _env
+    from trading.integrations.dgclaw import _env
     val = _env.read_dgclaw_env("DGCLAW_API_KEY")
     if val:
         return True, "DGCLAW_API_KEY set in dgclaw-skill .env"
@@ -198,7 +198,7 @@ def _check_pm2_processes() -> Tuple[Optional[bool], str]:
 def _check_lifecycle_db() -> Tuple[Optional[bool], str]:
     try:
         from harness.constants import get_hermes_home
-        from harness.agent.lifecycle_db import get_lifecycle_db
+        from trading.lifecycle.db import get_lifecycle_db
         path = get_hermes_home() / "lifecycle.db"
         if not path.exists():
             return False, f"missing at {path} — restart gateway to auto-init"

@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from harness.tools.integrations.dgclaw import _cli, _env, data_points, operations, alerts
+from trading.integrations.dgclaw import _cli, _env, data_points, operations, alerts
 
 
 @pytest.fixture

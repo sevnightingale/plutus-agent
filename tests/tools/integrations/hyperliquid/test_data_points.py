@@ -12,8 +12,8 @@ import os
 
 import pytest
 
-from harness.tools.core import data_point_registry, account_registry, venue_registry, alert_registry
-from harness.tools.integrations.hyperliquid import _client
+from trading.perception.core import data_point_registry, account_registry, venue_registry, alert_registry
+from trading.integrations.hyperliquid import _client
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +32,7 @@ def _import_integration():
     the module body (and its register_*() decorator calls) to re-execute.
     """
     import importlib
-    from harness.tools.core import (
+    from trading.perception.core import (
         data_point_registry, account_registry, venue_registry,
         alert_registry, identity_registry,
     )
@@ -42,7 +42,7 @@ def _import_integration():
     alert_registry.reset()
     identity_registry.reset()
 
-    import harness.tools.integrations.hyperliquid as hl_pkg
+    import trading.integrations.hyperliquid as hl_pkg
     importlib.reload(hl_pkg._client)
     importlib.reload(hl_pkg.accounts)
     importlib.reload(hl_pkg.data_points)
@@ -97,7 +97,7 @@ def test_two_alerts_registered():
 @pytest.mark.integration
 def test_hl_price_live():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_price
+    from trading.integrations.hyperliquid.data_points import hl_price
     res = hl_price("BTC")
     assert res["symbol"] == "BTC"
     assert isinstance(res["price"], float)
@@ -108,7 +108,7 @@ def test_hl_price_live():
 @pytest.mark.integration
 def test_hl_price_unknown_symbol():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_price
+    from trading.integrations.hyperliquid.data_points import hl_price
     with pytest.raises(KeyError, match="not in Hyperliquid universe"):
         hl_price("NOTAREALSYMBOLXYZ")
 
@@ -116,7 +116,7 @@ def test_hl_price_unknown_symbol():
 @pytest.mark.integration
 def test_hl_candles_live():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_candles
+    from trading.integrations.hyperliquid.data_points import hl_candles
     res = hl_candles("BTC", "1m", lookback_bars=10)
     assert res["symbol"] == "BTC"
     assert res["interval"] == "1m"
@@ -127,7 +127,7 @@ def test_hl_candles_live():
 
 def test_hl_candles_invalid_interval():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_candles
+    from trading.integrations.hyperliquid.data_points import hl_candles
     with pytest.raises(ValueError, match="Unknown candle interval"):
         hl_candles("BTC", "999z", lookback_bars=5)
 
@@ -135,7 +135,7 @@ def test_hl_candles_invalid_interval():
 @pytest.mark.integration
 def test_hl_orderbook_live():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_orderbook
+    from trading.integrations.hyperliquid.data_points import hl_orderbook
     res = hl_orderbook("BTC", depth=5)
     assert res["symbol"] == "BTC"
     assert len(res["bids"]) <= 5
@@ -147,7 +147,7 @@ def test_hl_orderbook_live():
 @pytest.mark.integration
 def test_hl_funding_and_oi_live():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_funding_and_oi
+    from trading.integrations.hyperliquid.data_points import hl_funding_and_oi
     res = hl_funding_and_oi("BTC")
     assert res["symbol"] == "BTC"
     assert "funding" in res
@@ -157,7 +157,7 @@ def test_hl_funding_and_oi_live():
 @pytest.mark.integration
 def test_hl_universe_live():
     _import_integration()
-    from harness.tools.integrations.hyperliquid.data_points import hl_universe
+    from trading.integrations.hyperliquid.data_points import hl_universe
     res = hl_universe()
     assert res["count"] >= 50  # HL has hundreds of perps
     names = {a["name"] for a in res["universe"]}
@@ -173,7 +173,7 @@ def test_hl_holdings_loud_fails_without_address(monkeypatch):
     monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
     # account_registry's hl_trading registered with empty address; resolve
     # will then read env, fail.
-    from harness.tools.integrations.hyperliquid.data_points import hl_holdings
+    from trading.integrations.hyperliquid.data_points import hl_holdings
     with pytest.raises(_client.HLConfigError):
         hl_holdings("hl_trading")
 
@@ -181,6 +181,6 @@ def test_hl_holdings_loud_fails_without_address(monkeypatch):
 def test_hl_total_equity_loud_fails_without_address(monkeypatch):
     _import_integration()
     monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
-    from harness.tools.integrations.hyperliquid.data_points import hl_total_equity
+    from trading.integrations.hyperliquid.data_points import hl_total_equity
     with pytest.raises(_client.HLConfigError):
         hl_total_equity("hl_trading")

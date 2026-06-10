@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.agent import strategy_loader
+from trading.strategies import loader as strategy_loader
 
 
 @pytest.fixture()

@@ -97,8 +97,8 @@ from harness.agent.context_compressor import ContextCompressor
 from harness.agent.subdirectory_hints import SubdirectoryHintTracker
 from harness.agent.prompt_caching import apply_anthropic_cache_control
 from harness.agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
-from harness.agent.worldview_loader import load_worldview_md
-from harness.agent.strategy_loader import build_strategy_prompt_block
+from trading.worldview_loader import load_worldview_md
+from trading.strategies.loader import build_strategy_prompt_block
 from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
 from harness.agent.codex_responses_adapter import (
     _derive_responses_function_call_id as _codex_derive_responses_function_call_id,
@@ -7602,7 +7602,7 @@ class AIAgent:
         # via query_compaction_history. Best-effort: never let event recording
         # failure rollback a successful compression.
         try:
-            from harness.tools.core.event_registry import lookup as _event_lookup
+            from trading.perception.core.event_registry import lookup as _event_lookup
             _evt = _event_lookup("compaction")
             if _evt and _evt.fn:
                 _evt.fn(

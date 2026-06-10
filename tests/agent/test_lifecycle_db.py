@@ -6,7 +6,7 @@ import time
 import pytest
 import sqlite_vec
 
-from harness.agent.lifecycle_db import (
+from trading.lifecycle.db import (
     SCHEMA_VERSION,
     LifecycleDB,
     get_lifecycle_db,

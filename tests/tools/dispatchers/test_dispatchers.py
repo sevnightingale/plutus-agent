@@ -10,8 +10,8 @@ import time
 
 import pytest
 
-from harness.agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
-from harness.tools.core import (
+from trading.lifecycle.db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
+from trading.perception.core import (
     account_registry,
     data_point_registry,
     event_registry,
@@ -21,19 +21,19 @@ from harness.tools.core import (
 from harness.tools.registry import registry as tool_registry
 
 # Ensure dispatcher modules are imported so they self-register at module top level.
-import harness.tools.dispatchers.account_state              # noqa: F401
-import harness.tools.dispatchers.cancel_order               # noqa: F401
-import harness.tools.dispatchers.close_position             # noqa: F401
-import harness.tools.dispatchers.fetch_data_point           # noqa: F401
-import harness.tools.dispatchers.list_accounts              # noqa: F401
-import harness.tools.dispatchers.list_data_points           # noqa: F401
-import harness.tools.dispatchers.list_event_types           # noqa: F401
-import harness.tools.dispatchers.list_identity_systems      # noqa: F401
-import harness.tools.dispatchers.list_venues                # noqa: F401
-import harness.tools.dispatchers.modify_order               # noqa: F401
-import harness.tools.dispatchers.place_order                # noqa: F401
-import harness.tools.dispatchers.record_event               # noqa: F401
-import harness.tools.dispatchers.record_observation         # noqa: F401
+import trading.dispatchers.account_state              # noqa: F401
+import trading.dispatchers.cancel_order               # noqa: F401
+import trading.dispatchers.close_position             # noqa: F401
+import trading.dispatchers.fetch_data_point           # noqa: F401
+import trading.dispatchers.list_accounts              # noqa: F401
+import trading.dispatchers.list_data_points           # noqa: F401
+import trading.dispatchers.list_event_types           # noqa: F401
+import trading.dispatchers.list_identity_systems      # noqa: F401
+import trading.dispatchers.list_venues                # noqa: F401
+import trading.dispatchers.modify_order               # noqa: F401
+import trading.dispatchers.place_order                # noqa: F401
+import trading.dispatchers.record_event               # noqa: F401
+import trading.dispatchers.record_observation         # noqa: F401
 
 
 @pytest.fixture(autouse=True)

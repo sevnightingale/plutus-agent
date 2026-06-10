@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from harness.agent import perception_cache
+from trading.perception import cache as perception_cache
 
 
 @pytest.fixture()

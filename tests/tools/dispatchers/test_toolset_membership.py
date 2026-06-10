@@ -7,18 +7,18 @@ so cement the contract here.
 """
 
 # Importing the modules triggers their top-level registry.register(...) call.
-import harness.tools.dispatchers.account_state              # noqa: F401
-import harness.tools.dispatchers.cancel_order               # noqa: F401
-import harness.tools.dispatchers.close_position             # noqa: F401
-import harness.tools.dispatchers.fetch_data_point           # noqa: F401
-import harness.tools.dispatchers.list_accounts              # noqa: F401
-import harness.tools.dispatchers.list_data_points           # noqa: F401
-import harness.tools.dispatchers.list_event_types           # noqa: F401
-import harness.tools.dispatchers.list_identity_systems      # noqa: F401
-import harness.tools.dispatchers.list_venues                # noqa: F401
-import harness.tools.dispatchers.modify_order               # noqa: F401
-import harness.tools.dispatchers.place_order                # noqa: F401
-import harness.tools.dispatchers.record_event               # noqa: F401
+import trading.dispatchers.account_state              # noqa: F401
+import trading.dispatchers.cancel_order               # noqa: F401
+import trading.dispatchers.close_position             # noqa: F401
+import trading.dispatchers.fetch_data_point           # noqa: F401
+import trading.dispatchers.list_accounts              # noqa: F401
+import trading.dispatchers.list_data_points           # noqa: F401
+import trading.dispatchers.list_event_types           # noqa: F401
+import trading.dispatchers.list_identity_systems      # noqa: F401
+import trading.dispatchers.list_venues                # noqa: F401
+import trading.dispatchers.modify_order               # noqa: F401
+import trading.dispatchers.place_order                # noqa: F401
+import trading.dispatchers.record_event               # noqa: F401
 
 from harness.tools.registry import registry
 

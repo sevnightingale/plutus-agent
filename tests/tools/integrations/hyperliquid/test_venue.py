@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from harness.tools.integrations.hyperliquid import _client, venue
+from trading.integrations.hyperliquid import _client, venue
 
 
 @pytest.fixture(autouse=True)

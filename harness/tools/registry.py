@@ -71,52 +71,59 @@ def _derive_package_prefix(tools_path: Path) -> str:
 
 
 def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
-    """Return (module_name, file_path) for every Python file in tools/ that
-    might register a tool — before AST-checking for the actual register call.
+    """Return (module_name, file_path) for flat ``tools/*.py`` candidates.
 
-    Scans:
-    - ``tools/*.py`` (flat, the upstream Hermes layout)
-    - ``tools/dispatchers/*.py``    (PLUTUS Phase 4a, registry-backed dispatchers)
-    - ``tools/lifecycle/*.py``      (PLUTUS Phase 4a, direct lifecycle queries)
-    - ``tools/integrations/<source>/*.py`` (PLUTUS Phase 4b+, per-source registrations)
+    Only the flat upstream-Hermes layout lives under ``harness/tools`` — the
+    trading shapes (dispatchers / lifecycle queries / integrations) moved to
+    the top-level ``trading/`` package and are enumerated by
+    ``_enumerate_trading_modules``.
 
-    Skips ``__init__.py``; the flat-tools scan also skips the harness's own
-    ``registry.py`` and the lazy-loaded ``mcp_tool.py``. Other subdirectories
-    under ``tools/`` (``__pycache__``, ``browser_providers``, ``environments``,
-    ``core``) are intentionally not scanned — they contain support code, not
-    registered tools.
+    Skips ``__init__.py``, the registry itself, and the lazy-loaded
+    ``mcp_tool.py``. Subdirectories (``browser_providers``, ``environments``,
+    ``__pycache__``) are support code, not registered tools.
 
-    Module names are derived from the on-disk package layout (see
-    ``_derive_package_prefix``) rather than hardcoded, so the same logic serves
-    both the real ``harness/tools`` tree and the synthetic fixtures in tests.
+    Module names derive from the on-disk package layout (see
+    ``_derive_package_prefix``), so the same logic serves the real tree and
+    the synthetic fixtures in tests.
     """
     out: List[tuple] = []
     prefix = _derive_package_prefix(tools_path)
-
-    # Flat tools/*.py (upstream layout).
     for path in sorted(tools_path.glob("*.py")):
         if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
             continue
         out.append((f"{prefix}.{path.stem}", path))
+    return out
 
-    # tools/dispatchers/*.py
-    dispatchers_dir = tools_path / "dispatchers"
+
+def _enumerate_trading_modules(trading_path: Path) -> List[tuple]:
+    """Return (module_name, file_path) candidates under the ``trading/`` package.
+
+    Scans:
+    - ``trading/dispatchers/*.py``         (registry-backed agent-facing tools)
+    - ``trading/lifecycle/queries/*.py``   (direct lifecycle.db reads)
+    - ``trading/integrations/<source>/*.py`` (per-source registrations)
+
+    ``trading/perception/core`` (registries + embedder), ``lifecycle/db.py``
+    and the other support modules are intentionally not scanned.
+    """
+    out: List[tuple] = []
+    prefix = _derive_package_prefix(trading_path)
+
+    dispatchers_dir = trading_path / "dispatchers"
     if dispatchers_dir.is_dir():
         for path in sorted(dispatchers_dir.glob("*.py")):
             if path.name == "__init__.py":
                 continue
             out.append((f"{prefix}.dispatchers.{path.stem}", path))
 
-    # tools/lifecycle/*.py
-    lifecycle_dir = tools_path / "lifecycle"
-    if lifecycle_dir.is_dir():
-        for path in sorted(lifecycle_dir.glob("*.py")):
+    queries_dir = trading_path / "lifecycle" / "queries"
+    if queries_dir.is_dir():
+        for path in sorted(queries_dir.glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            out.append((f"{prefix}.lifecycle.{path.stem}", path))
+            out.append((f"{prefix}.lifecycle.queries.{path.stem}", path))
 
-    # tools/integrations/<source>/*.py
-    integrations_dir = tools_path / "integrations"
+    integrations_dir = trading_path / "integrations"
     if integrations_dir.is_dir():
         for source_dir in sorted(integrations_dir.iterdir()):
             if not source_dir.is_dir() or source_dir.name == "__pycache__":
@@ -129,24 +136,42 @@ def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
     return out
 
 
-def discover_builtin_tools(tools_dir: Optional[Path] = None) -> List[str]:
+def discover_builtin_tools(
+    tools_dir: Optional[Path] = None,
+    trading_dir: Optional[Path] = None,
+) -> List[str]:
     """Import built-in self-registering tool modules and return their module names.
 
-    Walks the layout in ``_enumerate_tool_modules`` and imports every module
-    whose top-level body contains ``registry.register(...)``. Modules without
-    the call are skipped silently (helper modules can live alongside tools).
+    Dual-root discovery: the flat harness tools under ``harness/tools`` plus
+    the trading domain under ``trading/`` (dispatchers, lifecycle queries,
+    integrations). Imports every candidate whose top-level body contains
+    ``registry.register(...)``; modules without the call are skipped silently
+    (helper modules can live alongside tools).
 
-    Additionally imports every ``tools/integrations/<source>/`` package
+    Additionally imports every ``trading/integrations/<source>/`` package
     (via its ``__init__.py``) so the PLUTUS-style decorator registrations
     (``@register_data_point`` / ``@register_venue`` / ``@register_account``
     / ``@register_alert``) take effect. Integration submodules don't call
-    ``registry.register`` directly so the AST scan above skips them; the
-    package import fans out to the side-effect imports inside each
-    ``__init__.py``.
+    ``registry.register`` directly so the AST scan skips them; the package
+    import fans out to the side-effect imports inside each ``__init__.py``.
+
+    When ``tools_dir`` is passed explicitly without ``trading_dir`` (the
+    synthetic-fixture pattern in tests), the trading root is NOT scanned —
+    fixtures stay hermetic.
     """
     tools_path = Path(tools_dir) if tools_dir is not None else Path(__file__).resolve().parent
+    if trading_dir is not None:
+        trading_path: Optional[Path] = Path(trading_dir)
+    elif tools_dir is None:
+        # Real tree: <repo>/trading sits next to <repo>/harness.
+        trading_path = Path(__file__).resolve().parents[2] / "trading"
+    else:
+        trading_path = None
 
     candidates = _enumerate_tool_modules(tools_path)
+    if trading_path is not None and trading_path.is_dir():
+        candidates += _enumerate_trading_modules(trading_path)
+
     module_names = [
         mod_name for mod_name, path in candidates
         if _module_registers_tools(path)
@@ -160,23 +185,24 @@ def discover_builtin_tools(tools_dir: Optional[Path] = None) -> List[str]:
         except Exception as e:
             logger.warning("Could not import tool module %s: %s", mod_name, e)
 
-    # PLUTUS integrations: import each integration package so its
+    # Trading integrations: import each integration package so its
     # decorator-driven registrations execute.
-    prefix = _derive_package_prefix(tools_path)
-    integrations_dir = tools_path / "integrations"
-    if integrations_dir.is_dir():
-        for source_dir in sorted(integrations_dir.iterdir()):
-            if not source_dir.is_dir() or source_dir.name == "__pycache__":
-                continue
-            init_path = source_dir / "__init__.py"
-            if not init_path.exists():
-                continue
-            mod_name = f"{prefix}.integrations.{source_dir.name}"
-            try:
-                importlib.import_module(mod_name)
-                imported.append(mod_name)
-            except Exception as e:
-                logger.warning("Could not import integration package %s: %s", mod_name, e)
+    if trading_path is not None and trading_path.is_dir():
+        prefix = _derive_package_prefix(trading_path)
+        integrations_dir = trading_path / "integrations"
+        if integrations_dir.is_dir():
+            for source_dir in sorted(integrations_dir.iterdir()):
+                if not source_dir.is_dir() or source_dir.name == "__pycache__":
+                    continue
+                init_path = source_dir / "__init__.py"
+                if not init_path.exists():
+                    continue
+                mod_name = f"{prefix}.integrations.{source_dir.name}"
+                try:
+                    importlib.import_module(mod_name)
+                    imported.append(mod_name)
+                except Exception as e:
+                    logger.warning("Could not import integration package %s: %s", mod_name, e)
 
     return imported
 

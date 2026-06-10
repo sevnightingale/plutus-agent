@@ -11,13 +11,13 @@ import time
 
 import pytest
 
-from harness.agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
-from harness.tools.core import event_registry
+from trading.lifecycle.db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
+from trading.perception.core import event_registry
 from harness.tools.registry import registry as tool_registry
 
 # Force registration.
-import harness.tools.lifecycle.event_types               # noqa: F401
-import harness.tools.lifecycle.query_compaction_history  # noqa: F401
+import trading.lifecycle.queries.event_types               # noqa: F401
+import trading.lifecycle.queries.query_compaction_history  # noqa: F401
 
 
 @pytest.fixture()
@@ -28,8 +28,8 @@ def db(tmp_path):
     # at module import time; without re-registration we'd hit
     # "event type 'compaction' not registered".
     import importlib
-    import harness.tools.lifecycle.event_types as _et
-    from harness.tools.core import event_registry
+    import trading.lifecycle.queries.event_types as _et
+    from trading.perception.core import event_registry
     try:
         event_registry.lookup("compaction")
     except KeyError:

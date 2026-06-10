@@ -55,7 +55,7 @@ def main() -> int:
     from harness.tools.registry import discover_builtin_tools
     discover_builtin_tools()
 
-    from harness.tools.core.alert_registry import list_all
+    from trading.perception.core.alert_registry import list_all
     from .poller import poll_once
 
     alerts = list_all()

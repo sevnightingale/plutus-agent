@@ -9,7 +9,7 @@ import os
 
 import pytest
 
-from harness.tools.core.embedder import (
+from trading.perception.core.embedder import (
     EmbedderError,
     OpenAIEmbedder,
     VoyageFinanceEmbedder,
@@ -114,7 +114,7 @@ class TestVoyageFinanceEmbedder:
     def test_missing_api_key_raises(self, monkeypatch):
         monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
         # Also override _load_env so the fixture file doesn't repopulate it
-        from harness.tools.core import embedder as em
+        from trading.perception.core import embedder as em
         monkeypatch.setattr(em, "_load_env", lambda: None)
         with pytest.raises(EmbedderError, match="VOYAGE_API_KEY"):
             VoyageFinanceEmbedder()
@@ -142,7 +142,7 @@ class TestGetEmbedderFactory:
 
     def test_factory_raises_without_key(self, monkeypatch):
         monkeypatch.delenv("VOYAGE_API_KEY", raising=False)
-        from harness.tools.core import embedder as em
+        from trading.perception.core import embedder as em
         monkeypatch.setattr(em, "_load_env", lambda: None)
         reset_embedder_singleton()
         with pytest.raises(EmbedderError):

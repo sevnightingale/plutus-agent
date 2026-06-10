@@ -10,13 +10,13 @@ import time
 
 import pytest
 
-from harness.agent.lifecycle_db import get_lifecycle_db, reset_lifecycle_db_singleton
-from harness.tools.core import event_registry
+from trading.lifecycle.db import get_lifecycle_db, reset_lifecycle_db_singleton
+from trading.perception.core import event_registry
 from harness.tools.registry import registry as tool_registry
 
 # Force registration.
-import harness.tools.lifecycle.event_types               # noqa: F401
-import harness.tools.lifecycle.query_latest_perception_digest  # noqa: F401
+import trading.lifecycle.queries.event_types               # noqa: F401
+import trading.lifecycle.queries.query_latest_perception_digest  # noqa: F401
 
 
 @pytest.fixture()
@@ -25,8 +25,8 @@ def db(tmp_path):
     # cleared the registry. See test_compaction_visibility.py for the
     # same pattern.
     import importlib
-    import harness.tools.lifecycle.event_types as _et
-    from harness.tools.core import event_registry
+    import trading.lifecycle.queries.event_types as _et
+    from trading.perception.core import event_registry
     try:
         event_registry.lookup("perception_digest")
     except KeyError:

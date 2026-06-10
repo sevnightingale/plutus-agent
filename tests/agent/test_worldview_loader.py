@@ -47,7 +47,7 @@ def test_seed_is_idempotent(tmp_path, monkeypatch):
 def test_loader_returns_none_when_absent(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     # Don't seed — file shouldn't exist
-    from harness.agent.worldview_loader import load_worldview_md
+    from trading.worldview_loader import load_worldview_md
     # Ensure path will be empty so loader sees no file
     wv = tmp_path / "WORLDVIEW.md"
     if wv.exists():
@@ -66,7 +66,7 @@ def test_loader_returns_content_when_present(tmp_path, monkeypatch):
     wv = tmp_path / "WORLDVIEW.md"
     wv.write_text("---\nfoo: bar\n---\n# body\nhello", encoding="utf-8")
 
-    from harness.agent.worldview_loader import load_worldview_md
+    from trading.worldview_loader import load_worldview_md
     content = load_worldview_md()
     assert content is not None
     assert "foo: bar" in content
@@ -81,7 +81,7 @@ def test_loader_returns_none_on_empty_file(tmp_path, monkeypatch):
     wv = tmp_path / "WORLDVIEW.md"
     wv.write_text("    \n\n  ", encoding="utf-8")  # whitespace only
 
-    from harness.agent.worldview_loader import load_worldview_md
+    from trading.worldview_loader import load_worldview_md
     assert load_worldview_md() is None
 
 

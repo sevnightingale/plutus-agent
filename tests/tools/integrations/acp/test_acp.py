@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from harness.tools.integrations.acp import _cli, _env, setup as acp_setup, data_points, operations, identity, accounts, events
-from harness.tools.core import account_registry, identity_registry
+from trading.integrations.acp import _cli, _env, setup as acp_setup, data_points, operations, identity, accounts, events
+from trading.perception.core import account_registry, identity_registry
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def temp_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(home))
     import importlib; import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
-    from harness.agent.lifecycle_db import reset_lifecycle_db_singleton
+    from trading.lifecycle.db import reset_lifecycle_db_singleton
     reset_lifecycle_db_singleton()
     yield home
     reset_lifecycle_db_singleton()

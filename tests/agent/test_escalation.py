@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from harness.agent import escalation
+from trading import escalation
 
 
 @pytest.fixture()
