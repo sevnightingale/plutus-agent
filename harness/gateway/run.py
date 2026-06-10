@@ -10858,6 +10858,65 @@ class GatewayRunner:
         return response
 
 
+def _drain_wake_queue_into_main(gateway, loop) -> None:
+    """Drain the desk wake queue into plutus-main's persistent session.
+
+    All pending wakes collapse into ONE synthetic turn (§10 — never fire two
+    wakes at once). Uses the same primary-session origin resolution as cron
+    synthetic injection. If no origin is configured or delivery fails, the
+    wakes are RE-ENQUEUED — a wake is never silently lost.
+    """
+    import asyncio as _asyncio
+
+    from harness.wake_queue import drain, enqueue, format_wake_prompt, peek
+
+    if peek() == 0:
+        return
+    wakes = drain()
+    if not wakes:
+        return
+
+    def _requeue(reason_note: str) -> None:
+        logger.error("wake drain: %s — re-enqueueing %d wake(s)", reason_note, len(wakes))
+        for w in wakes:
+            try:
+                enqueue(w["reason"], w.get("detail", ""), w.get("source", ""))
+            except Exception:
+                logger.exception("wake re-enqueue failed for %r", w)
+
+    from harness.cron.scheduler import _resolve_origin_for_injection
+    origin = _resolve_origin_for_injection({})
+    if not origin:
+        _requeue("no primary session origin configured")
+        return
+
+    from harness.gateway.config import Platform
+    try:
+        platform = Platform(str(origin["platform"]).lower())
+    except Exception:
+        _requeue(f"unknown origin platform {origin.get('platform')!r}")
+        return
+
+    prompt = format_wake_prompt(wakes)
+    coro = gateway.deliver_synthetic_message(
+        platform=platform,
+        chat_id=str(origin["chat_id"]),
+        text=prompt,
+        kind="wake",
+        user_id=origin.get("user_id"),
+        user_name=origin.get("user_name") or origin.get("chat_name"),
+        chat_type=origin.get("chat_type", "dm"),
+        thread_id=origin.get("thread_id"),
+    )
+    future = _asyncio.run_coroutine_threadsafe(coro, loop)
+    try:
+        future.result(timeout=1800)
+        logger.info("wake drain: delivered %d wake(s) to plutus-main", len(wakes))
+    except Exception as e:
+        future.cancel()
+        _requeue(f"synthetic delivery failed: {type(e).__name__}: {e}")
+
+
 def _start_cron_ticker(
     stop_event: threading.Event,
     adapters=None,
@@ -10899,6 +10958,16 @@ def _start_cron_ticker(
             # trading beats silently stop firing — the exact failure class
             # this project exists to never let happen quietly.
             logger.error("Cron tick error: %s", e, exc_info=True)
+
+        # Desk wake queue (rebuild R4): drain pending wakes into plutus-main's
+        # persistent session — one synthetic turn no matter how many triggers
+        # landed since the last tick. Failures re-enqueue so wakes are never
+        # silently lost.
+        if gateway is not None and loop is not None:
+            try:
+                _drain_wake_queue_into_main(gateway, loop)
+            except Exception as e:
+                logger.error("Wake-queue drain error: %s", e, exc_info=True)
 
         tick_count += 1
 

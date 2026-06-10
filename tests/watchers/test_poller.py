@@ -85,37 +85,31 @@ def test_poll_once_respects_throttle(temp_hermes_home):
     assert second == []
 
 
-def test_schedule_wake_session_creates_cron(temp_hermes_home):
-    """A batch of fired events creates one cron job with the right skill route."""
+def test_schedule_wake_session_enqueues_one_wake(temp_hermes_home):
+    """A batch of fired events enqueues ONE wake for plutus-main (rebuild R4)."""
     from harness.watchers.poller import schedule_wake_session
-    from harness.cron import jobs as cron_jobs
+    from harness.wake_queue import drain
 
     events = [
         {"alert": "hl_position_status_change", "kind": "closed", "coin": "BTC"},
         {"alert": "hl_account_balance_change", "delta": 5.0},
+        {"alert": "hl_price_range", "coin": "BTC", "price": 104100},
     ]
-    job = schedule_wake_session(events)
-    assert job is not None
-    assert job["skill"] == "trading/reconcile-and-reflect"
-    assert job["enabled_toolsets"] == ["plutus-agent-cli"]
-    assert "hl_position_status_change" in job["prompt"]
-    assert "hl_account_balance_change" in job["prompt"]
+    record = schedule_wake_session(events)
+    assert record is not None
+    assert record["reason"] == "watcher"
+    assert record["source"] == "plutus-watchers"
 
-    listed = cron_jobs.list_jobs()
-    assert any(j["id"] == job["id"] for j in listed)
+    wakes = drain()
+    assert len(wakes) == 1
+    detail = wakes[0]["detail"]
+    assert "hl_position_status_change" in detail
+    assert "104100" in detail
 
 
 def test_schedule_wake_session_no_events_returns_none(temp_hermes_home):
     from harness.watchers.poller import schedule_wake_session
     assert schedule_wake_session([]) is None
-
-
-def test_schedule_wake_session_unknown_alert_falls_back_to_heartbeat(temp_hermes_home):
-    from harness.watchers.poller import schedule_wake_session
-
-    events = [{"alert": "future_alert_name", "delta": 1.0}]
-    job = schedule_wake_session(events)
-    assert job["skill"] == "trading/heartbeat"
 
 
 def test_emit_wake_events_appends_lines(temp_hermes_home):

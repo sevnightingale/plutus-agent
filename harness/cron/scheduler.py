@@ -957,6 +957,35 @@ def run_job(job: dict, gateway=None) -> tuple[bool, str, str, Optional[str]]:
     job_id = job["id"]
     job_name = job["name"]
 
+    # ── Path 0: desk-agent job (rebuild R4) ──────────────────────────
+    # A job with `agent: plutus-ops` runs that AGENT.md recipe directly on
+    # its own declared model/toolsets via harness.spawn — no AIAgent
+    # middleman, no prompt building. The cron prompt becomes the spawn
+    # task. Silent toward the operator chat; wakes the agent enqueues are
+    # drained into plutus-main by the gateway ticker.
+    desk_agent = job.get("agent")
+    if desk_agent:
+        from harness.spawn import spawn_agent
+        try:
+            result = spawn_agent(
+                desk_agent,
+                job.get("prompt") or f"{job_name} tick",
+                session_name=f"cron-{job_id}",
+            )
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            logger.exception("Desk-agent job '%s' (%s) failed: %s", job_name, desk_agent, msg)
+            return False, _build_failure_doc(job, job.get("prompt") or "", msg), "", msg
+        doc = (
+            f"# Desk agent job: {job_name}\n\n"
+            f"**Agent:** {desk_agent}\n**ok:** {result['ok']}\n"
+            f"**duration_s:** {result.get('duration_s')}\n"
+            f"**transcript:** {result.get('transcript')}\n"
+            f"**problems:** {result.get('problems') or []}\n"
+        )
+        err = None if result["ok"] else "; ".join(str(x) for x in (result.get("problems") or ["unknown"]))
+        return result["ok"], doc, SILENT_MARKER, err
+
     # Wake-gate: if this job has a pre-check script, run it BEFORE building
     # the prompt so a ``{"wakeAgent": false}`` response can short-circuit
     # the whole agent run. We pass the result into _build_job_prompt so

@@ -385,6 +385,7 @@ def create_job(
     base_url: Optional[str] = None,
     script: Optional[str] = None,
     enabled_toolsets: Optional[List[str]] = None,
+    agent: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a new cron job.
@@ -445,6 +446,9 @@ def create_job(
         "id": job_id,
         "name": name or label_source[:50].strip(),
         "prompt": prompt,
+        # Desk-agent job (rebuild R4): when set, run_job spawns this
+        # agents/<name>/AGENT.md recipe directly instead of an AIAgent.
+        "agent": str(agent).strip() if isinstance(agent, str) and agent.strip() else None,
         "skills": normalized_skills,
         "skill": normalized_skills[0] if normalized_skills else None,
         "model": normalized_model,

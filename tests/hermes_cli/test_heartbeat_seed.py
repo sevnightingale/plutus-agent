@@ -1,8 +1,6 @@
-"""plutus-agent cron seed-heartbeat / seed-weekly-review — write to jobs.json."""
+"""plutus-agent cron seed-desk — the desk's standing jobs (rebuild R4)."""
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
@@ -27,64 +25,54 @@ def temp_hermes_home(tmp_path, monkeypatch):
     importlib.reload(cron.jobs)
 
 
-def test_seed_heartbeat_creates_job(temp_hermes_home):
-    from harness.cli.heartbeat import seed_heartbeat
+def test_seed_desk_creates_both_jobs(temp_hermes_home):
+    from harness.cli.heartbeat import seed_desk_crons
 
-    job = seed_heartbeat()
+    jobs = seed_desk_crons()
 
-    assert job["name"] == "plutus-heartbeat"
-    assert job["schedule"]["expr"] == "0 * * * *"
-    assert job["skill"] == "trading/heartbeat"
-    assert job["enabled_toolsets"] == ["plutus-agent-cli"]
-    assert "Heartbeat tick" in job["prompt"]
+    ops = jobs["ops"]
+    assert ops["name"] == "plutus-ops-tick"
+    assert ops["schedule"]["expr"] == "*/30 * * * *"
+    assert ops["agent"] == "plutus-ops"
 
-    # File-backed
-    jobs_file = temp_hermes_home / "cron" / "jobs.json"
-    assert jobs_file.exists()
-    raw = json.loads(jobs_file.read_text())
-    jobs_iter = (
-        raw["jobs"].values() if isinstance(raw.get("jobs"), dict) else raw.get("jobs", [])
-    )
-    assert any(j["name"] == "plutus-heartbeat" for j in jobs_iter)
+    eod = jobs["eod"]
+    assert eod["name"] == "plutus-eod"
+    assert eod["schedule"]["expr"] == "55 23 * * *"
+    assert eod.get("agent") is None  # synthetic injection into main, not a spawn
+    assert "record(kind=eod)" in eod["prompt"]
 
 
-def test_seed_heartbeat_idempotent(temp_hermes_home):
-    """Re-seeding replaces the prior job rather than duplicating."""
-    from harness.cli.heartbeat import seed_heartbeat
-    import harness.cron.jobs; import harness.cron as cron
+def test_seed_desk_idempotent(temp_hermes_home):
+    from harness.cli.heartbeat import seed_desk_crons
+    from harness.cron.jobs import list_jobs
 
-    first = seed_heartbeat(schedule="*/30 * * * *")
-    second = seed_heartbeat(schedule="0 */2 * * *")
-
-    assert first["id"] != second["id"]
-    jobs = [j for j in cron.jobs.list_jobs() if j["name"] == "plutus-heartbeat"]
-    assert len(jobs) == 1
-    assert jobs[0]["schedule"]["expr"] == "0 */2 * * *"
+    seed_desk_crons()
+    seed_desk_crons()
+    names = [j["name"] for j in list_jobs()]
+    assert names.count("plutus-ops-tick") == 1
+    assert names.count("plutus-eod") == 1
 
 
-def test_seed_weekly_review_creates_job(temp_hermes_home):
-    from harness.cli.heartbeat import seed_weekly_review
+def test_desk_agent_job_routes_to_spawn(temp_hermes_home, monkeypatch):
+    """run_job dispatches agent-jobs straight to harness.spawn.spawn_agent."""
+    from harness.cli.heartbeat import seed_desk_crons
+    from harness.cron import scheduler
 
-    job = seed_weekly_review()
-    assert job["name"] == "plutus-weekly-review"
-    assert job["schedule"]["expr"] == "0 18 * * 0"
-    assert job["skill"] == "trading/weekly-review"
+    jobs = seed_desk_crons()
+    calls = {}
 
+    def fake_spawn(name, task, *, session_name, **kw):
+        calls["name"] = name
+        calls["task"] = task
+        return {"ok": True, "payload": {"resolved": []}, "problems": [],
+                "duration_s": 0.1, "transcript": "/tmp/t.md", "raw": "{}"}
 
-def test_seed_weekly_review_custom_schedule(temp_hermes_home):
-    from harness.cli.heartbeat import seed_weekly_review
+    import harness.spawn
+    monkeypatch.setattr(harness.spawn, "spawn_agent", fake_spawn)
 
-    job = seed_weekly_review(schedule="0 12 * * 1")  # Monday noon
-    assert job["schedule"]["expr"] == "0 12 * * 1"
-
-
-def test_both_helpers_coexist(temp_hermes_home):
-    from harness.cli.heartbeat import seed_heartbeat, seed_weekly_review
-    import harness.cron.jobs; import harness.cron as cron
-
-    seed_heartbeat()
-    seed_weekly_review()
-
-    names = {j["name"] for j in cron.jobs.list_jobs()}
-    assert "plutus-heartbeat" in names
-    assert "plutus-weekly-review" in names
+    ok, doc, final, err = scheduler.run_job(jobs["ops"])
+    assert ok
+    assert calls["name"] == "plutus-ops"
+    assert "ops tick" in calls["task"]
+    assert final == scheduler.SILENT_MARKER
+    assert err is None

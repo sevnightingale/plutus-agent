@@ -7348,30 +7348,11 @@ For more help on a command:
     # cron tick (mostly for debugging)
     cron_tick = cron_subparsers.add_parser("tick", help="Run due jobs once and exit")
 
-    # cron seed-heartbeat (plutus-agent Phase 4 — Plutus's hourly tick)
-    cron_seed_hb = cron_subparsers.add_parser(
-        "seed-heartbeat",
-        help="Install or replace the Plutus hourly heartbeat job (idempotent)",
-    )
-    cron_seed_hb.add_argument(
-        "--schedule", default="0 * * * *",
-        help="Cron schedule (default: '0 * * * *' — every hour on the hour).",
-    )
-    cron_seed_hb.add_argument(
-        "--model", help="Optional per-job model override.",
-    )
-
-    # cron seed-weekly-review (plutus-agent Phase 4 — Sunday 18:00 UTC)
-    cron_seed_wr = cron_subparsers.add_parser(
-        "seed-weekly-review",
-        help="Install or replace the Plutus weekly review job (idempotent)",
-    )
-    cron_seed_wr.add_argument(
-        "--schedule", default="0 18 * * 0",
-        help="Cron schedule (default: '0 18 * * 0' — Sunday 18:00 UTC).",
-    )
-    cron_seed_wr.add_argument(
-        "--model", help="Optional per-job model override.",
+    # cron seed-desk (rebuild R4 — ops tick + EOD journal close)
+    cron_subparsers.add_parser(
+        "seed-desk",
+        help="Install or replace the desk's standing cron jobs (idempotent): "
+             "plutus-ops-tick (every 30 min) + plutus-eod (23:55 daily)",
     )
 
     _add_accept_hooks_flag(cron_tick)

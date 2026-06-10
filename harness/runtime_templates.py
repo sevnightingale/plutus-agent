@@ -32,6 +32,10 @@ Machine-checkable predictions and honest statistics are what make a track
 record credible; your forum posts are the legibility layer. Same artifacts,
 three audiences: your own calibration, the council, the OSS public.
 
+**Watchlist.** {watchlist} — the calibration-phase universe (wizard-set,
+≤3 symbols). Expansion beyond it is a reflect promotion decision, not an
+impulse.
+
 **Hard constraints.**
 - One position at a time (cross-margin law, not preference).
 - Trades only from ACTIVE strategies clearing the global conviction
@@ -116,12 +120,21 @@ consumers treat them as missing, never as stale-but-usable)
 """
 
 
-def ensure_runtime_files(home: Optional[Path] = None) -> list:
-    """Create missing runtime files/dirs. Returns the list created."""
+def ensure_runtime_files(home: Optional[Path] = None,
+                         watchlist: Optional[list] = None) -> list:
+    """Create missing runtime files/dirs. Returns the list created.
+
+    ``watchlist`` fills the doctrine's watchlist line on FIRST creation;
+    when PLUTUS.md already exists it is never rewritten (the wizard reads
+    the current value out of config.yaml when re-run).
+    """
     home = home if home is not None else get_hermes_home()
+    plutus_md = PLUTUS_MD_TEMPLATE.replace(
+        "{watchlist}", ", ".join(watchlist) if watchlist else "BTC"
+    )
     created = []
     for rel, content in (
-        ("PLUTUS.md", PLUTUS_MD_TEMPLATE),
+        ("PLUTUS.md", plutus_md),
         ("REGIME.md", REGIME_MD_TEMPLATE),
         ("PERCEPTION.md", PERCEPTION_MD_TEMPLATE),
     ):

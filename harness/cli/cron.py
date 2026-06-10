@@ -285,13 +285,9 @@ def cron_command(args):
     if subcmd in {"remove", "rm", "delete"}:
         return _job_action("remove", args.job_id, "Removed")
 
-    if subcmd == "seed-heartbeat":
-        from harness.cli.heartbeat import cmd_seed_heartbeat
-        return cmd_seed_heartbeat(args)
-
-    if subcmd == "seed-weekly-review":
-        from harness.cli.heartbeat import cmd_seed_weekly_review
-        return cmd_seed_weekly_review(args)
+    if subcmd == "seed-desk":
+        from harness.cli.heartbeat import cmd_seed_desk
+        return cmd_seed_desk(args)
 
     print(f"Unknown cron command: {subcmd}")
     print("Usage: plutus cron [list|create|edit|pause|resume|run|remove|status|tick|seed-heartbeat|seed-weekly-review]")

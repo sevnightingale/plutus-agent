@@ -65,86 +65,28 @@ def poll_once(alert_entry) -> List[Dict[str, Any]]:
     return events
 
 
-# Map alert names to the skill Plutus should load when the alert fires.
-# Falls back to the heartbeat skill when no specific routing is registered.
-_ALERT_SKILL_ROUTES: Dict[str, str] = {
-    "hl_position_status_change":     "trading/reconcile-and-reflect",
-    "hl_account_balance_change":     "trading/reconcile-and-reflect",
-    "dgclaw_perp_deposit_completed": "trading/bootstrap-setup",
-    "dgclaw_leaderboard_rank_change": "trading/heartbeat",
-    "hl_price_range":                "trading/price-alert",
-}
-
-
-def _route_skill_for(events: List[Dict[str, Any]]) -> str:
-    """Pick the most-specific skill name to load for a batch of events."""
-    skills = {_ALERT_SKILL_ROUTES.get(e.get("alert", ""), "trading/heartbeat") for e in events}
-    # Most-specific skill wins; fall back to heartbeat.
-    if "trading/reconcile-and-reflect" in skills:
-        return "trading/reconcile-and-reflect"
-    if "trading/bootstrap-setup" in skills:
-        return "trading/bootstrap-setup"
-    return next(iter(skills), "trading/heartbeat")
-
-
-def _build_prompt_for(events: List[Dict[str, Any]]) -> str:
-    """Build a cron prompt for the given batch of events.
-
-    Price-range alerts get a direct, minimal prompt so Plutus evaluates them
-    immediately without needing to load the full wake-event skill scaffold.
-    """
-    price_events = [e for e in events if e.get("alert") == "hl_price_range"]
-    other_events = [e for e in events if e.get("alert") != "hl_price_range"]
-
-    parts: List[str] = []
-
-    if price_events:
-        # Direct, machine-readable alert — Plutus knows to evaluate this
-        # immediately without needing to load the price-alert skill
-        price_lines = []
-        for e in price_events:
-            coin = e.get("coin", "?")
-            price = e.get("price", "?")
-            price_lines.append(f"{coin} at {price} (inside configured range)")
-        parts.append(
-            "Price alert triggered: " + "; ".join(price_lines) + ". "
-            "Evaluate immediately for trading opportunity."
-        )
-
-    if other_events:
-        summary = "; ".join(
-            f"{e.get('alert')}/{e.get('kind') or 'fired'}"
-            + (f"({e.get('coin')})" if e.get("coin") else "")
-            for e in other_events
-        )
-        parts.append(
-            f"Wake event(s) from watcher daemon: {summary}. "
-            "Load the indicated skill, examine the wake events in "
-            "~/.plutus-agent/wake_events.ndjson if more detail is needed, "
-            "and act."
-        )
-
-    return " ".join(parts)
-
-
 def schedule_wake_session(events: List[Dict[str, Any]]) -> Dict[str, Any] | None:
-    """Create a one-shot cron job that wakes Plutus for the batched events.
+    """Enqueue ONE wake for plutus-main covering the batched events (rebuild R4).
 
-    Returns the created job dict (or None when no events). The cron
-    scheduler picks up the job within ~60s and runs it as a fresh
-    Plutus session with the chosen skill loaded.
+    Watchers never spawn sessions or create cron jobs anymore — they enqueue
+    into the serialized wake queue; the gateway ticker drains it into main's
+    persistent session (multiple triggers collapse into one turn by design).
     """
     if not events:
         return None
-    from harness.cron.jobs import create_job
+    from harness.wake_queue import enqueue
 
-    skill = _route_skill_for(events)
-    prompt = _build_prompt_for(events)
-    return create_job(
-        prompt=prompt,
-        schedule="1m",       # one-shot, fires within ~60s
-        name=f"plutus-wake-{int(time.time())}",
-        skill=skill,
-        enabled_toolsets=["plutus-agent-cli"],
-        repeat=1,
-    )
+    parts: List[str] = []
+    price_events = [e for e in events if e.get("alert") == "hl_price_range"]
+    other_events = [e for e in events if e.get("alert") != "hl_price_range"]
+    if price_events:
+        parts.append("price alert: " + "; ".join(
+            f"{e.get('coin', '?')} at {e.get('price', '?')} (inside configured range)"
+            for e in price_events))
+    if other_events:
+        parts.append("watcher events: " + "; ".join(
+            f"{e.get('alert')}/{e.get('kind') or 'fired'}"
+            + (f"({e.get('coin')})" if e.get("coin") else "")
+            for e in other_events))
+    detail = ". ".join(parts) + ". Full payloads: ~/.plutus-agent/wake_events.ndjson"
+    return enqueue("watcher", detail, source="plutus-watchers")

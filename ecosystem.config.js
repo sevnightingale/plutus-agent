@@ -5,7 +5,7 @@ module.exports = {
   apps: [
     {
       name: "plutus-gateway",
-      script: `${home}/.local/bin/plutus`,
+      script: `${repo}/.venv/bin/plutus`,
       args: "gateway run",
       cwd: repo,
       interpreter: "none",
@@ -13,6 +13,8 @@ module.exports = {
       max_restarts: 20,
       kill_timeout: 10000,
       max_memory_restart: "900M",
+      error_file: `${home}/.plutus-agent/logs/gateway-error.log`,
+      out_file: `${home}/.plutus-agent/logs/gateway-out.log`,
     },
     {
       name: "plutus-watchers",

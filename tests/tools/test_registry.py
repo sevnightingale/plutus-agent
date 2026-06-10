@@ -322,7 +322,13 @@ class TestBuiltinDiscovery:
             "trading.dispatchers.list_venues",
 
 
+            "trading.dispatchers.desk_execution",
+            "trading.dispatchers.lifecycle_query",
             "trading.dispatchers.record",
+            "trading.dispatchers.resolution",
+            "trading.dispatchers.spawn_tool",
+            "trading.dispatchers.strategy_tools",
+            "trading.dispatchers.wake",
             "trading.dispatchers.register_prediction",
             "trading.dispatchers.record_data_point_observation",
 

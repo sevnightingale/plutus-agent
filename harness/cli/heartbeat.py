@@ -1,103 +1,62 @@
-"""Cron seed helpers for the Plutus heartbeat + weekly review.
+"""Cron seed helpers for the desk (rebuild R4).
 
-Two-line entry points the operator runs once per fresh install:
-    plutus-agent cron seed-heartbeat
-    plutus-agent cron seed-weekly-review
+One idempotent entry point the wizard (and operator) runs on a fresh install:
 
-Both are idempotent — re-running with the same name simply replaces
-the existing job with the new schedule (current behavior of the cron
-job store: name collisions overwrite).
+    plutus-agent cron seed-desk
+
+Installs:
+- ``plutus-ops-tick`` — every 30 minutes, a desk-agent job that spawns
+  agents/plutus-ops/AGENT.md directly (resolution + watchdog; silent).
+- ``plutus-eod`` — 23:55 daily, a synthetic message into plutus-main's
+  session asking for the journal close (record(kind=eod)).
+
+plutus-main needs no seed: it IS the operator's persistent session, woken by
+the wake queue, the operator, and its own self-scheduled crons.
 """
 
 from __future__ import annotations
 
-import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-
-HEARTBEAT_PROMPT = (
-    "Heartbeat tick. Load the trading/heartbeat skill and route to the "
-    "appropriate phase skill (watchlist-scan / deep-research / "
-    "position-monitor / reconcile-and-reflect). Examine WORLDVIEW.md and "
-    "lifecycle.db before deciding."
+OPS_TICK_PROMPT = (
+    "30-minute ops tick. Run your Procedure: resolve due predictions, "
+    "evaluate the open position (if any), check staleness floors, enqueue "
+    "wakes where needed, return your ops_report."
 )
 
-WEEKLY_REVIEW_PROMPT = (
-    "Weekly review. Load the trading/weekly-review skill, run the lifecycle "
-    "queries, write a structured weekly_review reflection, surface the "
-    "summary to the operator, and pass control to strategy-curator if "
-    "any strategies need pause/retire actions."
+EOD_PROMPT = (
+    "[EOD] End of day. Close the journal via record(kind=eod): how the day "
+    "went, what changed in the book, what you're watching tomorrow. Keep it "
+    "honest and short. The session rolls after this turn."
 )
 
 
-def seed_heartbeat(
-    schedule: str = "0 * * * *",
-    model: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Install (or replace) the hourly Plutus heartbeat cron job."""
-    from harness.cron.jobs import create_job, list_jobs, remove_job
-
-    # Idempotent replace — remove any existing job with the same name first.
-    for job in list_jobs():
-        if job.get("name") == "plutus-heartbeat":
-            remove_job(job["id"])
-
-    return create_job(
-        prompt=HEARTBEAT_PROMPT,
-        schedule=schedule,
-        name="plutus-heartbeat",
-        skill="trading/heartbeat",
-        enabled_toolsets=["plutus-agent-cli"],
-        repeat=None,
-        model=model,
-    )
-
-
-def seed_weekly_review(
-    schedule: str = "0 18 * * 0",   # Sunday 18:00 UTC
-    model: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Install (or replace) the Sunday 18:00 UTC weekly review cron job."""
+def seed_desk_crons() -> Dict[str, Any]:
+    """Install (or replace) the desk's two standing cron jobs."""
     from harness.cron.jobs import create_job, list_jobs, remove_job
 
     for job in list_jobs():
-        if job.get("name") == "plutus-weekly-review":
+        if job.get("name") in ("plutus-ops-tick", "plutus-eod"):
             remove_job(job["id"])
 
-    return create_job(
-        prompt=WEEKLY_REVIEW_PROMPT,
-        schedule=schedule,
-        name="plutus-weekly-review",
-        skill="trading/weekly-review",
-        enabled_toolsets=["plutus-agent-cli"],
-        repeat=None,
-        model=model,
+    ops = create_job(
+        prompt=OPS_TICK_PROMPT,
+        schedule="*/30 * * * *",
+        name="plutus-ops-tick",
+        agent="plutus-ops",
     )
-
-
-def cmd_seed_heartbeat(args) -> int:
-    """CLI handler — `plutus-agent cron seed-heartbeat [--schedule X]`."""
-    schedule = getattr(args, "schedule", None) or "0 * * * *"
-    model = getattr(args, "model", None) or None
-    job = seed_heartbeat(schedule=schedule, model=model)
-    _print_seeded(job)
-    return 0
-
-
-def cmd_seed_weekly_review(args) -> int:
-    """CLI handler — `plutus-agent cron seed-weekly-review [--schedule X]`."""
-    schedule = getattr(args, "schedule", None) or "0 18 * * 0"
-    model = getattr(args, "model", None) or None
-    job = seed_weekly_review(schedule=schedule, model=model)
-    _print_seeded(job)
-    return 0
-
-
-def _print_seeded(job: Dict[str, Any]) -> None:
-    sys.stdout.write(
-        f"Installed cron job '{job.get('name')}' (id={job.get('id')}).\n"
-        f"  schedule:        {job.get('schedule')}\n"
-        f"  skill:           {job.get('skill')}\n"
-        f"  enabled_toolsets: {job.get('enabled_toolsets')}\n"
-        f"  next run (utc):  {job.get('next_run')}\n"
+    eod = create_job(
+        prompt=EOD_PROMPT,
+        schedule="55 23 * * *",
+        name="plutus-eod",
     )
+    return {"ops": ops, "eod": eod}
+
+
+def cmd_seed_desk(args) -> int:
+    """CLI handler — `plutus-agent cron seed-desk`."""
+    jobs = seed_desk_crons()
+    for label, job in jobs.items():
+        print(f"  ✓ {job['name']}: {job['schedule']['expr']}"
+              + (f" (agent: {job['agent']})" if job.get("agent") else ""))
+    return 0
