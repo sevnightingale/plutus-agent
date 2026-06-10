@@ -175,7 +175,7 @@ TIPS = [
     "The plan skill saves markdown plans under .hermes/plans/ in the active workspace.",
 
     # --- Cron & Scheduling ---
-    "Cron jobs can attach skills: plutus cron add --skill blogwatcher \"Check for new posts\".",
+    "Cron jobs can attach skills: plutus cron add --skill polymarket \"Check for new markets\".",
     "Cron delivery targets include telegram, discord, slack, email, sms, and 12+ more platforms.",
     "If a cron response starts with [SILENT], delivery is suppressed — useful for monitoring-only jobs.",
     "Cron supports relative delays (30m), intervals (every 2h), cron expressions, and ISO timestamps.",
