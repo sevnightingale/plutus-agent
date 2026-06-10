@@ -53,8 +53,13 @@ LEGACY_SUMMARY_PREFIX = "[CONTEXT SUMMARY]:"
 _MIN_SUMMARY_TOKENS = 2000
 # Proportion of compressed content to allocate for summary
 _SUMMARY_RATIO = 0.20
-# Absolute ceiling for summary tokens (even on very large context windows)
-_SUMMARY_TOKENS_CEILING = 12_000
+# Absolute ceiling for summary tokens (even on very large context windows).
+# Was 12_000; lowered to 4_000 on 2026-06-05 because deepseek-v4-flash's
+# streaming output peer-closes (RemoteProtocolError) past ~4K tokens on
+# opencode-go's chunked transfer. The 12K ceiling was a Claude-Sonnet-class
+# budget that never delivered reliably on the flash model — see ledger
+# 2026-06-05 for the diagnosis (Plutus gateway provider connectivity issue).
+_SUMMARY_TOKENS_CEILING = 4_000
 
 # Placeholder used when pruning old tool results
 _PRUNED_TOOL_PLACEHOLDER = "[Old tool output cleared to save context space]"
@@ -795,7 +800,10 @@ The user has requested that this compaction PRIORITISE preserving all informatio
                     "api_mode": self.api_mode,
                 },
                 "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": int(summary_budget * 1.3),
+                # Was int(summary_budget * 1.3); dropped 1.3× overshoot on 2026-06-05
+                # — flash-class models cannot reliably deliver the headroom and
+                # truncate (finish_reason='length') + peer-close the chunked stream.
+                "max_tokens": summary_budget,
                 # timeout resolved from auxiliary.compression.timeout config by call_llm
             }
             if self.summary_model:

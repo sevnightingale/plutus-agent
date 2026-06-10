@@ -88,6 +88,70 @@ def _resolve_provider(
         raise RuntimeError(format_runtime_provider_error(exc)) from exc
 
 
+def _load_external_context() -> Optional[str]:
+    """For ``plutus-perception`` spawns, auto-load an optional external-context
+    JSON file from disk and embed it in the kick-off prompt so perception sees
+    it alongside SOUL.md + WORLDVIEW.md.
+
+    This is the mechanism by which an operator-side process (a daily market
+    research brief, an external automation, a separate intelligence agent, etc)
+    can feed ancillary context to perception without plutus-main having to
+    touch the file. The harness owns the file-path coupling; main reads only
+    the digest, which now carries an "External context" section composed by
+    perception from this block.
+
+    Path resolution order:
+      1. ``$PLUTUS_EXTERNAL_CONTEXT_PATH`` if set
+      2. ``$HERMES_HOME/external-context.json``
+      3. ``$HERMES_HOME/sebastian-context.json`` (legacy compatibility)
+
+    The JSON is expected to carry a ``generated_at`` ISO8601 timestamp so a
+    freshness label can be computed (``STALE`` if > 30h old). Schema is
+    otherwise open — perception receives the raw JSON and surfaces whatever
+    fields it recognizes (macro_context, narrative_context, polymarket_shifts,
+    x_panel_callouts are conventional names but not enforced).
+
+    Returns a markdown block ready to embed in the kick-off prompt, or
+    ``None`` if no file is found or it is unparseable. Treats absent files as
+    a no-op — the brief is ancillary, not required.
+    """
+    override = os.environ.get("PLUTUS_EXTERNAL_CONTEXT_PATH")
+    candidates = []
+    if override:
+        candidates.append(Path(override).expanduser())
+    candidates.append(_HERMES_HOME / "external-context.json")
+    candidates.append(_HERMES_HOME / "sebastian-context.json")  # legacy
+
+    path = next((p for p in candidates if p.exists()), None)
+    if path is None:
+        return None
+    try:
+        raw = path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except Exception as exc:
+        logger.info("subagent_spawn: external-context file present but unparseable: %s", exc)
+        return None
+    generated_at = data.get("generated_at")
+    age_label = "unknown age"
+    fresh_label = "fresh"
+    if generated_at:
+        try:
+            import datetime
+            gen_dt = datetime.datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+            now_dt = datetime.datetime.now(datetime.timezone.utc)
+            age_h = (now_dt - gen_dt).total_seconds() / 3600
+            age_label = f"age {age_h:.1f}h"
+            fresh_label = "STALE" if age_h > 30 else "fresh"
+        except Exception:
+            pass
+    return (
+        f"## External context ({age_label}, {fresh_label})\n\n"
+        "```json\n"
+        f"{raw.strip()}\n"
+        "```"
+    )
+
+
 def _build_subagent_prompt(skill_name: str, scope: Optional[str],
                            extra_context_md: Optional[str],
                            for_main_beat_at_unix: Optional[float]) -> str:
@@ -97,6 +161,12 @@ def _build_subagent_prompt(skill_name: str, scope: Optional[str],
     the ``SKILL.md`` body and inlines it. We just hand the agent a clear
     "run this skill now" instruction plus any context the orchestrator
     wants to pass through.
+
+    For ``plutus-perception`` specifically, this helper auto-loads an
+    optional external-context JSON from disk (see ``_load_external_context``)
+    and embeds it in the prompt — perception sees it like an inherited
+    context file, not as something main has to pass through. Keeps plutus-main
+    free of any external-context handling.
     """
     parts = [
         f"[SUB-AGENT INVOCATION — skill={skill_name}]",
@@ -113,6 +183,10 @@ def _build_subagent_prompt(skill_name: str, scope: Optional[str],
         parts += ["", f"Scope parameter: **{scope}**"]
     if for_main_beat_at_unix is not None:
         parts += ["", f"This run serves the main beat scheduled at unix={for_main_beat_at_unix:.0f}."]
+    if skill_name == "plutus-perception":
+        external_block = _load_external_context()
+        if external_block:
+            parts += ["", external_block]
     if extra_context_md:
         parts += ["", "Additional context from orchestrator:", extra_context_md]
     parts += ["", f"skill_view: \"trading/{skill_name}\""]
