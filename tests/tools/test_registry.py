@@ -299,7 +299,6 @@ class TestBuiltinDiscovery:
             "tools.code_execution_tool",
             "tools.cronjob_tools",
             "tools.delegate_tool",
-            "tools.discord_tool",
             "tools.file_tools",
             "tools.image_generation_tool",
             "tools.memory_tool",

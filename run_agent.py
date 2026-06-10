@@ -1669,31 +1669,6 @@ class AIAgent:
         except Exception:
             pass
 
-        if _engine_name != "compressor":
-            # Try loading from plugins/context_engine/<name>/
-            try:
-                from plugins.context_engine import load_context_engine
-                _selected_engine = load_context_engine(_engine_name)
-            except Exception as _ce_load_err:
-                logger.debug("Context engine load from plugins/context_engine/: %s", _ce_load_err)
-
-            # Try general plugin system as fallback
-            if _selected_engine is None:
-                try:
-                    from plutus_cli.plugins import get_plugin_context_engine
-                    _candidate = get_plugin_context_engine()
-                    if _candidate and _candidate.name == _engine_name:
-                        _selected_engine = _candidate
-                except Exception:
-                    pass
-
-            if _selected_engine is None:
-                logger.warning(
-                    "Context engine '%s' not found — falling back to built-in compressor",
-                    _engine_name,
-                )
-        # else: config says "compressor" — use built-in, don't auto-activate plugins
-
         if _selected_engine is not None:
             self.context_compressor = _selected_engine
             # Resolve context_length for plugin engines — mirrors switch_model() path

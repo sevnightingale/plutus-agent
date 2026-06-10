@@ -658,7 +658,7 @@ def _discover_all_plugins() -> list:
 
     seen: dict = {}  # name -> (name, version, description, source, path)
 
-    # Bundled (<repo>/plugins/<name>/), excluding memory/ and context_engine/
+    # Bundled (<repo>/plugins/<name>/), excluding memory/
     import plutus_cli
     repo_plugins = Path(plutus_cli.__file__).resolve().parent.parent / "plugins"
     for base, source in ((repo_plugins, "bundled"), (_plugins_dir(), "user")):
@@ -667,7 +667,7 @@ def _discover_all_plugins() -> list:
         for d in sorted(base.iterdir()):
             if not d.is_dir():
                 continue
-            if source == "bundled" and d.name in ("memory", "context_engine"):
+            if source == "bundled" and d.name == "memory":
                 continue
             manifest_file = d / "plugin.yaml"
             if not manifest_file.exists():
@@ -749,15 +749,6 @@ def _discover_memory_providers() -> list[tuple[str, str]]:
         return []
 
 
-def _discover_context_engines() -> list[tuple[str, str]]:
-    """Return [(name, description), ...] for available context engines."""
-    try:
-        from plugins.context_engine import discover_context_engines
-        return [(name, desc) for name, desc, _avail in discover_context_engines()]
-    except Exception:
-        return []
-
-
 def _get_current_memory_provider() -> str:
     """Return the current memory.provider from config (empty = built-in)."""
     try:
@@ -768,16 +759,6 @@ def _get_current_memory_provider() -> str:
         return ""
 
 
-def _get_current_context_engine() -> str:
-    """Return the current context.engine from config."""
-    try:
-        from plutus_cli.config import load_config
-        config = load_config()
-        return config.get("context", {}).get("engine", "compressor") or "compressor"
-    except Exception:
-        return "compressor"
-
-
 def _save_memory_provider(name: str) -> None:
     """Persist memory.provider to config.yaml."""
     from plutus_cli.config import load_config, save_config
@@ -785,16 +766,6 @@ def _save_memory_provider(name: str) -> None:
     if "memory" not in config:
         config["memory"] = {}
     config["memory"]["provider"] = name
-    save_config(config)
-
-
-def _save_context_engine(name: str) -> None:
-    """Persist context.engine to config.yaml."""
-    from plutus_cli.config import load_config, save_config
-    config = load_config()
-    if "context" not in config:
-        config["context"] = {}
-    config["context"]["engine"] = name
     save_config(config)
 
 
@@ -836,44 +807,6 @@ def _configure_memory_provider() -> bool:
     return False
 
 
-def _configure_context_engine() -> bool:
-    """Launch a radio picker for context engines. Returns True if changed."""
-    from plutus_cli.curses_ui import curses_radiolist
-
-    current = _get_current_context_engine()
-    engines = _discover_context_engines()
-
-    # Build items: "compressor" first (built-in), then discovered engines
-    items = ["compressor (default)"]
-    names = ["compressor"]
-    selected = 0
-
-    for name, desc in engines:
-        names.append(name)
-        label = f"{name} \u2014 {desc}" if desc else name
-        items.append(label)
-        if name == current:
-            selected = len(items) - 1
-
-    # If current engine isn't in discovered list and isn't compressor, add it
-    if current != "compressor" and current not in names:
-        names.append(current)
-        items.append(f"{current} (not found)")
-        selected = len(items) - 1
-
-    choice = curses_radiolist(
-        title="Context Engine (select one)",
-        items=items,
-        selected=selected,
-    )
-
-    new_engine = names[choice]
-    if new_engine != current:
-        _save_context_engine(new_engine)
-        return True
-    return False
-
-
 # ---------------------------------------------------------------------------
 # Composite plugins UI
 # ---------------------------------------------------------------------------
@@ -906,10 +839,8 @@ def cmd_toggle() -> None:
 
     # -- Provider categories --
     current_memory = _get_current_memory_provider() or "built-in"
-    current_context = _get_current_context_engine()
     categories = [
         ("Memory Provider", current_memory, _configure_memory_provider),
-        ("Context Engine", current_context, _configure_context_engine),
     ]
 
     has_plugins = bool(plugin_names)
@@ -1088,8 +1019,7 @@ def _run_composite_ui(curses, plugin_names, plugin_labels, plugin_selected,
                             # Refresh current values
                             categories[ci] = (
                                 _cat_name,
-                                _get_current_memory_provider() or "built-in" if ci == 0
-                                else _get_current_context_engine(),
+                                _get_current_memory_provider() or "built-in",
                                 cat_fn,
                             )
                         # Re-enter curses
@@ -1121,8 +1051,7 @@ def _run_composite_ui(curses, plugin_names, plugin_labels, plugin_selected,
                             result_holder["providers_changed"] = True
                             categories[ci] = (
                                 _cat_name,
-                                _get_current_memory_provider() or "built-in" if ci == 0
-                                else _get_current_context_engine(),
+                                _get_current_memory_provider() or "built-in",
                                 cat_fn,
                             )
                         stdscr = curses.initscr()
@@ -1174,10 +1103,8 @@ def _run_composite_ui(curses, plugin_names, plugin_labels, plugin_selected,
 
     if result_holder["providers_changed"]:
         new_memory = _get_current_memory_provider() or "built-in"
-        new_context = _get_current_context_engine()
         console.print(
-            f"[green]\u2713[/green] Memory provider: [bold]{new_memory}[/bold]  "
-            f"Context engine: [bold]{new_context}[/bold]"
+            f"[green]\u2713[/green] Memory provider: [bold]{new_memory}[/bold]"
         )
 
     if n_plugins > 0 or result_holder["providers_changed"]:

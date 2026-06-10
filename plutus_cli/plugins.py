@@ -1109,11 +1109,6 @@ def _ensure_plugins_discovered(force: bool = False) -> PluginManager:
     return manager
 
 
-def get_plugin_context_engine():
-    """Return the plugin-registered context engine, or None."""
-    return _ensure_plugins_discovered()._context_engine
-
-
 def get_plugin_command_handler(name: str) -> Optional[Callable]:
     """Return the handler for a plugin-registered slash command, or ``None``."""
     entry = _ensure_plugins_discovered()._plugin_commands.get(name)
