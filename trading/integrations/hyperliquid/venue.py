@@ -14,7 +14,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from trading.lifecycle.db import get_lifecycle_db
+from trading.lifecycle.db import get_db
 from trading.perception.core.venue_registry import register_venue, RegistryError
 
 from ._client import (
@@ -402,8 +402,7 @@ def _lookup_bracket_order_ids(position_id: int) -> Dict[str, Optional[str]]:
     Returns ``{"sl": "<oid>" or None, "tp": "<oid>" or None}``. Empty when
     the position was opened without brackets or before bracket support.
     """
-    db = get_lifecycle_db()
-    row = db.conn().execute(
+    row = get_db().execute(
         "SELECT d.params_json FROM positions p "
         "JOIN trades t ON t.id = p.opening_trade_id "
         "JOIN decisions d ON d.id = t.decision_id "

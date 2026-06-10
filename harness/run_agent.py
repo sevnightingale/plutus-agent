@@ -97,8 +97,6 @@ from harness.agent.context_compressor import ContextCompressor
 from harness.agent.subdirectory_hints import SubdirectoryHintTracker
 from harness.agent.prompt_caching import apply_anthropic_cache_control
 from harness.agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
-from trading.worldview_loader import load_worldview_md
-from trading.strategies.loader import build_strategy_prompt_block
 from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
 from harness.agent.codex_responses_adapter import (
     _derive_responses_function_call_id as _codex_derive_responses_function_call_id,
@@ -4017,27 +4015,9 @@ class AIAgent:
             # Fallback to hardcoded identity
             prompt_parts = [DEFAULT_AGENT_IDENTITY]
 
-        # WORLDVIEW.md (PLUTUS Stratum 1: cross-session bridge). Frozen
-        # snapshot at session start; Plutus's writes during the session
-        # take effect on the NEXT session (prompt is cached — see
-        # agent/prompt_caching.py and PLUTUS principle 3).
-        _wv_content = load_worldview_md()
-        if _wv_content:
-            prompt_parts.append(_wv_content)
-
-        # Strategy library summary (active + trial + observation strategies).
-        # Frozen-snapshot semantics same as WORLDVIEW: read at session start.
-        # Full strategy bodies loaded on-demand via read_file; this is the
-        # index so heartbeat routing + thesis discipline have the current
-        # playbooks at top-of-mind without a tool call.
-        try:
-            _strat_block = build_strategy_prompt_block()
-            if _strat_block:
-                prompt_parts.append(_strat_block)
-        except Exception as exc:
-            logging.getLogger(__name__).warning(
-                "strategy_loader failed (skipping block): %s", exc
-            )
+        # (WORLDVIEW.md + v1 strategy-block injection removed in the rebuild —
+        # desk context is assembled per-agent by the spawn mechanism from
+        # PLUTUS.md zones and the status-gated strategy loader. R2.)
 
         # Tool-aware behavioral guidance: only inject when the tools are loaded
         tool_guidance = []

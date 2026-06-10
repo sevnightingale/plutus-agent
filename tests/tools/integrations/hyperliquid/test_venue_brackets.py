@@ -363,7 +363,7 @@ class TestClosePositionCancelsBrackets:
             "sl_order_id": "9001", "tp_order_id": "9002",
         })
         fake_db = _FakeLifecycleDB(params)
-        monkeypatch.setattr(venue, "get_lifecycle_db", lambda: fake_db)
+        monkeypatch.setattr(venue, "get_db", lambda: fake_db.conn())
 
         mock_ex = MagicMock()
         mock_ex.cancel.return_value = _wrap_statuses([{"status": "ok"}])
@@ -384,7 +384,7 @@ class TestClosePositionCancelsBrackets:
     def test_no_brackets_tracked_skips_cancel(self, monkeypatch):
         params = json.dumps({"symbol": "BTC", "size": 0.01})  # no bracket IDs
         fake_db = _FakeLifecycleDB(params)
-        monkeypatch.setattr(venue, "get_lifecycle_db", lambda: fake_db)
+        monkeypatch.setattr(venue, "get_db", lambda: fake_db.conn())
 
         mock_ex = MagicMock()
         mock_ex.market_close.return_value = _wrap_statuses([_make_filled(80100.0, 0.01)])
@@ -397,7 +397,7 @@ class TestClosePositionCancelsBrackets:
     def test_benign_already_canceled_error_swallowed(self, monkeypatch):
         params = json.dumps({"sl_order_id": "9001", "tp_order_id": None})
         fake_db = _FakeLifecycleDB(params)
-        monkeypatch.setattr(venue, "get_lifecycle_db", lambda: fake_db)
+        monkeypatch.setattr(venue, "get_db", lambda: fake_db.conn())
 
         mock_ex = MagicMock()
         # HL returns "Order was never placed, already canceled, or filled"
@@ -416,7 +416,7 @@ class TestClosePositionCancelsBrackets:
     def test_real_cancel_error_surfaces_warning(self, monkeypatch):
         params = json.dumps({"sl_order_id": "9001"})
         fake_db = _FakeLifecycleDB(params)
-        monkeypatch.setattr(venue, "get_lifecycle_db", lambda: fake_db)
+        monkeypatch.setattr(venue, "get_db", lambda: fake_db.conn())
 
         mock_ex = MagicMock()
         mock_ex.cancel.return_value = _wrap_statuses([
@@ -434,7 +434,7 @@ class TestClosePositionCancelsBrackets:
     def test_cancel_exception_surfaces_warning(self, monkeypatch):
         params = json.dumps({"sl_order_id": "9001"})
         fake_db = _FakeLifecycleDB(params)
-        monkeypatch.setattr(venue, "get_lifecycle_db", lambda: fake_db)
+        monkeypatch.setattr(venue, "get_db", lambda: fake_db.conn())
 
         mock_ex = MagicMock()
         mock_ex.cancel.side_effect = ConnectionError("RPC down")

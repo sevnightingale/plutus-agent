@@ -198,12 +198,11 @@ def _check_pm2_processes() -> Tuple[Optional[bool], str]:
 def _check_lifecycle_db() -> Tuple[Optional[bool], str]:
     try:
         from harness.constants import get_hermes_home
-        from trading.lifecycle.db import get_lifecycle_db
+        from trading.lifecycle.db import get_db
         path = get_hermes_home() / "lifecycle.db"
         if not path.exists():
-            return False, f"missing at {path} — restart gateway to auto-init"
-        db = get_lifecycle_db()
-        sv = db.conn().execute("SELECT version FROM schema_version LIMIT 1").fetchone()
+            return False, f"missing at {path} — created on first boot"
+        sv = get_db().execute("SELECT version FROM schema_version LIMIT 1").fetchone()
         return True, f"schema v{sv['version']}"
     except Exception as exc:
         return None, str(exc)

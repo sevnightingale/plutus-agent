@@ -31,10 +31,7 @@ def temp_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(home))
     import importlib; import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
-    from trading.lifecycle.db import reset_lifecycle_db_singleton
-    reset_lifecycle_db_singleton()
     yield home
-    reset_lifecycle_db_singleton()
 
 
 @pytest.fixture

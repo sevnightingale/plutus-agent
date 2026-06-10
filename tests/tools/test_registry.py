@@ -314,23 +314,19 @@ class TestBuiltinDiscovery:
             "harness.tools.web_tools",
             # PLUTUS trading dispatchers (registry-backed agent-facing tools).
             "trading.dispatchers.account_state",
-            "trading.dispatchers.cancel_order",
-            "trading.dispatchers.close_position",
+
             "trading.dispatchers.fetch_data_point",
             "trading.dispatchers.list_accounts",
             "trading.dispatchers.list_data_points",
-            "trading.dispatchers.list_event_types",
             "trading.dispatchers.list_identity_systems",
             "trading.dispatchers.list_venues",
-            "trading.dispatchers.modify_order",
-            "trading.dispatchers.place_order",
-            "trading.dispatchers.place_trigger",
+
+
             "trading.dispatchers.record_data_point_observation",
-            "trading.dispatchers.record_event",
-            "trading.dispatchers.record_observation",
-            "trading.dispatchers.record_prediction",
-            "trading.dispatchers.resolve_prediction",
-            "trading.dispatchers.spawn_subagent",
+
+
+
+
             # PLUTUS integrations (per-source registry contributors).
             "trading.integrations.acp",
             "trading.integrations.acp.identity",
@@ -345,26 +341,24 @@ class TestBuiltinDiscovery:
             "trading.integrations.hyperliquid",
             "trading.integrations.macro",
             "trading.integrations.ta",
-            # PLUTUS lifecycle queries (direct lifecycle.db reads).
-            "trading.lifecycle.queries.find_similar_reflections",
-            "trading.lifecycle.queries.find_similar_theses",
-            "trading.lifecycle.queries.inspect_position",
-            "trading.lifecycle.queries.query_calibration",
-            "trading.lifecycle.queries.query_capital_movements",
-            "trading.lifecycle.queries.query_compaction_history",
-            "trading.lifecycle.queries.query_conviction_outcomes",
-            "trading.lifecycle.queries.query_conviction_trajectory",
-            "trading.lifecycle.queries.query_equity_curve",
-            "trading.lifecycle.queries.query_latest_perception_digest",
-            "trading.lifecycle.queries.query_observations",
-            "trading.lifecycle.queries.query_performance",
-            "trading.lifecycle.queries.query_performance_attribution",
-            "trading.lifecycle.queries.query_predictions",
-            "trading.lifecycle.queries.query_skip_outcomes",
-            "trading.lifecycle.queries.query_strategy_book",
-            "trading.lifecycle.queries.query_strategy_stats",
-            "trading.lifecycle.queries.query_trades",
-            "trading.lifecycle.queries.query_unreflected_closes",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         }
 
         with patch("harness.tools.registry.importlib.import_module"):

@@ -1,64 +1,45 @@
-#!/usr/bin/env python3
-"""SQLite-backed lifecycle store for plutus-agent (Plutus, Stratum 3).
+"""lifecycle.db v2 — the prediction-first event log (PLUTUS rebuild, R1).
 
-Persists the trade lifecycle: data point snapshots, strategies, theses,
-decisions, trades, positions, conviction trajectories (position_evaluations),
-outcomes, reflections, and capital movements. Plus FTS5 over text fields and
-sqlite-vec virtual tables for vector similarity search over thesis/reflection
-embeddings.
+The lifecycle of PREDICTIONS, some of which become trades. The chain:
+prediction → (funding) → thesis (cites prediction_id) → decision → trade →
+position → outcome. Resolution and calibration happen uniformly at the
+prediction level; support_scores records the per-(prediction, data point)
+conviction inputs including narrative LLM reasoning.
 
-Mirrors the design of ``plutus_state.SessionDB`` (see that file for rationale):
-- WAL mode for concurrent readers + one writer
-- ``BEGIN IMMEDIATE`` + jitter retry for write transactions
-- ``schema_version`` table for forward-compatible migrations
-- FTS5 virtual tables backed by content tables with insert/delete/update triggers
+Fresh-create only — calibration starts from zero (locked). A v1 database is
+refused, never migrated; the old runtime's file stays preserved as reference.
 
-Vector storage uses the sqlite-vec loadable extension. Connections must enable
-extension loading before opening the lifecycle DB (handled in ``__init__``).
-The vec0 virtual tables (``theses_vec``, ``reflections_vec``) hold the
-search-optimized copy of each embedding; the canonical bytes also live on the
-parent row as ``embedding BLOB`` so embeddings remain queryable without the
-vec extension loaded.
+Write ownership (doctrine): plutus-main writes events from subagents'
+structured returns; plutus-predict writes predictions; plutus-ops resolves
+them. Blackboard files are written by their producers. Every row carries
+``agent`` + ``session_name`` provenance.
 """
 
-import logging
-import random
-import sqlite3
-import threading
-import time
-from pathlib import Path
-from typing import Any, Callable, Optional, TypeVar
+from __future__ import annotations
 
-import sqlite_vec
+import logging
+import sqlite3
+from pathlib import Path
+from typing import Optional
 
 from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
-def _default_db_path() -> Path:
-    """Resolve the default DB path at CALL time, not import time.
-
-    A frozen import-time constant here once let the test suite bypass the
-    per-test HERMES_HOME isolation (env redirects happen after module
-    import) and write fake trades into the real lifecycle.db.
-    """
-    return get_hermes_home() / "lifecycle.db"
-
 SCHEMA_VERSION = 2
 
+# ───────────────────────────────────────────────────────────────────────────
+# Schema
+# ───────────────────────────────────────────────────────────────────────────
 
-TABLES_SQL = """
-CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER NOT NULL
-);
+SCHEMA_SQL = """
+CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
--- Stratum 3 — append-only trace of every perception, decision, and outcome.
-
+-- Perception audit trail
 CREATE TABLE IF NOT EXISTS data_point_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
+    session_name TEXT,
+    agent TEXT,
     ts REAL NOT NULL,
     name TEXT NOT NULL,
     params_json TEXT,
@@ -66,42 +47,104 @@ CREATE TABLE IF NOT EXISTS data_point_snapshots (
     source TEXT
 );
 
+-- Derived mirror of strategy .md files (file is truth; synced atomically by
+-- the same tool that edits the file; never written independently)
 CREATE TABLE IF NOT EXISTS strategies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE,
-    description_md TEXT,
+    name TEXT NOT NULL UNIQUE,            -- slug == file stem under strategies/
+    file_path TEXT NOT NULL,
+    status TEXT NOT NULL,                 -- 'test' | 'active' | 'dormant' | 'retired'
+    timescale TEXT NOT NULL,              -- 'intraday' | 'swing' | 'position'
+    mechanism_family TEXT NOT NULL,       -- 'momentum'|'mean_reversion'|'flow'|'event'|'narrative'
+    parent_strategy TEXT,                 -- champion/challenger lineage
     hypothesis_md TEXT,
-    regime_conditions_json TEXT,
-    status TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'paused' | 'retired'
+    mechanism_md TEXT,                    -- WHY the edge exists
+    regime_applicability_json TEXT,       -- regime labels AT THIS STRATEGY'S TIMESCALE
+    data_points_json TEXT,                -- declared DPs + weights (frontmatter mirror)
     created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
     retired_at REAL,
-    retirement_reason TEXT
-);
-
-CREATE TABLE IF NOT EXISTS theses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
-    ts REAL NOT NULL,
-    symbol TEXT,
-    text_md TEXT NOT NULL,
-    strategy_id INTEGER REFERENCES strategies(id),  -- legacy; new code uses strategy_name
-    strategy_name TEXT,                             -- name of STRATEGY.md file under ~/.plutus-agent/strategies/
-    regime_tag TEXT,                                -- regime perceived at thesis formation (e.g., 'distribution_breakdown')
-    prediction_horizon_hours REAL,                  -- explicit time bound; null = open-ended (discouraged)
-    structured_tags_json TEXT,
-    snapshot_ids_json TEXT,
-    invalidation_criteria_json TEXT,
+    retirement_reason TEXT,
+    n_resolved INTEGER NOT NULL DEFAULT 0,
+    n_correct INTEGER NOT NULL DEFAULT 0,
+    n_wrong INTEGER NOT NULL DEFAULT 0,
+    n_ambiguous INTEGER NOT NULL DEFAULT 0,
+    last_resolved_at REAL,
     embedding BLOB,
     embedding_model TEXT
 );
 
+-- THE SPINE
+CREATE TABLE IF NOT EXISTS predictions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_name TEXT,
+    agent TEXT,
+    ts REAL NOT NULL,
+    horizon_ts REAL NOT NULL,
+    timescale TEXT NOT NULL,              -- derived bucket, stored for quotas/slicing
+    symbol TEXT,
+    claim_md TEXT NOT NULL,
+    success_criteria_json TEXT NOT NULL,  -- structured, validated at write
+    failure_criteria_json TEXT,
+    invalidation_criteria_json TEXT,      -- thesis-break criteria (strong, fundamental)
+    risk_tolerance TEXT,                  -- 'low' | 'med' | 'high'
+    conviction REAL NOT NULL,             -- normalized 0-1 support-score aggregate
+    strategy_name TEXT,                   -- NOT NULL unless kind in ('stress','adhoc')
+    kind TEXT NOT NULL DEFAULT 'strategy',-- 'strategy' | 'stress' | 'adhoc'
+    regime_tag TEXT,                      -- regime at THIS prediction's timescale
+    snapshot_ids_json TEXT,
+    resolved_at REAL,
+    outcome TEXT,                         -- 'correct'|'wrong'|'ambiguous'|'expired_unresolvable'
+    resolved_by TEXT,
+    resolution_notes_md TEXT,
+    resolution_snapshot_ids_json TEXT,
+    realized_value_json TEXT,
+    embedding BLOB,
+    embedding_model TEXT
+);
+
+-- Per-(prediction, data point) support scores — conviction audit trail
+CREATE TABLE IF NOT EXISTS support_scores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id INTEGER NOT NULL REFERENCES predictions(id),
+    data_point TEXT NOT NULL,
+    score REAL NOT NULL,                  -- 0.0 invalidates … 1.0 supports
+    kind TEXT NOT NULL,                   -- 'numerical' | 'narrative'
+    reading_json TEXT,
+    weight REAL,
+    normalizer TEXT,                      -- deterministic normalizer id (numerical)
+    reasoning_md TEXT,                    -- REQUIRED for narrative kind
+    ts REAL NOT NULL,
+    UNIQUE (prediction_id, data_point)
+);
+
+-- A thesis is a FUNDED PREDICTION
+CREATE TABLE IF NOT EXISTS theses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id INTEGER NOT NULL REFERENCES predictions(id),
+    session_name TEXT,
+    agent TEXT,
+    ts REAL NOT NULL,
+    symbol TEXT NOT NULL,
+    text_md TEXT NOT NULL,
+    strategy_name TEXT,
+    sl_price REAL,
+    sl_rationale_md TEXT,
+    structured_tags_json TEXT,
+    snapshot_ids_json TEXT,
+    embedding BLOB,
+    embedding_model TEXT
+);
+
+-- Execution chain (carried from v1 + provenance)
 CREATE TABLE IF NOT EXISTS decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     thesis_id INTEGER NOT NULL REFERENCES theses(id),
+    agent TEXT,
     ts REAL NOT NULL,
-    action TEXT NOT NULL,           -- 'open_long' | 'open_short' | 'close' | 'modify_sl' | 'skip' | 'hold' | ...
+    action TEXT NOT NULL,
     params_json TEXT,
-    conviction REAL NOT NULL DEFAULT 0.5  -- 0.0-1.0
+    conviction REAL NOT NULL DEFAULT 0.5
 );
 
 CREATE TABLE IF NOT EXISTS trades (
@@ -110,7 +153,7 @@ CREATE TABLE IF NOT EXISTS trades (
     ts REAL NOT NULL,
     venue TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    side TEXT NOT NULL,             -- 'long' | 'short' | 'close'
+    side TEXT NOT NULL,
     size REAL NOT NULL,
     fill_price REAL NOT NULL,
     slippage_bp REAL,
@@ -122,27 +165,28 @@ CREATE TABLE IF NOT EXISTS positions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     venue TEXT NOT NULL,
     symbol TEXT NOT NULL,
-    side TEXT NOT NULL,             -- 'long' | 'short'
+    side TEXT NOT NULL,
     size REAL NOT NULL,
     opening_trade_id INTEGER NOT NULL REFERENCES trades(id),
     closing_trade_id INTEGER REFERENCES trades(id),
-    status TEXT NOT NULL DEFAULT 'open',  -- 'open' | 'closed'
-    opened_at REAL NOT NULL,         -- venue-actual open ts
-    closed_at REAL,                  -- venue-actual close ts (null while open)
-    perceived_at REAL                -- when Plutus saw it closed (may lag closed_at)
+    status TEXT NOT NULL DEFAULT 'open',
+    opened_at REAL NOT NULL,
+    closed_at REAL,
+    perceived_at REAL
 );
 
 CREATE TABLE IF NOT EXISTS position_evaluations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
+    session_name TEXT,
+    agent TEXT,
     ts REAL NOT NULL,
     position_id INTEGER NOT NULL REFERENCES positions(id),
-    conviction REAL NOT NULL,        -- 0.0-1.0
-    thesis_status TEXT,              -- 'intact' | 'strengthened' | 'weakening' | 'invalidated'
+    conviction REAL NOT NULL,
+    thesis_status TEXT,                   -- 'intact'|'strengthened'|'weakening'|'invalidated'
     active_thesis_id INTEGER REFERENCES theses(id),
     rationale_md TEXT,
     snapshot_ids_json TEXT,
-    recommended_action TEXT,         -- 'hold' | 'exit_now' | 'tighten_sl' | 'scale_in' | 'scale_out'
+    recommended_action TEXT,
     action_taken_decision_id INTEGER REFERENCES decisions(id)
 );
 
@@ -152,13 +196,12 @@ CREATE TABLE IF NOT EXISTS outcomes (
     realized_pnl_pct REAL,
     r_multiple REAL,
     holding_minutes REAL,
-    mae_pct REAL,                    -- max adverse excursion %
-    mfe_pct REAL,                    -- max favorable excursion %
+    mae_pct REAL,
+    mfe_pct REAL,
     entry_efficiency REAL,
     exit_efficiency REAL,
     slippage_total_bp REAL,
     exit_reason TEXT,
-    -- conviction trajectory derived stats:
     conviction_at_entry REAL,
     conviction_at_exit REAL,
     conviction_min_during_hold REAL,
@@ -171,75 +214,29 @@ CREATE TABLE IF NOT EXISTS outcomes (
 
 CREATE TABLE IF NOT EXISTS reflections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
+    session_name TEXT,
+    agent TEXT,
     ts REAL NOT NULL,
     text_md TEXT NOT NULL,
     position_ids_json TEXT,
     related_thesis_ids_json TEXT,
     related_prediction_ids_json TEXT,
-    reflection_kind TEXT,            -- 'post_trade' | 'loss_postmortem' | 'weekly_review' | 'ad_hoc' | 'calibration_review' | 'strategy_review' | 'setup_complete'
-    error_class TEXT,                -- on losses: 'forecast' | 'execution' | 'sizing' | 'regime' | 'variance' | 'process_violation'
-    strategy_name TEXT,              -- the strategy this reflection is about (if applicable)
+    reflection_kind TEXT,
+    error_class TEXT,                     -- losses: 'forecast'|'execution'|'sizing'|'regime'|'variance'|'process_violation'
+    strategy_name TEXT,
     embedding BLOB,
     embedding_model TEXT
 );
 
--- ─────────────────────────────────────────────────────────────────────────
--- Predictions (PLUTUS Stratum 3, observation track)
---
--- Pre-registered falsifiable claims with NO associated trade. The point
--- is to build calibration without putting capital at risk: Plutus says
--- "I think X will happen by Y", time passes, Plutus checks whether X
--- happened, and the resolution feeds the calibration curve.
---
--- Distinct from theses (which drive trades) and observations (passive
--- journal entries). A thesis can be derived from a prediction once it
--- triggers; the prediction stays as the original epistemic record.
--- ─────────────────────────────────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS predictions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
-    ts REAL NOT NULL,                       -- when made
-    horizon_ts REAL NOT NULL,               -- when it must be resolved by
-    symbol TEXT,                            -- optional; null for non-symbol claims (e.g., 'BTC.D rises 1pp')
-    claim_md TEXT NOT NULL,                 -- the falsifiable claim
-    success_criteria_json TEXT NOT NULL,    -- machine-checkable definition of 'correct'
-    failure_criteria_json TEXT,             -- machine-checkable definition of 'wrong' (else: success criteria flipped)
-    conviction REAL NOT NULL DEFAULT 0.5,   -- 0.0-1.0, the prior
-    strategy_name TEXT,                     -- which strategy generated the prediction (often null = freeform observation)
-    regime_tag TEXT,                        -- regime when prediction made
-    snapshot_ids_json TEXT,                 -- supporting data points
-    structured_tags_json TEXT,
-
-    -- Resolution (set when prediction is checked):
-    resolved_at REAL,
-    outcome TEXT,                           -- 'correct' | 'wrong' | 'ambiguous' | 'expired_unresolvable'
-    resolution_notes_md TEXT,
-    resolution_snapshot_ids_json TEXT,      -- supporting data points at resolution
-    realized_value_json TEXT                -- what actually happened (for retrospective)
-);
-
--- ─────────────────────────────────────────────────────────────────────────
--- Observations (PLUTUS Stratum 3, journal stream)
---
--- Dated micro-notes — the trader's running journal. Cheap to write,
--- FTS-indexed for retrieval. NOT a replacement for theses or predictions;
-
--- this is the "I noticed X" / "I'm watching Y" / "almost took this trade
--- and didn't because Z" stream that compounds into expertise over time.
---
--- WORLDVIEW.md captures the SYNTHESIS; observations are the RAW STREAM.
--- ─────────────────────────────────────────────────────────────────────────
-
 CREATE TABLE IF NOT EXISTS observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
+    session_name TEXT,
+    agent TEXT,
     ts REAL NOT NULL,
-    symbol TEXT,                            -- optional symbol focus
-    kind TEXT,                              -- 'noticed' | 'watching' | 'almost_traded' | 'mental_model' | 'pattern_candidate' | 'edge_claim' | 'edge_revoked'
+    symbol TEXT,
+    kind TEXT,
     text_md TEXT NOT NULL,
-    strategy_name TEXT,                     -- if observation is about a strategy
+    strategy_name TEXT,
     related_thesis_ids_json TEXT,
     related_prediction_ids_json TEXT,
     snapshot_ids_json TEXT,
@@ -248,354 +245,152 @@ CREATE TABLE IF NOT EXISTS observations (
 
 CREATE TABLE IF NOT EXISTS capital_movements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT,
+    session_name TEXT,
     ts REAL NOT NULL,
     from_account TEXT,
     to_account TEXT,
     token TEXT NOT NULL,
     amount_token REAL NOT NULL,
     amount_usd_at_time REAL,
-    movement_type TEXT NOT NULL,     -- 'deposit' | 'withdrawal' | 'internal_transfer' | 'venue_transfer'
+    movement_type TEXT NOT NULL,
     tx_hash TEXT,
     note TEXT
+);
+
+-- Staleness watchdog source: every run of every action type
+CREATE TABLE IF NOT EXISTS action_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action_type TEXT NOT NULL,
+    ts REAL NOT NULL,
+    agent TEXT,
+    session_name TEXT,
+    ok INTEGER NOT NULL DEFAULT 1,
+    notes_md TEXT
 );
 """
 
 INDEXES_SQL = """
-CREATE INDEX IF NOT EXISTS idx_data_point_snapshots_name_ts
-    ON data_point_snapshots(name, ts DESC);
-CREATE INDEX IF NOT EXISTS idx_data_point_snapshots_ts
-    ON data_point_snapshots(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_dps_name_ts ON data_point_snapshots(name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_strategies_status ON strategies(status);
-CREATE INDEX IF NOT EXISTS idx_theses_symbol_ts ON theses(symbol, ts DESC);
-CREATE INDEX IF NOT EXISTS idx_theses_strategy ON theses(strategy_id);
-CREATE INDEX IF NOT EXISTS idx_theses_strategy_name ON theses(strategy_name);
-CREATE INDEX IF NOT EXISTS idx_theses_regime ON theses(regime_tag);
-CREATE INDEX IF NOT EXISTS idx_theses_ts ON theses(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_decisions_thesis ON decisions(thesis_id);
-CREATE INDEX IF NOT EXISTS idx_decisions_action ON decisions(action);
-CREATE INDEX IF NOT EXISTS idx_decisions_ts ON decisions(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_trades_decision ON trades(decision_id);
-CREATE INDEX IF NOT EXISTS idx_trades_venue_symbol_ts
-    ON trades(venue, symbol, ts DESC);
-CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
-CREATE INDEX IF NOT EXISTS idx_positions_venue_symbol
-    ON positions(venue, symbol);
-CREATE INDEX IF NOT EXISTS idx_positions_opened ON positions(opened_at DESC);
-CREATE INDEX IF NOT EXISTS idx_position_evaluations_position_ts
-    ON position_evaluations(position_id, ts);
-CREATE INDEX IF NOT EXISTS idx_reflections_kind_ts
-    ON reflections(reflection_kind, ts DESC);
-CREATE INDEX IF NOT EXISTS idx_reflections_ts ON reflections(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_reflections_strategy ON reflections(strategy_name);
-CREATE INDEX IF NOT EXISTS idx_reflections_error_class ON reflections(error_class);
-CREATE INDEX IF NOT EXISTS idx_predictions_unresolved
+CREATE INDEX IF NOT EXISTS idx_strategies_parent ON strategies(parent_strategy);
+CREATE INDEX IF NOT EXISTS idx_predictions_due
     ON predictions(horizon_ts) WHERE resolved_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_predictions_strategy
-    ON predictions(strategy_name);
-CREATE INDEX IF NOT EXISTS idx_predictions_outcome
-    ON predictions(outcome);
-CREATE INDEX IF NOT EXISTS idx_predictions_ts ON predictions(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_observations_ts ON observations(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_observations_kind ON observations(kind);
-CREATE INDEX IF NOT EXISTS idx_observations_symbol ON observations(symbol);
-CREATE INDEX IF NOT EXISTS idx_observations_strategy ON observations(strategy_name);
-CREATE INDEX IF NOT EXISTS idx_observations_session_id ON observations(session_id);
-CREATE INDEX IF NOT EXISTS idx_capital_movements_ts
-    ON capital_movements(ts DESC);
-CREATE INDEX IF NOT EXISTS idx_capital_movements_type
-    ON capital_movements(movement_type);
+CREATE INDEX IF NOT EXISTS idx_predictions_strategy ON predictions(strategy_name, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_predictions_timescale ON predictions(timescale, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_predictions_outcome ON predictions(outcome);
+CREATE INDEX IF NOT EXISTS idx_predictions_regime ON predictions(regime_tag);
+CREATE INDEX IF NOT EXISTS idx_support_prediction ON support_scores(prediction_id);
+CREATE INDEX IF NOT EXISTS idx_support_dp ON support_scores(data_point);
+CREATE INDEX IF NOT EXISTS idx_theses_prediction ON theses(prediction_id);
+CREATE INDEX IF NOT EXISTS idx_theses_symbol_ts ON theses(symbol, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_decisions_thesis ON decisions(thesis_id);
+CREATE INDEX IF NOT EXISTS idx_trades_decision ON trades(decision_id);
+CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
+CREATE INDEX IF NOT EXISTS idx_evals_position_ts ON position_evaluations(position_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_reflections_kind_ts ON reflections(reflection_kind, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_observations_kind_ts ON observations(kind, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_action_runs_type_ts ON action_runs(action_type, ts DESC);
 """
-
 
 FTS_SQL = """
-CREATE VIRTUAL TABLE IF NOT EXISTS theses_fts USING fts5(
-    text_md,
-    content=theses,
-    content_rowid=id
-);
-
-CREATE TRIGGER IF NOT EXISTS theses_fts_insert AFTER INSERT ON theses BEGIN
-    INSERT INTO theses_fts(rowid, text_md) VALUES (new.id, new.text_md);
-END;
-
-CREATE TRIGGER IF NOT EXISTS theses_fts_delete AFTER DELETE ON theses BEGIN
-    INSERT INTO theses_fts(theses_fts, rowid, text_md) VALUES('delete', old.id, old.text_md);
-END;
-
-CREATE TRIGGER IF NOT EXISTS theses_fts_update AFTER UPDATE ON theses BEGIN
-    INSERT INTO theses_fts(theses_fts, rowid, text_md) VALUES('delete', old.id, old.text_md);
-    INSERT INTO theses_fts(rowid, text_md) VALUES (new.id, new.text_md);
-END;
-
-CREATE VIRTUAL TABLE IF NOT EXISTS reflections_fts USING fts5(
-    text_md,
-    content=reflections,
-    content_rowid=id
-);
-
-CREATE TRIGGER IF NOT EXISTS reflections_fts_insert AFTER INSERT ON reflections BEGIN
-    INSERT INTO reflections_fts(rowid, text_md) VALUES (new.id, new.text_md);
-END;
-
-CREATE TRIGGER IF NOT EXISTS reflections_fts_delete AFTER DELETE ON reflections BEGIN
-    INSERT INTO reflections_fts(reflections_fts, rowid, text_md) VALUES('delete', old.id, old.text_md);
-END;
-
-CREATE TRIGGER IF NOT EXISTS reflections_fts_update AFTER UPDATE ON reflections BEGIN
-    INSERT INTO reflections_fts(reflections_fts, rowid, text_md) VALUES('delete', old.id, old.text_md);
-    INSERT INTO reflections_fts(rowid, text_md) VALUES (new.id, new.text_md);
-END;
-
 CREATE VIRTUAL TABLE IF NOT EXISTS predictions_fts USING fts5(
-    claim_md,
-    content=predictions,
-    content_rowid=id
+    claim_md, content='predictions', content_rowid='id'
 );
-
-CREATE TRIGGER IF NOT EXISTS predictions_fts_insert AFTER INSERT ON predictions BEGIN
+CREATE TRIGGER IF NOT EXISTS predictions_ai AFTER INSERT ON predictions BEGIN
     INSERT INTO predictions_fts(rowid, claim_md) VALUES (new.id, new.claim_md);
 END;
-
-CREATE TRIGGER IF NOT EXISTS predictions_fts_delete AFTER DELETE ON predictions BEGIN
-    INSERT INTO predictions_fts(predictions_fts, rowid, claim_md) VALUES('delete', old.id, old.claim_md);
-END;
-
 CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
-    text_md,
-    content=observations,
-    content_rowid=id
+    text_md, content='observations', content_rowid='id'
 );
-
-CREATE TRIGGER IF NOT EXISTS observations_fts_insert AFTER INSERT ON observations BEGIN
+CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
     INSERT INTO observations_fts(rowid, text_md) VALUES (new.id, new.text_md);
 END;
-
-CREATE TRIGGER IF NOT EXISTS observations_fts_delete AFTER DELETE ON observations BEGIN
-    INSERT INTO observations_fts(observations_fts, rowid, text_md) VALUES('delete', old.id, old.text_md);
+CREATE VIRTUAL TABLE IF NOT EXISTS reflections_fts USING fts5(
+    text_md, content='reflections', content_rowid='id'
+);
+CREATE TRIGGER IF NOT EXISTS reflections_ai AFTER INSERT ON reflections BEGIN
+    INSERT INTO reflections_fts(rowid, text_md) VALUES (new.id, new.text_md);
 END;
-"""
-
-
-VEC_SQL = """
-CREATE VIRTUAL TABLE IF NOT EXISTS theses_vec USING vec0(
-    thesis_id INTEGER PRIMARY KEY,
-    embedding FLOAT[1024]
-);
-
-CREATE VIRTUAL TABLE IF NOT EXISTS reflections_vec USING vec0(
-    reflection_id INTEGER PRIMARY KEY,
-    embedding FLOAT[1024]
+CREATE VIRTUAL TABLE IF NOT EXISTS strategies_fts USING fts5(
+    hypothesis_md, mechanism_md, content='strategies', content_rowid='id'
 );
 """
 
 
-def _open_connection(db_path: Path) -> sqlite3.Connection:
-    """Open a sqlite3 connection with sqlite-vec loaded and pragmas set.
+def default_db_path() -> Path:
+    """Resolved at CALL time, never at import (the 45a6cc9 lesson)."""
+    return get_hermes_home() / "lifecycle.db"
 
-    Each connection needs sqlite-vec loaded individually — extension state
-    does not persist across connections.
+
+def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
+    """Open (creating if needed) the lifecycle database.
+
+    Refuses a pre-v2 file: the rebuild does not migrate — fresh runtime,
+    calibration from zero. The error message carries the runbook pointer.
     """
-    conn = sqlite3.connect(
-        str(db_path),
-        check_same_thread=False,
-        timeout=1.0,
-        isolation_level=None,
-    )
+    db_path = Path(path) if path is not None else default_db_path()
+    exists = db_path.exists()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
-    conn.enable_load_extension(True)
-    sqlite_vec.load(conn)
-    conn.enable_load_extension(False)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+
+    if exists:
+        row = conn.execute(
+            "SELECT version FROM schema_version LIMIT 1"
+        ).fetchone() if _has_table(conn, "schema_version") else None
+        version = row["version"] if row else None
+        if version != SCHEMA_VERSION:
+            conn.close()
+            raise RuntimeError(
+                f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
+                "lifecycle.db v2 is fresh-create only — the rebuild does not migrate. "
+                "Back up and remove the old file (see DEPLOY.md), then rerun."
+            )
+        return conn
+
+    _create_fresh(conn)
+    logger.info("Created fresh lifecycle.db v%s at %s", SCHEMA_VERSION, db_path)
     return conn
 
 
-class LifecycleDB:
-    """SQLite-backed Plutus lifecycle store with FTS5 + sqlite-vec.
-
-    Thread-safe for the gateway pattern (multiple reader threads, single writer
-    via WAL). Each method runs through ``_execute_write`` for writes, which
-    serializes via a Python lock and BEGIN IMMEDIATE, with jittered retry on
-    ``database is locked``. Reads are concurrent.
-    """
-
-    _WRITE_MAX_RETRIES = 15
-    _WRITE_RETRY_MIN_S = 0.020
-    _WRITE_RETRY_MAX_S = 0.150
-    _CHECKPOINT_EVERY_N_WRITES = 50
-
-    def __init__(self, db_path: Optional[Path] = None):
-        self.db_path = Path(db_path) if db_path else _default_db_path()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self._lock = threading.Lock()
-        self._write_count = 0
-        self._conn = _open_connection(self.db_path)
-
-        self._init_schema()
-
-    def _execute_write(self, fn: Callable[[sqlite3.Connection], T]) -> T:
-        """Run a write transaction with BEGIN IMMEDIATE + jittered retry.
-
-        See ``plutus_state.SessionDB._execute_write`` for the rationale (avoids
-        SQLite's deterministic backoff convoy under multi-process write
-        contention).
-        """
-        last_err: Optional[Exception] = None
-        for attempt in range(self._WRITE_MAX_RETRIES):
-            try:
-                with self._lock:
-                    self._conn.execute("BEGIN IMMEDIATE")
-                    try:
-                        result = fn(self._conn)
-                        self._conn.commit()
-                    except BaseException:
-                        try:
-                            self._conn.rollback()
-                        except Exception:
-                            pass
-                        raise
-                self._write_count += 1
-                if self._write_count % self._CHECKPOINT_EVERY_N_WRITES == 0:
-                    self._try_wal_checkpoint()
-                return result
-            except sqlite3.OperationalError as exc:
-                msg = str(exc).lower()
-                if "locked" in msg or "busy" in msg:
-                    last_err = exc
-                    if attempt < self._WRITE_MAX_RETRIES - 1:
-                        time.sleep(random.uniform(
-                            self._WRITE_RETRY_MIN_S,
-                            self._WRITE_RETRY_MAX_S,
-                        ))
-                        continue
-                raise
-        raise last_err or sqlite3.OperationalError(
-            "lifecycle.db locked after max retries"
-        )
-
-    def _try_wal_checkpoint(self) -> None:
-        """Best-effort PASSIVE WAL checkpoint. Never blocks, never raises."""
-        try:
-            with self._lock:
-                self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-        except Exception:
-            pass
-
-    def close(self) -> None:
-        """Close the connection (best-effort PASSIVE checkpoint first)."""
-        with self._lock:
-            if self._conn:
-                try:
-                    self._conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-                except Exception:
-                    pass
-                self._conn.close()
-                self._conn = None
-
-    def conn(self) -> sqlite3.Connection:
-        """Return the underlying connection for read queries.
-
-        Writes must go through ``_execute_write`` to get the write lock +
-        retry behavior; direct execution against this connection is safe for
-        SELECTs only.
-        """
-        return self._conn
-
-    def _init_schema(self) -> None:
-        """Create tables, FTS5, and vec0 virtual tables; record schema version.
-
-        Idempotent: re-running on an initialized DB is a no-op apart from the
-        schema_version row check. v1→v2 migrations run if needed (additive
-        ALTER TABLEs only — never destructive).
-        """
-        cursor = self._conn.cursor()
-
-        # Detect whether this is an existing v1 DB before applying v2 schema.
-        # An existing DB has tables; a fresh DB does not.
-        existing_tables = {
-            r[0] for r in cursor.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
-        }
-        had_theses = "theses" in existing_tables
-        had_reflections = "reflections" in existing_tables
-
-        # Order matters:
-        #   1. CREATE TABLE IF NOT EXISTS (preserves v1 shape if existing)
-        #   2. ALTER TABLE for missing columns (v1 → v2 migration)
-        #   3. CREATE INDEX IF NOT EXISTS (now references existing columns)
-        #   4. FTS5 + vec0 virtual tables
-        cursor.executescript(TABLES_SQL)
-
-        if had_theses:
-            self._add_column_if_missing(cursor, "theses", "strategy_name", "TEXT")
-            self._add_column_if_missing(cursor, "theses", "regime_tag", "TEXT")
-            self._add_column_if_missing(cursor, "theses", "prediction_horizon_hours", "REAL")
-        if had_reflections:
-            self._add_column_if_missing(cursor, "reflections", "related_prediction_ids_json", "TEXT")
-            self._add_column_if_missing(cursor, "reflections", "error_class", "TEXT")
-            self._add_column_if_missing(cursor, "reflections", "strategy_name", "TEXT")
-
-        cursor.executescript(INDEXES_SQL)
-        cursor.executescript(FTS_SQL)
-        cursor.executescript(VEC_SQL)
-
-        cursor.execute("SELECT version FROM schema_version LIMIT 1")
-        row = cursor.fetchone()
-        if row is None:
-            cursor.execute(
-                "INSERT INTO schema_version (version) VALUES (?)",
-                (SCHEMA_VERSION,),
-            )
-        elif row[0] < SCHEMA_VERSION:
-            cursor.execute(
-                "UPDATE schema_version SET version = ?",
-                (SCHEMA_VERSION,),
-            )
-            logger.info(
-                "lifecycle.db migrated %d → %d (additive)",
-                row[0], SCHEMA_VERSION,
-            )
-        self._conn.commit()
-
-    @staticmethod
-    def _add_column_if_missing(cursor, table: str, column: str, type_: str) -> None:
-        existing = {
-            r[1] for r in cursor.execute(f"PRAGMA table_info({table})").fetchall()
-        }
-        if column not in existing:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {type_}")
-            logger.info("lifecycle.db: added %s.%s %s", table, column, type_)
+def _has_table(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
 
 
-# ─── Module-level singleton ──────────────────────────────────────────────────
-
-_db_singleton: Optional[LifecycleDB] = None
-_singleton_lock = threading.Lock()
-
-
-def get_lifecycle_db(db_path: Optional[Path] = None) -> LifecycleDB:
-    """Return the process-wide LifecycleDB singleton.
-
-    First call optionally takes ``db_path`` (typically only set in tests).
-    Subsequent calls return the same instance regardless of ``db_path``.
-    """
-    global _db_singleton
-    with _singleton_lock:
-        if _db_singleton is None:
-            _db_singleton = LifecycleDB(db_path=db_path)
-        return _db_singleton
+def _create_fresh(conn: sqlite3.Connection) -> None:
+    conn.executescript(SCHEMA_SQL)
+    conn.executescript(INDEXES_SQL)
+    try:
+        conn.executescript(FTS_SQL)
+    except sqlite3.OperationalError as exc:
+        # FTS5 missing from the sqlite build: degraded search, stated loudly.
+        logger.warning("FTS5 unavailable (%s) — full-text search disabled.", exc)
+    conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+    conn.commit()
 
 
-def reset_lifecycle_db_singleton() -> None:
-    """Test-only: drop the singleton so the next ``get_lifecycle_db`` rebuilds.
+# Timescale derivation (locked taxonomy)
+_DAY = 86400.0
+TIMESCALE_MAX_S = {"intraday": _DAY, "swing": 7 * _DAY, "position": 30 * _DAY}
 
-    Closes the existing connection if present.
-    """
-    global _db_singleton
-    with _singleton_lock:
-        if _db_singleton is not None:
-            _db_singleton.close()
-        _db_singleton = None
+
+def derive_timescale(ts: float, horizon_ts: float) -> str:
+    """Bucket a horizon into the locked taxonomy. Raises on the >30d cap."""
+    span = horizon_ts - ts
+    if span <= 0:
+        raise ValueError("horizon_ts must be after ts")
+    if span <= TIMESCALE_MAX_S["intraday"]:
+        return "intraday"
+    if span <= TIMESCALE_MAX_S["swing"]:
+        return "swing"
+    if span <= TIMESCALE_MAX_S["position"]:
+        return "position"
+    raise ValueError(
+        f"horizon {span / _DAY:.1f}d exceeds the 30d cap — beyond that a "
+        "prediction can't feed calibration (rebuild-architecture.md §18)."
+    )

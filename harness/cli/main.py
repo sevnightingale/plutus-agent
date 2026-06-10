@@ -7379,12 +7379,6 @@ For more help on a command:
     cron_parser.set_defaults(func=cmd_cron)
 
     # =========================================================================
-    # lifecycle command (plutus-agent Phase 4a)
-    # =========================================================================
-    from harness.cli.lifecycle import add_lifecycle_subparser
-    add_lifecycle_subparser(subparsers)
-
-    # =========================================================================
     # setup-status command (plutus-agent Phase 4 — at-a-glance dashboard)
     # =========================================================================
     from harness.cli.setup_status import add_setup_status_subparser

@@ -24,7 +24,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from trading.lifecycle.db import get_lifecycle_db
+from trading.lifecycle.db import get_db
 
 from ._client import get_info, interval_to_ms
 
@@ -46,8 +46,7 @@ def _select_interval(holding_seconds: float) -> str:
 
 
 def compute_outcome(position_id: int) -> Dict[str, Any]:
-    db = get_lifecycle_db()
-    conn = db.conn()
+    conn = get_db()
 
     # Position + opening trade
     pos = conn.execute(

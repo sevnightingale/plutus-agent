@@ -318,7 +318,7 @@ def hl_total_equity(account_name: str) -> Dict[str, Any]:
     tags=["account", "equity", "drawdown", "derived"],
 )
 def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[str, Any]:
-    from trading.lifecycle.db import get_lifecycle_db
+    from trading.lifecycle.db import get_db
 
     info = get_info()
     addr = resolve_account_address(account_name)
@@ -327,9 +327,9 @@ def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[st
     total_eq = hl_total_equity(account_name)
     current = total_eq["equity_usd"]
 
-    db = get_lifecycle_db()
+    conn = get_db()
     cutoff_ms = int((time.time() - lookback_days * 86400) * 1000)
-    rows = db.conn().execute(
+    rows = conn.execute(
         "SELECT value_json, ts FROM data_point_snapshots "
         "WHERE name = 'hl_total_equity' AND ts >= ? "
         "ORDER BY ts ASC",

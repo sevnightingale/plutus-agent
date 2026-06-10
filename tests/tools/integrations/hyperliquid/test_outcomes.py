@@ -12,17 +12,15 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from trading.lifecycle.db import get_lifecycle_db, reset_lifecycle_db_singleton
+from trading.lifecycle.db import get_db
 from trading.integrations.hyperliquid import _client, outcomes
 
 
 @pytest.fixture(autouse=True)
 def _reset_singletons():
     _client.reset_singletons_for_tests()
-    reset_lifecycle_db_singleton()
     yield
     _client.reset_singletons_for_tests()
-    reset_lifecycle_db_singleton()
 
 
 def _seed(symbol: str, side: str, entry: float, exit_: float, size: float,
@@ -31,13 +29,18 @@ def _seed(symbol: str, side: str, entry: float, exit_: float, size: float,
           conviction_traj: list = None,
           invalidation_at: float = None) -> int:
     """Create thesis + decisions + trades + position + close in a temp db."""
-    db = get_lifecycle_db()
-    conn = db.conn()
+    conn = get_db()
 
+    # v2: a thesis is a funded prediction — seed the prediction first.
     conn.execute(
-        "INSERT INTO theses(ts, symbol, text_md, invalidation_criteria_json) "
-        "VALUES (?, ?, ?, ?)",
-        (opened_at, symbol, "test thesis", '{"min_price": 1.0}'),
+        "INSERT INTO predictions(ts, horizon_ts, timescale, symbol, claim_md, "
+        "success_criteria_json, conviction) VALUES (?, ?, 'intraday', ?, 'seed', '{}', 0.7)",
+        (opened_at, opened_at + 3600, symbol),
+    )
+    prediction_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO theses(prediction_id, ts, symbol, text_md) VALUES (?, ?, ?, ?)",
+        (prediction_id, opened_at, symbol, "test thesis"),
     )
     thesis_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
@@ -93,7 +96,7 @@ def _seed(symbol: str, side: str, entry: float, exit_: float, size: float,
                 (position_id, ts, conv, status),
             )
 
-    db._conn.commit()
+    conn.commit()
     return position_id
 
 
@@ -176,8 +179,9 @@ def test_compute_outcome_rejects_unclosed_position(monkeypatch):
     pid = _seed("BTC", "long", entry=80000.0, exit_=80000.0, size=0.001,
                 opened_at=t0, closed_at=t0 + 30)
     # mark it open again
-    db = get_lifecycle_db()
-    db.conn().execute("UPDATE positions SET closed_at = NULL, status = 'open' WHERE id = ?", (pid,))
-    db._conn.commit()
+    conn = get_db()
+    conn.execute("UPDATE positions SET closed_at = NULL, status = 'open' WHERE id = ?", (pid,))
+    conn.commit()
+    conn.commit()
     with pytest.raises(ValueError, match="not closed"):
         outcomes.compute_outcome(pid)

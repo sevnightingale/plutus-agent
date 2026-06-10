@@ -172,10 +172,9 @@ _PERCEPTION_TOOLS = [
 ]
 
 _EXECUTION_TOOLS = [
-    "place_order",
-    "close_position",
-    "modify_order",
-    "cancel_order",
+    # v1 execution dispatchers (place_order & co.) died with the R1 clean-cut;
+    # the desk's execution toolset is rebuilt over venue.py + lifecycle v2 in
+    # R3/R4 (rebuild-architecture.md §19).
     "list_venues",
     # Phase 4: ACP-job ops (acp_wallet_send dropped — real CLI takes raw EVM
     # to/data/value, not a USDC convenience; Plutus uses terminal directly
@@ -189,33 +188,9 @@ _EXECUTION_TOOLS = [
 ]
 
 _REFLECTION_TOOLS = [
-    # event recording (registry-dispatched)
-    "record_event",
-    "list_event_types",
-    # Phase 5: predictions + observations + per-strategy stats
-    "record_prediction",
-    "resolve_prediction",
-    "record_observation",
-    "query_predictions",
-    "query_observations",
-    "query_strategy_stats",
-    # direct lifecycle queries
-    "query_trades",
-    "query_performance",
-    "query_performance_attribution",
-    "query_equity_curve",
-    "query_capital_movements",
-    "query_calibration",
-    "query_skip_outcomes",
-    "query_conviction_trajectory",
-    "query_conviction_outcomes",
-    "query_strategy_book",      # legacy — strategies-table backed; kept for backwards compat
-    "query_unreflected_closes", # plutus-main Phase 0 handshake — pending postmortems
-    "query_compaction_history", # V2 compaction visibility
-    "query_latest_perception_digest", # V2.1 — plutus-main Phase 3 read of perception sub-agent output
-    "inspect_position",
-    "find_similar_theses",
-    "find_similar_reflections",
+    # v1 record_event/record_prediction/query_* surface died with the R1
+    # clean-cut; the desk's read/write toolsets are rebuilt over
+    # trading.lifecycle.{write,queries} in R3/R4.
     # Phase 4: ACP job inspection
     "acp_job_list",
     "acp_job_history",
@@ -224,9 +199,8 @@ _REFLECTION_TOOLS = [
 _IDENTITY_TOOLS = [
     "list_accounts",
     "list_identity_systems",
-    # V2.1 multi-tier orchestration — plutus-main spawns plutus-perception
-    # (and future deep-research) via this.
-    "spawn_subagent",
+    # (spawn_subagent died with the R1 clean-cut; the R2 spawn mechanism
+    # exposes its own tool to plutus-main only.)
     # Phase 4: ACP identity / setup-helper tools.
     # acp_configure + acp_agent_add_signer are *instruction returners* —
     # they tell the operator what to run in their own terminal, since

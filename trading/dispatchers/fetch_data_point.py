@@ -24,7 +24,7 @@ import time
 from typing import Any, Dict
 
 from trading.perception import cache as perception_cache
-from trading.lifecycle.db import get_lifecycle_db
+from trading.lifecycle.db import get_db
 from harness.gateway.session_context import get_synthetic_kind
 from trading.perception.core import data_point_registry
 from trading.dispatchers._helpers import json_dumps_compact, session_id_from_context
@@ -101,7 +101,7 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
     except KeyError as exc:
         return tool_error(str(exc))
 
-    db = get_lifecycle_db()
+    conn = get_db()
     sid = session_id_from_context()
     tier = _tier_from_synthetic_kind()
 
@@ -119,15 +119,13 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
         fetched_at = float(cached_entry.get("fetched_at", time.time()))
         cache_source = f"perception_cache:{entry.source}"
 
-        def _write_cache_hit(conn):
-            return conn.execute(
-                "INSERT INTO data_point_snapshots(session_id, ts, name, params_json, value_json, source) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (sid, fetched_at, name, json_dumps_compact(params),
-                 json_dumps_compact(value), cache_source),
-            ).lastrowid
-
-        snapshot_id = db._execute_write(_write_cache_hit)
+        snapshot_id = conn.execute(
+            "INSERT INTO data_point_snapshots(session_name, ts, name, params_json, value_json, source) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (sid, fetched_at, name, json_dumps_compact(params),
+             json_dumps_compact(value), cache_source),
+        ).lastrowid
+        conn.commit()
         return tool_result({
             "snapshot_id": snapshot_id,
             "name": name,
@@ -146,15 +144,13 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
 
     ts = time.time()
 
-    def _write_fresh(conn):
-        return conn.execute(
-            "INSERT INTO data_point_snapshots(session_id, ts, name, params_json, value_json, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (sid, ts, name, json_dumps_compact(params),
-             json_dumps_compact(value), entry.source),
-        ).lastrowid
-
-    snapshot_id = db._execute_write(_write_fresh)
+    snapshot_id = conn.execute(
+        "INSERT INTO data_point_snapshots(session_name, ts, name, params_json, value_json, source) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (sid, ts, name, json_dumps_compact(params),
+         json_dumps_compact(value), entry.source),
+    ).lastrowid
+    conn.commit()
 
     # Populate the cache for downstream tiers.
     try:

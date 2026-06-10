@@ -22,7 +22,7 @@ import json
 import time
 from typing import Any, Dict
 
-from trading.lifecycle.db import get_lifecycle_db
+from trading.lifecycle.db import get_db
 from trading.perception.core.data_point_registry import lookup as lookup_data_point
 from harness.tools.registry import registry, tool_error, tool_result
 
@@ -80,22 +80,19 @@ def _record_data_point_observation(args: Dict[str, Any]) -> str:
         return tool_error("value must be a non-empty object")
 
     params = args.get("params") or {}
-    db = get_lifecycle_db()
-
-    def _w(conn):
-        return conn.execute(
-            "INSERT INTO data_point_snapshots(ts, name, params_json, "
-            "value_json, source) VALUES (?, ?, ?, ?, ?)",
-            (
-                time.time(),
-                name,
-                json.dumps(params) if params else None,
-                json.dumps(value),
-                "agentic_observation",
-            ),
-        ).lastrowid
-
-    snapshot_id = db._execute_write(_w)
+    conn = get_db()
+    snapshot_id = conn.execute(
+        "INSERT INTO data_point_snapshots(ts, name, params_json, "
+        "value_json, source) VALUES (?, ?, ?, ?, ?)",
+        (
+            time.time(),
+            name,
+            json.dumps(params) if params else None,
+            json.dumps(value),
+            "agentic_observation",
+        ),
+    ).lastrowid
+    conn.commit()
 
     # ALSO populate the perception cache so downstream readers (regime-detection,
     # next beat) get a cache HIT on fetch_data_point(name) within the DP's staleness
