@@ -31,7 +31,7 @@ class _FatalAdapter(BasePlatformAdapter):
 
 class _RuntimeRetryableAdapter(BasePlatformAdapter):
     def __init__(self):
-        super().__init__(PlatformConfig(enabled=True, token="token"), Platform.WHATSAPP)
+        super().__init__(PlatformConfig(enabled=True, token="token"), Platform.TELEGRAM)
 
     async def connect(self) -> bool:
         return True
@@ -71,19 +71,19 @@ async def test_runner_queues_retryable_runtime_fatal_for_reconnection(monkeypatc
     instead of shutting down the gateway."""
     config = GatewayConfig(
         platforms={
-            Platform.WHATSAPP: PlatformConfig(enabled=True, token="token")
+            Platform.TELEGRAM: PlatformConfig(enabled=True, token="token")
         },
         sessions_dir=tmp_path / "sessions",
     )
     runner = GatewayRunner(config)
     adapter = _RuntimeRetryableAdapter()
     adapter._set_fatal_error(
-        "whatsapp_bridge_exited",
-        "WhatsApp bridge process exited unexpectedly (code 1).",
+        "telegram_connection_lost",
+        "Telegram connection dropped unexpectedly (code 1).",
         retryable=True,
     )
 
-    runner.adapters = {Platform.WHATSAPP: adapter}
+    runner.adapters = {Platform.TELEGRAM: adapter}
     runner.delivery_router.adapters = runner.adapters
     runner.stop = AsyncMock()
 
@@ -92,5 +92,5 @@ async def test_runner_queues_retryable_runtime_fatal_for_reconnection(monkeypatc
     # Should shut down with failure — systemd Restart=on-failure will restart
     runner.stop.assert_awaited_once()
     assert runner._exit_with_failure is True
-    assert Platform.WHATSAPP in runner._failed_platforms
-    assert runner._failed_platforms[Platform.WHATSAPP]["attempts"] == 0
+    assert Platform.TELEGRAM in runner._failed_platforms
+    assert runner._failed_platforms[Platform.TELEGRAM]["attempts"] == 0

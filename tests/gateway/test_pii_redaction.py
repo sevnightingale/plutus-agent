@@ -128,14 +128,8 @@ class TestBuildSessionContextPromptRedaction:
         prompt = build_session_context_prompt(ctx, redact_pii=True)
         assert "123456789" in prompt
 
-    def test_whatsapp_ids_redacted(self):
-        ctx = _make_context(user_id="+15551234567", platform=Platform.WHATSAPP)
-        prompt = build_session_context_prompt(ctx, redact_pii=True)
-        assert "+15551234567" not in prompt
-        assert "user_" in prompt
-
-    def test_signal_ids_redacted(self):
-        ctx = _make_context(user_id="+15551234567", platform=Platform.SIGNAL)
+    def test_telegram_ids_redacted(self):
+        ctx = _make_context(user_id="+15551234567", platform=Platform.TELEGRAM)
         prompt = build_session_context_prompt(ctx, redact_pii=True)
         assert "+15551234567" not in prompt
         assert "user_" in prompt

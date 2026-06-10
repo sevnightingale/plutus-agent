@@ -251,7 +251,7 @@ async def test_shutdown_notification_uses_persisted_origin_for_colon_ids():
     runner, adapter = make_restart_runner()
     adapter.send = AsyncMock()
     source = make_restart_source(chat_id="!room123:example.org", chat_type="group")
-    source.platform = gateway_run.Platform.MATRIX
+    source.platform = gateway_run.Platform.SLACK
     session_key = build_session_key(source)
     runner._running_agents[session_key] = MagicMock()
     runner.session_store._entries = {
@@ -265,7 +265,7 @@ async def test_shutdown_notification_uses_persisted_origin_for_colon_ids():
             chat_type=source.chat_type,
         )
     }
-    runner.adapters = {gateway_run.Platform.MATRIX: adapter}
+    runner.adapters = {gateway_run.Platform.SLACK: adapter}
 
     await runner._notify_active_sessions_of_shutdown()
 

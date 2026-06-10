@@ -44,38 +44,22 @@ logger = logging.getLogger(__name__)
 # Valid delivery platforms — used to validate user-supplied platform names
 # in cron delivery targets, preventing env var enumeration via crafted names.
 _KNOWN_DELIVERY_PLATFORMS = frozenset({
-    "telegram", "discord", "slack", "whatsapp", "signal",
-    "matrix", "mattermost", "homeassistant", "dingtalk", "feishu",
-    "wecom", "wecom_callback", "weixin", "sms", "email", "webhook", "bluebubbles",
-    "qqbot",
+    "telegram", "discord", "slack", "webhook",
 })
 
 # Platforms that support a configured cron/notification home target, mapped to
 # the environment variable used by gateway setup/runtime config.
 _HOME_TARGET_ENV_VARS = {
-    "matrix": "MATRIX_HOME_ROOM",
     "telegram": "TELEGRAM_HOME_CHANNEL",
     "discord": "DISCORD_HOME_CHANNEL",
     "slack": "SLACK_HOME_CHANNEL",
-    "signal": "SIGNAL_HOME_CHANNEL",
-    "mattermost": "MATTERMOST_HOME_CHANNEL",
-    "sms": "SMS_HOME_CHANNEL",
-    "email": "EMAIL_HOME_ADDRESS",
-    "dingtalk": "DINGTALK_HOME_CHANNEL",
-    "feishu": "FEISHU_HOME_CHANNEL",
-    "wecom": "WECOM_HOME_CHANNEL",
-    "weixin": "WEIXIN_HOME_CHANNEL",
-    "bluebubbles": "BLUEBUBBLES_HOME_CHANNEL",
-    "qqbot": "QQBOT_HOME_CHANNEL",
 }
 
 # Legacy env var names kept for back-compat.  Each entry is the current
 # primary env var → the previous name.  _get_home_target_chat_id falls
 # back to the legacy name if the primary is unset, so users who set the
 # old name before the rename keep working until they migrate.
-_LEGACY_HOME_TARGET_ENV_VARS = {
-    "QQBOT_HOME_CHANNEL": "QQ_HOME_CHANNEL",
-}
+_LEGACY_HOME_TARGET_ENV_VARS = {}
 
 from cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_run
 
@@ -398,20 +382,6 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
         "telegram": Platform.TELEGRAM,
         "discord": Platform.DISCORD,
         "slack": Platform.SLACK,
-        "whatsapp": Platform.WHATSAPP,
-        "signal": Platform.SIGNAL,
-        "matrix": Platform.MATRIX,
-        "mattermost": Platform.MATTERMOST,
-        "homeassistant": Platform.HOMEASSISTANT,
-        "dingtalk": Platform.DINGTALK,
-        "feishu": Platform.FEISHU,
-        "wecom": Platform.WECOM,
-        "wecom_callback": Platform.WECOM_CALLBACK,
-        "weixin": Platform.WEIXIN,
-        "email": Platform.EMAIL,
-        "sms": Platform.SMS,
-        "bluebubbles": Platform.BLUEBUBBLES,
-        "qqbot": Platform.QQBOT,
     }
 
     # Optionally wrap the content with a header/footer so the user knows this

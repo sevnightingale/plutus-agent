@@ -62,10 +62,10 @@ class TestPlatformTokenPlaceholderGuard:
         assert config.platforms[Platform.SLACK].enabled is False
 
     def test_rejects_placeholder(self, caplog):
-        config = _make_gateway_config(Platform.MATRIX, "placeholder")
+        config = _make_gateway_config(Platform.SLACK, "placeholder")
         with caplog.at_level(logging.ERROR):
             _validate_and_return(config)
-        assert config.platforms[Platform.MATRIX].enabled is False
+        assert config.platforms[Platform.SLACK].enabled is False
 
     def test_accepts_real_token(self, caplog):
         """A real-looking bot token should pass validation."""

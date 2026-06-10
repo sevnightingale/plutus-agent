@@ -681,30 +681,6 @@ async def test_run_agent_previewed_final_marks_already_sent(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_run_agent_matrix_streaming_omits_cursor(monkeypatch, tmp_path):
-    adapter, result = await _run_with_agent(
-        monkeypatch,
-        tmp_path,
-        StreamingRefineAgent,
-        session_id="sess-matrix-streaming",
-        config_data={
-            "display": {"tool_progress": "off", "interim_assistant_messages": False},
-            "streaming": {"enabled": True, "edit_interval": 0.01, "buffer_threshold": 1},
-        },
-        platform=Platform.MATRIX,
-        chat_id="!room:matrix.example.org",
-        chat_type="group",
-        thread_id="$thread",
-    )
-
-    assert result.get("already_sent") is True
-    all_text = [call["content"] for call in adapter.sent] + [call["content"] for call in adapter.edits]
-    assert all_text, "expected streamed Matrix content to be sent or edited"
-    assert all("▉" not in text for text in all_text)
-    assert any("Continuing to refine:" in text for text in all_text)
-
-
-@pytest.mark.asyncio
 async def test_run_agent_queued_message_does_not_treat_commentary_as_final(monkeypatch, tmp_path):
     QueuedCommentaryAgent.calls = 0
     adapter, result = await _run_with_agent(

@@ -151,11 +151,6 @@ class TestEditMessageFinalizeSignature:
             ("gateway.platforms.telegram", "TelegramAdapter"),
             ("gateway.platforms.discord", "DiscordAdapter"),
             ("gateway.platforms.slack", "SlackAdapter"),
-            ("gateway.platforms.matrix", "MatrixAdapter"),
-            ("gateway.platforms.mattermost", "MattermostAdapter"),
-            ("gateway.platforms.feishu", "FeishuAdapter"),
-            ("gateway.platforms.whatsapp", "WhatsAppAdapter"),
-            ("gateway.platforms.dingtalk", "DingTalkAdapter"),
         ],
     )
     def test_edit_message_accepts_finalize(self, module_path, class_name):

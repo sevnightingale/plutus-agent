@@ -297,48 +297,6 @@ from gateway.restart import (
 )
 
 
-def _normalize_whatsapp_identifier(value: str) -> str:
-    """Strip WhatsApp JID/LID syntax down to its stable numeric identifier."""
-    return (
-        str(value or "")
-        .strip()
-        .replace("+", "", 1)
-        .split(":", 1)[0]
-        .split("@", 1)[0]
-    )
-
-
-def _expand_whatsapp_auth_aliases(identifier: str) -> set:
-    """Resolve WhatsApp phone/LID aliases using bridge session mapping files."""
-    normalized = _normalize_whatsapp_identifier(identifier)
-    if not normalized:
-        return set()
-
-    session_dir = _hermes_home / "whatsapp" / "session"
-    resolved = set()
-    queue = [normalized]
-
-    while queue:
-        current = queue.pop(0)
-        if not current or current in resolved:
-            continue
-
-        resolved.add(current)
-        for suffix in ("", "_reverse"):
-            mapping_path = session_dir / f"lid-mapping-{current}{suffix}.json"
-            if not mapping_path.exists():
-                continue
-            try:
-                mapped = _normalize_whatsapp_identifier(
-                    json.loads(mapping_path.read_text(encoding="utf-8"))
-                )
-            except Exception:
-                continue
-            if mapped and mapped not in resolved:
-                queue.append(mapped)
-
-    return resolved
-
 logger = logging.getLogger(__name__)
 
 # Sentinel placed into _running_agents immediately when a session starts
@@ -2953,99 +2911,12 @@ class GatewayRunner:
                 return None
             return DiscordAdapter(config)
         
-        elif platform == Platform.WHATSAPP:
-            from gateway.platforms.whatsapp import WhatsAppAdapter, check_whatsapp_requirements
-            if not check_whatsapp_requirements():
-                logger.warning("WhatsApp: Node.js not installed or bridge not configured")
-                return None
-            return WhatsAppAdapter(config)
-        
         elif platform == Platform.SLACK:
             from gateway.platforms.slack import SlackAdapter, check_slack_requirements
             if not check_slack_requirements():
                 logger.warning("Slack: slack-bolt not installed. Run: pip install 'hermes-agent[slack]'")
                 return None
             return SlackAdapter(config)
-
-        elif platform == Platform.SIGNAL:
-            from gateway.platforms.signal import SignalAdapter, check_signal_requirements
-            if not check_signal_requirements():
-                logger.warning("Signal: SIGNAL_HTTP_URL or SIGNAL_ACCOUNT not configured")
-                return None
-            return SignalAdapter(config)
-
-        elif platform == Platform.HOMEASSISTANT:
-            from gateway.platforms.homeassistant import HomeAssistantAdapter, check_ha_requirements
-            if not check_ha_requirements():
-                logger.warning("HomeAssistant: aiohttp not installed or HASS_TOKEN not set")
-                return None
-            return HomeAssistantAdapter(config)
-
-        elif platform == Platform.EMAIL:
-            from gateway.platforms.email import EmailAdapter, check_email_requirements
-            if not check_email_requirements():
-                logger.warning("Email: EMAIL_ADDRESS, EMAIL_PASSWORD, EMAIL_IMAP_HOST, or EMAIL_SMTP_HOST not set")
-                return None
-            return EmailAdapter(config)
-
-        elif platform == Platform.SMS:
-            from gateway.platforms.sms import SmsAdapter, check_sms_requirements
-            if not check_sms_requirements():
-                logger.warning("SMS: aiohttp not installed or TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN not set")
-                return None
-            return SmsAdapter(config)
-
-        elif platform == Platform.DINGTALK:
-            from gateway.platforms.dingtalk import DingTalkAdapter, check_dingtalk_requirements
-            if not check_dingtalk_requirements():
-                logger.warning("DingTalk: dingtalk-stream not installed or DINGTALK_CLIENT_ID/SECRET not set")
-                return None
-            return DingTalkAdapter(config)
-
-        elif platform == Platform.FEISHU:
-            from gateway.platforms.feishu import FeishuAdapter, check_feishu_requirements
-            if not check_feishu_requirements():
-                logger.warning("Feishu: lark-oapi not installed or FEISHU_APP_ID/SECRET not set")
-                return None
-            return FeishuAdapter(config)
-
-        elif platform == Platform.WECOM_CALLBACK:
-            from gateway.platforms.wecom_callback import (
-                WecomCallbackAdapter,
-                check_wecom_callback_requirements,
-            )
-            if not check_wecom_callback_requirements():
-                logger.warning("WeComCallback: aiohttp/httpx not installed")
-                return None
-            return WecomCallbackAdapter(config)
-
-        elif platform == Platform.WECOM:
-            from gateway.platforms.wecom import WeComAdapter, check_wecom_requirements
-            if not check_wecom_requirements():
-                logger.warning("WeCom: aiohttp not installed or WECOM_BOT_ID/SECRET not set")
-                return None
-            return WeComAdapter(config)
-
-        elif platform == Platform.WEIXIN:
-            from gateway.platforms.weixin import WeixinAdapter, check_weixin_requirements
-            if not check_weixin_requirements():
-                logger.warning("Weixin: aiohttp/cryptography not installed")
-                return None
-            return WeixinAdapter(config)
-
-        elif platform == Platform.MATTERMOST:
-            from gateway.platforms.mattermost import MattermostAdapter, check_mattermost_requirements
-            if not check_mattermost_requirements():
-                logger.warning("Mattermost: MATTERMOST_TOKEN or MATTERMOST_URL not set, or aiohttp missing")
-                return None
-            return MattermostAdapter(config)
-
-        elif platform == Platform.MATRIX:
-            from gateway.platforms.matrix import MatrixAdapter, check_matrix_requirements
-            if not check_matrix_requirements():
-                logger.warning("Matrix: mautrix not installed or credentials not set. Run: pip install 'mautrix[encryption]'")
-                return None
-            return MatrixAdapter(config)
 
         elif platform == Platform.API_SERVER:
             from gateway.platforms.api_server import APIServerAdapter, check_api_server_requirements
@@ -3063,20 +2934,6 @@ class GatewayRunner:
             adapter.gateway_runner = self  # For cross-platform delivery
             return adapter
 
-        elif platform == Platform.BLUEBUBBLES:
-            from gateway.platforms.bluebubbles import BlueBubblesAdapter, check_bluebubbles_requirements
-            if not check_bluebubbles_requirements():
-                logger.warning("BlueBubbles: aiohttp/httpx missing or BLUEBUBBLES_SERVER_URL/BLUEBUBBLES_PASSWORD not configured")
-                return None
-            return BlueBubblesAdapter(config)
-
-        elif platform == Platform.QQBOT:
-            from gateway.platforms.qqbot import QQAdapter, check_qq_requirements
-            if not check_qq_requirements():
-                logger.warning("QQBot: aiohttp/httpx missing or QQ_APP_ID/QQ_CLIENT_SECRET not configured")
-                return None
-            return QQAdapter(config)
-
         return None
 
     def _is_user_authorized(self, source: SessionSource) -> bool:
@@ -3090,12 +2947,9 @@ class GatewayRunner:
         4. Global allow-all (GATEWAY_ALLOW_ALL_USERS=true)
         5. Default: deny
         """
-        # Home Assistant events are system-generated (state changes), not
-        # user-initiated messages.  The HASS_TOKEN already authenticates the
-        # connection, so HA events are always authorized.
         # Webhook events are authenticated via HMAC signature validation in
         # the adapter itself — no user allowlist applies.
-        if source.platform in (Platform.HOMEASSISTANT, Platform.WEBHOOK):
+        if source.platform == Platform.WEBHOOK:
             return True
 
         user_id = source.user_id
@@ -3105,41 +2959,13 @@ class GatewayRunner:
         platform_env_map = {
             Platform.TELEGRAM: "TELEGRAM_ALLOWED_USERS",
             Platform.DISCORD: "DISCORD_ALLOWED_USERS",
-            Platform.WHATSAPP: "WHATSAPP_ALLOWED_USERS",
             Platform.SLACK: "SLACK_ALLOWED_USERS",
-            Platform.SIGNAL: "SIGNAL_ALLOWED_USERS",
-            Platform.EMAIL: "EMAIL_ALLOWED_USERS",
-            Platform.SMS: "SMS_ALLOWED_USERS",
-            Platform.MATTERMOST: "MATTERMOST_ALLOWED_USERS",
-            Platform.MATRIX: "MATRIX_ALLOWED_USERS",
-            Platform.DINGTALK: "DINGTALK_ALLOWED_USERS",
-            Platform.FEISHU: "FEISHU_ALLOWED_USERS",
-            Platform.WECOM: "WECOM_ALLOWED_USERS",
-            Platform.WECOM_CALLBACK: "WECOM_CALLBACK_ALLOWED_USERS",
-            Platform.WEIXIN: "WEIXIN_ALLOWED_USERS",
-            Platform.BLUEBUBBLES: "BLUEBUBBLES_ALLOWED_USERS",
-            Platform.QQBOT: "QQ_ALLOWED_USERS",
         }
-        platform_group_env_map = {
-            Platform.QQBOT: "QQ_GROUP_ALLOWED_USERS",
-        }
+        platform_group_env_map = {}
         platform_allow_all_map = {
             Platform.TELEGRAM: "TELEGRAM_ALLOW_ALL_USERS",
             Platform.DISCORD: "DISCORD_ALLOW_ALL_USERS",
-            Platform.WHATSAPP: "WHATSAPP_ALLOW_ALL_USERS",
             Platform.SLACK: "SLACK_ALLOW_ALL_USERS",
-            Platform.SIGNAL: "SIGNAL_ALLOW_ALL_USERS",
-            Platform.EMAIL: "EMAIL_ALLOW_ALL_USERS",
-            Platform.SMS: "SMS_ALLOW_ALL_USERS",
-            Platform.MATTERMOST: "MATTERMOST_ALLOW_ALL_USERS",
-            Platform.MATRIX: "MATRIX_ALLOW_ALL_USERS",
-            Platform.DINGTALK: "DINGTALK_ALLOW_ALL_USERS",
-            Platform.FEISHU: "FEISHU_ALLOW_ALL_USERS",
-            Platform.WECOM: "WECOM_ALLOW_ALL_USERS",
-            Platform.WECOM_CALLBACK: "WECOM_CALLBACK_ALLOW_ALL_USERS",
-            Platform.WEIXIN: "WEIXIN_ALLOW_ALL_USERS",
-            Platform.BLUEBUBBLES: "BLUEBUBBLES_ALLOW_ALL_USERS",
-            Platform.QQBOT: "QQ_ALLOW_ALL_USERS",
         }
 
         # Per-platform allow-all flag (e.g., DISCORD_ALLOW_ALL_USERS=true)
@@ -3209,19 +3035,6 @@ class GatewayRunner:
         if "@" in user_id:
             check_ids.add(user_id.split("@")[0])
 
-        # WhatsApp: resolve phone↔LID aliases from bridge session mapping files
-        if source.platform == Platform.WHATSAPP:
-            normalized_allowed_ids = set()
-            for allowed_id in allowed_ids:
-                normalized_allowed_ids.update(_expand_whatsapp_auth_aliases(allowed_id))
-            if normalized_allowed_ids:
-                allowed_ids = normalized_allowed_ids
-
-            check_ids.update(_expand_whatsapp_auth_aliases(user_id))
-            normalized_user_id = _normalize_whatsapp_identifier(user_id)
-            if normalized_user_id:
-                check_ids.add(normalized_user_id)
-
         return bool(check_ids & allowed_ids)
 
     def _get_unauthorized_dm_behavior(self, platform: Optional[Platform]) -> str:
@@ -3257,20 +3070,7 @@ class GatewayRunner:
             platform_env_map = {
                 Platform.TELEGRAM: "TELEGRAM_ALLOWED_USERS",
                 Platform.DISCORD:  "DISCORD_ALLOWED_USERS",
-                Platform.WHATSAPP: "WHATSAPP_ALLOWED_USERS",
                 Platform.SLACK:    "SLACK_ALLOWED_USERS",
-                Platform.SIGNAL:   "SIGNAL_ALLOWED_USERS",
-                Platform.EMAIL:    "EMAIL_ALLOWED_USERS",
-                Platform.SMS:      "SMS_ALLOWED_USERS",
-                Platform.MATTERMOST: "MATTERMOST_ALLOWED_USERS",
-                Platform.MATRIX:   "MATRIX_ALLOWED_USERS",
-                Platform.DINGTALK: "DINGTALK_ALLOWED_USERS",
-                Platform.FEISHU:   "FEISHU_ALLOWED_USERS",
-                Platform.WECOM:    "WECOM_ALLOWED_USERS",
-                Platform.WECOM_CALLBACK: "WECOM_CALLBACK_ALLOWED_USERS",
-                Platform.WEIXIN:   "WEIXIN_ALLOWED_USERS",
-                Platform.BLUEBUBBLES: "BLUEBUBBLES_ALLOWED_USERS",
-                Platform.QQBOT:    "QQ_ALLOWED_USERS",
             }
             if os.getenv(platform_env_map.get(platform, ""), "").strip():
                 return "ignore"
@@ -7915,10 +7715,7 @@ class GatewayRunner:
     # Platforms where /update is allowed.  ACP, API server, and webhooks are
     # programmatic interfaces that should not trigger system updates.
     _UPDATE_ALLOWED_PLATFORMS = frozenset({
-        Platform.TELEGRAM, Platform.DISCORD, Platform.SLACK, Platform.WHATSAPP,
-        Platform.SIGNAL, Platform.MATTERMOST, Platform.MATRIX,
-        Platform.HOMEASSISTANT, Platform.EMAIL, Platform.SMS, Platform.DINGTALK,
-        Platform.FEISHU, Platform.WECOM, Platform.WECOM_CALLBACK, Platform.WEIXIN, Platform.BLUEBUBBLES, Platform.QQBOT, Platform.LOCAL,
+        Platform.TELEGRAM, Platform.DISCORD, Platform.SLACK, Platform.LOCAL,
     })
 
     async def _handle_debug_command(self, event: MessageEvent) -> str:
@@ -9325,9 +9122,6 @@ class GatewayRunner:
                     _adapter_supports_edit = getattr(_adapter, "SUPPORTS_MESSAGE_EDITING", True)
                     _effective_cursor = _scfg.cursor if _adapter_supports_edit else ""
                     _buffer_only = False
-                    if source.platform == Platform.MATRIX:
-                        _effective_cursor = ""
-                        _buffer_only = True
                     _consumer_cfg = StreamConsumerConfig(
                         edit_interval=_scfg.edit_interval,
                         buffer_threshold=_scfg.buffer_threshold,
@@ -9944,13 +9738,7 @@ class GatewayRunner:
                         if not _adapter_supports_edit:
                             raise RuntimeError("skip streaming for non-editable platform")
                         _effective_cursor = _scfg.cursor
-                        # Some Matrix clients render the streaming cursor
-                        # as a visible tofu/white-box artifact.  Keep
-                        # streaming text on Matrix, but suppress the cursor.
                         _buffer_only = False
-                        if source.platform == Platform.MATRIX:
-                            _effective_cursor = ""
-                            _buffer_only = True
                         _consumer_cfg = StreamConsumerConfig(
                             edit_interval=_scfg.edit_interval,
                             buffer_threshold=_scfg.buffer_threshold,

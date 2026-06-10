@@ -5833,7 +5833,6 @@ class HermesCLI:
             platform_status = {
                 Platform.TELEGRAM: ("Telegram", "TELEGRAM_BOT_TOKEN"),
                 Platform.DISCORD: ("Discord", "DISCORD_BOT_TOKEN"),
-                Platform.WHATSAPP: ("WhatsApp", "WHATSAPP_ENABLED"),
             }
             
             for platform, (name, env_var) in platform_status.items():

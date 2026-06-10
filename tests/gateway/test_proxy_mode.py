@@ -27,13 +27,13 @@ def _make_runner(proxy_url=None):
     return runner
 
 
-def _make_source(platform=Platform.MATRIX):
+def _make_source(platform=Platform.TELEGRAM):
     return SessionSource(
         platform=platform,
-        chat_id="!room:server.org",
+        chat_id="123456",
         chat_name="Test Room",
         chat_type="group",
-        user_id="@user:server.org",
+        user_id="987654",
         user_name="testuser",
         thread_id=None,
     )
