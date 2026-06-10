@@ -24,6 +24,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from tools.core.alert_registry import register_alert
 
+from watchers.price_alerts import (
+    auto_disable_after_fire,
+    should_fire,
+)
+
 from ._client import get_info, HLConfigError
 
 logger = logging.getLogger(__name__)
@@ -136,3 +141,45 @@ def poll_hl_account_balance_change(
             })
 
     return fired, {"account_value": current}
+
+
+@register_alert(
+    name="hl_price_range",
+    source="hyperliquid",
+    throttle_seconds=300,
+    description=(
+        "Fires when a configured price range is entered for a tracked coin. "
+        "Auto-disables after trigger; 30-minute cooldown before re-enable."
+    ),
+)
+def poll_hl_price_range(
+    state: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Poll for price-range alerts.
+
+    Reads ``watchers/price_alerts.json`` and checks each enabled coin against
+    the current Hyperliquid mid price. Returns events for any coin whose price
+    is inside its configured range and whose cooldown has elapsed.
+    """
+    try:
+        mids = get_info().all_mids()
+    except Exception as exc:
+        logger.warning("hl_price_range poll failed: %s", exc)
+        return [], state or {}
+
+    fired: List[Dict[str, Any]] = []
+    for coin, raw_price in mids.items():
+        try:
+            price = float(raw_price)
+        except (ValueError, TypeError):
+            continue
+        if should_fire(coin, price):
+            fired.append({
+                "alert": "hl_price_range",
+                "kind": "in_range",
+                "coin": coin,
+                "price": price,
+            })
+            auto_disable_after_fire(coin)
+
+    return fired, state or {}

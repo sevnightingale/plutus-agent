@@ -72,6 +72,7 @@ _ALERT_SKILL_ROUTES: Dict[str, str] = {
     "hl_account_balance_change":     "trading/reconcile-and-reflect",
     "dgclaw_perp_deposit_completed": "trading/bootstrap-setup",
     "dgclaw_leaderboard_rank_change": "trading/heartbeat",
+    "hl_price_range":                "trading/price-alert",
 }
 
 
@@ -86,6 +87,46 @@ def _route_skill_for(events: List[Dict[str, Any]]) -> str:
     return next(iter(skills), "trading/heartbeat")
 
 
+def _build_prompt_for(events: List[Dict[str, Any]]) -> str:
+    """Build a cron prompt for the given batch of events.
+
+    Price-range alerts get a direct, minimal prompt so Plutus evaluates them
+    immediately without needing to load the full wake-event skill scaffold.
+    """
+    price_events = [e for e in events if e.get("alert") == "hl_price_range"]
+    other_events = [e for e in events if e.get("alert") != "hl_price_range"]
+
+    parts: List[str] = []
+
+    if price_events:
+        # Direct, machine-readable alert — Plutus knows to evaluate this
+        # immediately without needing to load the price-alert skill
+        price_lines = []
+        for e in price_events:
+            coin = e.get("coin", "?")
+            price = e.get("price", "?")
+            price_lines.append(f"{coin} at {price} (inside configured range)")
+        parts.append(
+            "Price alert triggered: " + "; ".join(price_lines) + ". "
+            "Evaluate immediately for trading opportunity."
+        )
+
+    if other_events:
+        summary = "; ".join(
+            f"{e.get('alert')}/{e.get('kind') or 'fired'}"
+            + (f"({e.get('coin')})" if e.get("coin") else "")
+            for e in other_events
+        )
+        parts.append(
+            f"Wake event(s) from watcher daemon: {summary}. "
+            "Load the indicated skill, examine the wake events in "
+            "~/.plutus-agent/wake_events.ndjson if more detail is needed, "
+            "and act."
+        )
+
+    return " ".join(parts)
+
+
 def schedule_wake_session(events: List[Dict[str, Any]]) -> Dict[str, Any] | None:
     """Create a one-shot cron job that wakes Plutus for the batched events.
 
@@ -98,17 +139,7 @@ def schedule_wake_session(events: List[Dict[str, Any]]) -> Dict[str, Any] | None
     from cron.jobs import create_job
 
     skill = _route_skill_for(events)
-    summary = "; ".join(
-        f"{e.get('alert')}/{e.get('kind') or 'fired'}"
-        + (f"({e.get('coin')})" if e.get("coin") else "")
-        for e in events
-    )
-    prompt = (
-        f"Wake event(s) from watcher daemon: {summary}. "
-        "Load the indicated skill, examine the wake events in "
-        "~/.plutus-agent/wake_events.ndjson if more detail is needed, "
-        "and act."
-    )
+    prompt = _build_prompt_for(events)
     return create_job(
         prompt=prompt,
         schedule="1m",       # one-shot, fires within ~60s
