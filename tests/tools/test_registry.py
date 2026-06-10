@@ -322,6 +322,8 @@ class TestBuiltinDiscovery:
             "trading.dispatchers.list_venues",
 
 
+            "trading.dispatchers.record",
+            "trading.dispatchers.register_prediction",
             "trading.dispatchers.record_data_point_observation",
 
 
