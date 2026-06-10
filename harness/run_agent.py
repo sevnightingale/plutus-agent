@@ -77,7 +77,6 @@ from harness.tools.browser_tool import cleanup_browser
 
 
 # Agent internals extracted to agent/ package for modularity
-from harness.agent.memory_manager import build_memory_context_block, sanitize_context
 from harness.agent.retry_utils import jittered_backoff
 from harness.agent.error_classifier import classify_api_error, FailoverReason
 from harness.agent.prompt_builder import (
@@ -1449,11 +1448,9 @@ class AIAgent:
         
 
 
-        # External memory-provider subsystem REMOVED (was: holographic/honcho/mem0/etc
-        # plugins loaded via plugins.memory). Built-in file-backed memory (the `memory`
-        # tool + _memory_store above) is unaffected. _memory_manager stays None so the
-        # guarded usages below become harmless no-ops.
-        self._memory_manager = None
+        # External memory-provider subsystem REMOVED. Built-in file-backed memory
+        # (the `memory` tool + _memory_store above) is unaffected; the desk's
+        # curated knowledge lives in the PLUTUS.md Lessons zone (rebuild R2).
         if not skip_memory:
             _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
             if _mem_provider_name:
@@ -1462,28 +1459,6 @@ class AIAgent:
                     "removed; ignoring. Built-in memory is active.",
                     _mem_provider_name,
                 )
-
-        # Inject memory provider tool schemas into the tool surface.
-        # Skip tools whose names already exist (plugins may register the
-        # same tools via ctx.register_tool(), which lands in self.tools
-        # through get_tool_definitions()).  Duplicate function names cause
-        # 400 errors on providers that enforce unique names (e.g. Xiaomi
-        # MiMo via Nous Portal).
-        if self._memory_manager and self.tools is not None:
-            _existing_tool_names = {
-                t.get("function", {}).get("name")
-                for t in self.tools
-                if isinstance(t, dict)
-            }
-            for _schema in self._memory_manager.get_all_tool_schemas():
-                _tname = _schema.get("name", "")
-                if _tname and _tname in _existing_tool_names:
-                    continue  # already registered via plugin path
-                _wrapped = {"type": "function", "function": _schema}
-                self.tools.append(_wrapped)
-                if _tname:
-                    self.valid_tool_names.add(_tname)
-                    _existing_tool_names.add(_tname)
 
         # Skills config: nudge interval for skill creation reminders
         self._skill_nudge_interval = 10
@@ -3800,15 +3775,6 @@ class AIAgent:
         NOT called per-turn — only at CLI exit, /reset, gateway
         session expiry, etc.
         """
-        if self._memory_manager:
-            try:
-                self._memory_manager.on_session_end(messages or [])
-            except Exception:
-                pass
-            try:
-                self._memory_manager.shutdown_all()
-            except Exception:
-                pass
         # Notify context engine of session end (flush DAG, close DBs, etc.)
         if hasattr(self, "context_compressor") and self.context_compressor:
             try:
@@ -3824,12 +3790,7 @@ class AIAgent:
         Called when session_id rotates (e.g. /new, context compression);
         providers keep their state and continue running under the old
         session_id — they just flush pending extraction now."""
-        if not self._memory_manager:
-            return
-        try:
-            self._memory_manager.on_session_end(messages or [])
-        except Exception:
-            pass
+        return
 
     def release_clients(self) -> None:
         """Release LLM client resources WITHOUT tearing down session tool state.
@@ -4084,14 +4045,6 @@ class AIAgent:
                 if user_block:
                     prompt_parts.append(user_block)
 
-        # External memory provider system prompt block (additive to built-in)
-        if self._memory_manager:
-            try:
-                _ext_mem_block = self._memory_manager.build_system_prompt()
-                if _ext_mem_block:
-                    prompt_parts.append(_ext_mem_block)
-            except Exception:
-                pass
 
         has_skills_tools = any(name in self.valid_tool_names for name in ['skills_list', 'skill_view', 'skill_manage'])
         if has_skills_tools:
@@ -7498,12 +7451,6 @@ class AIAgent:
         # Pre-compression memory flush: let the model save memories before they're lost
         self.flush_memories(messages, min_turns=0)
 
-        # Notify external memory provider before compression discards context
-        if self._memory_manager:
-            try:
-                self._memory_manager.on_pre_compress(messages)
-            except Exception:
-                pass
 
         compressed = self.context_compressor.compress(messages, current_tokens=approx_tokens, focus_topic=focus_topic)
 
@@ -7691,19 +7638,7 @@ class AIAgent:
                 old_text=function_args.get("old_text"),
                 store=self._memory_store,
             )
-            # Bridge: notify external memory provider of built-in memory writes
-            if self._memory_manager and function_args.get("action") in ("add", "replace"):
-                try:
-                    self._memory_manager.on_memory_write(
-                        function_args.get("action", ""),
-                        target,
-                        function_args.get("content", ""),
-                    )
-                except Exception:
-                    pass
             return result
-        elif self._memory_manager and self._memory_manager.has_tool(function_name):
-            return self._memory_manager.handle_tool_call(function_name, function_args)
         elif function_name == "clarify":
             from harness.tools.clarify_tool import clarify_tool as _clarify_tool
             return _clarify_tool(
@@ -8202,16 +8137,6 @@ class AIAgent:
                     old_text=function_args.get("old_text"),
                     store=self._memory_store,
                 )
-                # Bridge: notify external memory provider of built-in memory writes
-                if self._memory_manager and function_args.get("action") in ("add", "replace"):
-                    try:
-                        self._memory_manager.on_memory_write(
-                            function_args.get("action", ""),
-                            target,
-                            function_args.get("content", ""),
-                        )
-                    except Exception:
-                        pass
                 tool_duration = time.time() - tool_start_time
                 if self._should_emit_quiet_tool_messages():
                     self._vprint(f"  {_get_cute_tool_message_impl('memory', function_args, tool_duration, result=function_result)}")
@@ -8269,30 +8194,6 @@ class AIAgent:
                 finally:
                     tool_duration = time.time() - tool_start_time
                     cute_msg = _get_cute_tool_message_impl(function_name, function_args, tool_duration, result=_ce_result)
-                    if spinner:
-                        spinner.stop(cute_msg)
-                    elif self._should_emit_quiet_tool_messages():
-                        self._vprint(f"  {cute_msg}")
-            elif self._memory_manager and self._memory_manager.has_tool(function_name):
-                # Memory provider tools (hindsight_retain, honcho_search, etc.)
-                # These are not in the tool registry — route through MemoryManager.
-                spinner = None
-                if self._should_emit_quiet_tool_messages() and self._should_start_quiet_spinner():
-                    face = random.choice(KawaiiSpinner.get_waiting_faces())
-                    emoji = _get_tool_emoji(function_name)
-                    preview = _build_tool_preview(function_name, function_args) or function_name
-                    spinner = KawaiiSpinner(f"{face} {emoji} {preview}", spinner_type='dots', print_fn=self._print_fn)
-                    spinner.start()
-                _mem_result = None
-                try:
-                    function_result = self._memory_manager.handle_tool_call(function_name, function_args)
-                    _mem_result = function_result
-                except Exception as tool_error:
-                    function_result = json.dumps({"error": f"Memory tool '{function_name}' failed: {tool_error}"})
-                    logger.error("memory_manager.handle_tool_call raised for %s: %s", function_name, tool_error, exc_info=True)
-                finally:
-                    tool_duration = time.time() - tool_start_time
-                    cute_msg = _get_cute_tool_message_impl(function_name, function_args, tool_duration, result=_mem_result)
                     if spinner:
                         spinner.stop(cute_msg)
                     elif self._should_emit_quiet_tool_messages():
@@ -8648,15 +8549,6 @@ class AIAgent:
         if isinstance(persist_user_message, str):
             persist_user_message = _sanitize_surrogates(persist_user_message)
 
-        # Strip leaked <memory-context> blocks from user input.  When Honcho's
-        # saveMessages persists a turn that included injected context, the block
-        # can reappear in the next turn's user message via message history.
-        # Stripping here prevents stale memory tags from leaking into the
-        # conversation and being visible to the user or the model as user text.
-        if isinstance(user_message, str):
-            user_message = sanitize_context(user_message)
-        if isinstance(persist_user_message, str):
-            persist_user_message = sanitize_context(persist_user_message)
 
         # Store stream callback for _interruptible_api_call to pick up
         self._stream_callback = stream_callback
@@ -8944,28 +8836,6 @@ class AIAgent:
             self._interrupt_message = None
             self._interrupt_thread_signal_pending = False
 
-        # Notify memory providers of the new turn so cadence tracking works.
-        # Must happen BEFORE prefetch_all() so providers know which turn it is
-        # and can gate context/dialectic refresh via contextCadence/dialecticCadence.
-        if self._memory_manager:
-            try:
-                _turn_msg = original_user_message if isinstance(original_user_message, str) else ""
-                self._memory_manager.on_turn_start(self._user_turn_count, _turn_msg)
-            except Exception:
-                pass
-
-        # External memory provider: prefetch once before the tool loop.
-        # Reuse the cached result on every iteration to avoid re-calling
-        # prefetch_all() on each tool call (10 tool calls = 10x latency + cost).
-        # Use original_user_message (clean input) — user_message may contain
-        # injected skill content that bloats / breaks provider queries.
-        _ext_prefetch_cache = ""
-        if self._memory_manager:
-            try:
-                _query = original_user_message if isinstance(original_user_message, str) else ""
-                _ext_prefetch_cache = self._memory_manager.prefetch_all(_query) or ""
-            except Exception:
-                pass
 
         while (api_call_count < self.max_iterations and self.iteration_budget.remaining > 0) or self._budget_grace_call:
             # Reset per-turn checkpoint dedup so each iteration can take one snapshot
@@ -9094,10 +8964,6 @@ class AIAgent:
                 # never mutated, so nothing leaks into session persistence.
                 if idx == current_turn_user_idx and msg.get("role") == "user":
                     _injections = []
-                    if _ext_prefetch_cache:
-                        _fenced = build_memory_context_block(_ext_prefetch_cache)
-                        if _fenced:
-                            _injections.append(_fenced)
                     if _plugin_user_context:
                         _injections.append(_plugin_user_context)
                     if _injections:
@@ -11864,16 +11730,6 @@ class AIAgent:
                 and "skill_manage" in self.valid_tool_names):
             _should_review_skills = True
             self._iters_since_skill = 0
-
-        # External memory provider: sync the completed turn + queue next prefetch.
-        # Use original_user_message (clean input) — user_message may contain
-        # injected skill content that bloats / breaks provider queries.
-        if self._memory_manager and final_response and original_user_message:
-            try:
-                self._memory_manager.sync_all(original_user_message, final_response)
-                self._memory_manager.queue_prefetch_all(original_user_message)
-            except Exception:
-                pass
 
         # Background memory/skill review — runs AFTER the response is delivered
         # so it never competes with the user's task for model attention.

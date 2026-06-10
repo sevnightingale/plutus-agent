@@ -11062,6 +11062,11 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     from harness.log import setup_logging
     setup_logging(hermes_home=_hermes_home, mode="gateway")
 
+    # Desk blackboards (PLUTUS.md / REGIME.md / PERCEPTION.md / ledger/ /
+    # strategies/) — created when absent, never overwritten.
+    from harness.runtime_templates import ensure_runtime_files
+    ensure_runtime_files()
+
     # Optional stderr handler — level driven by -v/-q flags on the CLI.
     # verbosity=None (-q/--quiet): no stderr output
     # verbosity=0    (default):    WARNING and above
