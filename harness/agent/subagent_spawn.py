@@ -73,7 +73,7 @@ def _resolve_provider(
     Mirrors the legacy-cron resolution shape so spawned sub-agents pick up
     the same OpenCode/credential setup as the cron-fired jobs.
     """
-    from plutus_cli.runtime_provider import (
+    from harness.cli.runtime_provider import (
         resolve_runtime_provider,
         format_runtime_provider_error,
     )
@@ -295,7 +295,7 @@ def spawn_subagent_blocking(
     runtime = _resolve_provider(cfg, provider, base_url)
 
     # Reasoning config — pick up from config.yaml like cron does.
-    from plutus_constants import parse_reasoning_effort
+    from harness.constants import parse_reasoning_effort
     effort = str(cfg.get("agent", {}).get("reasoning_effort", "")).strip()
     reasoning_config = parse_reasoning_effort(effort)
     if max_iterations is None:
@@ -312,7 +312,7 @@ def spawn_subagent_blocking(
     runtime_provider = str(runtime.get("provider") or "").strip().lower()
     if runtime_provider:
         try:
-            from agent.credential_pool import load_pool
+            from harness.agent.credential_pool import load_pool
             pool = load_pool(runtime_provider)
             if pool.has_credentials():
                 credential_pool = pool
@@ -322,7 +322,7 @@ def spawn_subagent_blocking(
     # SQLite session store so the sub-agent's run is searchable like any other.
     session_db = None
     try:
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         session_db = SessionDB()
     except Exception:
         pass
@@ -349,7 +349,7 @@ def spawn_subagent_blocking(
     #   - platform="subagent" (vs "cron")
     #   - skip_context_files + skip_memory same (we DON'T want SOUL/AGENTS files for sub-agent)
     #     since sub-agent inherits its identity from the skill, not from operator memory.
-    from run_agent import AIAgent
+    from harness.run_agent import AIAgent
     agent = AIAgent(
         model=model,
         api_key=runtime.get("api_key"),
@@ -389,7 +389,7 @@ def spawn_subagent_blocking(
     # see the caller's session_id and write their rows under the wrong session
     # — observation #278 bug (2026-05-21).
     def _run_with_sub_session():
-        from gateway.session_context import set_session_vars, clear_session_vars
+        from harness.gateway.session_context import set_session_vars, clear_session_vars
         tokens = set_session_vars(
             platform="subagent",
             chat_id="",
@@ -462,7 +462,7 @@ def spawn_subagent_blocking(
         }
 
     # Look for the result observation.
-    from agent.lifecycle_db import get_lifecycle_db
+    from harness.agent.lifecycle_db import get_lifecycle_db
     db = get_lifecycle_db()
     obs = _query_result_observation(
         db, sub_session_id, expected_event_type, spawn_ts,

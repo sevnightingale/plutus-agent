@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from tools.environments.singularity import (
+from harness.tools.environments.singularity import (
     _find_singularity_executable,
     _ensure_singularity_available,
 )

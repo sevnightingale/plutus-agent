@@ -16,14 +16,14 @@ from unittest.mock import MagicMock, patch, call
 
 @pytest.fixture(autouse=True)
 def _mock_dotenv(monkeypatch):
-    """gateway.run imports dotenv at module level; stub it so tests run without the package."""
+    """harness.gateway.run imports dotenv at module level; stub it so tests run without the package."""
     fake = types.ModuleType("dotenv")
     fake.load_dotenv = lambda *a, **kw: None
     monkeypatch.setitem(sys.modules, "dotenv", fake)
 
 
 def _make_runner():
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner._honcho_managers = {}
@@ -73,7 +73,7 @@ def _make_flush_context(monkeypatch, memory_dir=None):
     tmp_agent = MagicMock()
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = MagicMock(return_value=tmp_agent)
-    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
     runner = _make_runner()
     runner.session_store.load_transcript.return_value = _TRANSCRIPT_4_MSGS
@@ -93,9 +93,9 @@ class TestMemoryInjection:
         runner, tmp_agent, _ = _make_flush_context(monkeypatch, memory_dir)
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: memory_dir)}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: memory_dir)}),
         ):
             runner._flush_memories_for_session("session_123")
 
@@ -117,9 +117,9 @@ class TestMemoryInjection:
         runner, tmp_agent, _ = _make_flush_context(monkeypatch)
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: empty_dir)}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: empty_dir)}),
         ):
             runner._flush_memories_for_session("session_456")
 
@@ -138,9 +138,9 @@ class TestMemoryInjection:
         runner, tmp_agent, _ = _make_flush_context(monkeypatch)
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: memory_dir)}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: memory_dir)}),
         ):
             runner._flush_memories_for_session("session_789")
 
@@ -166,12 +166,12 @@ class TestFlushAgentSilenced:
 
         fake_run_agent = types.ModuleType("run_agent")
         fake_run_agent.AIAgent = _fake_ai_agent
-        monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+        monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: tmp_path)}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: tmp_path)}),
         ):
             runner._flush_memories_for_session("session_silent")
 
@@ -182,7 +182,7 @@ class TestFlushAgentSilenced:
 
     def test_kawaii_spinner_respects_print_fn(self):
         """KawaiiSpinner must route all output through print_fn when supplied."""
-        from agent.display import KawaiiSpinner
+        from harness.agent.display import KawaiiSpinner
 
         written = []
         spinner = KawaiiSpinner("test", print_fn=lambda *a, **kw: written.append(a))
@@ -209,9 +209,9 @@ class TestFlushAgentSilenced:
         tmp_agent.close = MagicMock()
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: Path("/nonexistent"))}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: Path("/nonexistent"))}),
         ):
             runner._flush_memories_for_session("session_cleanup")
 
@@ -227,9 +227,9 @@ class TestFlushPromptStructure:
         runner, tmp_agent, _ = _make_flush_context(monkeypatch)
 
         with (
-            patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
-            patch("gateway.run._resolve_gateway_model", return_value="test-model"),
-            patch.dict("sys.modules", {"tools.memory_tool": MagicMock(get_memory_dir=lambda: Path("/nonexistent"))}),
+            patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "k"}),
+            patch("harness.gateway.run._resolve_gateway_model", return_value="test-model"),
+            patch.dict("sys.modules", {"harness.tools.memory_tool": MagicMock(get_memory_dir=lambda: Path("/nonexistent"))}),
         ):
             runner._flush_memories_for_session("session_struct")
 

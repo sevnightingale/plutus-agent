@@ -29,11 +29,11 @@ import math
 import time
 from typing import Any, Dict, Optional, Tuple
 
-from agent import strategy_loader
-from agent.lifecycle_db import get_lifecycle_db
-from tools.core import venue_registry
-from tools.dispatchers._helpers import json_dumps_compact, session_id_from_context
-from tools.registry import registry, tool_error, tool_result
+from harness.agent import strategy_loader
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.core import venue_registry
+from harness.tools.dispatchers._helpers import json_dumps_compact, session_id_from_context
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 # Maximum multiplier when composite_conviction = 1.0. With sqrt geometric mean,

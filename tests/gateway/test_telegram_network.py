@@ -18,7 +18,7 @@ fallback IPs in order, then "stick" to whichever IP works.
 import httpx
 import pytest
 
-from gateway.platforms import telegram_network as tnet
+from harness.gateway.platforms import telegram_network as tnet
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +354,7 @@ class TestFallbackTransportClose:
 
 class TestConfigFallbackIps:
     def test_env_var_populates_config_extra(self, monkeypatch):
-        from gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
+        from harness.gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
 
         monkeypatch.setenv("TELEGRAM_FALLBACK_IPS", "149.154.167.220,149.154.167.221")
         config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="tok")})
@@ -365,7 +365,7 @@ class TestConfigFallbackIps:
         ]
 
     def test_env_var_creates_platform_if_missing(self, monkeypatch):
-        from gateway.config import GatewayConfig, Platform, _apply_env_overrides
+        from harness.gateway.config import GatewayConfig, Platform, _apply_env_overrides
 
         monkeypatch.setenv("TELEGRAM_FALLBACK_IPS", "149.154.167.220")
         config = GatewayConfig(platforms={})
@@ -375,7 +375,7 @@ class TestConfigFallbackIps:
         assert config.platforms[Platform.TELEGRAM].extra["fallback_ips"] == ["149.154.167.220"]
 
     def test_env_var_strips_whitespace(self, monkeypatch):
-        from gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
+        from harness.gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
 
         monkeypatch.setenv("TELEGRAM_FALLBACK_IPS", "  149.154.167.220 , 149.154.167.221  ")
         config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="tok")})
@@ -386,7 +386,7 @@ class TestConfigFallbackIps:
         ]
 
     def test_empty_env_var_does_not_populate(self, monkeypatch):
-        from gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
+        from harness.gateway.config import GatewayConfig, Platform, PlatformConfig, _apply_env_overrides
 
         monkeypatch.setenv("TELEGRAM_FALLBACK_IPS", "")
         config = GatewayConfig(platforms={Platform.TELEGRAM: PlatformConfig(enabled=True, token="tok")})
@@ -416,8 +416,8 @@ class TestAdapterFallbackIps:
             for name in ("telegram", "telegram.ext", "telegram.constants", "telegram.request"):
                 sys.modules.setdefault(name, mod)
 
-        from gateway.config import PlatformConfig
-        from gateway.platforms.telegram import TelegramAdapter
+        from harness.gateway.config import PlatformConfig
+        from harness.gateway.platforms.telegram import TelegramAdapter
 
         config = PlatformConfig(enabled=True, token="test-token")
         if extra:

@@ -22,7 +22,7 @@ import logging
 import re
 from typing import Dict, Any, List, Optional, Union
 
-from agent.auxiliary_client import async_call_llm, extract_content_or_reasoning
+from harness.agent.auxiliary_client import async_call_llm, extract_content_or_reasoning
 MAX_SESSION_CHARS = 100_000
 MAX_SUMMARY_TOKENS = 10000
 
@@ -30,7 +30,7 @@ MAX_SUMMARY_TOKENS = 10000
 def _get_session_search_max_concurrency(default: int = 3) -> int:
     """Read auxiliary.session_search.max_concurrency with sane bounds."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
     except ImportError:
         return default
@@ -465,7 +465,7 @@ def session_search(
             # disposable event loop that conflicted with cached
             # AsyncOpenAI/httpx clients bound to a different loop,
             # causing deadlocks in gateway mode (#2681).
-            from model_tools import _run_async
+            from harness.model_tools import _run_async
             results = _run_async(_summarize_all())
         except concurrent.futures.TimeoutError:
             logging.warning(
@@ -519,7 +519,7 @@ def session_search(
 def check_session_search_requirements() -> bool:
     """Requires SQLite state database and an auxiliary text model."""
     try:
-        from plutus_state import DEFAULT_DB_PATH
+        from harness.state import DEFAULT_DB_PATH
         return DEFAULT_DB_PATH.parent.exists()
     except ImportError:
         return False
@@ -573,7 +573,7 @@ SESSION_SEARCH_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 registry.register(
     name="session_search",

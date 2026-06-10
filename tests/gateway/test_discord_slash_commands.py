@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from gateway.config import PlatformConfig
+from harness.gateway.config import PlatformConfig
 
 
 def _ensure_discord_mock():
@@ -75,7 +75,7 @@ def _ensure_discord_mock():
 
 _ensure_discord_mock()
 
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
 
 class FakeTree:
@@ -205,7 +205,7 @@ async def test_auto_registers_plugin_commands_for_discord(adapter):
     adapter._run_simple_slash = AsyncMock()
 
     with patch(
-        "plutus_cli.plugins.get_plugin_commands",
+        "harness.cli.plugins.get_plugin_commands",
         return_value={
             "metricas": {
                 "handler": lambda _a: "ok",
@@ -234,7 +234,7 @@ async def test_auto_registered_plugin_command_without_args_hint(adapter):
     adapter._run_simple_slash = AsyncMock()
 
     with patch(
-        "plutus_cli.plugins.get_plugin_commands",
+        "harness.cli.plugins.get_plugin_commands",
         return_value={
             "ping": {
                 "handler": lambda _a: "pong",
@@ -259,7 +259,7 @@ async def test_plugin_command_name_conflict_skipped(adapter):
     adapter._run_simple_slash = AsyncMock()
 
     with patch(
-        "plutus_cli.plugins.get_plugin_commands",
+        "harness.cli.plugins.get_plugin_commands",
         return_value={
             "status": {
                 "handler": lambda _a: "plugin-status",
@@ -757,7 +757,7 @@ def test_discord_auto_thread_config_bridge(monkeypatch, tmp_path):
     monkeypatch.setenv("HERMES_HOME", str(hermes_dir))
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    from gateway.config import load_gateway_config
+    from harness.gateway.config import load_gateway_config
     load_gateway_config()
 
     import os
@@ -792,7 +792,7 @@ def test_register_skill_command_is_flat_not_nested(adapter):
     ]
 
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=(mock_categories, mock_uncategorized, 0),
     ):
         adapter._register_slash_commands()
@@ -810,7 +810,7 @@ def test_register_skill_command_is_flat_not_nested(adapter):
 def test_register_skill_command_empty_skills_no_command(adapter):
     """No /skill command should be registered when there are zero skills."""
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=({}, [], 0),
     ):
         adapter._register_slash_commands()
@@ -833,7 +833,7 @@ def test_register_skill_command_callback_dispatches_by_name(adapter):
     ]
 
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=(mock_categories, mock_uncategorized, 0),
     ):
         adapter._register_slash_commands()
@@ -865,7 +865,7 @@ def test_register_skill_command_handles_unknown_skill_gracefully(adapter):
     an ephemeral error message, NOT crash the callback.
     """
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=({"media": [("gif-search", "GIFs", "/gif-search")]}, [], 0),
     ):
         adapter._register_slash_commands()
@@ -913,7 +913,7 @@ def test_register_skill_command_payload_fits_discord_8kb_limit(adapter):
         ]
 
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=(large_categories, [], 0),
     ):
         adapter._register_slash_commands()
@@ -949,7 +949,7 @@ def test_register_skill_command_autocomplete_filters_by_name_and_description(ada
     }
 
     with patch(
-        "plutus_cli.commands.discord_skill_commands_by_category",
+        "harness.cli.commands.discord_skill_commands_by_category",
         return_value=(mock_categories, [], 0),
     ):
         adapter._register_slash_commands()

@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 from rich.console import Console
 
-import plutus_cli.banner as banner
-import model_tools
-import tools.mcp_tool
+import harness.cli.banner as banner
+import harness.model_tools as model_tools
+import harness.tools.mcp_tool; import harness.tools as tools
 
 
 def test_display_toolset_name_strips_legacy_suffix():

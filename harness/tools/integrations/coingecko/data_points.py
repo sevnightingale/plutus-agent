@@ -10,7 +10,7 @@ import json
 import urllib.request
 from typing import Any, Dict, List
 
-from tools.core.data_point_registry import register_data_point
+from harness.tools.core.data_point_registry import register_data_point
 
 BASE_URL = "https://api.coingecko.com/api/v3"
 UA = "Mozilla/5.0 (plutus-agent Plutus)"

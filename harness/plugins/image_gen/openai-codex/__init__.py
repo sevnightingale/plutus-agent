@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
-from agent.image_gen_provider import (
+from harness.agent.image_gen_provider import (
     DEFAULT_ASPECT_RATIO,
     ImageGenProvider,
     error_response,
@@ -88,7 +88,7 @@ _CODEX_INSTRUCTIONS = (
 def _load_image_gen_config() -> Dict[str, Any]:
     """Read ``image_gen`` from config.yaml (returns {} on any failure)."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None
@@ -131,7 +131,7 @@ def _read_codex_access_token() -> Optional[str]:
     expiry, credential pool selection, and JWT decoding stay in one place.
     """
     try:
-        from agent.auxiliary_client import _read_codex_access_token as _reader
+        from harness.agent.auxiliary_client import _read_codex_access_token as _reader
 
         token = _reader()
         if isinstance(token, str) and token.strip():
@@ -149,7 +149,7 @@ def _build_codex_client():
         return None
     try:
         import openai
-        from agent.auxiliary_client import _codex_cloudflare_headers
+        from harness.agent.auxiliary_client import _codex_cloudflare_headers
 
         return openai.OpenAI(
             api_key=token,

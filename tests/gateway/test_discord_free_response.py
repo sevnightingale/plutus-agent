@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from gateway.config import PlatformConfig
+from harness.gateway.config import PlatformConfig
 
 
 def _ensure_discord_mock():
@@ -45,8 +45,8 @@ def _ensure_discord_mock():
 
 _ensure_discord_mock()
 
-import gateway.platforms.discord as discord_platform  # noqa: E402
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+import harness.gateway.platforms.discord as discord_platform  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
 
 class FakeDMChannel:

@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig
-from gateway.platforms.base import MessageType
+from harness.gateway.config import PlatformConfig
+from harness.gateway.platforms.base import MessageType
 
 
 # ---------------------------------------------------------------------------
@@ -56,8 +56,8 @@ def _ensure_discord_mock():
 
 _ensure_discord_mock()
 
-import gateway.platforms.discord as discord_platform  # noqa: E402
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+import harness.gateway.platforms.discord as discord_platform  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@ class FakeThread:
 def _redirect_cache(tmp_path, monkeypatch):
     """Point document cache to tmp_path so tests never write to ~/.hermes."""
     monkeypatch.setattr(
-        "gateway.platforms.base.DOCUMENT_CACHE_DIR", tmp_path / "doc_cache"
+        "harness.gateway.platforms.base.DOCUMENT_CACHE_DIR", tmp_path / "doc_cache"
     )
 
 
@@ -370,7 +370,7 @@ class TestIncomingDocumentHandling:
     async def test_image_attachment_unaffected(self, adapter):
         """Image attachments should still go through the image path, not the document path."""
         with patch(
-            "gateway.platforms.discord.cache_image_from_url",
+            "harness.gateway.platforms.discord.cache_image_from_url",
             new_callable=AsyncMock,
             return_value="/tmp/cached_image.png",
         ):

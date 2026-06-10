@@ -8,11 +8,11 @@ sys.modules.setdefault("fire", types.SimpleNamespace(Fire=lambda *a, **k: None))
 sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
 sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
-import cron.scheduler as cron_scheduler
-import gateway.run as gateway_run
-import run_agent
-from gateway.config import Platform
-from gateway.session import SessionSource
+import harness.cron.scheduler as cron_scheduler
+import harness.gateway.run as gateway_run
+import harness.run_agent as run_agent
+from harness.gateway.config import Platform
+from harness.gateway.session import SessionSource
 
 
 def _patch_agent_bootstrap(monkeypatch):
@@ -98,7 +98,7 @@ def test_cron_run_job_codex_path_handles_internal_401_refresh(monkeypatch):
     monkeypatch.setattr(run_agent, "OpenAI", _FakeOpenAI)
     monkeypatch.setattr(run_agent, "AIAgent", _Codex401ThenSuccessAgent)
     monkeypatch.setattr(
-        "plutus_cli.runtime_provider.resolve_runtime_provider",
+        "harness.cli.runtime_provider.resolve_runtime_provider",
         lambda requested=None: {
             "provider": "openai-codex",
             "api_mode": "codex_responses",
@@ -106,7 +106,7 @@ def test_cron_run_job_codex_path_handles_internal_401_refresh(monkeypatch):
             "api_key": "codex-token",
         },
     )
-    monkeypatch.setattr("plutus_cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc))
+    monkeypatch.setattr("harness.cli.runtime_provider.format_runtime_provider_error", lambda exc: str(exc))
 
     _Codex401ThenSuccessAgent.refresh_attempts = 0
     _Codex401ThenSuccessAgent.last_init = {}

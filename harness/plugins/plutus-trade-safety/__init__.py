@@ -25,7 +25,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ def _resolve_trade_chat_id() -> Optional[str]:
     if chat_id:
         return chat_id
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         cfg = load_config()
         return (cfg.get("notifications") or {}).get("trade_chat_id") or None
     except Exception:

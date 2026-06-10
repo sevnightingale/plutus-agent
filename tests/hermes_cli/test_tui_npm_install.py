@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture
 def main_mod():
-    import plutus_cli.main as m
+    import harness.cli.main as m
 
     return m
 

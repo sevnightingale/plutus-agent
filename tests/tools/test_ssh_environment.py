@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tools.environments.ssh import SSHEnvironment
-from tools.environments import ssh as ssh_env
+from harness.tools.environments.ssh import SSHEnvironment
+from harness.tools.environments import ssh as ssh_env
 
 _SSH_HOST = os.getenv("TERMINAL_SSH_HOST", "")
 _SSH_USER = os.getenv("TERMINAL_SSH_USER", "")
@@ -24,12 +24,12 @@ requires_ssh = pytest.mark.skipif(
 
 
 def _run(command, task_id="ssh_test", **kwargs):
-    from tools.terminal_tool import terminal_tool
+    from harness.tools.terminal_tool import terminal_tool
     return json.loads(terminal_tool(command, task_id=task_id, **kwargs))
 
 
 def _cleanup(task_id="ssh_test"):
-    from tools.terminal_tool import cleanup_vm
+    from harness.tools.terminal_tool import cleanup_vm
     cleanup_vm(task_id)
 
 
@@ -37,13 +37,13 @@ class TestBuildSSHCommand:
 
     @pytest.fixture(autouse=True)
     def _mock_connection(self, monkeypatch):
-        monkeypatch.setattr("tools.environments.ssh.subprocess.run",
+        monkeypatch.setattr("harness.tools.environments.ssh.subprocess.run",
                             lambda *a, **k: subprocess.CompletedProcess([], 0))
-        monkeypatch.setattr("tools.environments.ssh.subprocess.Popen",
+        monkeypatch.setattr("harness.tools.environments.ssh.subprocess.Popen",
                             lambda *a, **k: MagicMock(stdout=iter([]),
                                                       stderr=iter([]),
                                                       stdin=MagicMock()))
-        monkeypatch.setattr("tools.environments.base.time.sleep", lambda _: None)
+        monkeypatch.setattr("harness.tools.environments.base.time.sleep", lambda _: None)
 
     def test_base_flags(self):
         env = SSHEnvironment(host="h", user="u")
@@ -79,13 +79,13 @@ class TestControlSocketPath:
 
     @pytest.fixture(autouse=True)
     def _mock_connection(self, monkeypatch):
-        monkeypatch.setattr("tools.environments.ssh.subprocess.run",
+        monkeypatch.setattr("harness.tools.environments.ssh.subprocess.run",
                             lambda *a, **k: subprocess.CompletedProcess([], 0))
-        monkeypatch.setattr("tools.environments.ssh.subprocess.Popen",
+        monkeypatch.setattr("harness.tools.environments.ssh.subprocess.Popen",
                             lambda *a, **k: MagicMock(stdout=iter([]),
                                                       stderr=iter([]),
                                                       stdin=MagicMock()))
-        monkeypatch.setattr("tools.environments.base.time.sleep", lambda _: None)
+        monkeypatch.setattr("harness.tools.environments.base.time.sleep", lambda _: None)
 
     # SSH appends ``.XXXXXXXXXXXXXXXX`` (17 bytes) to the ControlPath in
     # ControlMaster mode; the macOS sun_path field is 104 bytes including
@@ -100,7 +100,7 @@ class TestControlSocketPath:
         # Simulate the macOS $TMPDIR shape from the issue traceback —
         # 48 bytes, the typical length of ``/var/folders/XX/YYYYYYYYY/T``.
         fake_tmp = "/var/folders/2t/wbkw5yb158jc3zhswgl7tz9c0000gn/T"
-        monkeypatch.setattr("tools.environments.ssh.tempfile.gettempdir",
+        monkeypatch.setattr("harness.tools.environments.ssh.tempfile.gettempdir",
                             lambda: fake_tmp)
         # The simulated path doesn't exist on the test host — skip the
         # real mkdir so __init__ can proceed.
@@ -140,25 +140,25 @@ class TestTerminalToolConfig:
         """SSH persistent defaults to True (via TERMINAL_PERSISTENT_SHELL)."""
         monkeypatch.delenv("TERMINAL_SSH_PERSISTENT", raising=False)
         monkeypatch.delenv("TERMINAL_PERSISTENT_SHELL", raising=False)
-        from tools.terminal_tool import _get_env_config
+        from harness.tools.terminal_tool import _get_env_config
         assert _get_env_config()["ssh_persistent"] is True
 
     def test_ssh_persistent_explicit_false(self, monkeypatch):
         """Per-backend env var overrides the global default."""
         monkeypatch.setenv("TERMINAL_SSH_PERSISTENT", "false")
-        from tools.terminal_tool import _get_env_config
+        from harness.tools.terminal_tool import _get_env_config
         assert _get_env_config()["ssh_persistent"] is False
 
     def test_ssh_persistent_explicit_true(self, monkeypatch):
         monkeypatch.setenv("TERMINAL_SSH_PERSISTENT", "true")
-        from tools.terminal_tool import _get_env_config
+        from harness.tools.terminal_tool import _get_env_config
         assert _get_env_config()["ssh_persistent"] is True
 
     def test_ssh_persistent_respects_config(self, monkeypatch):
         """TERMINAL_PERSISTENT_SHELL=false disables SSH persistent by default."""
         monkeypatch.delenv("TERMINAL_SSH_PERSISTENT", raising=False)
         monkeypatch.setenv("TERMINAL_PERSISTENT_SHELL", "false")
-        from tools.terminal_tool import _get_env_config
+        from harness.tools.terminal_tool import _get_env_config
         assert _get_env_config()["ssh_persistent"] is False
 
 

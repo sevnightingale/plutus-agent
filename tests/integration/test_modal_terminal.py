@@ -44,7 +44,7 @@ sys.path.insert(0, str(parent_dir))
 
 # Import terminal_tool module directly using importlib to avoid tools/__init__.py
 import importlib.util
-terminal_tool_path = parent_dir / "tools" / "terminal_tool.py"
+terminal_tool_path = parent_dir / "harness" / "tools" / "terminal_tool.py"
 spec = importlib.util.spec_from_file_location("terminal_tool", terminal_tool_path)
 terminal_module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(terminal_module)

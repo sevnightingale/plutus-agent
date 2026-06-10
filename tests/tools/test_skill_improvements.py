@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.skill_manager_tool import (
+from harness.tools.skill_manager_tool import (
     _create_skill,
     _patch_skill,
     _write_file,
@@ -39,7 +39,7 @@ class TestFuzzyPatchSkill:
     def setup_skills(self, tmp_path, monkeypatch):
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
-        monkeypatch.setattr("tools.skill_manager_tool.SKILLS_DIR", skills_dir)
+        monkeypatch.setattr("harness.tools.skill_manager_tool.SKILLS_DIR", skills_dir)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         self.skills_dir = skills_dir
 

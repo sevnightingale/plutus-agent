@@ -16,7 +16,7 @@ import time
 import pytest
 from unittest.mock import patch
 
-from tools.process_registry import (
+from harness.tools.process_registry import (
     ProcessRegistry,
     ProcessSession,
     WATCH_MAX_PER_WINDOW,
@@ -255,7 +255,7 @@ class TestCheckpointPersistence:
         with registry._lock:
             registry._running[session.id] = session
 
-        with patch("utils.atomic_json_write") as mock_write:
+        with patch("harness.utils.atomic_json_write") as mock_write:
             registry._write_checkpoint()
             args = mock_write.call_args
             entries = args[0][1]  # second positional arg
@@ -264,7 +264,7 @@ class TestCheckpointPersistence:
 
     def test_watch_patterns_recovery(self, registry, tmp_path, monkeypatch):
         """watch_patterns survives checkpoint recovery."""
-        import tools.process_registry as pr_mod
+        import harness.tools.process_registry as pr_mod
         checkpoint = tmp_path / "processes.json"
         checkpoint.write_text(json.dumps([{
             "session_id": "proc_recovered",
@@ -294,7 +294,7 @@ class TestCheckpointPersistence:
 
 class TestTerminalToolSchema:
     def test_schema_includes_watch_patterns(self):
-        from tools.terminal_tool import TERMINAL_SCHEMA
+        from harness.tools.terminal_tool import TERMINAL_SCHEMA
         props = TERMINAL_SCHEMA["parameters"]["properties"]
         assert "watch_patterns" in props
         assert props["watch_patterns"]["type"] == "array"
@@ -302,8 +302,8 @@ class TestTerminalToolSchema:
 
     def test_handler_passes_watch_patterns(self):
         """_handle_terminal passes watch_patterns to terminal_tool."""
-        from tools.terminal_tool import _handle_terminal
-        with patch("tools.terminal_tool.terminal_tool") as mock_tt:
+        from harness.tools.terminal_tool import _handle_terminal
+        with patch("harness.tools.terminal_tool.terminal_tool") as mock_tt:
             mock_tt.return_value = json.dumps({"output": "ok", "exit_code": 0})
             _handle_terminal(
                 {"command": "echo hi", "watch_patterns": ["ERR"]},
@@ -319,5 +319,5 @@ class TestTerminalToolSchema:
 
 class TestCodeExecutionBlocked:
     def test_watch_patterns_blocked(self):
-        from tools.code_execution_tool import _TERMINAL_BLOCKED_PARAMS
+        from harness.tools.code_execution_tool import _TERMINAL_BLOCKED_PARAMS
         assert "watch_patterns" in _TERMINAL_BLOCKED_PARAMS

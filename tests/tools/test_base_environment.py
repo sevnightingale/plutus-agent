@@ -7,7 +7,7 @@ init_session() failure handling, and the CWD marker contract.
 import uuid
 from unittest.mock import MagicMock
 
-from tools.environments.base import BaseEnvironment, _cwd_marker
+from harness.tools.environments.base import BaseEnvironment, _cwd_marker
 
 
 class _TestableEnv(BaseEnvironment):

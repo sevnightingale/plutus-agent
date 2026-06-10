@@ -19,22 +19,22 @@ class TestProviderRegistry:
     """Verify Bedrock is registered in PROVIDER_REGISTRY."""
 
     def test_bedrock_in_registry(self):
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
         assert "bedrock" in PROVIDER_REGISTRY
 
     def test_bedrock_auth_type_is_aws_sdk(self):
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.auth_type == "aws_sdk"
 
     def test_bedrock_has_no_api_key_env_vars(self):
         """Bedrock uses the AWS SDK credential chain, not API keys."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.api_key_env_vars == ()
 
     def test_bedrock_base_url_env_var(self):
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
         pconfig = PROVIDER_REGISTRY["bedrock"]
         assert pconfig.base_url_env_var == "BEDROCK_BASE_URL"
 
@@ -43,19 +43,19 @@ class TestProviderAliases:
     """Verify Bedrock aliases resolve correctly."""
 
     def test_aws_alias(self):
-        from plutus_cli.models import _PROVIDER_ALIASES
+        from harness.cli.models import _PROVIDER_ALIASES
         assert _PROVIDER_ALIASES.get("aws") == "bedrock"
 
     def test_aws_bedrock_alias(self):
-        from plutus_cli.models import _PROVIDER_ALIASES
+        from harness.cli.models import _PROVIDER_ALIASES
         assert _PROVIDER_ALIASES.get("aws-bedrock") == "bedrock"
 
     def test_amazon_bedrock_alias(self):
-        from plutus_cli.models import _PROVIDER_ALIASES
+        from harness.cli.models import _PROVIDER_ALIASES
         assert _PROVIDER_ALIASES.get("amazon-bedrock") == "bedrock"
 
     def test_amazon_alias(self):
-        from plutus_cli.models import _PROVIDER_ALIASES
+        from harness.cli.models import _PROVIDER_ALIASES
         assert _PROVIDER_ALIASES.get("amazon") == "bedrock"
 
 
@@ -63,7 +63,7 @@ class TestProviderLabels:
     """Verify Bedrock appears in provider labels."""
 
     def test_bedrock_label(self):
-        from plutus_cli.models import _PROVIDER_LABELS
+        from harness.cli.models import _PROVIDER_LABELS
         assert _PROVIDER_LABELS.get("bedrock") == "AWS Bedrock"
 
 
@@ -71,18 +71,18 @@ class TestModelCatalog:
     """Verify Bedrock has a static model fallback list."""
 
     def test_bedrock_has_curated_models(self):
-        from plutus_cli.models import _PROVIDER_MODELS
+        from harness.cli.models import _PROVIDER_MODELS
         models = _PROVIDER_MODELS.get("bedrock", [])
         assert len(models) > 0
 
     def test_bedrock_models_include_claude(self):
-        from plutus_cli.models import _PROVIDER_MODELS
+        from harness.cli.models import _PROVIDER_MODELS
         models = _PROVIDER_MODELS.get("bedrock", [])
         claude_models = [m for m in models if "anthropic.claude" in m]
         assert len(claude_models) > 0
 
     def test_bedrock_models_include_nova(self):
-        from plutus_cli.models import _PROVIDER_MODELS
+        from harness.cli.models import _PROVIDER_MODELS
         models = _PROVIDER_MODELS.get("bedrock", [])
         nova_models = [m for m in models if "amazon.nova" in m]
         assert len(nova_models) > 0
@@ -93,26 +93,26 @@ class TestResolveProvider:
 
     def test_explicit_bedrock_resolves(self, monkeypatch):
         """When user explicitly requests 'bedrock', it should resolve."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
         # bedrock is in the registry, so resolve_provider should return it
-        from plutus_cli.auth import resolve_provider
+        from harness.cli.auth import resolve_provider
         result = resolve_provider("bedrock")
         assert result == "bedrock"
 
     def test_aws_alias_resolves_to_bedrock(self):
-        from plutus_cli.auth import resolve_provider
+        from harness.cli.auth import resolve_provider
         result = resolve_provider("aws")
         assert result == "bedrock"
 
     def test_amazon_bedrock_alias_resolves(self):
-        from plutus_cli.auth import resolve_provider
+        from harness.cli.auth import resolve_provider
         result = resolve_provider("amazon-bedrock")
         assert result == "bedrock"
 
     def test_auto_detect_with_aws_credentials(self, monkeypatch):
         """When AWS credentials are present and no other provider is configured,
         auto-detect should find bedrock."""
-        from plutus_cli.auth import resolve_provider
+        from harness.cli.auth import resolve_provider
 
         # Clear all other provider env vars
         for var in ["OPENAI_API_KEY", "OPENROUTER_API_KEY", "ANTHROPIC_API_KEY",
@@ -124,7 +124,7 @@ class TestResolveProvider:
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
 
         # Mock the auth store to have no active provider
-        with patch("plutus_cli.auth._load_auth_store", return_value={}):
+        with patch("harness.cli.auth._load_auth_store", return_value={}):
             result = resolve_provider("auto")
         assert result == "bedrock"
 
@@ -133,15 +133,15 @@ class TestRuntimeProvider:
     """Verify resolve_runtime_provider() handles bedrock correctly."""
 
     def test_bedrock_runtime_resolution(self, monkeypatch):
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIAIOSFODNN7EXAMPLE")
         monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
         monkeypatch.setenv("AWS_REGION", "eu-west-1")
 
         # Mock resolve_provider to return bedrock
-        with patch("plutus_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("plutus_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with patch("harness.cli.runtime_provider.resolve_provider", return_value="bedrock"), \
+             patch("harness.cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
             result = resolve_runtime_provider(requested="bedrock")
 
         assert result["provider"] == "bedrock"
@@ -151,14 +151,14 @@ class TestRuntimeProvider:
         assert result["api_key"] == "aws-sdk"
 
     def test_bedrock_runtime_default_region(self, monkeypatch):
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         monkeypatch.setenv("AWS_PROFILE", "default")
         monkeypatch.delenv("AWS_REGION", raising=False)
         monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
 
-        with patch("plutus_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("plutus_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with patch("harness.cli.runtime_provider.resolve_provider", return_value="bedrock"), \
+             patch("harness.cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
             result = resolve_runtime_provider(requested="bedrock")
 
         assert result["region"] == "us-east-1"
@@ -166,8 +166,8 @@ class TestRuntimeProvider:
     def test_bedrock_runtime_no_credentials_raises_on_auto_detect(self, monkeypatch):
         """When bedrock is auto-detected (not explicitly requested) and no
         credentials are found, runtime resolution should raise AuthError."""
-        from plutus_cli.runtime_provider import resolve_runtime_provider
-        from plutus_cli.auth import AuthError
+        from harness.cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.auth import AuthError
 
         # Clear all AWS env vars
         for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
@@ -178,9 +178,9 @@ class TestRuntimeProvider:
         # Mock both the provider resolution and boto3's credential chain
         mock_session = MagicMock()
         mock_session.get_credentials.return_value = None
-        with patch("plutus_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("plutus_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}), \
-             patch("plutus_cli.runtime_provider.resolve_requested_provider", return_value="auto"), \
+        with patch("harness.cli.runtime_provider.resolve_provider", return_value="bedrock"), \
+             patch("harness.cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}), \
+             patch("harness.cli.runtime_provider.resolve_requested_provider", return_value="auto"), \
              patch.dict("sys.modules", {"botocore": MagicMock(), "botocore.session": MagicMock()}):
             import botocore.session as _bs
             _bs.get_session = MagicMock(return_value=mock_session)
@@ -190,15 +190,15 @@ class TestRuntimeProvider:
     def test_bedrock_runtime_explicit_skips_credential_check(self, monkeypatch):
         """When user explicitly requests bedrock, trust boto3's credential chain
         even if env-var detection finds nothing (covers IMDS, SSO, etc.)."""
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         # No AWS env vars set — but explicit bedrock request should not raise
         for var in ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_PROFILE",
                      "AWS_BEARER_TOKEN_BEDROCK"]:
             monkeypatch.delenv(var, raising=False)
 
-        with patch("plutus_cli.runtime_provider.resolve_provider", return_value="bedrock"), \
-             patch("plutus_cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
+        with patch("harness.cli.runtime_provider.resolve_provider", return_value="bedrock"), \
+             patch("harness.cli.runtime_provider._get_model_config", return_value={"provider": "bedrock"}):
             result = resolve_runtime_provider(requested="bedrock")
         assert result["provider"] == "bedrock"
         assert result["api_mode"] == "bedrock_converse"
@@ -212,23 +212,23 @@ class TestProvidersModule:
     """Verify bedrock is wired into plutus_cli/providers.py."""
 
     def test_bedrock_alias_in_providers(self):
-        from plutus_cli.providers import ALIASES
+        from harness.cli.providers import ALIASES
         assert ALIASES.get("bedrock") is None  # "bedrock" IS the canonical name, not an alias
         assert ALIASES.get("aws") == "bedrock"
         assert ALIASES.get("aws-bedrock") == "bedrock"
 
     def test_bedrock_transport_mapping(self):
-        from plutus_cli.providers import TRANSPORT_TO_API_MODE
+        from harness.cli.providers import TRANSPORT_TO_API_MODE
         assert TRANSPORT_TO_API_MODE.get("bedrock_converse") == "bedrock_converse"
 
     def test_determine_api_mode_from_bedrock_url(self):
-        from plutus_cli.providers import determine_api_mode
+        from harness.cli.providers import determine_api_mode
         assert determine_api_mode(
             "unknown", "https://bedrock-runtime.us-east-1.amazonaws.com"
         ) == "bedrock_converse"
 
     def test_label_override(self):
-        from plutus_cli.providers import _LABEL_OVERRIDES
+        from harness.cli.providers import _LABEL_OVERRIDES
         assert _LABEL_OVERRIDES.get("bedrock") == "AWS Bedrock"
 
 
@@ -240,11 +240,11 @@ class TestErrorClassifierBedrock:
     """Verify Bedrock error patterns are in the global error classifier."""
 
     def test_throttling_in_rate_limit_patterns(self):
-        from agent.error_classifier import _RATE_LIMIT_PATTERNS
+        from harness.agent.error_classifier import _RATE_LIMIT_PATTERNS
         assert "throttlingexception" in _RATE_LIMIT_PATTERNS
 
     def test_context_overflow_patterns(self):
-        from agent.error_classifier import _CONTEXT_OVERFLOW_PATTERNS
+        from harness.agent.error_classifier import _CONTEXT_OVERFLOW_PATTERNS
         assert "input is too long" in _CONTEXT_OVERFLOW_PATTERNS
 
 
@@ -300,7 +300,7 @@ class TestBedrockPreserveDotsFlag:
     def test_bedrock_provider_preserves_dots(self):
         from types import SimpleNamespace
         agent = SimpleNamespace(provider="bedrock", base_url="")
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_bedrock_runtime_us_east_1_url_preserves_dots(self):
@@ -312,7 +312,7 @@ class TestBedrockPreserveDotsFlag:
             provider="custom",
             base_url="https://bedrock-runtime.us-east-1.amazonaws.com",
         )
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_bedrock_runtime_ap_northeast_2_url_preserves_dots(self):
@@ -323,7 +323,7 @@ class TestBedrockPreserveDotsFlag:
             provider="custom",
             base_url="https://bedrock-runtime.ap-northeast-2.amazonaws.com",
         )
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         assert AIAgent._anthropic_preserve_dots(agent) is True
 
     def test_non_bedrock_aws_url_does_not_preserve_dots(self):
@@ -336,7 +336,7 @@ class TestBedrockPreserveDotsFlag:
             provider="custom",
             base_url="https://s3.us-east-1.amazonaws.com",
         )
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         assert AIAgent._anthropic_preserve_dots(agent) is False
 
     def test_anthropic_native_still_does_not_preserve_dots(self):
@@ -345,7 +345,7 @@ class TestBedrockPreserveDotsFlag:
         becomes ``claude-sonnet-4-6`` for the Anthropic API."""
         from types import SimpleNamespace
         agent = SimpleNamespace(provider="anthropic", base_url="https://api.anthropic.com")
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         assert AIAgent._anthropic_preserve_dots(agent) is False
 
 
@@ -356,14 +356,14 @@ class TestBedrockModelNameNormalization:
 
     def test_global_anthropic_inference_profile_preserved(self):
         """The reporter's exact model ID."""
-        from agent.anthropic_adapter import normalize_model_name
+        from harness.agent.anthropic_adapter import normalize_model_name
         assert normalize_model_name(
             "global.anthropic.claude-opus-4-7", preserve_dots=True
         ) == "global.anthropic.claude-opus-4-7"
 
     def test_us_anthropic_dated_inference_profile_preserved(self):
         """Regional + dated Sonnet inference profile."""
-        from agent.anthropic_adapter import normalize_model_name
+        from harness.agent.anthropic_adapter import normalize_model_name
         assert normalize_model_name(
             "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
             preserve_dots=True,
@@ -371,7 +371,7 @@ class TestBedrockModelNameNormalization:
 
     def test_apac_anthropic_haiku_inference_profile_preserved(self):
         """APAC inference profile — same structural-dot shape."""
-        from agent.anthropic_adapter import normalize_model_name
+        from harness.agent.anthropic_adapter import normalize_model_name
         assert normalize_model_name(
             "apac.anthropic.claude-haiku-4-5", preserve_dots=True
         ) == "apac.anthropic.claude-haiku-4-5"
@@ -383,7 +383,7 @@ class TestBedrockModelNameNormalization:
         locks in the existing behaviour of ``normalize_model_name`` so a
         future refactor doesn't accidentally decouple the knob from its
         effect."""
-        from agent.anthropic_adapter import normalize_model_name
+        from harness.agent.anthropic_adapter import normalize_model_name
         assert normalize_model_name(
             "global.anthropic.claude-opus-4-7", preserve_dots=False
         ) == "global-anthropic-claude-opus-4-7"
@@ -393,7 +393,7 @@ class TestBedrockModelNameNormalization:
         (e.g. ``anthropic.claude-3-5-sonnet-20241022-v2:0``) use dots as
         vendor separators and must also survive intact under
         ``preserve_dots=True``."""
-        from agent.anthropic_adapter import normalize_model_name
+        from harness.agent.anthropic_adapter import normalize_model_name
         assert normalize_model_name(
             "anthropic.claude-3-5-sonnet-20241022-v2:0",
             preserve_dots=True,
@@ -408,7 +408,7 @@ class TestBedrockBuildAnthropicKwargsEndToEnd:
     regression for the reporter's HTTP 400."""
 
     def test_bedrock_inference_profile_survives_build_kwargs(self):
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
         kwargs = build_anthropic_kwargs(
             model="global.anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],
@@ -428,7 +428,7 @@ class TestBedrockBuildAnthropicKwargsEndToEnd:
         ``_anthropic_preserve_dots`` is the load-bearing piece that
         wires ``preserve_dots=True`` through to this builder for the
         Bedrock case."""
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
         kwargs = build_anthropic_kwargs(
             model="global.anthropic.claude-opus-4-7",
             messages=[{"role": "user", "content": "hi"}],

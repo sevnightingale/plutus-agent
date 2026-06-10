@@ -23,7 +23,7 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def _resolve_cdp_endpoint() -> str:
     2. ``browser.cdp_url`` in ``config.yaml``
     """
     try:
-        from tools.browser_tool import _get_cdp_override  # type: ignore[import-not-found]
+        from harness.tools.browser_tool import _get_cdp_override  # type: ignore[import-not-found]
 
         return (_get_cdp_override() or "").strip()
     except Exception as exc:  # pragma: no cover — defensive
@@ -388,7 +388,7 @@ def _browser_cdp_check() -> bool:
     ``registry.register(...)`` calls).
     """
     try:
-        from tools.browser_tool import (  # type: ignore[import-not-found]
+        from harness.tools.browser_tool import (  # type: ignore[import-not-found]
             _get_cdp_override,
             check_browser_requirements,
         )

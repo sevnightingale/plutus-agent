@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 def test_vision_call_uses_resolved_provider_args():
     """Resolved provider/model/key/url from config must reach resolve_vision_provider_client."""
-    from agent.auxiliary_client import call_llm
+    from harness.agent.auxiliary_client import call_llm
 
     fake_client = MagicMock()
     fake_client.chat.completions.create.return_value = MagicMock(
@@ -15,11 +15,11 @@ def test_vision_call_uses_resolved_provider_args():
 
     with (
         patch(
-            "agent.auxiliary_client._resolve_task_provider_model",
+            "harness.agent.auxiliary_client._resolve_task_provider_model",
             return_value=("my-resolved-provider", "my-resolved-model", "http://resolved", "resolved-key", "chat_completions"),
         ),
         patch(
-            "agent.auxiliary_client.resolve_vision_provider_client",
+            "harness.agent.auxiliary_client.resolve_vision_provider_client",
             return_value=("my-resolved-provider", fake_client, "my-resolved-model"),
         ) as mock_vision,
     ):

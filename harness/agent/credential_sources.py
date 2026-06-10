@@ -150,7 +150,7 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
          EnvironmentFile, launchd plist) → hint them where to unset it
       3. Var lives in both → clear from .env, hint about shell
     """
-    from plutus_cli.config import get_env_path, remove_env_value
+    from harness.cli.config import get_env_path, remove_env_value
 
     result = RemovalResult()
     env_var = removed.source[len("env:"):]
@@ -207,7 +207,7 @@ def _remove_claude_code(provider: str, removed) -> RemovalResult:
 
 def _remove_hermes_pkce(provider: str, removed) -> RemovalResult:
     """~/.plutus-agent/.anthropic_oauth.json is ours — delete it outright."""
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
 
     result = RemovalResult()
     oauth_file = get_hermes_home() / ".anthropic_oauth.json"
@@ -222,7 +222,7 @@ def _remove_hermes_pkce(provider: str, removed) -> RemovalResult:
 
 def _clear_auth_store_provider(provider: str) -> bool:
     """Delete auth_store.providers[provider].  Returns True if deleted."""
-    from plutus_cli.auth import (
+    from harness.cli.auth import (
         _auth_store_lock,
         _load_auth_store,
         _save_auth_store,
@@ -270,7 +270,7 @@ def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
     that canonical key here; the central dispatcher also suppresses
     ``removed.source`` which is fine — belt-and-suspenders, idempotent.
     """
-    from plutus_cli.auth import suppress_credential_source
+    from harness.cli.auth import suppress_credential_source
 
     result = RemovalResult()
     if _clear_auth_store_provider(provider):
@@ -317,7 +317,7 @@ def _remove_copilot_gh(provider: str, removed) -> RemovalResult:
     # the pool entry.  The central dispatcher in auth_remove_command will
     # ALSO suppress removed.source, but it's idempotent so double-calling
     # is harmless.
-    from plutus_cli.auth import suppress_credential_source
+    from harness.cli.auth import suppress_credential_source
     suppress_credential_source(provider, "gh_cli")
     for env_var in ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
         suppress_credential_source(provider, f"env:{env_var}")

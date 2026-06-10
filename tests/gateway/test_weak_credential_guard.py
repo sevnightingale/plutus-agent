@@ -9,7 +9,7 @@ import logging
 
 import pytest
 
-from gateway.config import PlatformConfig, Platform, _validate_gateway_config
+from harness.gateway.config import PlatformConfig, Platform, _validate_gateway_config
 
 
 # ---------------------------------------------------------------------------
@@ -19,7 +19,7 @@ from gateway.config import PlatformConfig, Platform, _validate_gateway_config
 
 def _make_gateway_config(platform, token, enabled=True, **extra_kwargs):
     """Create a minimal GatewayConfig-like object for validation testing."""
-    from gateway.config import GatewayConfig
+    from harness.gateway.config import GatewayConfig
 
     config = GatewayConfig(platforms={})
     pconfig = PlatformConfig(enabled=enabled, token=token, **extra_kwargs)
@@ -111,7 +111,7 @@ class TestAPIServerPlaceholderKeyGuard:
 
     @pytest.mark.asyncio
     async def test_refuses_wildcard_with_placeholder_key(self):
-        from gateway.platforms.api_server import APIServerAdapter
+        from harness.gateway.platforms.api_server import APIServerAdapter
 
         adapter = APIServerAdapter(
             PlatformConfig(enabled=True, extra={"host": "0.0.0.0", "key": "changeme"})
@@ -121,7 +121,7 @@ class TestAPIServerPlaceholderKeyGuard:
 
     @pytest.mark.asyncio
     async def test_refuses_wildcard_with_asterisk_key(self):
-        from gateway.platforms.api_server import APIServerAdapter
+        from harness.gateway.platforms.api_server import APIServerAdapter
 
         adapter = APIServerAdapter(
             PlatformConfig(enabled=True, extra={"host": "0.0.0.0", "key": "***"})
@@ -131,8 +131,8 @@ class TestAPIServerPlaceholderKeyGuard:
 
     def test_allows_loopback_with_placeholder_key(self):
         """Loopback with a placeholder key is fine — not network-exposed."""
-        from gateway.platforms.api_server import APIServerAdapter
-        from gateway.platforms.base import is_network_accessible
+        from harness.gateway.platforms.api_server import APIServerAdapter
+        from harness.gateway.platforms.base import is_network_accessible
 
         adapter = APIServerAdapter(
             PlatformConfig(enabled=True, extra={"host": "127.0.0.1", "key": "changeme"})

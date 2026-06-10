@@ -16,7 +16,7 @@ from difflib import get_close_matches
 from pathlib import Path
 from typing import Any, NamedTuple, Optional
 
-from plutus_cli import __version__ as _HERMES_VERSION
+from harness.cli import __version__ as _HERMES_VERSION
 
 # Identify ourselves so endpoints fronted by Cloudflare's Browser Integrity
 # Check (error 1010) don't reject the default ``Python-urllib/*`` signature.
@@ -102,7 +102,7 @@ def _codex_curated_models() -> list[str]:
     This keeps the gateway /model picker in sync with the CLI `plutus model`
     flow without maintaining a separate static list.
     """
-    from plutus_cli.codex_models import DEFAULT_CODEX_MODELS, _add_forward_compat_models
+    from harness.cli.codex_models import DEFAULT_CODEX_MODELS, _add_forward_compat_models
     return _add_forward_compat_models(list(DEFAULT_CODEX_MODELS))
 
 
@@ -498,7 +498,7 @@ def check_nous_free_tier() -> bool:
             return cached_result
 
     try:
-        from plutus_cli.auth import get_provider_auth_state, resolve_nous_runtime_credentials
+        from harness.cli.auth import get_provider_auth_state, resolve_nous_runtime_credentials
 
         # Ensure we have a fresh token (triggers refresh if needed)
         resolve_nous_runtime_credentials(min_key_ttl_seconds=60)
@@ -593,7 +593,7 @@ def fetch_nous_recommended_models(
 def _resolve_nous_portal_url() -> str:
     """Best-effort lookup of the Portal base URL the user is authed against."""
     try:
-        from plutus_cli.auth import (
+        from harness.cli.auth import (
             DEFAULT_NOUS_PORTAL_URL,
             get_provider_auth_state,
         )
@@ -925,7 +925,7 @@ def fetch_ai_gateway_models(
     if _ai_gateway_catalog_cache is not None and not force_refresh:
         return list(_ai_gateway_catalog_cache)
 
-    from plutus_constants import AI_GATEWAY_BASE_URL
+    from harness.constants import AI_GATEWAY_BASE_URL
 
     fallback = list(VERCEL_AI_GATEWAY_MODELS)
     preferred_ids = [mid for mid, _ in fallback]
@@ -1146,7 +1146,7 @@ def fetch_ai_gateway_pricing(
     ``prompt`` / ``completion``. This translates. Cache read/write field names
     already match.
     """
-    from plutus_constants import AI_GATEWAY_BASE_URL
+    from harness.constants import AI_GATEWAY_BASE_URL
 
     cache_key = AI_GATEWAY_BASE_URL.rstrip("/")
     if not force_refresh and cache_key in _pricing_cache:
@@ -1193,7 +1193,7 @@ def _resolve_openrouter_api_key() -> str:
 def _resolve_nous_pricing_credentials() -> tuple[str, str]:
     """Return ``(api_key, base_url)`` for Nous Portal pricing, or empty strings."""
     try:
-        from plutus_cli.auth import resolve_nous_runtime_credentials
+        from harness.cli.auth import resolve_nous_runtime_credentials
         creds = resolve_nous_runtime_credentials()
         if creds:
             return (creds.get("api_key", ""), creds.get("base_url", ""))
@@ -1261,7 +1261,7 @@ def list_available_providers() -> list[dict[str, str]]:
         # Check if this provider has credentials available
         has_creds = False
         try:
-            from plutus_cli.auth import get_auth_status, has_usable_secret
+            from harness.cli.auth import get_auth_status, has_usable_secret
             if pid == "custom":
                 custom_base_url = _get_custom_base_url() or ""
                 has_creds = bool(custom_base_url.strip())
@@ -1320,7 +1320,7 @@ def parse_model_input(raw: str, current_provider: str) -> tuple[str, str]:
 def _get_custom_base_url() -> str:
     """Get the custom endpoint base_url from config.yaml."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         model_cfg = config.get("model", {})
         if isinstance(model_cfg, dict):
@@ -1414,7 +1414,7 @@ def detect_provider_for_model(
         # credential pool, or auth store entries.
         has_creds = False
         try:
-            from plutus_cli.auth import PROVIDER_REGISTRY
+            from harness.cli.auth import PROVIDER_REGISTRY
             pconfig = PROVIDER_REGISTRY.get(direct_match)
             if pconfig:
                 for env_var in pconfig.api_key_env_vars:
@@ -1427,7 +1427,7 @@ def detect_provider_for_model(
         # Claude Code tokens, and other non-env-var credentials (#10300).
         if not has_creds:
             try:
-                from agent.credential_pool import load_pool
+                from harness.agent.credential_pool import load_pool
                 pool = load_pool(direct_match)
                 if pool.has_credentials():
                     has_creds = True
@@ -1435,7 +1435,7 @@ def detect_provider_for_model(
                 pass
         if not has_creds:
             try:
-                from plutus_cli.auth import _load_auth_store
+                from harness.cli.auth import _load_auth_store
                 store = _load_auth_store()
                 if direct_match in store.get("providers", {}) or direct_match in store.get("credential_pool", {}):
                     has_creds = True
@@ -1585,7 +1585,7 @@ def resolve_fast_mode_overrides(model_id: Optional[str]) -> dict[str, Any] | Non
 def _resolve_copilot_catalog_api_key() -> str:
     """Best-effort GitHub token for fetching the Copilot model catalog."""
     try:
-        from plutus_cli.auth import resolve_api_key_provider_credentials
+        from harness.cli.auth import resolve_api_key_provider_credentials
 
         creds = resolve_api_key_provider_credentials("copilot")
         return str(creds.get("api_key") or "").strip()
@@ -1637,7 +1637,7 @@ def _merge_with_models_dev(provider: str, curated: list[str]) -> list[str]:
     returned unchanged — this is the offline/CI fallback path.
     """
     try:
-        from agent.models_dev import list_agentic_models
+        from harness.agent.models_dev import list_agentic_models
         mdev = list_agentic_models(provider)
     except Exception:
         mdev = []
@@ -1676,7 +1676,7 @@ def provider_model_ids(provider: Optional[str], *, force_refresh: bool = False) 
     if normalized == "openrouter":
         return model_ids(force_refresh=force_refresh)
     if normalized == "openai-codex":
-        from plutus_cli.codex_models import get_codex_model_ids
+        from harness.cli.codex_models import get_codex_model_ids
 
         # Pass the live OAuth access token so the picker matches whatever
         # ChatGPT lists for this account right now (new models appear without
@@ -1684,7 +1684,7 @@ def provider_model_ids(provider: Optional[str], *, force_refresh: bool = False) 
         # or the endpoint is unreachable.
         access_token = None
         try:
-            from plutus_cli.auth import resolve_codex_runtime_credentials
+            from harness.cli.auth import resolve_codex_runtime_credentials
 
             creds = resolve_codex_runtime_credentials(refresh_if_expiring=True)
             access_token = creds.get("api_key")
@@ -1703,7 +1703,7 @@ def provider_model_ids(provider: Optional[str], *, force_refresh: bool = False) 
     if normalized == "nous":
         # Try live Nous Portal /models endpoint
         try:
-            from plutus_cli.auth import fetch_nous_models, resolve_nous_runtime_credentials
+            from harness.cli.auth import fetch_nous_models, resolve_nous_runtime_credentials
             creds = resolve_nous_runtime_credentials()
             if creds:
                 live = fetch_nous_models(api_key=creds.get("api_key", ""), inference_base_url=creds.get("base_url", ""))
@@ -1713,7 +1713,7 @@ def provider_model_ids(provider: Optional[str], *, force_refresh: bool = False) 
             pass
     if normalized == "stepfun":
         try:
-            from plutus_cli.auth import resolve_api_key_provider_credentials
+            from harness.cli.auth import resolve_api_key_provider_credentials
 
             creds = resolve_api_key_provider_credentials("stepfun")
             api_key = str(creds.get("api_key") or "").strip()
@@ -1761,7 +1761,7 @@ def _fetch_anthropic_models(timeout: float = 5.0) -> Optional[list[str]]:
     Claude Code auto-discovery).  Returns sorted model IDs or None.
     """
     try:
-        from agent.anthropic_adapter import resolve_anthropic_token, _is_oauth_token
+        from harness.agent.anthropic_adapter import resolve_anthropic_token, _is_oauth_token
     except ImportError:
         return None
 
@@ -1772,7 +1772,7 @@ def _fetch_anthropic_models(timeout: float = 5.0) -> Optional[list[str]]:
     headers: dict[str, str] = {"anthropic-version": "2023-06-01"}
     if _is_oauth_token(token):
         headers["Authorization"] = f"Bearer {token}"
-        from agent.anthropic_adapter import _COMMON_BETAS, _OAUTH_ONLY_BETAS
+        from harness.agent.anthropic_adapter import _COMMON_BETAS, _OAUTH_ONLY_BETAS
         headers["anthropic-beta"] = ",".join(_COMMON_BETAS + _OAUTH_ONLY_BETAS)
     else:
         headers["x-api-key"] = token
@@ -1815,7 +1815,7 @@ def copilot_default_headers() -> dict[str, str]:
     Copilot CLI send on every request.
     """
     try:
-        from plutus_cli.copilot_auth import copilot_request_headers
+        from harness.cli.copilot_auth import copilot_request_headers
         return copilot_request_headers(is_agent_turn=True)
     except ImportError:
         return {
@@ -2231,7 +2231,7 @@ def _fetch_ai_gateway_models(timeout: float = 5.0) -> Optional[list[str]]:
         return None
     base_url = os.getenv("AI_GATEWAY_BASE_URL", "").strip()
     if not base_url:
-        from plutus_constants import AI_GATEWAY_BASE_URL
+        from harness.constants import AI_GATEWAY_BASE_URL
         base_url = AI_GATEWAY_BASE_URL
 
     url = base_url.rstrip("/") + "/models"
@@ -2275,7 +2275,7 @@ _OLLAMA_CLOUD_CACHE_TTL = 3600  # 1 hour
 
 def _ollama_cloud_cache_path() -> Path:
     """Return the path for the Ollama Cloud model cache."""
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return get_hermes_home() / "ollama_cloud_models_cache.json"
 
 
@@ -2309,7 +2309,7 @@ def _load_ollama_cloud_cache(*, ignore_ttl: bool = False) -> Optional[dict]:
 def _save_ollama_cloud_cache(models: list[str]) -> None:
     """Persist the merged Ollama Cloud model list to disk."""
     try:
-        from utils import atomic_json_write
+        from harness.utils import atomic_json_write
         cache_path = _ollama_cloud_cache_path()
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         atomic_json_write(cache_path, {"models": models, "cached_at": time.time()}, indent=None)
@@ -2354,7 +2354,7 @@ def fetch_ollama_cloud_models(
     # 3. models.dev registry
     mdev_models: list[str] = []
     try:
-        from agent.models_dev import list_agentic_models
+        from harness.agent.models_dev import list_agentic_models
         mdev_models = list_agentic_models("ollama-cloud")
     except Exception:
         pass
@@ -2624,7 +2624,7 @@ def validate_requested_model(
     # AWS SDK control plane (ListFoundationModels + ListInferenceProfiles).
     if normalized == "bedrock":
         try:
-            from agent.bedrock_adapter import discover_bedrock_models, resolve_bedrock_region
+            from harness.agent.bedrock_adapter import discover_bedrock_models, resolve_bedrock_region
             region = resolve_bedrock_region()
             discovered = discover_bedrock_models(region)
             discovered_ids = {m["id"] for m in discovered}

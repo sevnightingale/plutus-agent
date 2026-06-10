@@ -14,7 +14,7 @@ import time
 import unittest
 from unittest.mock import patch, MagicMock
 
-from tools.file_tools import (
+from harness.tools.file_tools import (
     read_file_tool,
     reset_file_dedup,
     _is_blocked_device,
@@ -100,8 +100,8 @@ class TestCharacterCountGuard(unittest.TestCase):
     def tearDown(self):
         _read_tracker.clear()
 
-    @patch("tools.file_tools._get_file_ops")
-    @patch("tools.file_tools._get_max_read_chars", return_value=_DEFAULT_MAX_READ_CHARS)
+    @patch("harness.tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_max_read_chars", return_value=_DEFAULT_MAX_READ_CHARS)
     def test_oversized_read_rejected(self, _mock_limit, mock_ops):
         """A read that returns >max chars is rejected."""
         big_content = "x" * (_DEFAULT_MAX_READ_CHARS + 1)
@@ -116,7 +116,7 @@ class TestCharacterCountGuard(unittest.TestCase):
         self.assertIn("offset and limit", result["error"])
         self.assertIn("total_lines", result)
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_small_read_not_rejected(self, mock_ops):
         """Normal-sized reads pass through fine."""
         mock_ops.return_value = _make_fake_ops(content="short\n", file_size=6)
@@ -124,8 +124,8 @@ class TestCharacterCountGuard(unittest.TestCase):
         self.assertNotIn("error", result)
         self.assertIn("content", result)
 
-    @patch("tools.file_tools._get_file_ops")
-    @patch("tools.file_tools._get_max_read_chars", return_value=_DEFAULT_MAX_READ_CHARS)
+    @patch("harness.tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_max_read_chars", return_value=_DEFAULT_MAX_READ_CHARS)
     def test_content_under_limit_passes(self, _mock_limit, mock_ops):
         """Content just under the limit should pass through fine."""
         mock_ops.return_value = _make_fake_ops(
@@ -159,7 +159,7 @@ class TestFileDedup(unittest.TestCase):
         except OSError:
             pass
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_second_read_returns_dedup_stub(self, mock_ops):
         """Second read of same file+range returns dedup stub."""
         mock_ops.return_value = _make_fake_ops(
@@ -174,7 +174,7 @@ class TestFileDedup(unittest.TestCase):
         self.assertTrue(r2.get("dedup"), "Second read should return dedup stub")
         self.assertIn("unchanged", r2.get("content", ""))
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_modified_file_not_deduped(self, mock_ops):
         """After the file is modified, dedup returns full content."""
         mock_ops.return_value = _make_fake_ops(
@@ -190,7 +190,7 @@ class TestFileDedup(unittest.TestCase):
         r2 = json.loads(read_file_tool(self._tmpfile, task_id="mod"))
         self.assertNotEqual(r2.get("dedup"), True, "Modified file should not dedup")
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_different_range_not_deduped(self, mock_ops):
         """Same file but different offset/limit should not dedup."""
         mock_ops.return_value = _make_fake_ops(
@@ -203,7 +203,7 @@ class TestFileDedup(unittest.TestCase):
         ))
         self.assertNotEqual(r2.get("dedup"), True)
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_different_task_not_deduped(self, mock_ops):
         """Different task_ids have separate dedup caches."""
         mock_ops.return_value = _make_fake_ops(
@@ -238,7 +238,7 @@ class TestDedupResetOnCompression(unittest.TestCase):
         except OSError:
             pass
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_reset_clears_dedup(self, mock_ops):
         """After reset_file_dedup, the same read returns full content."""
         mock_ops.return_value = _make_fake_ops(
@@ -259,7 +259,7 @@ class TestDedupResetOnCompression(unittest.TestCase):
         self.assertNotEqual(r_post.get("dedup"), True,
                             "Post-compression read should return full content")
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_reset_all_tasks(self, mock_ops):
         """reset_file_dedup(None) clears all tasks."""
         mock_ops.return_value = _make_fake_ops(
@@ -275,7 +275,7 @@ class TestDedupResetOnCompression(unittest.TestCase):
         self.assertNotEqual(r1.get("dedup"), True)
         self.assertNotEqual(r2.get("dedup"), True)
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_reset_preserves_loop_detection(self, mock_ops):
         """reset_file_dedup does NOT affect the consecutive-read counter."""
         mock_ops.return_value = _make_fake_ops(
@@ -310,7 +310,7 @@ class TestLargeFileHint(unittest.TestCase):
     def tearDown(self):
         _read_tracker.clear()
 
-    @patch("tools.file_tools._get_file_ops")
+    @patch("harness.tools.file_tools._get_file_ops")
     def test_large_truncated_file_gets_hint(self, mock_ops):
         content = "line\n" * 400  # 2000 chars, small enough to pass char guard
         fake = _make_fake_ops(content=content, total_lines=10000, file_size=600_000)
@@ -343,16 +343,16 @@ class TestConfigOverride(unittest.TestCase):
     def setUp(self):
         _read_tracker.clear()
         # Reset the cached value so each test gets a fresh lookup
-        import tools.file_tools as _ft
+        import harness.tools.file_tools as _ft
         _ft._max_read_chars_cached = None
 
     def tearDown(self):
         _read_tracker.clear()
-        import tools.file_tools as _ft
+        import harness.tools.file_tools as _ft
         _ft._max_read_chars_cached = None
 
-    @patch("tools.file_tools._get_file_ops")
-    @patch("plutus_cli.config.load_config", return_value={"file_read_max_chars": 50})
+    @patch("harness.tools.file_tools._get_file_ops")
+    @patch("harness.cli.config.load_config", return_value={"file_read_max_chars": 50})
     def test_custom_config_lowers_limit(self, _mock_cfg, mock_ops):
         """A config value of 50 should reject reads over 50 chars."""
         mock_ops.return_value = _make_fake_ops(content="x" * 60, file_size=60)
@@ -361,8 +361,8 @@ class TestConfigOverride(unittest.TestCase):
         self.assertIn("safety limit", result["error"])
         self.assertIn("50", result["error"])  # should show the configured limit
 
-    @patch("tools.file_tools._get_file_ops")
-    @patch("plutus_cli.config.load_config", return_value={"file_read_max_chars": 500_000})
+    @patch("harness.tools.file_tools._get_file_ops")
+    @patch("harness.cli.config.load_config", return_value={"file_read_max_chars": 500_000})
     def test_custom_config_raises_limit(self, _mock_cfg, mock_ops):
         """A config value of 500K should allow reads up to 500K chars."""
         # 200K chars would be rejected at the default 100K but passes at 500K

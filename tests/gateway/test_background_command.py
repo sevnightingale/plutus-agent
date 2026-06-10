@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 def _make_event(text="/background", platform=Platform.TELEGRAM,
@@ -29,7 +29,7 @@ def _make_event(text="/background", platform=Platform.TELEGRAM,
 
 def _make_runner():
     """Create a bare GatewayRunner with minimal mocks."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -43,7 +43,7 @@ def _make_runner():
     mock_store = MagicMock()
     runner.session_store = mock_store
 
-    from gateway.hooks import HookRegistry
+    from harness.gateway.hooks import HookRegistry
     runner.hooks = HookRegistry()
 
     return runner
@@ -98,7 +98,7 @@ class TestHandleBackgroundCommand:
             created_tasks.append(mock_task)
             return mock_task
 
-        with patch("gateway.run.asyncio.create_task", side_effect=capture_task):
+        with patch("harness.gateway.run.asyncio.create_task", side_effect=capture_task):
             event = _make_event(text="/background Summarize the top HN stories")
             result = await runner._handle_background_command(event)
 
@@ -114,7 +114,7 @@ class TestHandleBackgroundCommand:
         runner = _make_runner()
         long_prompt = "A" * 100
 
-        with patch("gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
+        with patch("harness.gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
             event = _make_event(text=f"/background {long_prompt}")
             result = await runner._handle_background_command(event)
 
@@ -128,7 +128,7 @@ class TestHandleBackgroundCommand:
         runner = _make_runner()
         task_ids = set()
 
-        with patch("gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
+        with patch("harness.gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
             for i in range(5):
                 event = _make_event(text=f"/background task {i}")
                 result = await runner._handle_background_command(event)
@@ -145,7 +145,7 @@ class TestHandleBackgroundCommand:
         """The /background command works for all platforms."""
         for platform in [Platform.TELEGRAM, Platform.DISCORD, Platform.SLACK]:
             runner = _make_runner()
-            with patch("gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
+            with patch("harness.gateway.run.asyncio.create_task", side_effect=lambda c, **kw: (c.close(), MagicMock())[1]):
                 event = _make_event(
                     text="/background test task",
                     platform=platform,
@@ -190,7 +190,7 @@ class TestRunBackgroundTask:
             user_name="testuser",
         )
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": None}):
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": None}):
             await runner._run_background_task("test prompt", source, "bg_test")
 
         # Should have sent an error message
@@ -217,8 +217,8 @@ class TestRunBackgroundTask:
 
         mock_result = {"final_response": "Hello from background!", "messages": []}
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}), \
-             patch("run_agent.AIAgent") as MockAgent:
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}), \
+             patch("harness.run_agent.AIAgent") as MockAgent:
             mock_agent_instance = MagicMock()
             mock_agent_instance.shutdown_memory_provider = MagicMock()
             mock_agent_instance.close = MagicMock()
@@ -251,8 +251,8 @@ class TestRunBackgroundTask:
             user_name="testuser",
         )
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}), \
-             patch("run_agent.AIAgent") as MockAgent:
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs", return_value={"api_key": "test-key"}), \
+             patch("harness.run_agent.AIAgent") as MockAgent:
             mock_agent_instance = MagicMock()
             mock_agent_instance.shutdown_memory_provider = MagicMock()
             mock_agent_instance.close = MagicMock()
@@ -280,7 +280,7 @@ class TestRunBackgroundTask:
             user_name="testuser",
         )
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs", side_effect=RuntimeError("boom")):
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs", side_effect=RuntimeError("boom")):
             await runner._run_background_task("test prompt", source, "bg_test")
 
         mock_adapter.send.assert_called_once()
@@ -307,12 +307,12 @@ class TestBackgroundInHelp:
 
     def test_background_is_known_command(self):
         """The /background command is in GATEWAY_KNOWN_COMMANDS."""
-        from plutus_cli.commands import GATEWAY_KNOWN_COMMANDS
+        from harness.cli.commands import GATEWAY_KNOWN_COMMANDS
         assert "background" in GATEWAY_KNOWN_COMMANDS
 
     def test_bg_alias_is_known_command(self):
         """The /bg alias is in GATEWAY_KNOWN_COMMANDS."""
-        from plutus_cli.commands import GATEWAY_KNOWN_COMMANDS
+        from harness.cli.commands import GATEWAY_KNOWN_COMMANDS
         assert "bg" in GATEWAY_KNOWN_COMMANDS
 
 
@@ -326,23 +326,23 @@ class TestBackgroundInCLICommands:
 
     def test_background_in_commands_dict(self):
         """The /background command is in the COMMANDS dict."""
-        from plutus_cli.commands import COMMANDS
+        from harness.cli.commands import COMMANDS
         assert "/background" in COMMANDS
 
     def test_bg_alias_in_commands_dict(self):
         """The /bg alias is in the COMMANDS dict."""
-        from plutus_cli.commands import COMMANDS
+        from harness.cli.commands import COMMANDS
         assert "/bg" in COMMANDS
 
     def test_background_in_session_category(self):
         """The /background command is in the Session category."""
-        from plutus_cli.commands import COMMANDS_BY_CATEGORY
+        from harness.cli.commands import COMMANDS_BY_CATEGORY
         assert "/background" in COMMANDS_BY_CATEGORY["Session"]
 
     def test_background_autocompletes(self):
         """The /background command appears in autocomplete results."""
         pytest.importorskip("prompt_toolkit")
-        from plutus_cli.commands import SlashCommandCompleter
+        from harness.cli.commands import SlashCommandCompleter
         from prompt_toolkit.document import Document
 
         completer = SlashCommandCompleter()

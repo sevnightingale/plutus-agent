@@ -22,7 +22,7 @@ from unittest.mock import patch
 
 import httpx
 
-from run_agent import AIAgent, _get_proxy_from_env
+from harness.run_agent import AIAgent, _get_proxy_from_env
 
 
 def _make_agent():
@@ -75,7 +75,7 @@ def test_get_proxy_from_env_normalizes_socks_alias(monkeypatch):
     assert _get_proxy_from_env() == "socks5://127.0.0.1:1080/"
 
 
-@patch("run_agent.OpenAI")
+@patch("harness.run_agent.OpenAI")
 def test_create_openai_client_routes_via_proxy_when_env_set(mock_openai, monkeypatch):
     """With HTTPS_PROXY set, the custom httpx.Client must mount an HTTPProxy pool.
 
@@ -115,7 +115,7 @@ def test_create_openai_client_routes_via_proxy_when_env_set(mock_openai, monkeyp
     http_client.close()
 
 
-@patch("run_agent.OpenAI")
+@patch("harness.run_agent.OpenAI")
 def test_create_openai_client_no_proxy_when_env_unset(mock_openai, monkeypatch):
     """Without proxy env vars, the keepalive transport must still be installed
     and no HTTPProxy mount should exist."""

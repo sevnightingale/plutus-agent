@@ -16,13 +16,13 @@ def temp_hermes_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(home))
     # cron.jobs imports HERMES_DIR at module load time — reload to pick up env
     import importlib
-    import cron.jobs
+    import harness.cron.jobs; import harness.cron as cron
     importlib.reload(cron.jobs)
     return home
 
 
 def test_seed_heartbeat_creates_job(temp_hermes_home):
-    from plutus_cli.heartbeat import seed_heartbeat
+    from harness.cli.heartbeat import seed_heartbeat
 
     job = seed_heartbeat()
 
@@ -44,8 +44,8 @@ def test_seed_heartbeat_creates_job(temp_hermes_home):
 
 def test_seed_heartbeat_idempotent(temp_hermes_home):
     """Re-seeding replaces the prior job rather than duplicating."""
-    from plutus_cli.heartbeat import seed_heartbeat
-    import cron.jobs
+    from harness.cli.heartbeat import seed_heartbeat
+    import harness.cron.jobs; import harness.cron as cron
 
     first = seed_heartbeat(schedule="*/30 * * * *")
     second = seed_heartbeat(schedule="0 */2 * * *")
@@ -57,7 +57,7 @@ def test_seed_heartbeat_idempotent(temp_hermes_home):
 
 
 def test_seed_weekly_review_creates_job(temp_hermes_home):
-    from plutus_cli.heartbeat import seed_weekly_review
+    from harness.cli.heartbeat import seed_weekly_review
 
     job = seed_weekly_review()
     assert job["name"] == "plutus-weekly-review"
@@ -66,15 +66,15 @@ def test_seed_weekly_review_creates_job(temp_hermes_home):
 
 
 def test_seed_weekly_review_custom_schedule(temp_hermes_home):
-    from plutus_cli.heartbeat import seed_weekly_review
+    from harness.cli.heartbeat import seed_weekly_review
 
     job = seed_weekly_review(schedule="0 12 * * 1")  # Monday noon
     assert job["schedule"]["expr"] == "0 12 * * 1"
 
 
 def test_both_helpers_coexist(temp_hermes_home):
-    from plutus_cli.heartbeat import seed_heartbeat, seed_weekly_review
-    import cron.jobs
+    from harness.cli.heartbeat import seed_heartbeat, seed_weekly_review
+    import harness.cron.jobs; import harness.cron as cron
 
     seed_heartbeat()
     seed_weekly_review()

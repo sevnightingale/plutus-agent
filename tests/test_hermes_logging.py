@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-import plutus_logging
+import harness.log as plutus_logging
 
 
 @pytest.fixture(autouse=True)
@@ -265,7 +265,7 @@ class TestGatewayMode:
         """gateway.log captures records from gateway.* loggers."""
         plutus_logging.setup_logging(hermes_home=hermes_home, mode="gateway")
 
-        gw_logger = logging.getLogger("gateway.platforms.telegram")
+        gw_logger = logging.getLogger("harness.gateway.platforms.telegram")
         gw_logger.info("telegram connected")
 
         for h in logging.getLogger().handlers:
@@ -279,10 +279,10 @@ class TestGatewayMode:
         """gateway.log does NOT capture records from tools.*, agent.*, etc."""
         plutus_logging.setup_logging(hermes_home=hermes_home, mode="gateway")
 
-        tool_logger = logging.getLogger("tools.terminal_tool")
+        tool_logger = logging.getLogger("harness.tools.terminal_tool")
         tool_logger.info("running command")
 
-        agent_logger = logging.getLogger("agent.context_compressor")
+        agent_logger = logging.getLogger("harness.agent.context_compressor")
         agent_logger.info("compressing context")
 
         for h in logging.getLogger().handlers:
@@ -298,8 +298,8 @@ class TestGatewayMode:
         """agent.log (catch-all) still receives gateway AND tool records."""
         plutus_logging.setup_logging(hermes_home=hermes_home, mode="gateway")
 
-        gw_logger = logging.getLogger("gateway.run")
-        file_logger = logging.getLogger("tools.file_tools")
+        gw_logger = logging.getLogger("harness.gateway.run")
+        file_logger = logging.getLogger("harness.tools.file_tools")
         # Ensure propagation and levels are clean (cross-test pollution defense)
         gw_logger.propagate = True
         file_logger.propagate = True
@@ -463,21 +463,21 @@ class TestComponentFilter:
     def test_passes_matching_prefix(self):
         f = plutus_logging._ComponentFilter(("gateway",))
         record = logging.LogRecord(
-            "gateway.run", logging.INFO, "", 0, "msg", (), None
+            "harness.gateway.run", logging.INFO, "", 0, "msg", (), None
         )
         assert f.filter(record) is True
 
     def test_passes_nested_matching_prefix(self):
         f = plutus_logging._ComponentFilter(("gateway",))
         record = logging.LogRecord(
-            "gateway.platforms.telegram", logging.INFO, "", 0, "msg", (), None
+            "harness.gateway.platforms.telegram", logging.INFO, "", 0, "msg", (), None
         )
         assert f.filter(record) is True
 
     def test_blocks_non_matching(self):
         f = plutus_logging._ComponentFilter(("gateway",))
         record = logging.LogRecord(
-            "tools.terminal_tool", logging.INFO, "", 0, "msg", (), None
+            "harness.tools.terminal_tool", logging.INFO, "", 0, "msg", (), None
         )
         assert f.filter(record) is False
 
@@ -662,7 +662,7 @@ class TestAddRotatingHandler:
 
         old_umask = os.umask(0o022)
         try:
-            with patch("plutus_cli.config.is_managed", return_value=True):
+            with patch("harness.cli.config.is_managed", return_value=True):
                 plutus_logging._add_rotating_handler(
                     logger, log_path,
                     level=logging.INFO, max_bytes=1024, backup_count=1,
@@ -686,7 +686,7 @@ class TestAddRotatingHandler:
 
         old_umask = os.umask(0o022)
         try:
-            with patch("plutus_cli.config.is_managed", return_value=True):
+            with patch("harness.cli.config.is_managed", return_value=True):
                 plutus_logging._add_rotating_handler(
                     logger, log_path,
                     level=logging.INFO, max_bytes=1, backup_count=1,

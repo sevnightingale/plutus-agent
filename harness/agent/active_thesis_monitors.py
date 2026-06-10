@@ -53,7 +53,7 @@ MONITORS_FILE_VERSION = 1
 
 
 def _hermes_home() -> Path:
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return Path(get_hermes_home())
 
 

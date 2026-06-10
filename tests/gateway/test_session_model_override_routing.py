@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import gateway.run as gateway_run
-from gateway.config import Platform
-from gateway.session import SessionSource
+import harness.gateway.run as gateway_run
+from harness.gateway.config import Platform
+from harness.gateway.session import SessionSource
 
 
 class _CapturingAgent:
@@ -88,7 +88,7 @@ def test_run_agent_prefers_session_override_over_global_runtime(monkeypatch):
 
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = _CapturingAgent
-    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
     _CapturingAgent.last_init = None
     runner = _make_runner()
@@ -130,7 +130,7 @@ async def test_background_task_prefers_session_override_over_global_runtime(monk
 
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = _CapturingAgent
-    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
     _CapturingAgent.last_init = None
     runner = _make_runner()

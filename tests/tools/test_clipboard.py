@@ -17,7 +17,7 @@ from unittest.mock import patch, MagicMock, PropertyMock, mock_open
 
 import pytest
 
-from plutus_cli.clipboard import (
+from harness.cli.clipboard import (
     save_clipboard_image,
     has_clipboard_image,
     _is_wsl,
@@ -35,7 +35,7 @@ from plutus_cli.clipboard import (
     _windows_has_image,
     _convert_to_png,
 )
-from cli import _should_auto_attach_clipboard_image_on_paste
+from harness.repl import _should_auto_attach_clipboard_image_on_paste
 
 FAKE_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
 FAKE_BMP = b"BM" + b"\x00" * 100
@@ -48,33 +48,33 @@ FAKE_BMP = b"BM" + b"\x00" * 100
 class TestSaveClipboardImage:
     def test_dispatches_to_macos_on_darwin(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "darwin"
-            with patch("plutus_cli.clipboard._macos_save", return_value=False) as m:
+            with patch("harness.cli.clipboard._macos_save", return_value=False) as m:
                 save_clipboard_image(dest)
                 m.assert_called_once_with(dest)
 
     def test_dispatches_to_windows_on_win32(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "win32"
-            with patch("plutus_cli.clipboard._windows_save", return_value=False) as m:
+            with patch("harness.cli.clipboard._windows_save", return_value=False) as m:
                 save_clipboard_image(dest)
                 m.assert_called_once_with(dest)
 
     def test_dispatches_to_linux_on_linux(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._linux_save", return_value=False) as m:
+            with patch("harness.cli.clipboard._linux_save", return_value=False) as m:
                 save_clipboard_image(dest)
                 m.assert_called_once_with(dest)
 
     def test_creates_parent_dirs(self, tmp_path):
         dest = tmp_path / "deep" / "nested" / "out.png"
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._linux_save", return_value=False):
+            with patch("harness.cli.clipboard._linux_save", return_value=False):
                 save_clipboard_image(dest)
         assert dest.parent.exists()
 
@@ -87,17 +87,17 @@ class TestMacosPngpaste:
         def fake_run(cmd, **kw):
             dest.write_bytes(FAKE_PNG)
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_pngpaste(dest) is True
         assert dest.stat().st_size == len(FAKE_PNG)
 
     def test_not_installed(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _macos_pngpaste(tmp_path / "out.png") is False
 
     def test_no_image_in_clipboard(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1)
             assert _macos_pngpaste(dest) is False
         assert not dest.exists()
@@ -107,33 +107,33 @@ class TestMacosPngpaste:
         def fake_run(cmd, **kw):
             dest.write_bytes(b"")
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_pngpaste(dest) is False
 
     def test_timeout_returns_false(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run",
+        with patch("harness.cli.clipboard.subprocess.run",
                    side_effect=subprocess.TimeoutExpired("pngpaste", 3)):
             assert _macos_pngpaste(dest) is False
 
 
 class TestMacosHasImage:
     def test_png_detected(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="«class PNGf», «class ut16»", returncode=0
             )
             assert _macos_has_image() is True
 
     def test_tiff_detected(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="«class TIFF»", returncode=0
             )
             assert _macos_has_image() is True
 
     def test_text_only(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="«class ut16», «class utf8»", returncode=0
             )
@@ -142,14 +142,14 @@ class TestMacosHasImage:
 
 class TestMacosOsascript:
     def test_no_image_type_in_clipboard(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="«class ut16», «class utf8»", returncode=0
             )
             assert _macos_osascript(tmp_path / "out.png") is False
 
     def test_clipboard_info_fails(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=Exception("fail")):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=Exception("fail")):
             assert _macos_osascript(tmp_path / "out.png") is False
 
     def test_success_with_png(self, tmp_path):
@@ -161,7 +161,7 @@ class TestMacosOsascript:
                 return MagicMock(stdout="«class PNGf», «class ut16»", returncode=0)
             dest.write_bytes(FAKE_PNG)
             return MagicMock(stdout="", returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_osascript(dest) is True
         assert dest.stat().st_size > 0
 
@@ -174,7 +174,7 @@ class TestMacosOsascript:
                 return MagicMock(stdout="«class TIFF»", returncode=0)
             dest.write_bytes(FAKE_PNG)
             return MagicMock(stdout="", returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_osascript(dest) is True
 
     def test_extraction_returns_fail(self, tmp_path):
@@ -185,7 +185,7 @@ class TestMacosOsascript:
             if len(calls) == 1:
                 return MagicMock(stdout="«class PNGf»", returncode=0)
             return MagicMock(stdout="fail", returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_osascript(dest) is False
 
     def test_extraction_writes_empty_file(self, tmp_path):
@@ -197,7 +197,7 @@ class TestMacosOsascript:
                 return MagicMock(stdout="«class PNGf»", returncode=0)
             dest.write_bytes(b"")
             return MagicMock(stdout="", returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _macos_osascript(dest) is False
 
 
@@ -206,7 +206,7 @@ class TestMacosOsascript:
 class TestIsWsl:
     def setup_method(self):
         # _is_wsl is now plutus_constants.is_wsl — reset its cache
-        import plutus_constants
+        import harness.constants as plutus_constants
         plutus_constants._wsl_detected = None
 
     def test_wsl2_detected(self):
@@ -229,7 +229,7 @@ class TestIsWsl:
             assert _is_wsl() is False
 
     def test_result_is_cached(self):
-        import plutus_constants
+        import harness.constants as plutus_constants
         content = "Linux version 5.15.0 (microsoft-standard-WSL2)"
         with patch("builtins.open", mock_open(read_data=content)) as m:
             assert _is_wsl() is True
@@ -241,17 +241,17 @@ class TestIsWsl:
 
 class TestWslHasImage:
     def test_clipboard_has_image(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="True\n", returncode=0)
             assert _wsl_has_image() is True
 
     def test_clipboard_no_image(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="False\n", returncode=0)
             assert _wsl_has_image() is False
 
     def test_falls_back_to_get_clipboard_image(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(stdout="False\n", returncode=0),
                 MagicMock(stdout="True\n", returncode=0),
@@ -260,11 +260,11 @@ class TestWslHasImage:
             assert mock_run.call_count == 2
 
     def test_powershell_not_found(self):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _wsl_has_image() is False
 
     def test_powershell_error(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="", returncode=1)
             assert _wsl_has_image() is False
 
@@ -273,7 +273,7 @@ class TestWslSave:
     def test_successful_extraction(self, tmp_path):
         dest = tmp_path / "out.png"
         b64_png = base64.b64encode(FAKE_PNG).decode()
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout=b64_png + "\n", returncode=0)
             assert _wsl_save(dest) is True
         assert dest.read_bytes() == FAKE_PNG
@@ -281,7 +281,7 @@ class TestWslSave:
     def test_falls_back_to_get_clipboard_extraction(self, tmp_path):
         dest = tmp_path / "out.png"
         b64_png = base64.b64encode(FAKE_PNG).decode()
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.side_effect = [
                 MagicMock(stdout="", returncode=1),
                 MagicMock(stdout=b64_png + "\n", returncode=0),
@@ -292,31 +292,31 @@ class TestWslSave:
 
     def test_no_image_returns_false(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="", returncode=1)
             assert _wsl_save(dest) is False
         assert not dest.exists()
 
     def test_empty_output(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="", returncode=0)
             assert _wsl_save(dest) is False
 
     def test_powershell_not_found(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _wsl_save(dest) is False
 
     def test_invalid_base64(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="not-valid-base64!!!", returncode=0)
             assert _wsl_save(dest) is False
 
     def test_timeout(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run",
+        with patch("harness.cli.clipboard.subprocess.run",
                    side_effect=subprocess.TimeoutExpired("powershell.exe", 15)):
             assert _wsl_save(dest) is False
 
@@ -325,28 +325,28 @@ class TestWslSave:
 
 class TestWaylandHasImage:
     def test_has_png(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="image/png\ntext/plain\n", returncode=0
             )
             assert _wayland_has_image() is True
 
     def test_has_bmp_only(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="text/html\nimage/bmp\n", returncode=0
             )
             assert _wayland_has_image() is True
 
     def test_text_only(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="text/plain\ntext/html\n", returncode=0
             )
             assert _wayland_has_image() is False
 
     def test_wl_paste_not_installed(self):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _wayland_has_image() is False
 
 
@@ -362,7 +362,7 @@ class TestWaylandSave:
             if "stdout" in kw and hasattr(kw["stdout"], "write"):
                 kw["stdout"].write(FAKE_PNG)
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _wayland_save(dest) is True
         assert dest.stat().st_size > 0
 
@@ -376,13 +376,13 @@ class TestWaylandSave:
             if "stdout" in kw and hasattr(kw["stdout"], "write"):
                 kw["stdout"].write(FAKE_BMP)
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
-            with patch("plutus_cli.clipboard._convert_to_png", return_value=True):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
+            with patch("harness.cli.clipboard._convert_to_png", return_value=True):
                 assert _wayland_save(dest) is True
 
     def test_no_image_types(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="text/plain\ntext/html\n", returncode=0
             )
@@ -390,12 +390,12 @@ class TestWaylandSave:
 
     def test_wl_paste_not_installed(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _wayland_save(dest) is False
 
     def test_list_types_fails(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="", returncode=1)
             assert _wayland_save(dest) is False
 
@@ -412,7 +412,7 @@ class TestWaylandSave:
             if "stdout" in kw and hasattr(kw["stdout"], "write"):
                 kw["stdout"].write(FAKE_PNG)
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _wayland_save(dest) is True
         # Verify PNG was requested, not BMP
         extract_cmd = calls[1]
@@ -423,31 +423,31 @@ class TestWaylandSave:
 
 class TestXclipHasImage:
     def test_has_image(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="image/png\ntext/plain\n", returncode=0
             )
             assert _xclip_has_image() is True
 
     def test_no_image(self):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(
                 stdout="text/plain\n", returncode=0
             )
             assert _xclip_has_image() is False
 
     def test_xclip_not_installed(self):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _xclip_has_image() is False
 
 
 class TestXclipSave:
     def test_no_xclip_installed(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
             assert _xclip_save(tmp_path / "out.png") is False
 
     def test_no_image_in_clipboard(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(stdout="text/plain\n", returncode=0)
             assert _xclip_save(tmp_path / "out.png") is False
 
@@ -459,7 +459,7 @@ class TestXclipSave:
             if "stdout" in kw and hasattr(kw["stdout"], "write"):
                 kw["stdout"].write(FAKE_PNG)
             return MagicMock(returncode=0)
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _xclip_save(dest) is True
         assert dest.stat().st_size > 0
 
@@ -469,12 +469,12 @@ class TestXclipSave:
             if "TARGETS" in cmd:
                 return MagicMock(stdout="image/png\n", returncode=0)
             raise subprocess.SubprocessError("pipe broke")
-        with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+        with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
             assert _xclip_save(dest) is False
         assert not dest.exists()
 
     def test_targets_check_timeout(self, tmp_path):
-        with patch("plutus_cli.clipboard.subprocess.run",
+        with patch("harness.cli.clipboard.subprocess.run",
                    side_effect=subprocess.TimeoutExpired("xclip", 3)):
             assert _xclip_save(tmp_path / "out.png") is False
 
@@ -485,47 +485,47 @@ class TestLinuxSave:
     """Test that _linux_save dispatches correctly to WSL → Wayland → X11."""
 
     def setup_method(self):
-        import plutus_cli.clipboard as cb
+        import harness.cli.clipboard as cb
         cb._wsl_detected = None
 
     def test_wsl_tried_first(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._is_wsl", return_value=True):
-            with patch("plutus_cli.clipboard._wsl_save", return_value=True) as m:
+        with patch("harness.cli.clipboard._is_wsl", return_value=True):
+            with patch("harness.cli.clipboard._wsl_save", return_value=True) as m:
                 assert _linux_save(dest) is True
                 m.assert_called_once_with(dest)
 
     def test_wsl_fails_falls_through_to_xclip(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._is_wsl", return_value=True):
-            with patch("plutus_cli.clipboard._wsl_save", return_value=False):
+        with patch("harness.cli.clipboard._is_wsl", return_value=True):
+            with patch("harness.cli.clipboard._wsl_save", return_value=False):
                 with patch.dict(os.environ, {}, clear=True):
-                    with patch("plutus_cli.clipboard._xclip_save", return_value=True) as m:
+                    with patch("harness.cli.clipboard._xclip_save", return_value=True) as m:
                         assert _linux_save(dest) is True
                         m.assert_called_once_with(dest)
 
     def test_wayland_tried_when_display_set(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._is_wsl", return_value=False):
+        with patch("harness.cli.clipboard._is_wsl", return_value=False):
             with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}):
-                with patch("plutus_cli.clipboard._wayland_save", return_value=True) as m:
+                with patch("harness.cli.clipboard._wayland_save", return_value=True) as m:
                     assert _linux_save(dest) is True
                     m.assert_called_once_with(dest)
 
     def test_wayland_fails_falls_through_to_xclip(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._is_wsl", return_value=False):
+        with patch("harness.cli.clipboard._is_wsl", return_value=False):
             with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}):
-                with patch("plutus_cli.clipboard._wayland_save", return_value=False):
-                    with patch("plutus_cli.clipboard._xclip_save", return_value=True) as m:
+                with patch("harness.cli.clipboard._wayland_save", return_value=False):
+                    with patch("harness.cli.clipboard._xclip_save", return_value=True) as m:
                         assert _linux_save(dest) is True
                         m.assert_called_once_with(dest)
 
     def test_xclip_used_on_plain_x11(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._is_wsl", return_value=False):
+        with patch("harness.cli.clipboard._is_wsl", return_value=False):
             with patch.dict(os.environ, {}, clear=True):
-                with patch("plutus_cli.clipboard._xclip_save", return_value=True) as m:
+                with patch("harness.cli.clipboard._xclip_save", return_value=True) as m:
                     assert _linux_save(dest) is True
                     m.assert_called_once_with(dest)
 
@@ -534,24 +534,24 @@ class TestLinuxSave:
 
 class TestWindowsHasImage:
     def setup_method(self):
-        import plutus_cli.clipboard as cb
+        import harness.cli.clipboard as cb
         cb._ps_exe = False  # reset cache
 
     def test_clipboard_has_image(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="True\n", returncode=0)
                 assert _windows_has_image() is True
 
     def test_clipboard_no_image(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="False\n", returncode=0)
                 assert _windows_has_image() is False
 
     def test_falls_back_to_get_clipboard_image(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.side_effect = [
                     MagicMock(stdout="False\n", returncode=0),
                     MagicMock(stdout="True\n", returncode=0),
@@ -560,32 +560,32 @@ class TestWindowsHasImage:
                 assert mock_run.call_count == 2
 
     def test_no_powershell_available(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value=None):
+        with patch("harness.cli.clipboard._get_ps_exe", return_value=None):
             assert _windows_has_image() is False
 
     def test_powershell_error(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="", returncode=1)
                 assert _windows_has_image() is False
 
     def test_subprocess_exception(self):
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run",
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run",
                        side_effect=subprocess.TimeoutExpired("powershell", 5)):
                 assert _windows_has_image() is False
 
 
 class TestWindowsSave:
     def setup_method(self):
-        import plutus_cli.clipboard as cb
+        import harness.cli.clipboard as cb
         cb._ps_exe = False  # reset cache
 
     def test_successful_extraction(self, tmp_path):
         dest = tmp_path / "out.png"
         b64_png = base64.b64encode(FAKE_PNG).decode()
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout=b64_png + "\n", returncode=0)
                 assert _windows_save(dest) is True
         assert dest.read_bytes() == FAKE_PNG
@@ -593,8 +593,8 @@ class TestWindowsSave:
     def test_falls_back_to_filedrop_image(self, tmp_path):
         dest = tmp_path / "out.png"
         b64_png = base64.b64encode(FAKE_PNG).decode()
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.side_effect = [
                     MagicMock(stdout="", returncode=1),
                     MagicMock(stdout="", returncode=1),
@@ -606,35 +606,35 @@ class TestWindowsSave:
 
     def test_no_image_returns_false(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="", returncode=1)
                 assert _windows_save(dest) is False
         assert not dest.exists()
 
     def test_empty_output(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="", returncode=0)
                 assert _windows_save(dest) is False
 
     def test_no_powershell_returns_false(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value=None):
+        with patch("harness.cli.clipboard._get_ps_exe", return_value=None):
             assert _windows_save(dest) is False
 
     def test_invalid_base64(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run") as mock_run:
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run") as mock_run:
                 mock_run.return_value = MagicMock(stdout="not-valid-base64!!!", returncode=0)
                 assert _windows_save(dest) is False
 
     def test_timeout(self, tmp_path):
         dest = tmp_path / "out.png"
-        with patch("plutus_cli.clipboard._get_ps_exe", return_value="powershell"):
-            with patch("plutus_cli.clipboard.subprocess.run",
+        with patch("harness.cli.clipboard._get_ps_exe", return_value="powershell"):
+            with patch("harness.cli.clipboard.subprocess.run",
                        side_effect=subprocess.TimeoutExpired("powershell", 15)):
                 assert _windows_save(dest) is False
 
@@ -643,9 +643,9 @@ class TestHasClipboardImageWin32:
     """Verify has_clipboard_image dispatches to _windows_has_image on win32."""
 
     def test_dispatches_on_win32(self):
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "win32"
-            with patch("plutus_cli.clipboard._windows_has_image", return_value=True) as m:
+            with patch("harness.cli.clipboard._windows_has_image", return_value=True) as m:
                 assert has_clipboard_image() is True
                 m.assert_called_once()
 
@@ -676,9 +676,9 @@ class TestConvertToPng:
             return MagicMock(returncode=0)
 
         with patch.dict(sys.modules, {"PIL": None, "PIL.Image": None}):
-            with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run):
+            with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run):
                 # Force ImportError for Pillow
-                import plutus_cli.clipboard as cb
+                import harness.cli.clipboard as cb
                 original = cb._convert_to_png
 
                 def patched_convert(path):
@@ -705,7 +705,7 @@ class TestConvertToPng:
         dest.write_bytes(FAKE_BMP)  # it's a BMP but named .png
         # Both Pillow and ImageMagick unavailable
         with patch.dict(sys.modules, {"PIL": None, "PIL.Image": None}):
-            with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+            with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
                 result = _convert_to_png(dest)
                 # Raw BMP is better than nothing — function should return True
                 assert result is True
@@ -722,7 +722,7 @@ class TestConvertToPng:
             return MagicMock(returncode=1)
 
         with patch.dict(sys.modules, {"PIL": None, "PIL.Image": None}):
-            with patch("plutus_cli.clipboard.subprocess.run", side_effect=fake_run_fail):
+            with patch("harness.cli.clipboard.subprocess.run", side_effect=fake_run_fail):
                 _convert_to_png(dest)
 
         # Original file must still exist with original content
@@ -736,7 +736,7 @@ class TestConvertToPng:
         dest.write_bytes(original_data)
 
         with patch.dict(sys.modules, {"PIL": None, "PIL.Image": None}):
-            with patch("plutus_cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
+            with patch("harness.cli.clipboard.subprocess.run", side_effect=FileNotFoundError):
                 _convert_to_png(dest)
 
         assert dest.exists(), "Original file was lost when ImageMagick not installed"
@@ -750,7 +750,7 @@ class TestConvertToPng:
         dest.write_bytes(original_data)
 
         with patch.dict(sys.modules, {"PIL": None, "PIL.Image": None}):
-            with patch("plutus_cli.clipboard.subprocess.run", side_effect=subprocess.TimeoutExpired("convert", 5)):
+            with patch("harness.cli.clipboard.subprocess.run", side_effect=subprocess.TimeoutExpired("convert", 5)):
                 _convert_to_png(dest)
 
         assert dest.exists(), "Original file was lost after timeout"
@@ -761,51 +761,51 @@ class TestConvertToPng:
 
 class TestHasClipboardImage:
     def setup_method(self):
-        import plutus_cli.clipboard as cb
+        import harness.cli.clipboard as cb
         cb._wsl_detected = None
 
     def test_macos_dispatch(self):
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "darwin"
-            with patch("plutus_cli.clipboard._macos_has_image", return_value=True) as m:
+            with patch("harness.cli.clipboard._macos_has_image", return_value=True) as m:
                 assert has_clipboard_image() is True
                 m.assert_called_once()
 
     def test_linux_wsl_dispatch(self):
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._is_wsl", return_value=True):
-                with patch("plutus_cli.clipboard._wsl_has_image", return_value=True) as m:
+            with patch("harness.cli.clipboard._is_wsl", return_value=True):
+                with patch("harness.cli.clipboard._wsl_has_image", return_value=True) as m:
                     assert has_clipboard_image() is True
                     m.assert_called_once()
 
     def test_wsl_falls_through_to_wayland_when_windows_path_empty(self):
         """WSLg often bridges images to wl-paste even when powershell.exe check fails."""
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._is_wsl", return_value=True):
-                with patch("plutus_cli.clipboard._wsl_has_image", return_value=False) as wsl:
+            with patch("harness.cli.clipboard._is_wsl", return_value=True):
+                with patch("harness.cli.clipboard._wsl_has_image", return_value=False) as wsl:
                     with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}):
-                        with patch("plutus_cli.clipboard._wayland_has_image", return_value=True) as wl:
+                        with patch("harness.cli.clipboard._wayland_has_image", return_value=True) as wl:
                             assert has_clipboard_image() is True
                             wsl.assert_called_once()
                             wl.assert_called_once()
 
     def test_linux_wayland_dispatch(self):
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._is_wsl", return_value=False):
+            with patch("harness.cli.clipboard._is_wsl", return_value=False):
                 with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}):
-                    with patch("plutus_cli.clipboard._wayland_has_image", return_value=True) as m:
+                    with patch("harness.cli.clipboard._wayland_has_image", return_value=True) as m:
                         assert has_clipboard_image() is True
                         m.assert_called_once()
 
     def test_linux_x11_dispatch(self):
-        with patch("plutus_cli.clipboard.sys") as mock_sys:
+        with patch("harness.cli.clipboard.sys") as mock_sys:
             mock_sys.platform = "linux"
-            with patch("plutus_cli.clipboard._is_wsl", return_value=False):
+            with patch("harness.cli.clipboard._is_wsl", return_value=False):
                 with patch.dict(os.environ, {}, clear=True):
-                    with patch("plutus_cli.clipboard._xclip_has_image", return_value=True) as m:
+                    with patch("harness.cli.clipboard._xclip_has_image", return_value=True) as m:
                         assert has_clipboard_image() is True
                         m.assert_called_once()
 
@@ -820,7 +820,7 @@ class TestPreprocessImagesWithVision:
     @pytest.fixture
     def cli(self):
         """Minimal HermesCLI with mocked internals."""
-        with patch("cli.load_cli_config") as mock_cfg:
+        with patch("harness.repl.load_cli_config") as mock_cfg:
             mock_cfg.return_value = {
                 "model": {"default": "test/model", "base_url": "http://x", "provider": "auto"},
                 "terminal": {"timeout": 60},
@@ -833,8 +833,8 @@ class TestPreprocessImagesWithVision:
                 "delegation": {},
             }
             with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test-key"}):
-                with patch("cli.CLI_CONFIG", mock_cfg.return_value):
-                    from cli import HermesCLI
+                with patch("harness.repl.CLI_CONFIG", mock_cfg.return_value):
+                    from harness.repl import HermesCLI
                     cli_obj = HermesCLI.__new__(HermesCLI)
                     # Manually init just enough state
                     cli_obj._attached_images = []
@@ -862,7 +862,7 @@ class TestPreprocessImagesWithVision:
 
     def test_single_image_with_text(self, cli, tmp_path):
         img = self._make_image(tmp_path)
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
             result = cli._preprocess_images_with_vision("Describe this", [img])
 
         assert isinstance(result, str)
@@ -873,7 +873,7 @@ class TestPreprocessImagesWithVision:
 
     def test_multiple_images(self, cli, tmp_path):
         imgs = [self._make_image(tmp_path, f"img{i}.png") for i in range(3)]
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
             result = cli._preprocess_images_with_vision("Compare", imgs)
 
         assert isinstance(result, str)
@@ -884,14 +884,14 @@ class TestPreprocessImagesWithVision:
 
     def test_empty_text_gets_default_question(self, cli, tmp_path):
         img = self._make_image(tmp_path)
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
             result = cli._preprocess_images_with_vision("", [img])
         assert isinstance(result, str)
         assert "A test image with colored pixels." in result
 
     def test_missing_image_skipped(self, cli, tmp_path):
         missing = tmp_path / "gone.png"
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
             result = cli._preprocess_images_with_vision("test", [missing])
         # No images analyzed, falls back to default
         assert result == "test"
@@ -899,7 +899,7 @@ class TestPreprocessImagesWithVision:
     def test_mix_of_existing_and_missing(self, cli, tmp_path):
         real = self._make_image(tmp_path, "real.png")
         missing = tmp_path / "gone.png"
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_success()):
             result = cli._preprocess_images_with_vision("test", [real, missing])
         assert str(real) in result
         assert str(missing) not in result
@@ -907,7 +907,7 @@ class TestPreprocessImagesWithVision:
 
     def test_vision_failure_includes_path(self, cli, tmp_path):
         img = self._make_image(tmp_path)
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_failure()):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=self._mock_vision_failure()):
             result = cli._preprocess_images_with_vision("check this", [img])
         assert isinstance(result, str)
         assert str(img) in result  # path still included for retry
@@ -917,7 +917,7 @@ class TestPreprocessImagesWithVision:
         img = self._make_image(tmp_path)
         async def _explode(**kwargs):
             raise RuntimeError("API down")
-        with patch("tools.vision_tools.vision_analyze_tool", side_effect=_explode):
+        with patch("harness.tools.vision_tools.vision_analyze_tool", side_effect=_explode):
             result = cli._preprocess_images_with_vision("check this", [img])
         assert isinstance(result, str)
         assert str(img) in result  # path still included for retry
@@ -932,28 +932,28 @@ class TestTryAttachClipboardImage:
 
     @pytest.fixture
     def cli(self):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         cli_obj = HermesCLI.__new__(HermesCLI)
         cli_obj._attached_images = []
         cli_obj._image_counter = 0
         return cli_obj
 
     def test_image_found_attaches(self, cli):
-        with patch("plutus_cli.clipboard.save_clipboard_image", return_value=True):
+        with patch("harness.cli.clipboard.save_clipboard_image", return_value=True):
             result = cli._try_attach_clipboard_image()
         assert result is True
         assert len(cli._attached_images) == 1
         assert cli._image_counter == 1
 
     def test_no_image_doesnt_attach(self, cli):
-        with patch("plutus_cli.clipboard.save_clipboard_image", return_value=False):
+        with patch("harness.cli.clipboard.save_clipboard_image", return_value=False):
             result = cli._try_attach_clipboard_image()
         assert result is False
         assert len(cli._attached_images) == 0
         assert cli._image_counter == 0  # rolled back
 
     def test_multiple_attaches_increment_counter(self, cli):
-        with patch("plutus_cli.clipboard.save_clipboard_image", return_value=True):
+        with patch("harness.cli.clipboard.save_clipboard_image", return_value=True):
             cli._try_attach_clipboard_image()
             cli._try_attach_clipboard_image()
             cli._try_attach_clipboard_image()
@@ -962,7 +962,7 @@ class TestTryAttachClipboardImage:
 
     def test_mixed_success_and_failure(self, cli):
         results = [True, False, True]
-        with patch("plutus_cli.clipboard.save_clipboard_image", side_effect=results):
+        with patch("harness.cli.clipboard.save_clipboard_image", side_effect=results):
             cli._try_attach_clipboard_image()
             cli._try_attach_clipboard_image()
             cli._try_attach_clipboard_image()
@@ -970,7 +970,7 @@ class TestTryAttachClipboardImage:
         assert cli._image_counter == 2  # 3 attempts, 1 rolled back
 
     def test_image_path_follows_naming_convention(self, cli):
-        with patch("plutus_cli.clipboard.save_clipboard_image", return_value=True):
+        with patch("harness.cli.clipboard.save_clipboard_image", return_value=True):
             cli._try_attach_clipboard_image()
         path = cli._attached_images[0]
         assert path.parent == Path(os.environ["HERMES_HOME"]) / "images"
@@ -995,7 +995,7 @@ class TestAutoAttachClipboardImageOnPaste:
 class TestVoiceSubmission:
     @pytest.fixture
     def cli(self):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         cli_obj = HermesCLI.__new__(HermesCLI)
         cli_obj._attached_images = [Path("/tmp/stale.png")]
         cli_obj._pending_input = queue.Queue()
@@ -1010,10 +1010,10 @@ class TestVoiceSubmission:
         return cli_obj
 
     def test_voice_transcript_clears_stale_attached_images(self, cli):
-        with patch("tools.voice_mode.play_beep"):
-            with patch("tools.voice_mode.transcribe_recording", return_value={"success": True, "transcript": "hello"}):
+        with patch("harness.tools.voice_mode.play_beep"):
+            with patch("harness.tools.voice_mode.transcribe_recording", return_value={"success": True, "transcript": "hello"}):
                 with patch("os.path.isfile", return_value=False):
-                    with patch("cli._cprint"):
+                    with patch("harness.repl._cprint"):
                         cli._voice_stop_and_transcribe()
 
         assert cli._attached_images == []

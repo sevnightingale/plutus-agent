@@ -3,7 +3,7 @@
 import threading
 import time
 
-from tools.environments.base import _ThreadedProcessHandle
+from harness.tools.environments.base import _ThreadedProcessHandle
 
 
 class TestBasicExecution:

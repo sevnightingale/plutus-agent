@@ -15,8 +15,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.delegate_tool import delegate_task
-from plutus_cli import plugins
+from harness.tools.delegate_tool import delegate_task
+from harness.cli import plugins
 
 
 def _make_parent(depth: int = 0, session_id: str = "parent-1"):
@@ -65,7 +65,7 @@ def _stub_child_builder(monkeypatch):
         return child
 
     monkeypatch.setattr(
-        "tools.delegate_tool._build_child_agent", _fake_build_child,
+        "harness.tools.delegate_tool._build_child_agent", _fake_build_child,
     )
 
 
@@ -88,7 +88,7 @@ class TestSingleTask:
     def test_fires_once(self):
         captured = _register_capturing_hook()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
                 "task_index": 0,
                 "status": "completed",
@@ -110,7 +110,7 @@ class TestSingleTask:
         captured = _register_capturing_hook()
         main_thread = threading.current_thread()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
                 "task_index": 0, "status": "completed",
                 "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
@@ -123,7 +123,7 @@ class TestSingleTask:
     def test_payload_includes_parent_session_id(self):
         captured = _register_capturing_hook()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
                 "task_index": 0, "status": "completed",
                 "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
@@ -144,7 +144,7 @@ class TestBatchMode:
     def test_fires_per_child(self):
         captured = _register_capturing_hook()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
                 {"task_index": 0, "status": "completed",
                  "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
@@ -171,7 +171,7 @@ class TestBatchMode:
         captured = _register_capturing_hook()
         main_thread = threading.current_thread()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.side_effect = [
                 {"task_index": 0, "status": "completed",
                  "summary": "A", "api_calls": 1, "duration_seconds": 1.0,
@@ -196,7 +196,7 @@ class TestPayloadShape:
     def test_role_absent_becomes_none(self):
         captured = _register_capturing_hook()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
                 "task_index": 0, "status": "completed",
                 "summary": "x", "api_calls": 1, "duration_seconds": 0.1,
@@ -211,7 +211,7 @@ class TestPayloadShape:
         result dict is serialised to JSON."""
         _register_capturing_hook()
 
-        with patch("tools.delegate_tool._run_single_child") as mock_run:
+        with patch("harness.tools.delegate_tool._run_single_child") as mock_run:
             mock_run.return_value = {
                 "task_index": 0, "status": "completed",
                 "summary": "x", "api_calls": 1, "duration_seconds": 0.1,

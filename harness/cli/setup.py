@@ -20,14 +20,14 @@ import copy
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-from plutus_cli.nous_subscription import get_nous_subscription_features
-from tools.tool_backend_helpers import managed_nous_tools_enabled
-from utils import base_url_hostname
-from plutus_constants import get_optional_skills_dir
+from harness.cli.nous_subscription import get_nous_subscription_features
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled
+from harness.utils import base_url_hostname
+from harness.constants import get_optional_skills_dir
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 _DOCS_BASE = "https://github.com/sevnightingale/plutus-agent"
 
@@ -59,7 +59,7 @@ def _supports_same_provider_pool_setup(provider: str) -> bool:
         return False
     if provider == "openrouter":
         return True
-    from plutus_cli.auth import PROVIDER_REGISTRY
+    from harness.cli.auth import PROVIDER_REGISTRY
 
     pconfig = PROVIDER_REGISTRY.get(provider)
     if not pconfig:
@@ -130,7 +130,7 @@ def _set_reasoning_effort(config: Dict[str, Any], effort: str) -> None:
 
 
 # Import config helpers
-from plutus_cli.config import (
+from harness.cli.config import (
     DEFAULT_CONFIG,
     get_hermes_home,
     get_config_path,
@@ -143,7 +143,7 @@ from plutus_cli.config import (
 )
 # display_hermes_home imported lazily at call sites (stale-module safety during plutus update)
 
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 
 def print_header(title: str):
@@ -152,7 +152,7 @@ def print_header(title: str):
     print(color(f"◆ {title}", Colors.CYAN, Colors.BOLD))
 
 
-from plutus_cli.cli_output import (  # noqa: E402
+from harness.cli.cli_output import (  # noqa: E402
     print_error,
     print_info,
     print_success,
@@ -213,7 +213,7 @@ def prompt(question: str, default: str = None, password: bool = False) -> str:
 
 def _curses_prompt_choice(question: str, choices: list, default: int = 0, description: str | None = None) -> int:
     """Single-select menu using curses. Delegates to curses_radiolist."""
-    from plutus_cli.curses_ui import curses_radiolist
+    from harness.cli.curses_ui import curses_radiolist
     return curses_radiolist(question, choices, selected=default, cancel_returns=-1, description=description)
 
 
@@ -303,7 +303,7 @@ def prompt_checklist(title: str, items: list, pre_selected: list = None) -> list
     if pre_selected is None:
         pre_selected = []
 
-    from plutus_cli.curses_ui import curses_checklist
+    from harness.cli.curses_ui import curses_checklist
 
     chosen = curses_checklist(
         title,
@@ -353,7 +353,7 @@ def _print_setup_summary(config: dict, hermes_home):
 
     # Vision — use the same runtime resolver as the actual vision tools
     try:
-        from agent.auxiliary_client import get_available_vision_backends
+        from harness.agent.auxiliary_client import get_available_vision_backends
 
         _vision_backends = get_available_vision_backends()
     except Exception:
@@ -420,8 +420,8 @@ def _print_setup_summary(config: dict, hermes_home):
         # setups don't show as "missing FAL_KEY".
         _img_backend = None
         try:
-            from agent.image_gen_registry import list_providers
-            from plutus_cli.plugins import _ensure_plugins_discovered
+            from harness.agent.image_gen_registry import list_providers
+            from harness.cli.plugins import _ensure_plugins_discovered
 
             _ensure_plugins_discovered()
             for _p in list_providers():
@@ -537,7 +537,7 @@ def _print_setup_summary(config: dict, hermes_home):
         print_warning(
             "Some tools are disabled. Run 'plutus setup tools' to configure them,"
         )
-        from plutus_constants import display_hermes_home as _dhh
+        from harness.constants import display_hermes_home as _dhh
         print_warning(f"or edit {_dhh()}/.env directly to add the missing API keys.")
         print()
 
@@ -561,7 +561,7 @@ def _print_setup_summary(config: dict, hermes_home):
     print()
 
     # Show file locations prominently
-    from plutus_constants import display_hermes_home as _dhh
+    from harness.constants import display_hermes_home as _dhh
     print(color(f"📁 All your files are in {_dhh()}/:", Colors.CYAN, Colors.BOLD))
     print()
     print(f"   {color('Settings:', Colors.YELLOW)}  {get_config_path()}")
@@ -666,7 +666,7 @@ def setup_model_provider(config: dict, *, quick: bool = False):
     When *quick* is True, skips credential rotation, vision, and TTS
     configuration — used by the streamlined first-time quick setup.
     """
-    from plutus_cli.config import load_config, save_config
+    from harness.cli.config import load_config, save_config
 
     print_header("Inference Provider")
     print_info("Choose how to connect to your main chat model.")
@@ -675,7 +675,7 @@ def setup_model_provider(config: dict, *, quick: bool = False):
 
     # Delegate to the shared plutus model flow — handles provider picker,
     # credential prompting, model selection, and config persistence.
-    from plutus_cli.main import select_provider_and_model
+    from harness.cli.main import select_provider_and_model
     try:
         select_provider_and_model(quick=quick)
     except (SystemExit, KeyboardInterrupt):
@@ -709,8 +709,8 @@ def setup_model_provider(config: dict, *, quick: bool = False):
     if not quick and _supports_same_provider_pool_setup(selected_provider):
         try:
             from types import SimpleNamespace
-            from agent.credential_pool import load_pool
-            from plutus_cli.auth_commands import auth_add_command
+            from harness.agent.credential_pool import load_pool
+            from harness.cli.auth_commands import auth_add_command
 
             pool = load_pool(selected_provider)
             entries = pool.entries()
@@ -787,7 +787,7 @@ def setup_model_provider(config: dict, *, quick: bool = False):
         _vision_needs_setup = False
     else:
         try:
-            from agent.auxiliary_client import get_available_vision_backends
+            from harness.agent.auxiliary_client import get_available_vision_backends
             _vision_backends = set(get_available_vision_backends())
         except Exception:
             _vision_backends = set()
@@ -1077,7 +1077,7 @@ def _setup_tts_provider(config: dict):
                 save_env_value("XAI_API_KEY", api_key)
                 print_success("xAI TTS API key saved")
             else:
-                from plutus_constants import display_hermes_home as _dhh
+                from harness.constants import display_hermes_home as _dhh
                 print_warning(
                     "No xAI API key provided for TTS. Configure XAI_API_KEY via "
                     f"plutus setup model or {_dhh()}/.env to use xAI TTS. "
@@ -1286,8 +1286,8 @@ def setup_terminal_backend(config: dict):
     elif selected_backend == "modal":
         print_success("Terminal backend: Modal")
         print_info("Serverless cloud sandboxes. Each session gets its own container.")
-        from tools.managed_tool_gateway import is_managed_tool_gateway_ready
-        from tools.tool_backend_helpers import normalize_modal_mode
+        from harness.tools.managed_tool_gateway import is_managed_tool_gateway_ready
+        from harness.tools.tool_backend_helpers import normalize_modal_mode
 
         managed_modal_available = bool(
             managed_nous_tools_enabled()
@@ -2042,49 +2042,49 @@ def _setup_whatsapp():
 
 def _setup_weixin():
     """Configure Weixin (personal WeChat) via iLink Bot API QR login."""
-    from plutus_cli.gateway import _setup_weixin as _gateway_setup_weixin
+    from harness.cli.gateway import _setup_weixin as _gateway_setup_weixin
     _gateway_setup_weixin()
 
 
 def _setup_signal():
     """Configure Signal via gateway setup."""
-    from plutus_cli.gateway import _setup_signal as _gateway_setup_signal
+    from harness.cli.gateway import _setup_signal as _gateway_setup_signal
     _gateway_setup_signal()
 
 
 def _setup_email():
     """Configure Email via gateway setup."""
-    from plutus_cli.gateway import _setup_email as _gateway_setup_email
+    from harness.cli.gateway import _setup_email as _gateway_setup_email
     _gateway_setup_email()
 
 
 def _setup_sms():
     """Configure SMS (Twilio) via gateway setup."""
-    from plutus_cli.gateway import _setup_sms as _gateway_setup_sms
+    from harness.cli.gateway import _setup_sms as _gateway_setup_sms
     _gateway_setup_sms()
 
 
 def _setup_dingtalk():
     """Configure DingTalk via gateway setup."""
-    from plutus_cli.gateway import _setup_dingtalk as _gateway_setup_dingtalk
+    from harness.cli.gateway import _setup_dingtalk as _gateway_setup_dingtalk
     _gateway_setup_dingtalk()
 
 
 def _setup_feishu():
     """Configure Feishu / Lark via gateway setup."""
-    from plutus_cli.gateway import _setup_feishu as _gateway_setup_feishu
+    from harness.cli.gateway import _setup_feishu as _gateway_setup_feishu
     _gateway_setup_feishu()
 
 
 def _setup_wecom():
     """Configure WeCom (Enterprise WeChat) via gateway setup."""
-    from plutus_cli.gateway import _setup_wecom as _gateway_setup_wecom
+    from harness.cli.gateway import _setup_wecom as _gateway_setup_wecom
     _gateway_setup_wecom()
 
 
 def _setup_wecom_callback():
     """Configure WeCom Callback (self-built app) via gateway setup."""
-    from plutus_cli.gateway import _setup_wecom_callback as _gw_setup
+    from harness.cli.gateway import _setup_wecom_callback as _gw_setup
     _gw_setup()
 
 
@@ -2157,7 +2157,7 @@ def _setup_bluebubbles():
 
 def _setup_qqbot():
     """Configure QQ Bot (Official API v2) via gateway setup."""
-    from plutus_cli.gateway import _setup_qqbot as _gateway_setup_qqbot
+    from harness.cli.gateway import _setup_qqbot as _gateway_setup_qqbot
     _gateway_setup_qqbot()
 
 
@@ -2196,7 +2196,7 @@ def _setup_webhooks():
     save_env_value("WEBHOOK_ENABLED", "true")
     print()
     print_success("Webhooks enabled! Next steps:")
-    from plutus_constants import display_hermes_home as _dhh
+    from harness.constants import display_hermes_home as _dhh
     print_info(f"   1. Define webhook routes in {_dhh()}/config.yaml")
     print_info("   2. Point your service (GitHub, GitLab, etc.) at:")
     print_info("      http://your-server:8644/webhooks/<route-name>")
@@ -2320,7 +2320,7 @@ def setup_gateway(config: dict):
         _is_linux = _platform.system() == "Linux"
         _is_macos = _platform.system() == "Darwin"
 
-        from plutus_cli.gateway import (
+        from harness.cli.gateway import (
             _is_service_installed,
             _is_service_running,
             supports_systemd_services,
@@ -2413,7 +2413,7 @@ def setup_gateway(config: dict):
                     print_info("  Or as a boot-time service: sudo plutus gateway install --system")
                 print_info("  Or run in foreground:  plutus gateway")
         else:
-            from plutus_constants import is_container
+            from harness.constants import is_container
             if is_container():
                 print_info("Start the gateway to bring your bots online:")
                 print_info("   plutus gateway run          # Run as container main process")
@@ -2443,7 +2443,7 @@ def setup_tools(config: dict, first_install: bool = False):
         first_install: When True, uses the simplified first-install flow
             (no platform menu, prompts for all unconfigured API keys).
     """
-    from plutus_cli.tools_config import tools_command
+    from harness.cli.tools_config import tools_command
 
     tools_command(first_install=first_install, config=config)
 
@@ -2465,14 +2465,14 @@ def _model_section_has_credentials(config: dict) -> bool:
         ``OPENAI_API_KEY`` / ``OPENROUTER_API_KEY`` values through OpenRouter.
     """
     try:
-        from plutus_cli.auth import get_active_provider
+        from harness.cli.auth import get_active_provider
         if get_active_provider():
             return True
     except Exception:
         pass
 
     try:
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
     except Exception:
         PROVIDER_REGISTRY = {}  # type: ignore[assignment]
 
@@ -2878,7 +2878,7 @@ def run_setup_wizard(args):
       plutus setup tools     — just tool configuration
       plutus setup agent     — just agent settings
     """
-    from plutus_cli.config import is_managed, managed_error
+    from harness.cli.config import is_managed, managed_error
     if is_managed():
         managed_error("run setup wizard")
         return
@@ -2933,7 +2933,7 @@ def run_setup_wizard(args):
         return
 
     # Check if this is an existing installation with a provider configured
-    from plutus_cli.auth import get_active_provider
+    from harness.cli.auth import get_active_provider
 
     active_provider = get_active_provider()
     is_existing = (
@@ -3088,7 +3088,7 @@ def _resolve_hermes_chat_argv() -> Optional[list[str]]:
 
     try:
         if importlib.util.find_spec("plutus_cli") is not None:
-            return [sys.executable, "-m", "plutus_cli.main", "chat"]
+            return [sys.executable, "-m", "harness.cli.main", "chat"]
     except Exception:
         pass
 
@@ -3155,7 +3155,7 @@ def _run_first_time_quick_setup(config: dict, hermes_home, is_existing: bool):
 
 def _run_quick_setup(config: dict, hermes_home):
     """Quick setup — only configure items that are missing."""
-    from plutus_cli.config import (
+    from harness.cli.config import (
         get_missing_env_vars,
         get_missing_config_fields,
         check_config_version,

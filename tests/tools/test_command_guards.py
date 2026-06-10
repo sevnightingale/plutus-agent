@@ -5,8 +5,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-import tools.approval as approval_module
-from tools.approval import (
+import harness.tools.approval as approval_module
+from harness.tools.approval import (
     approve_session,
     check_all_command_guards,
     is_approved,
@@ -15,7 +15,7 @@ from tools.approval import (
 )
 
 # Ensure the module is importable so we can patch it
-import tools.tirith_security
+import harness.tools.tirith_security; import harness.tools as tools
 
 
 # ---------------------------------------------------------------------------
@@ -29,7 +29,7 @@ def _tirith_result(action="allow", findings=None, summary=""):
 # The lazy import inside check_all_command_guards does:
 #   from tools.tirith_security import check_command_security
 # We need to patch the function on the tirith_security module itself.
-_TIRITH_PATCH = "tools.tirith_security.check_command_security"
+_TIRITH_PATCH = "harness.tools.tirith_security.check_command_security"
 
 
 @pytest.fixture(autouse=True)
@@ -279,16 +279,16 @@ class TestTirithImportError:
         """When tools.tirith_security can't be imported, treated as allow."""
         import sys
         # Temporarily remove the module and replace with something that raises
-        original = sys.modules.get("tools.tirith_security")
-        sys.modules["tools.tirith_security"] = None  # causes ImportError on from-import
+        original = sys.modules.get("harness.tools.tirith_security")
+        sys.modules["harness.tools.tirith_security"] = None  # causes ImportError on from-import
         try:
             result = check_all_command_guards("echo hello", "local")
             assert result["approved"] is True
         finally:
             if original is not None:
-                sys.modules["tools.tirith_security"] = original
+                sys.modules["harness.tools.tirith_security"] = original
             else:
-                sys.modules.pop("tools.tirith_security", None)
+                sys.modules.pop("harness.tools.tirith_security", None)
 
 
 # ---------------------------------------------------------------------------

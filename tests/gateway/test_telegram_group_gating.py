@@ -2,11 +2,11 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from gateway.config import Platform, PlatformConfig, load_gateway_config
+from harness.gateway.config import Platform, PlatformConfig, load_gateway_config
 
 
 def _make_adapter(require_mention=None, free_response_chats=None, mention_patterns=None, ignored_threads=None):
-    from gateway.platforms.telegram import TelegramAdapter
+    from harness.gateway.platforms.telegram import TelegramAdapter
 
     extra = {}
     if require_mention is not None:

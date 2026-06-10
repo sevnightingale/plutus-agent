@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from plutus_constants import get_config_path, get_skills_dir
+from harness.constants import get_config_path, get_skills_dir
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def get_disabled_skill_names(platform: str | None = None) -> Set[str]:
     if not isinstance(skills_cfg, dict):
         return set()
 
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     resolved_platform = (
         platform
         or os.getenv("HERMES_PLATFORM")

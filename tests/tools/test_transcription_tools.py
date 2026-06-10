@@ -62,24 +62,24 @@ class TestGetProviderGroq:
 
     def test_groq_when_key_set(self, monkeypatch):
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
-             patch("tools.transcription_tools._HAS_FASTER_WHISPER", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
+             patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "groq"}) == "groq"
 
     def test_groq_explicit_no_fallback(self, monkeypatch):
         """Explicit groq with no key returns none — no cross-provider fallback."""
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "groq"}) == "none"
 
     def test_groq_nothing_available(self, monkeypatch):
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "groq"}) == "none"
 
 
@@ -88,36 +88,36 @@ class TestGetProviderFallbackPriority:
 
     def test_auto_detect_prefers_local(self):
         """Auto-detect prefers local over any cloud provider."""
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "local"
 
     def test_auto_detect_prefers_groq_over_openai(self, monkeypatch):
         """Auto-detect: groq (free) is preferred over openai (paid)."""
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "groq"
 
     def test_explicit_openai_no_key_returns_none(self, monkeypatch):
         """Explicit openai with no key returns none — no cross-provider fallback."""
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "openai"}) == "none"
 
     def test_unknown_provider_passed_through(self):
-        from tools.transcription_tools import _get_provider
+        from harness.tools.transcription_tools import _get_provider
         assert _get_provider({"provider": "custom-endpoint"}) == "custom-endpoint"
 
     def test_empty_config_defaults_to_local(self):
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "local"
 
 
@@ -134,19 +134,19 @@ class TestExplicitProviderRespected:
         even when an OpenAI API key is set."""
         monkeypatch.setenv("OPENAI_API_KEY", "***")
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({"provider": "local"})
             assert result == "none", f"Expected 'none' but got {result!r}"
 
     def test_explicit_local_no_fallback_to_groq(self, monkeypatch):
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({"provider": "local"})
             assert result == "none"
 
@@ -156,17 +156,17 @@ class TestExplicitProviderRespected:
             "HERMES_LOCAL_STT_COMMAND",
             "whisper {input_path} --output_dir {output_dir} --language {language}",
         )
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({"provider": "local"})
             assert result == "local_command"
 
     def test_explicit_groq_no_fallback_to_openai(self, monkeypatch):
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
         monkeypatch.setenv("OPENAI_API_KEY", "sk-real-key")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({"provider": "groq"})
             assert result == "none"
 
@@ -174,9 +174,9 @@ class TestExplicitProviderRespected:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({"provider": "openai"})
             assert result == "none"
 
@@ -184,10 +184,10 @@ class TestExplicitProviderRespected:
         """When no provider is explicitly set, auto-detect cloud fallback works."""
         monkeypatch.setenv("OPENAI_API_KEY", "sk-real-key")
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             # Empty dict = no explicit provider, uses DEFAULT_PROVIDER auto-detect
             result = _get_provider({})
             assert result == "openai"
@@ -195,10 +195,10 @@ class TestExplicitProviderRespected:
     def test_auto_detect_prefers_groq_over_openai(self, monkeypatch):
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
         monkeypatch.setenv("OPENAI_API_KEY", "sk-real-key")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import _get_provider
             result = _get_provider({})
             assert result == "groq"
 
@@ -210,15 +210,15 @@ class TestExplicitProviderRespected:
 class TestTranscribeGroq:
     def test_no_key(self, monkeypatch):
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        from tools.transcription_tools import _transcribe_groq
+        from harness.tools.transcription_tools import _transcribe_groq
         result = _transcribe_groq("/tmp/test.ogg", "whisper-large-v3-turbo")
         assert result["success"] is False
         assert "GROQ_API_KEY" in result["error"]
 
     def test_openai_package_not_installed(self, monkeypatch):
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
-        with patch("tools.transcription_tools._HAS_OPENAI", False):
-            from tools.transcription_tools import _transcribe_groq
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", False):
+            from harness.tools.transcription_tools import _transcribe_groq
             result = _transcribe_groq("/tmp/test.ogg", "whisper-large-v3-turbo")
         assert result["success"] is False
         assert "openai package" in result["error"]
@@ -229,9 +229,9 @@ class TestTranscribeGroq:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "hello world"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             result = _transcribe_groq(sample_wav, "whisper-large-v3-turbo")
 
         assert result["success"] is True
@@ -245,9 +245,9 @@ class TestTranscribeGroq:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "  hello world  \n"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             result = _transcribe_groq(sample_wav, "whisper-large-v3-turbo")
 
         assert result["transcript"] == "hello world"
@@ -258,9 +258,9 @@ class TestTranscribeGroq:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client) as mock_openai_cls:
-            from tools.transcription_tools import _transcribe_groq, GROQ_BASE_URL
+            from harness.tools.transcription_tools import _transcribe_groq, GROQ_BASE_URL
             _transcribe_groq(sample_wav, "whisper-large-v3-turbo")
 
         call_kwargs = mock_openai_cls.call_args
@@ -272,9 +272,9 @@ class TestTranscribeGroq:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.side_effect = Exception("API error")
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             result = _transcribe_groq(sample_wav, "whisper-large-v3-turbo")
 
         assert result["success"] is False
@@ -287,9 +287,9 @@ class TestTranscribeGroq:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.side_effect = PermissionError("denied")
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             result = _transcribe_groq(sample_wav, "whisper-large-v3-turbo")
 
         assert result["success"] is False
@@ -303,8 +303,8 @@ class TestTranscribeGroq:
 class TestTranscribeOpenAIExtended:
     def test_openai_package_not_installed(self, monkeypatch):
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test")
-        with patch("tools.transcription_tools._HAS_OPENAI", False):
-            from tools.transcription_tools import _transcribe_openai
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", False):
+            from harness.tools.transcription_tools import _transcribe_openai
             result = _transcribe_openai("/tmp/test.ogg", "whisper-1")
         assert result["success"] is False
         assert "openai package" in result["error"]
@@ -315,9 +315,9 @@ class TestTranscribeOpenAIExtended:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client) as mock_openai_cls:
-            from tools.transcription_tools import _transcribe_openai, OPENAI_BASE_URL
+            from harness.tools.transcription_tools import _transcribe_openai, OPENAI_BASE_URL
             _transcribe_openai(sample_wav, "whisper-1")
 
         call_kwargs = mock_openai_cls.call_args
@@ -329,9 +329,9 @@ class TestTranscribeOpenAIExtended:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "  hello  \n"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai
+            from harness.tools.transcription_tools import _transcribe_openai
             result = _transcribe_openai(sample_wav, "whisper-1")
 
         assert result["transcript"] == "hello"
@@ -343,9 +343,9 @@ class TestTranscribeOpenAIExtended:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.side_effect = PermissionError("denied")
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai
+            from harness.tools.transcription_tools import _transcribe_openai
             result = _transcribe_openai(sample_wav, "whisper-1")
 
         assert result["success"] is False
@@ -356,9 +356,9 @@ class TestTranscribeOpenAIExtended:
 class TestTranscribeLocalCommand:
     def test_auto_detects_local_whisper_binary(self, monkeypatch):
         monkeypatch.delenv("HERMES_LOCAL_STT_COMMAND", raising=False)
-        monkeypatch.setattr("tools.transcription_tools._find_whisper_binary", lambda: "/opt/homebrew/bin/whisper")
+        monkeypatch.setattr("harness.tools.transcription_tools._find_whisper_binary", lambda: "/opt/homebrew/bin/whisper")
 
-        from tools.transcription_tools import _get_local_command_template
+        from harness.tools.transcription_tools import _get_local_command_template
 
         template = _get_local_command_template()
 
@@ -397,11 +397,11 @@ class TestTranscribeLocalCommand:
             (out_dir / "test.txt").write_text("hello from local command\n", encoding="utf-8")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-        monkeypatch.setattr("tools.transcription_tools.tempfile.TemporaryDirectory", fake_tempdir)
-        monkeypatch.setattr("tools.transcription_tools._find_ffmpeg_binary", lambda: "/opt/homebrew/bin/ffmpeg")
-        monkeypatch.setattr("tools.transcription_tools.subprocess.run", fake_run)
+        monkeypatch.setattr("harness.tools.transcription_tools.tempfile.TemporaryDirectory", fake_tempdir)
+        monkeypatch.setattr("harness.tools.transcription_tools._find_ffmpeg_binary", lambda: "/opt/homebrew/bin/ffmpeg")
+        monkeypatch.setattr("harness.tools.transcription_tools.subprocess.run", fake_run)
 
-        from tools.transcription_tools import _transcribe_local_command
+        from harness.tools.transcription_tools import _transcribe_local_command
 
         result = _transcribe_local_command(sample_ogg, "base")
 
@@ -430,11 +430,11 @@ class TestTranscribeLocalExtended:
         mock_model.transcribe.return_value = ([mock_segment], mock_info)
         mock_whisper_cls = MagicMock(return_value=mock_model)
 
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True), \
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True), \
              patch("faster_whisper.WhisperModel", mock_whisper_cls), \
-             patch("tools.transcription_tools._local_model", None), \
-             patch("tools.transcription_tools._local_model_name", None):
-            from tools.transcription_tools import _transcribe_local
+             patch("harness.tools.transcription_tools._local_model", None), \
+             patch("harness.tools.transcription_tools._local_model_name", None):
+            from harness.tools.transcription_tools import _transcribe_local
             _transcribe_local(str(audio), "base")
             _transcribe_local(str(audio), "base")
 
@@ -456,11 +456,11 @@ class TestTranscribeLocalExtended:
         mock_model.transcribe.return_value = ([mock_segment], mock_info)
         mock_whisper_cls = MagicMock(return_value=mock_model)
 
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True), \
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True), \
              patch("faster_whisper.WhisperModel", mock_whisper_cls), \
-             patch("tools.transcription_tools._local_model", None), \
-             patch("tools.transcription_tools._local_model_name", None):
-            from tools.transcription_tools import _transcribe_local
+             patch("harness.tools.transcription_tools._local_model", None), \
+             patch("harness.tools.transcription_tools._local_model_name", None):
+            from harness.tools.transcription_tools import _transcribe_local
             _transcribe_local(str(audio), "base")
             _transcribe_local(str(audio), "small")
 
@@ -472,10 +472,10 @@ class TestTranscribeLocalExtended:
 
         mock_whisper_cls = MagicMock(side_effect=RuntimeError("CUDA out of memory"))
 
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True), \
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True), \
              patch("faster_whisper.WhisperModel", mock_whisper_cls), \
-             patch("tools.transcription_tools._local_model", None):
-            from tools.transcription_tools import _transcribe_local
+             patch("harness.tools.transcription_tools._local_model", None):
+            from harness.tools.transcription_tools import _transcribe_local
             result = _transcribe_local(str(audio), "large-v3")
 
         assert result["success"] is False
@@ -496,10 +496,10 @@ class TestTranscribeLocalExtended:
         mock_model = MagicMock()
         mock_model.transcribe.return_value = ([seg1, seg2], mock_info)
 
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", True), \
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", True), \
              patch("faster_whisper.WhisperModel", return_value=mock_model), \
-             patch("tools.transcription_tools._local_model", None):
-            from tools.transcription_tools import _transcribe_local
+             patch("harness.tools.transcription_tools._local_model", None):
+            from harness.tools.transcription_tools import _transcribe_local
             result = _transcribe_local(str(audio), "base")
 
         assert result["success"] is True
@@ -517,9 +517,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "hello world"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq, DEFAULT_GROQ_STT_MODEL
+            from harness.tools.transcription_tools import _transcribe_groq, DEFAULT_GROQ_STT_MODEL
             _transcribe_groq(sample_wav, "whisper-1")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -531,9 +531,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq, DEFAULT_GROQ_STT_MODEL
+            from harness.tools.transcription_tools import _transcribe_groq, DEFAULT_GROQ_STT_MODEL
             _transcribe_groq(sample_wav, "gpt-4o-transcribe")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -545,9 +545,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "hello world"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai, DEFAULT_STT_MODEL
+            from harness.tools.transcription_tools import _transcribe_openai, DEFAULT_STT_MODEL
             _transcribe_openai(sample_wav, "whisper-large-v3-turbo")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -559,9 +559,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai, DEFAULT_STT_MODEL
+            from harness.tools.transcription_tools import _transcribe_openai, DEFAULT_STT_MODEL
             _transcribe_openai(sample_wav, "distil-whisper-large-v3-en")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -573,9 +573,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             _transcribe_groq(sample_wav, "whisper-large-v3")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -587,9 +587,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai
+            from harness.tools.transcription_tools import _transcribe_openai
             _transcribe_openai(sample_wav, "gpt-4o-mini-transcribe")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -602,9 +602,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_groq
+            from harness.tools.transcription_tools import _transcribe_groq
             _transcribe_groq(sample_wav, "my-custom-model")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -616,9 +616,9 @@ class TestModelAutoCorrection:
         mock_client = MagicMock()
         mock_client.audio.transcriptions.create.return_value = "test"
 
-        with patch("tools.transcription_tools._HAS_OPENAI", True), \
+        with patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
              patch("openai.OpenAI", return_value=mock_client):
-            from tools.transcription_tools import _transcribe_openai
+            from harness.tools.transcription_tools import _transcribe_openai
             _transcribe_openai(sample_wav, "my-custom-model")
 
         call_kwargs = mock_client.audio.transcriptions.create.call_args
@@ -631,15 +631,15 @@ class TestModelAutoCorrection:
 
 class TestLoadSttConfig:
     def test_returns_dict_when_import_fails(self):
-        with patch("tools.transcription_tools._load_stt_config") as mock_load:
+        with patch("harness.tools.transcription_tools._load_stt_config") as mock_load:
             mock_load.return_value = {}
-            from tools.transcription_tools import _load_stt_config
+            from harness.tools.transcription_tools import _load_stt_config
             assert _load_stt_config() == {}
 
     def test_real_load_returns_dict(self):
         """_load_stt_config should always return a dict, even on import error."""
-        with patch.dict("sys.modules", {"plutus_cli": None, "plutus_cli.config": None}):
-            from tools.transcription_tools import _load_stt_config
+        with patch.dict("sys.modules", {"plutus_cli": None, "harness.cli.config": None}):
+            from harness.tools.transcription_tools import _load_stt_config
             result = _load_stt_config()
         assert isinstance(result, dict)
 
@@ -650,7 +650,7 @@ class TestLoadSttConfig:
 
 class TestValidateAudioFileEdgeCases:
     def test_directory_is_not_a_file(self, tmp_path):
-        from tools.transcription_tools import _validate_audio_file
+        from harness.tools.transcription_tools import _validate_audio_file
         # tmp_path itself is a directory with an .ogg-ish name? No.
         # Create a directory with a valid audio extension
         d = tmp_path / "audio.ogg"
@@ -662,7 +662,7 @@ class TestValidateAudioFileEdgeCases:
     def test_stat_oserror(self, tmp_path):
         f = tmp_path / "test.ogg"
         f.write_bytes(b"data")
-        from tools.transcription_tools import _validate_audio_file
+        from harness.tools.transcription_tools import _validate_audio_file
         real_stat = f.stat()
         call_count = 0
 
@@ -680,14 +680,14 @@ class TestValidateAudioFileEdgeCases:
         assert "Failed to access" in result["error"]
 
     def test_all_supported_formats_accepted(self, tmp_path):
-        from tools.transcription_tools import _validate_audio_file, SUPPORTED_FORMATS
+        from harness.tools.transcription_tools import _validate_audio_file, SUPPORTED_FORMATS
         for fmt in SUPPORTED_FORMATS:
             f = tmp_path / f"test{fmt}"
             f.write_bytes(b"data")
             assert _validate_audio_file(str(f)) is None, f"Format {fmt} should be accepted"
 
     def test_case_insensitive_extension(self, tmp_path):
-        from tools.transcription_tools import _validate_audio_file
+        from harness.tools.transcription_tools import _validate_audio_file
         f = tmp_path / "test.MP3"
         f.write_bytes(b"data")
         assert _validate_audio_file(str(f)) is None
@@ -699,11 +699,11 @@ class TestValidateAudioFileEdgeCases:
 
 class TestTranscribeAudioDispatch:
     def test_dispatches_to_groq(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "groq"}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._transcribe_groq",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "groq"}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="groq"), \
+             patch("harness.tools.transcription_tools._transcribe_groq",
                    return_value={"success": True, "transcript": "hi", "provider": "groq"}) as mock_groq:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is True
@@ -711,31 +711,31 @@ class TestTranscribeAudioDispatch:
         mock_groq.assert_called_once()
 
     def test_dispatches_to_local(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="local"), \
-             patch("tools.transcription_tools._transcribe_local",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="local"), \
+             patch("harness.tools.transcription_tools._transcribe_local",
                    return_value={"success": True, "transcript": "hi"}) as mock_local:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is True
         mock_local.assert_called_once()
 
     def test_dispatches_to_openai(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "openai"}), \
-             patch("tools.transcription_tools._get_provider", return_value="openai"), \
-             patch("tools.transcription_tools._transcribe_openai",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "openai"}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="openai"), \
+             patch("harness.tools.transcription_tools._transcribe_openai",
                    return_value={"success": True, "transcript": "hi", "provider": "openai"}) as mock_openai:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is True
         mock_openai.assert_called_once()
 
     def test_no_provider_returns_error(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="none"):
-            from tools.transcription_tools import transcribe_audio
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="none"):
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is False
@@ -748,70 +748,70 @@ class TestTranscribeAudioDispatch:
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "openai"}), \
-             patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True):
-            from tools.transcription_tools import transcribe_audio
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "openai"}), \
+             patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True):
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is False
         assert "No STT provider" in result["error"]
 
     def test_invalid_file_short_circuits(self):
-        from tools.transcription_tools import transcribe_audio
+        from harness.tools.transcription_tools import transcribe_audio
         result = transcribe_audio("/nonexistent/audio.wav")
         assert result["success"] is False
         assert "not found" in result["error"]
 
     def test_model_override_passed_to_groq(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._transcribe_groq",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="groq"), \
+             patch("harness.tools.transcription_tools._transcribe_groq",
                    return_value={"success": True, "transcript": "hi"}) as mock_groq:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model="whisper-large-v3")
 
         _, kwargs = mock_groq.call_args
         assert kwargs.get("model_name") or mock_groq.call_args[0][1] == "whisper-large-v3"
 
     def test_model_override_passed_to_local(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="local"), \
-             patch("tools.transcription_tools._transcribe_local",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="local"), \
+             patch("harness.tools.transcription_tools._transcribe_local",
                    return_value={"success": True, "transcript": "hi"}) as mock_local:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model="large-v3")
 
         assert mock_local.call_args[0][1] == "large-v3"
 
     def test_default_model_used_when_none(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="groq"), \
-             patch("tools.transcription_tools._transcribe_groq",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="groq"), \
+             patch("harness.tools.transcription_tools._transcribe_groq",
                    return_value={"success": True, "transcript": "hi"}) as mock_groq:
-            from tools.transcription_tools import transcribe_audio, DEFAULT_GROQ_STT_MODEL
+            from harness.tools.transcription_tools import transcribe_audio, DEFAULT_GROQ_STT_MODEL
             transcribe_audio(sample_ogg, model=None)
 
         assert mock_groq.call_args[0][1] == DEFAULT_GROQ_STT_MODEL
 
     def test_config_local_model_used(self, sample_ogg):
         config = {"local": {"model": "small"}}
-        with patch("tools.transcription_tools._load_stt_config", return_value=config), \
-             patch("tools.transcription_tools._get_provider", return_value="local"), \
-             patch("tools.transcription_tools._transcribe_local",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value=config), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="local"), \
+             patch("harness.tools.transcription_tools._transcribe_local",
                    return_value={"success": True, "transcript": "hi"}) as mock_local:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model=None)
 
         assert mock_local.call_args[0][1] == "small"
 
     def test_config_openai_model_used(self, sample_ogg):
         config = {"openai": {"model": "gpt-4o-transcribe"}}
-        with patch("tools.transcription_tools._load_stt_config", return_value=config), \
-             patch("tools.transcription_tools._get_provider", return_value="openai"), \
-             patch("tools.transcription_tools._transcribe_openai",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value=config), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="openai"), \
+             patch("harness.tools.transcription_tools._transcribe_openai",
                    return_value={"success": True, "transcript": "hi"}) as mock_openai:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model=None)
 
         assert mock_openai.call_args[0][1] == "gpt-4o-transcribe"
@@ -838,7 +838,7 @@ def mock_mistral_module():
 class TestTranscribeMistral:
     def test_no_key(self, monkeypatch):
         monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-        from tools.transcription_tools import _transcribe_mistral
+        from harness.tools.transcription_tools import _transcribe_mistral
         result = _transcribe_mistral("/tmp/test.ogg", "voxtral-mini-latest")
         assert result["success"] is False
         assert "MISTRAL_API_KEY" in result["error"]
@@ -850,7 +850,7 @@ class TestTranscribeMistral:
         mock_result.text = "hello from mistral"
         mock_mistral_module.audio.transcriptions.complete.return_value = mock_result
 
-        from tools.transcription_tools import _transcribe_mistral
+        from harness.tools.transcription_tools import _transcribe_mistral
         result = _transcribe_mistral(sample_ogg, "voxtral-mini-latest")
 
         assert result["success"] is True
@@ -863,7 +863,7 @@ class TestTranscribeMistral:
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
         mock_mistral_module.audio.transcriptions.complete.side_effect = RuntimeError("secret-key-leaked")
 
-        from tools.transcription_tools import _transcribe_mistral
+        from harness.tools.transcription_tools import _transcribe_mistral
         result = _transcribe_mistral(sample_ogg, "voxtral-mini-latest")
 
         assert result["success"] is False
@@ -874,7 +874,7 @@ class TestTranscribeMistral:
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
         mock_mistral_module.audio.transcriptions.complete.side_effect = PermissionError("denied")
 
-        from tools.transcription_tools import _transcribe_mistral
+        from harness.tools.transcription_tools import _transcribe_mistral
         result = _transcribe_mistral(sample_ogg, "voxtral-mini-latest")
 
         assert result["success"] is False
@@ -890,22 +890,22 @@ class TestGetProviderMistral:
 
     def test_mistral_when_key_and_sdk_available(self, monkeypatch):
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "mistral"}) == "mistral"
 
     def test_mistral_explicit_no_key_returns_none(self, monkeypatch):
         """Explicit mistral with no key returns none — no cross-provider fallback."""
         monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "mistral"}) == "none"
 
     def test_mistral_explicit_no_sdk_returns_none(self, monkeypatch):
         """Explicit mistral with key but no SDK returns none."""
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch("tools.transcription_tools._HAS_MISTRAL", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_MISTRAL", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({"provider": "mistral"}) == "none"
 
     def test_auto_detect_mistral_after_openai(self, monkeypatch):
@@ -914,11 +914,11 @@ class TestGetProviderMistral:
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False), \
-             patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "mistral"
 
     def test_auto_detect_openai_preferred_over_mistral(self, monkeypatch):
@@ -926,22 +926,22 @@ class TestGetProviderMistral:
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test")
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True), \
-             patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "openai"
 
     def test_auto_detect_groq_preferred_over_mistral(self, monkeypatch):
         """Auto-detect: groq (free) is preferred over mistral (paid)."""
         monkeypatch.setenv("GROQ_API_KEY", "gsk-test")
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", True), \
-             patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", True), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "groq"
 
     def test_auto_detect_skips_mistral_without_sdk(self, monkeypatch):
@@ -950,11 +950,11 @@ class TestGetProviderMistral:
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.setenv("MISTRAL_API_KEY", "test-key")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False), \
-             patch("tools.transcription_tools._HAS_MISTRAL", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "none"
 
 
@@ -964,11 +964,11 @@ class TestGetProviderMistral:
 
 class TestTranscribeAudioMistralDispatch:
     def test_dispatches_to_mistral(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "mistral"}), \
-             patch("tools.transcription_tools._get_provider", return_value="mistral"), \
-             patch("tools.transcription_tools._transcribe_mistral",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "mistral"}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="mistral"), \
+             patch("harness.tools.transcription_tools._transcribe_mistral",
                    return_value={"success": True, "transcript": "hi", "provider": "mistral"}) as mock_mistral:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is True
@@ -977,21 +977,21 @@ class TestTranscribeAudioMistralDispatch:
 
     def test_config_mistral_model_used(self, sample_ogg):
         config = {"provider": "mistral", "mistral": {"model": "voxtral-mini-2602"}}
-        with patch("tools.transcription_tools._load_stt_config", return_value=config), \
-             patch("tools.transcription_tools._get_provider", return_value="mistral"), \
-             patch("tools.transcription_tools._transcribe_mistral",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value=config), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="mistral"), \
+             patch("harness.tools.transcription_tools._transcribe_mistral",
                    return_value={"success": True, "transcript": "hi"}) as mock_mistral:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model=None)
 
         assert mock_mistral.call_args[0][1] == "voxtral-mini-2602"
 
     def test_model_override_passed_to_mistral(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="mistral"), \
-             patch("tools.transcription_tools._transcribe_mistral",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="mistral"), \
+             patch("harness.tools.transcription_tools._transcribe_mistral",
                    return_value={"success": True, "transcript": "hi"}) as mock_mistral:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model="voxtral-mini-2602")
 
         assert mock_mistral.call_args[0][1] == "voxtral-mini-2602"
@@ -1007,14 +1007,14 @@ def mock_xai_http_module():
     """Inject a fake tools.xai_http module for testing."""
     fake_module = MagicMock()
     fake_module.hermes_xai_user_agent = MagicMock(return_value="hermes-xai/test")
-    with patch.dict("sys.modules", {"tools.xai_http": fake_module}):
+    with patch.dict("sys.modules", {"harness.tools.xai_http": fake_module}):
         yield fake_module
 
 
 class TestTranscribeXAI:
     def test_no_key(self, monkeypatch):
         monkeypatch.delenv("XAI_API_KEY", raising=False)
-        from tools.transcription_tools import _transcribe_xai
+        from harness.tools.transcription_tools import _transcribe_xai
         result = _transcribe_xai("/tmp/test.ogg", "grok-stt")
         assert result["success"] is False
         assert "XAI_API_KEY" in result["error"]
@@ -1030,9 +1030,9 @@ class TestTranscribeXAI:
             "duration": 3.2,
         }
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["success"] is True
@@ -1046,9 +1046,9 @@ class TestTranscribeXAI:
         mock_response.status_code = 200
         mock_response.json.return_value = {"text": "  hello world  \n"}
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["transcript"] == "hello world"
@@ -1061,9 +1061,9 @@ class TestTranscribeXAI:
         mock_response.json.return_value = {"error": {"message": "Invalid audio format"}}
         mock_response.text = '{"error": {"message": "Invalid audio format"}}'
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["success"] is False
@@ -1077,9 +1077,9 @@ class TestTranscribeXAI:
         mock_response.status_code = 200
         mock_response.json.return_value = {"text": "   "}
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["success"] is False
@@ -1088,9 +1088,9 @@ class TestTranscribeXAI:
     def test_permission_error(self, monkeypatch, sample_ogg, mock_xai_http_module):
         monkeypatch.setenv("XAI_API_KEY", "xai-test-key")
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("builtins.open", side_effect=PermissionError("denied")):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["success"] is False
@@ -1099,9 +1099,9 @@ class TestTranscribeXAI:
     def test_network_error_returns_failure(self, monkeypatch, sample_ogg, mock_xai_http_module):
         monkeypatch.setenv("XAI_API_KEY", "xai-test-key")
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", side_effect=ConnectionError("timeout")):
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             result = _transcribe_xai(sample_ogg, "grok-stt")
 
         assert result["success"] is False
@@ -1117,9 +1117,9 @@ class TestTranscribeXAI:
         mock_response.status_code = 200
         mock_response.json.return_value = {"text": "test", "language": "fr", "duration": 1.0}
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response) as mock_post:
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             _transcribe_xai(sample_ogg, "grok-stt")
 
         call_kwargs = mock_post.call_args
@@ -1135,9 +1135,9 @@ class TestTranscribeXAI:
         mock_response.status_code = 200
         mock_response.json.return_value = {"text": "test", "language": "en", "duration": 1.0}
 
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
              patch("requests.post", return_value=mock_response) as mock_post:
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             _transcribe_xai(sample_ogg, "grok-stt")
 
         call_args = mock_post.call_args
@@ -1152,9 +1152,9 @@ class TestTranscribeXAI:
         mock_response.json.return_value = {"text": "test", "language": "fr", "duration": 1.0}
 
         config = {"xai": {"diarize": True}}
-        with patch("tools.transcription_tools._load_stt_config", return_value=config), \
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value=config), \
              patch("requests.post", return_value=mock_response) as mock_post:
-            from tools.transcription_tools import _transcribe_xai
+            from harness.tools.transcription_tools import _transcribe_xai
             _transcribe_xai(sample_ogg, "grok-stt")
 
         data = mock_post.call_args.kwargs.get("data", mock_post.call_args[1].get("data", {}))
@@ -1170,13 +1170,13 @@ class TestGetProviderXAI:
 
     def test_xai_when_key_set(self, monkeypatch):
         monkeypatch.setenv("XAI_API_KEY", "xai-test")
-        from tools.transcription_tools import _get_provider
+        from harness.tools.transcription_tools import _get_provider
         assert _get_provider({"provider": "xai"}) == "xai"
 
     def test_xai_explicit_no_key_returns_none(self, monkeypatch):
         """Explicit xai with no key returns none — no cross-provider fallback."""
         monkeypatch.delenv("XAI_API_KEY", raising=False)
-        from tools.transcription_tools import _get_provider
+        from harness.tools.transcription_tools import _get_provider
         assert _get_provider({"provider": "xai"}) == "none"
 
     def test_auto_detect_xai_after_mistral(self, monkeypatch):
@@ -1186,11 +1186,11 @@ class TestGetProviderXAI:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
         monkeypatch.setenv("XAI_API_KEY", "xai-test")
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False), \
-             patch("tools.transcription_tools._HAS_MISTRAL", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "xai"
 
     def test_auto_detect_mistral_preferred_over_xai(self, monkeypatch):
@@ -1200,21 +1200,21 @@ class TestGetProviderXAI:
         monkeypatch.delenv("GROQ_API_KEY", raising=False)
         monkeypatch.delenv("VOICE_TOOLS_OPENAI_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False), \
-             patch("tools.transcription_tools._HAS_MISTRAL", True):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", True):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "mistral"
 
     def test_auto_detect_no_key_returns_none(self, monkeypatch):
         """Auto-detect: xai skipped when no key is set."""
         monkeypatch.delenv("XAI_API_KEY", raising=False)
-        with patch("tools.transcription_tools._HAS_FASTER_WHISPER", False), \
-             patch("tools.transcription_tools._has_local_command", return_value=False), \
-             patch("tools.transcription_tools._HAS_OPENAI", False), \
-             patch("tools.transcription_tools._HAS_MISTRAL", False):
-            from tools.transcription_tools import _get_provider
+        with patch("harness.tools.transcription_tools._HAS_FASTER_WHISPER", False), \
+             patch("harness.tools.transcription_tools._has_local_command", return_value=False), \
+             patch("harness.tools.transcription_tools._HAS_OPENAI", False), \
+             patch("harness.tools.transcription_tools._HAS_MISTRAL", False):
+            from harness.tools.transcription_tools import _get_provider
             assert _get_provider({}) == "none"
 
 
@@ -1224,11 +1224,11 @@ class TestGetProviderXAI:
 
 class TestTranscribeAudioXAIDispatch:
     def test_dispatches_to_xai(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "xai"}), \
-             patch("tools.transcription_tools._get_provider", return_value="xai"), \
-             patch("tools.transcription_tools._transcribe_xai",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "xai"}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="xai"), \
+             patch("harness.tools.transcription_tools._transcribe_xai",
                    return_value={"success": True, "transcript": "hi", "provider": "xai"}) as mock_xai:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = transcribe_audio(sample_ogg)
 
         assert result["success"] is True
@@ -1236,21 +1236,21 @@ class TestTranscribeAudioXAIDispatch:
         mock_xai.assert_called_once()
 
     def test_model_default_is_grok_stt(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={"provider": "xai"}), \
-             patch("tools.transcription_tools._get_provider", return_value="xai"), \
-             patch("tools.transcription_tools._transcribe_xai",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={"provider": "xai"}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="xai"), \
+             patch("harness.tools.transcription_tools._transcribe_xai",
                    return_value={"success": True, "transcript": "hi"}) as mock_xai:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model=None)
 
         assert mock_xai.call_args[0][1] == "grok-stt"
 
     def test_model_override_passed_to_xai(self, sample_ogg):
-        with patch("tools.transcription_tools._load_stt_config", return_value={}), \
-             patch("tools.transcription_tools._get_provider", return_value="xai"), \
-             patch("tools.transcription_tools._transcribe_xai",
+        with patch("harness.tools.transcription_tools._load_stt_config", return_value={}), \
+             patch("harness.tools.transcription_tools._get_provider", return_value="xai"), \
+             patch("harness.tools.transcription_tools._transcribe_xai",
                    return_value={"success": True, "transcript": "hi"}) as mock_xai:
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             transcribe_audio(sample_ogg, model="custom-stt")
 
         assert mock_xai.call_args[0][1] == "custom-stt"

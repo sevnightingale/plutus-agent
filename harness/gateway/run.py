@@ -30,7 +30,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, Any, List
 
-from agent.account_usage import fetch_account_usage, render_account_usage_lines
+from harness.agent.account_usage import fetch_account_usage, render_account_usage_lines
 
 # --- Agent cache tuning ---------------------------------------------------
 # Bounds the per-session AIAgent cache to prevent unbounded growth in
@@ -84,17 +84,17 @@ def _ensure_ssl_certs() -> None:
 _ensure_ssl_certs()
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 # Resolve Hermes home directory (respects HERMES_HOME override)
-from plutus_constants import get_hermes_home
-from utils import atomic_yaml_write, base_url_host_matches, is_truthy_value
+from harness.constants import get_hermes_home
+from harness.utils import atomic_yaml_write, base_url_host_matches, is_truthy_value
 _hermes_home = get_hermes_home()
 
 # Load environment variables from ~/.plutus-agent/.env first.
 # User-managed env files should override stale shell exports on restart.
 from dotenv import load_dotenv  # backward-compat for tests that monkeypatch this symbol
-from plutus_cli.env_loader import load_hermes_dotenv
+from harness.cli.env_loader import load_hermes_dotenv
 _env_path = _hermes_home / '.env'
 load_hermes_dotenv(hermes_home=_hermes_home, project_env=Path(__file__).resolve().parents[1] / '.env')
 
@@ -111,7 +111,7 @@ if _config_path.exists():
         with open(_config_path, encoding="utf-8") as _f:
             _cfg = _yaml.safe_load(_f) or {}
         # Expand ${ENV_VAR} references before bridging to env vars.
-        from plutus_cli.config import _expand_env_vars
+        from harness.cli.config import _expand_env_vars
         _cfg = _expand_env_vars(_cfg)
         # Top-level simple values (fallback only — don't override .env)
         for _key, _val in _cfg.items():
@@ -232,7 +232,7 @@ if _config_path.exists():
 
 # Apply IPv4 preference if configured (before any HTTP clients are created).
 try:
-    from plutus_constants import apply_ipv4_preference
+    from harness.constants import apply_ipv4_preference
     _network_cfg = (_cfg if '_cfg' in dir() else {}).get("network", {})
     if isinstance(_network_cfg, dict) and _network_cfg.get("force_ipv4"):
         apply_ipv4_preference(force=True)
@@ -241,14 +241,14 @@ except Exception:
 
 # Validate config structure early — log warnings so gateway operators see problems
 try:
-    from plutus_cli.config import print_config_warnings
+    from harness.cli.config import print_config_warnings
     print_config_warnings()
 except Exception:
     pass
 
 # Warn if user has deprecated MESSAGING_CWD / TERMINAL_CWD in .env
 try:
-    from plutus_cli.config import warn_deprecated_cwd_env_vars
+    from harness.cli.config import warn_deprecated_cwd_env_vars
     warn_deprecated_cwd_env_vars()
 except Exception:
     pass
@@ -269,12 +269,12 @@ if not _configured_cwd or _configured_cwd in (".", "auto", "cwd"):
     _fallback = os.getenv("MESSAGING_CWD") or str(Path.home())
     os.environ["TERMINAL_CWD"] = _fallback
 
-from gateway.config import (
+from harness.gateway.config import (
     Platform,
     GatewayConfig,
     load_gateway_config,
 )
-from gateway.session import (
+from harness.gateway.session import (
     SessionStore,
     SessionSource,
     SessionContext,
@@ -283,14 +283,14 @@ from gateway.session import (
     build_session_key,
     is_shared_multi_user_session,
 )
-from gateway.delivery import DeliveryRouter
-from gateway.platforms.base import (
+from harness.gateway.delivery import DeliveryRouter
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
     merge_pending_message_event,
 )
-from gateway.restart import (
+from harness.gateway.restart import (
     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
     GATEWAY_SERVICE_RESTART_EXIT_CODE,
     parse_restart_drain_timeout,
@@ -308,7 +308,7 @@ _AGENT_PENDING_SENTINEL = object()
 
 def _resolve_runtime_agent_kwargs() -> dict:
     """Resolve provider credentials for gateway-created AIAgent instances."""
-    from plutus_cli.runtime_provider import (
+    from harness.cli.runtime_provider import (
         resolve_runtime_provider,
         format_runtime_provider_error,
     )
@@ -399,8 +399,8 @@ def _check_unavailable_skill(command_name: str) -> str | None:
     # Normalize: command uses hyphens, skill names may use hyphens or underscores
     normalized = command_name.lower().replace("_", "-")
     try:
-        from tools.skills_tool import _get_disabled_skill_names
-        from agent.skill_utils import get_all_skills_dirs
+        from harness.tools.skills_tool import _get_disabled_skill_names
+        from harness.agent.skill_utils import get_all_skills_dirs
         disabled = _get_disabled_skill_names()
 
         # Check disabled skills across all dirs (local + external)
@@ -418,8 +418,8 @@ def _check_unavailable_skill(command_name: str) -> str | None:
                     )
 
         # Check optional skills (shipped with repo but not installed)
-        from plutus_constants import get_optional_skills_dir
-        repo_root = Path(__file__).resolve().parent.parent
+        from harness.constants import get_optional_skills_dir
+        repo_root = Path(__file__).resolve().parent.parent.parent
         optional_dir = get_optional_skills_dir(repo_root / "optional-skills")
         if optional_dir.exists():
             for skill_md in optional_dir.rglob("SKILL.md"):
@@ -492,7 +492,7 @@ def _resolve_hermes_bin() -> Optional[list[str]]:
         import importlib.util
 
         if importlib.util.find_spec("plutus_cli") is not None:
-            return [sys.executable, "-m", "plutus_cli.main"]
+            return [sys.executable, "-m", "harness.cli.main"]
     except Exception:
         pass
 
@@ -592,7 +592,7 @@ class GatewayRunner:
         self._fallback_model = self._load_fallback_model()
 
         # Wire process registry into session store for reset protection
-        from tools.process_registry import process_registry
+        from harness.tools.process_registry import process_registry
         self.session_store = SessionStore(
             self.config.sessions_dir, self.config,
             has_active_processes_fn=lambda key: process_registry.has_active_for_session(key),
@@ -656,7 +656,7 @@ class GatewayRunner:
 
         # Ensure tirith security scanner is available (downloads if needed)
         try:
-            from tools.tirith_security import ensure_installed
+            from harness.tools.tirith_security import ensure_installed
             ensure_installed(log_failures=False)
         except Exception:
             pass  # Non-fatal — fail-open at scan time if unavailable
@@ -664,7 +664,7 @@ class GatewayRunner:
         # Initialize session database for session_search tool support
         self._session_db = None
         try:
-            from plutus_state import SessionDB
+            from harness.state import SessionDB
             self._session_db = SessionDB()
         except Exception as e:
             logger.debug("SQLite session store not available: %s", e)
@@ -677,7 +677,7 @@ class GatewayRunner:
         # but never raised.
         if self._session_db is not None:
             try:
-                from plutus_cli.config import load_config as _load_full_config
+                from harness.cli.config import load_config as _load_full_config
                 _sess_cfg = (_load_full_config().get("sessions") or {})
                 if _sess_cfg.get("auto_prune", False):
                     self._session_db.maybe_auto_prune_and_vacuum(
@@ -689,11 +689,11 @@ class GatewayRunner:
                 logger.debug("state.db auto-maintenance skipped: %s", exc)
 
         # DM pairing store for code-based user authorization
-        from gateway.pairing import PairingStore
+        from harness.gateway.pairing import PairingStore
         self.pairing_store = PairingStore()
         
         # Event hook system
-        from gateway.hooks import HookRegistry
+        from harness.gateway.hooks import HookRegistry
         self.hooks = HookRegistry()
 
         # Per-chat voice reply mode: "off" | "voice_only" | "all"
@@ -757,7 +757,7 @@ class GatewayRunner:
     def _has_setup_skill(self) -> bool:
         """Check if the hermes-agent-setup skill is installed."""
         try:
-            from tools.skill_manager_tool import _find_skill
+            from harness.tools.skill_manager_tool import _find_skill
             return _find_skill("hermes-agent-setup") is not None
         except Exception:
             return False
@@ -873,7 +873,7 @@ class GatewayRunner:
             if not history or len(history) < 4:
                 return
 
-            from run_agent import AIAgent
+            from harness.run_agent import AIAgent
             model, runtime_kwargs = self._resolve_session_agent_runtime(
                 session_key=session_key,
             )
@@ -906,7 +906,7 @@ class GatewayRunner:
                 # what's already saved and avoid overwriting newer entries.
                 _current_memory = ""
                 try:
-                    from tools.memory_tool import get_memory_dir
+                    from harness.tools.memory_tool import get_memory_dir
                     _mem_dir = get_memory_dir()
                     for fname, label in [
                         ("MEMORY.md", "MEMORY (your personal notes)"),
@@ -1067,7 +1067,7 @@ class GatewayRunner:
         # doesn't fail with "model must be a non-empty string".
         if not model and runtime_kwargs.get("provider"):
             try:
-                from plutus_cli.models import get_default_model_for_provider
+                from harness.cli.models import get_default_model_for_provider
                 model = get_default_model_for_provider(runtime_kwargs["provider"])
                 if model:
                     logger.info(
@@ -1087,7 +1087,7 @@ class GatewayRunner:
         mode, attach `request_overrides` so the API call is marked
         accordingly.
         """
-        from plutus_cli.models import resolve_fast_mode_overrides
+        from harness.cli.models import resolve_fast_mode_overrides
 
         runtime = {
             "api_key": runtime_kwargs.get("api_key"),
@@ -1209,7 +1209,7 @@ class GatewayRunner:
 
     def _update_runtime_status(self, gateway_state: Optional[str] = None, exit_reason: Optional[str] = None) -> None:
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(
                 gateway_state=gateway_state,
                 exit_reason=exit_reason,
@@ -1228,7 +1228,7 @@ class GatewayRunner:
         error_message: Optional[str] = None,
     ) -> None:
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(
                 platform=platform,
                 platform_state=platform_state,
@@ -1305,7 +1305,7 @@ class GatewayRunner:
         "minimal", "low", "medium", "high", "xhigh". Returns None to use
         default (medium).
         """
-        from plutus_constants import parse_reasoning_effort
+        from harness.constants import parse_reasoning_effort
         effort = ""
         try:
             import yaml as _y
@@ -1659,7 +1659,7 @@ class GatewayRunner:
 
         # Store the message so it's processed as the next turn after the
         # current run finishes (or is interrupted).
-        from gateway.platforms.base import merge_pending_message_event
+        from harness.gateway.platforms.base import merge_pending_message_event
         merge_pending_message_event(adapter._pending_messages, session_key, event)
 
         # Synthetic events (cron tick, watcher wake) NEVER interrupt the
@@ -1858,7 +1858,7 @@ class GatewayRunner:
     def _finalize_shutdown_agents(self, active_agents: Dict[str, Any]) -> None:
         for agent in active_agents.values():
             try:
-                from plutus_cli.plugins import invoke_hook as _invoke_hook
+                from harness.cli.plugins import invoke_hook as _invoke_hook
                 _invoke_hook(
                     "on_session_finalize",
                     session_id=getattr(agent, "session_id", None),
@@ -2043,14 +2043,14 @@ class GatewayRunner:
         logger.info("Starting Hermes Gateway...")
         logger.info("Session storage: %s", self.config.sessions_dir)
         try:
-            from plutus_cli.profiles import get_active_profile_name
+            from harness.cli.profiles import get_active_profile_name
             _profile = get_active_profile_name()
             if _profile and _profile != "default":
                 logger.info("Active profile: %s", _profile)
         except Exception:
             pass
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(gateway_state="starting", exit_reason=None)
         except Exception:
             pass
@@ -2100,7 +2100,7 @@ class GatewayRunner:
         # so the discover_plugins() side-effect in model_tools.py is NOT
         # guaranteed to have run by the time we reach this point.
         try:
-            from plutus_cli.plugins import discover_plugins
+            from harness.cli.plugins import discover_plugins
             discover_plugins()
         except Exception:
             logger.debug(
@@ -2117,8 +2117,8 @@ class GatewayRunner:
         # hooks_auto_accept here would just duplicate that lookup.
         # Failures are logged but must never block gateway startup.
         try:
-            from plutus_cli.config import load_config
-            from agent.shell_hooks import register_from_config
+            from harness.cli.config import load_config
+            from harness.agent.shell_hooks import register_from_config
             register_from_config(load_config(), accept_hooks=False)
         except Exception:
             logger.debug(
@@ -2131,7 +2131,7 @@ class GatewayRunner:
         
         # Recover background processes from checkpoint (crash recovery)
         try:
-            from tools.process_registry import process_registry
+            from harness.tools.process_registry import process_registry
             recovered = process_registry.recover_from_checkpoint()
             if recovered:
                 logger.info("Recovered %s background process(es) from previous run", recovered)
@@ -2290,7 +2290,7 @@ class GatewayRunner:
                 reason = "; ".join(startup_nonretryable_errors)
                 logger.error("Gateway hit a non-retryable startup conflict: %s", reason)
                 try:
-                    from gateway.status import write_runtime_status
+                    from harness.gateway.status import write_runtime_status
                     write_runtime_status(gateway_state="startup_failed", exit_reason=reason)
                 except Exception:
                     pass
@@ -2300,7 +2300,7 @@ class GatewayRunner:
                 reason = "; ".join(startup_retryable_errors) or "all configured messaging platforms failed to connect"
                 logger.error("Gateway failed to connect any configured messaging platform: %s", reason)
                 try:
-                    from gateway.status import write_runtime_status
+                    from harness.gateway.status import write_runtime_status
                     write_runtime_status(gateway_state="startup_failed", exit_reason=reason)
                 except Exception:
                     pass
@@ -2327,7 +2327,7 @@ class GatewayRunner:
         
         # Build initial channel directory for send_message name resolution
         try:
-            from gateway.channel_directory import build_channel_directory
+            from harness.gateway.channel_directory import build_channel_directory
             directory = build_channel_directory(self.adapters)
             ch_count = sum(len(chs) for chs in directory.get("platforms", {}).values())
             logger.info("Channel directory built: %d target(s)", ch_count)
@@ -2351,7 +2351,7 @@ class GatewayRunner:
 
         # Drain any recovered process watchers (from crash recovery checkpoint)
         try:
-            from tools.process_registry import process_registry
+            from harness.tools.process_registry import process_registry
             while process_registry.pending_watchers:
                 watcher = process_registry.pending_watchers.pop(0)
                 asyncio.create_task(self._run_process_watcher(watcher))
@@ -2602,7 +2602,7 @@ class GatewayRunner:
 
                         # Rebuild channel directory with the new adapter
                         try:
-                            from gateway.channel_directory import build_channel_directory
+                            from harness.gateway.channel_directory import build_channel_directory
                             build_channel_directory(self.adapters)
                         except Exception:
                             pass
@@ -2686,7 +2686,7 @@ class GatewayRunner:
                 one subsystem's failure doesn't block the rest.
                 """
                 try:
-                    from tools.process_registry import process_registry
+                    from harness.tools.process_registry import process_registry
                     _killed = process_registry.kill_all()
                     if _killed:
                         logger.info(
@@ -2696,12 +2696,12 @@ class GatewayRunner:
                 except Exception as _e:
                     logger.debug("process_registry.kill_all (%s) error: %s", phase, _e)
                 try:
-                    from tools.terminal_tool import cleanup_all_environments
+                    from harness.tools.terminal_tool import cleanup_all_environments
                     cleanup_all_environments()
                 except Exception as _e:
                     logger.debug("cleanup_all_environments (%s) error: %s", phase, _e)
                 try:
-                    from tools.browser_tool import cleanup_all_browsers
+                    from harness.tools.browser_tool import cleanup_all_browsers
                     cleanup_all_browsers()
                 except Exception as _e:
                     logger.debug("cleanup_all_browsers (%s) error: %s", phase, _e)
@@ -2834,7 +2834,7 @@ class GatewayRunner:
                 except Exception as _e:
                     logger.debug("SessionDB close error: %s", _e)
 
-            from gateway.status import remove_pid_file, release_gateway_runtime_lock
+            from harness.gateway.status import remove_pid_file, release_gateway_runtime_lock
             remove_pid_file()
             release_gateway_runtime_lock()
 
@@ -2898,35 +2898,35 @@ class GatewayRunner:
             )
 
         if platform == Platform.TELEGRAM:
-            from gateway.platforms.telegram import TelegramAdapter, check_telegram_requirements
+            from harness.gateway.platforms.telegram import TelegramAdapter, check_telegram_requirements
             if not check_telegram_requirements():
                 logger.warning("Telegram: python-telegram-bot not installed")
                 return None
             return TelegramAdapter(config)
         
         elif platform == Platform.DISCORD:
-            from gateway.platforms.discord import DiscordAdapter, check_discord_requirements
+            from harness.gateway.platforms.discord import DiscordAdapter, check_discord_requirements
             if not check_discord_requirements():
                 logger.warning("Discord: discord.py not installed")
                 return None
             return DiscordAdapter(config)
         
         elif platform == Platform.SLACK:
-            from gateway.platforms.slack import SlackAdapter, check_slack_requirements
+            from harness.gateway.platforms.slack import SlackAdapter, check_slack_requirements
             if not check_slack_requirements():
                 logger.warning("Slack: slack-bolt not installed. Run: pip install 'hermes-agent[slack]'")
                 return None
             return SlackAdapter(config)
 
         elif platform == Platform.API_SERVER:
-            from gateway.platforms.api_server import APIServerAdapter, check_api_server_requirements
+            from harness.gateway.platforms.api_server import APIServerAdapter, check_api_server_requirements
             if not check_api_server_requirements():
                 logger.warning("API Server: aiohttp not installed")
                 return None
             return APIServerAdapter(config)
 
         elif platform == Platform.WEBHOOK:
-            from gateway.platforms.webhook import WebhookAdapter, check_webhook_requirements
+            from harness.gateway.platforms.webhook import WebhookAdapter, check_webhook_requirements
             if not check_webhook_requirements():
                 logger.warning("Webhook: aiohttp not installed")
                 return None
@@ -3235,7 +3235,7 @@ class GatewayRunner:
                 return await self._handle_status_command(event)
 
             # Resolve the command once for all early-intercept checks below.
-            from plutus_cli.commands import (
+            from harness.cli.commands import (
                 ACTIVE_SESSION_BYPASS_COMMANDS as _DEDICATED_HANDLERS,
                 resolve_command as _resolve_cmd_inner,
             )
@@ -3476,7 +3476,7 @@ class GatewayRunner:
         # Check for commands
         command = event.get_command()
 
-        from plutus_cli.commands import (
+        from harness.cli.commands import (
             GATEWAY_KNOWN_COMMANDS,
             is_gateway_known_command,
             resolve_command as _resolve_cmd,
@@ -3589,7 +3589,7 @@ class GatewayRunner:
 
         if canonical == "plan":
             try:
-                from agent.skill_commands import build_plan_path, build_skill_invocation_message
+                from harness.agent.skill_commands import build_plan_path, build_skill_invocation_message
 
                 user_instruction = event.get_command_args().strip()
                 plan_path = build_plan_path(user_instruction)
@@ -3726,7 +3726,7 @@ class GatewayRunner:
         # Plugin-registered slash commands
         if command:
             try:
-                from plutus_cli.plugins import get_plugin_command_handler
+                from harness.cli.plugins import get_plugin_command_handler
                 # Normalize underscores to hyphens so Telegram's underscored
                 # autocomplete form matches plugin commands registered with
                 # hyphens. See plutus_cli/commands.py:_build_telegram_menu.
@@ -3746,7 +3746,7 @@ class GatewayRunner:
         # to the claude-code skill.
         if command:
             try:
-                from agent.skill_commands import (
+                from harness.agent.skill_commands import (
                     get_skill_commands,
                     build_skill_invocation_message,
                     resolve_skill_command_key,
@@ -3761,7 +3761,7 @@ class GatewayRunner:
                     _skill_name = skill_cmds[cmd_key].get("name", "")
                     _plat = source.platform.value if source.platform else None
                     if _plat and _skill_name:
-                        from agent.skill_utils import get_disabled_skill_names as _get_plat_disabled
+                        from harness.agent.skill_utils import get_disabled_skill_names as _get_plat_disabled
                         if _skill_name in _get_plat_disabled(platform=_plat):
                             return (
                                 f"The **{_skill_name}** skill is disabled for {_plat}.\n"
@@ -3957,8 +3957,8 @@ class GatewayRunner:
 
         if "@" in message_text:
             try:
-                from agent.context_references import preprocess_context_references_async
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.context_references import preprocess_context_references_async
+                from harness.agent.model_metadata import get_model_context_length
 
                 _msg_cwd = os.environ.get("TERMINAL_CWD", os.path.expanduser("~"))
                 _msg_runtime = _resolve_runtime_agent_kwargs()
@@ -4004,7 +4004,7 @@ class GatewayRunner:
         # tools/approval.py for cron-mode policy) can introspect via
         # get_synthetic_kind(). Reset in finally to avoid leaking across
         # concurrent turns. Empty kind for normal operator inbound.
-        from gateway.session_context import (
+        from harness.gateway.session_context import (
             set_synthetic_kind,
             reset_synthetic_kind,
         )
@@ -4124,7 +4124,7 @@ class GatewayRunner:
         if _is_new_session and _auto:
             _skill_names = [_auto] if isinstance(_auto, str) else list(_auto)
             try:
-                from agent.skill_commands import _load_skill_payload, _build_skill_message
+                from harness.agent.skill_commands import _load_skill_payload, _build_skill_message
                 _combined_parts: list[str] = []
                 _loaded_names: list[str] = []
                 for _sname in _skill_names:
@@ -4171,7 +4171,7 @@ class GatewayRunner:
         #    means hygiene fires a bit early — safe and harmless.
         # -----------------------------------------------------------------
         if history and len(history) >= 4:
-            from agent.model_metadata import (
+            from harness.agent.model_metadata import (
                 estimate_messages_tokens_rough,
                 get_model_context_length,
             )
@@ -4244,7 +4244,7 @@ class GatewayRunner:
                 if _hyg_config_context_length is None and _hyg_base_url:
                     try:
                         try:
-                            from plutus_cli.config import get_compatible_custom_providers as _gw_gcp
+                            from harness.cli.config import get_compatible_custom_providers as _gw_gcp
                             _hyg_custom_providers = _gw_gcp(_hyg_data)
                         except Exception:
                             _hyg_custom_providers = _hyg_data.get("custom_providers")
@@ -4326,7 +4326,7 @@ class GatewayRunner:
                     _hyg_meta = {"thread_id": source.thread_id} if source.thread_id else None
 
                     try:
-                        from run_agent import AIAgent
+                        from harness.run_agent import AIAgent
 
                         _hyg_model, _hyg_runtime = self._resolve_session_agent_runtime(
                             source=source,
@@ -4611,7 +4611,7 @@ class GatewayRunner:
 
             # Prepend reasoning/thinking if display is enabled (per-platform)
             try:
-                from gateway.display_config import resolve_display_setting as _rds
+                from harness.gateway.display_config import resolve_display_setting as _rds
                 _show_reasoning_effective = _rds(
                     _load_gateway_config(),
                     _platform_config_key(source.platform),
@@ -4640,7 +4640,7 @@ class GatewayRunner:
             
             # Check for pending process watchers (check_interval on background processes)
             try:
-                from tools.process_registry import process_registry
+                from harness.tools.process_registry import process_registry
                 while process_registry.pending_watchers:
                     watcher = process_registry.pending_watchers.pop(0)
                     asyncio.create_task(self._run_process_watcher(watcher))
@@ -4652,7 +4652,7 @@ class GatewayRunner:
             # already handled by the per-process watcher task above, so we only
             # inject watch-type events here.
             try:
-                from tools.process_registry import process_registry as _pr
+                from harness.tools.process_registry import process_registry as _pr
                 _watch_events = []
                 while not _pr.completion_queue.empty():
                     evt = _pr.completion_queue.get_nowait()
@@ -4875,7 +4875,7 @@ class GatewayRunner:
         users can immediately see if context detection went wrong (e.g.
         local models falling to the 128K default).
         """
-        from agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
+        from harness.agent.model_metadata import get_model_context_length, DEFAULT_FALLBACK_CONTEXT
 
         model = _resolve_gateway_model()
         config_context_length = None
@@ -4980,13 +4980,13 @@ class GatewayRunner:
         self._evict_cached_agent(session_key)
 
         try:
-            from tools.env_passthrough import clear_env_passthrough
+            from harness.tools.env_passthrough import clear_env_passthrough
             clear_env_passthrough()
         except Exception:
             pass
 
         try:
-            from tools.credential_files import clear_credential_files
+            from harness.tools.credential_files import clear_credential_files
             clear_credential_files()
         except Exception:
             pass
@@ -5005,7 +5005,7 @@ class GatewayRunner:
 
         # Fire plugin on_session_finalize hook (session boundary)
         try:
-            from plutus_cli.plugins import invoke_hook as _invoke_hook
+            from harness.cli.plugins import invoke_hook as _invoke_hook
             _old_sid = old_entry.session_id if old_entry else None
             _invoke_hook("on_session_finalize", session_id=_old_sid,
                          platform=source.platform.value if source.platform else "")
@@ -5041,7 +5041,7 @@ class GatewayRunner:
 
         # Fire plugin on_session_reset hook (new session guaranteed to exist)
         try:
-            from plutus_cli.plugins import invoke_hook as _invoke_hook
+            from harness.cli.plugins import invoke_hook as _invoke_hook
             _new_sid = new_entry.session_id if new_entry else None
             _invoke_hook("on_session_reset", session_id=_new_sid,
                          platform=source.platform.value if source.platform else "")
@@ -5050,7 +5050,7 @@ class GatewayRunner:
 
         # Append a random tip to the reset message
         try:
-            from plutus_cli.tips import get_random_tip
+            from harness.cli.tips import get_random_tip
             _tip_line = f"\n✦ Tip: {get_random_tip()}"
         except Exception:
             _tip_line = ""
@@ -5061,8 +5061,8 @@ class GatewayRunner:
     
     async def _handle_profile_command(self, event: MessageEvent) -> str:
         """Handle /profile — show active profile name and home directory."""
-        from plutus_constants import display_hermes_home
-        from plutus_cli.profiles import get_active_profile_name
+        from harness.constants import display_hermes_home
+        from harness.cli.profiles import get_active_profile_name
 
         display = display_hermes_home()
         profile_name = get_active_profile_name()
@@ -5112,7 +5112,7 @@ class GatewayRunner:
 
     async def _handle_agents_command(self, event: MessageEvent) -> str:
         """Handle /agents command - list active agents and running tasks."""
-        from tools.process_registry import format_uptime_short, process_registry
+        from harness.tools.process_registry import format_uptime_short, process_registry
 
         now = time.time()
         current_session_key = self._session_key_for_source(event.source)
@@ -5367,13 +5367,13 @@ class GatewayRunner:
 
     async def _handle_help_command(self, event: MessageEvent) -> str:
         """Handle /help command - list available commands."""
-        from plutus_cli.commands import gateway_help_lines
+        from harness.cli.commands import gateway_help_lines
         lines = [
             "📖 **Hermes Commands**\n",
             *gateway_help_lines(),
         ]
         try:
-            from agent.skill_commands import get_skill_commands
+            from harness.agent.skill_commands import get_skill_commands
             skill_cmds = get_skill_commands()
             if skill_cmds:
                 lines.append(f"\n⚡ **Skill Commands** ({len(skill_cmds)} active):")
@@ -5389,7 +5389,7 @@ class GatewayRunner:
 
     async def _handle_commands_command(self, event: MessageEvent) -> str:
         """Handle /commands [page] - paginated list of all commands and skills."""
-        from plutus_cli.commands import gateway_help_lines
+        from harness.cli.commands import gateway_help_lines
 
         raw_args = event.get_command_args().strip()
         if raw_args:
@@ -5403,7 +5403,7 @@ class GatewayRunner:
         # Build combined entry list: built-in commands + skill commands
         entries = list(gateway_help_lines())
         try:
-            from agent.skill_commands import get_skill_commands
+            from harness.agent.skill_commands import get_skill_commands
             skill_cmds = get_skill_commands()
             if skill_cmds:
                 entries.append("")
@@ -5417,7 +5417,7 @@ class GatewayRunner:
         if not entries:
             return "No commands available."
 
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         page_size = 15 if event.source.platform == Platform.TELEGRAM else 20
         total_pages = max(1, (len(entries) + page_size - 1) // page_size)
         page = max(1, min(requested_page, total_pages))
@@ -5451,11 +5451,11 @@ class GatewayRunner:
           /model --provider <provider>        — switch to provider, auto-detect model
         """
         import yaml
-        from plutus_cli.model_switch import (
+        from harness.cli.model_switch import (
             switch_model as _switch_model, parse_model_flags,
             list_authenticated_providers,
         )
-        from plutus_cli.providers import get_label
+        from harness.cli.providers import get_label
 
         raw_args = event.get_command_args().strip()
 
@@ -5481,7 +5481,7 @@ class GatewayRunner:
                     current_base_url = model_cfg.get("base_url", "")
                 user_provs = cfg.get("providers")
                 try:
-                    from plutus_cli.config import get_compatible_custom_providers
+                    from harness.cli.config import get_compatible_custom_providers
                     custom_provs = get_compatible_custom_providers(cfg)
                 except Exception:
                     custom_provs = cfg.get("custom_providers")
@@ -5718,7 +5718,7 @@ class GatewayRunner:
                 model_cfg["provider"] = result.target_provider
                 if result.base_url:
                     model_cfg["base_url"] = result.base_url
-                from plutus_cli.config import save_config
+                from harness.cli.config import save_config
                 save_config(cfg)
             except Exception as e:
                 logger.warning("Failed to persist model switch: %s", e)
@@ -5740,7 +5740,7 @@ class GatewayRunner:
             lines.append(f"Capabilities: {mi.format_capabilities()}")
         else:
             try:
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.model_metadata import get_model_context_length
                 ctx = get_model_context_length(
                     result.new_model,
                     base_url=result.base_url or current_base_url,
@@ -5772,7 +5772,7 @@ class GatewayRunner:
     async def _handle_provider_command(self, event: MessageEvent) -> str:
         """Handle /provider command - show available providers."""
         import yaml
-        from plutus_cli.models import (
+        from harness.cli.models import (
             list_available_providers,
             normalize_provider,
             _PROVIDER_LABELS,
@@ -5795,7 +5795,7 @@ class GatewayRunner:
         current_provider = normalize_provider(current_provider)
         if current_provider == "auto":
             try:
-                from plutus_cli.auth import resolve_provider as _resolve_provider
+                from harness.cli.auth import resolve_provider as _resolve_provider
                 current_provider = _resolve_provider(current_provider)
             except Exception:
                 current_provider = "openrouter"
@@ -5829,7 +5829,7 @@ class GatewayRunner:
     async def _handle_personality_command(self, event: MessageEvent) -> str:
         """Handle /personality command - list or set a personality."""
         import yaml
-        from plutus_constants import display_hermes_home
+        from harness.constants import display_hermes_home
 
         args = event.get_command_args().strip().lower()
         config_path = _hermes_home / 'config.yaml'
@@ -6285,7 +6285,7 @@ class GatewayRunner:
         audio_path = None
         actual_path = None
         try:
-            from tools.tts_tool import text_to_speech_tool, _strip_markdown_for_tts
+            from harness.tools.tts_tool import text_to_speech_tool, _strip_markdown_for_tts
 
             tts_text = _strip_markdown_for_tts(text[:4000])
             if not tts_text:
@@ -6415,7 +6415,7 @@ class GatewayRunner:
 
     async def _handle_rollback_command(self, event: MessageEvent) -> str:
         """Handle /rollback command — list or restore filesystem checkpoints."""
-        from tools.checkpoint_manager import CheckpointManager, format_checkpoint_list
+        from harness.tools.checkpoint_manager import CheckpointManager, format_checkpoint_list
 
         # Read checkpoint config from config.yaml
         cp_cfg = {}
@@ -6505,7 +6505,7 @@ class GatewayRunner:
         self, prompt: str, source: "SessionSource", task_id: str
     ) -> None:
         """Execute a background agent task and deliver the result to the chat."""
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
 
         adapter = self.adapters.get(source.platform)
         if not adapter:
@@ -6530,7 +6530,7 @@ class GatewayRunner:
 
             platform_key = _platform_config_key(source.platform)
 
-            from plutus_cli.tools_config import _get_platform_tools
+            from harness.cli.tools_config import _get_platform_tools
             enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
 
             pr = self._provider_routing
@@ -6683,7 +6683,7 @@ class GatewayRunner:
         self, question: str, source, session_key: str, task_id: str,
     ) -> None:
         """Execute an ephemeral /btw side question and deliver the answer."""
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
 
         adapter = self.adapters.get(source.platform)
         if not adapter:
@@ -6900,7 +6900,7 @@ class GatewayRunner:
     async def _handle_fast_command(self, event: MessageEvent) -> str:
         """Handle /fast — mirror the CLI Priority Processing toggle in gateway chats."""
         import yaml
-        from plutus_cli.models import model_supports_fast_mode
+        from harness.cli.models import model_supports_fast_mode
 
         args = event.get_command_args().strip().lower()
         config_path = _hermes_home / "config.yaml"
@@ -6959,7 +6959,7 @@ class GatewayRunner:
 
     async def _handle_yolo_command(self, event: MessageEvent) -> str:
         """Handle /yolo — toggle dangerous command approval bypass for this session only."""
-        from tools.approval import (
+        from harness.tools.approval import (
             disable_session_yolo,
             enable_session_yolo,
             is_session_yolo_enabled,
@@ -7015,7 +7015,7 @@ class GatewayRunner:
         }
 
         # Read current effective mode for this platform via the resolver
-        from gateway.display_config import resolve_display_setting
+        from harness.gateway.display_config import resolve_display_setting
         current = resolve_display_setting(user_config, platform_key, "tool_progress", "all")
         if current not in cycle:
             current = "all"
@@ -7059,9 +7059,9 @@ class GatewayRunner:
         focus_topic = (event.get_command_args() or "").strip() or None
 
         try:
-            from run_agent import AIAgent
-            from agent.manual_compression_feedback import summarize_manual_compression
-            from agent.model_metadata import estimate_messages_tokens_rough
+            from harness.run_agent import AIAgent
+            from harness.agent.manual_compression_feedback import summarize_manual_compression
+            from harness.agent.model_metadata import estimate_messages_tokens_rough
 
             session_key = self._session_key_for_source(source)
             model, runtime_kwargs = self._resolve_session_agent_runtime(
@@ -7414,7 +7414,7 @@ class GatewayRunner:
             # Rate limits (when available from provider headers)
             rl_state = agent.get_rate_limit_state()
             if rl_state and rl_state.has_data:
-                from agent.rate_limit_tracker import format_rate_limit_compact
+                from harness.agent.rate_limit_tracker import format_rate_limit_compact
                 lines.append(f"⏱️ **Rate Limits:** {format_rate_limit_compact(rl_state)}")
                 lines.append("")
 
@@ -7437,7 +7437,7 @@ class GatewayRunner:
 
             # Cost estimation
             try:
-                from agent.usage_pricing import CanonicalUsage, estimate_usage_cost
+                from harness.agent.usage_pricing import CanonicalUsage, estimate_usage_cost
                 cost_result = estimate_usage_cost(
                     agent.model,
                     CanonicalUsage(
@@ -7475,7 +7475,7 @@ class GatewayRunner:
         session_entry = self.session_store.get_or_create_session(source)
         history = self.session_store.load_transcript(session_entry.session_id)
         if history:
-            from agent.model_metadata import estimate_messages_tokens_rough
+            from harness.agent.model_metadata import estimate_messages_tokens_rough
             msgs = [m for m in history if m.get("role") in ("user", "assistant") and m.get("content")]
             approx = estimate_messages_tokens_rough(msgs)
             lines = [
@@ -7523,8 +7523,8 @@ class GatewayRunner:
                     i += 1
 
         try:
-            from plutus_state import SessionDB
-            from agent.insights import InsightsEngine
+            from harness.state import SessionDB
+            from harness.agent.insights import InsightsEngine
 
             loop = asyncio.get_running_loop()
 
@@ -7545,7 +7545,7 @@ class GatewayRunner:
         """Handle /reload-mcp command -- disconnect and reconnect all MCP servers."""
         loop = asyncio.get_running_loop()
         try:
-            from tools.mcp_tool import shutdown_mcp_servers, discover_mcp_tools, _servers, _lock
+            from harness.tools.mcp_tool import shutdown_mcp_servers, discover_mcp_tools, _servers, _lock
 
             # Capture old server names before shutdown
             with _lock:
@@ -7637,7 +7637,7 @@ class GatewayRunner:
         source = event.source
         session_key = self._session_key_for_source(source)
 
-        from tools.approval import (
+        from harness.tools.approval import (
             resolve_gateway_approval, has_blocking_approval,
         )
 
@@ -7686,7 +7686,7 @@ class GatewayRunner:
         source = event.source
         session_key = self._session_key_for_source(source)
 
-        from tools.approval import (
+        from harness.tools.approval import (
             resolve_gateway_approval, has_blocking_approval,
         )
 
@@ -7726,7 +7726,7 @@ class GatewayRunner:
         full log uploads should use ``hermes debug share`` from the CLI.
         """
         import asyncio
-        from plutus_cli.debug import (
+        from harness.cli.debug import (
             _capture_dump, collect_debug_report,
             upload_to_pastebin, _schedule_auto_delete,
             _GATEWAY_PRIVACY_NOTICE, _best_effort_sweep_expired_pastes,
@@ -7774,7 +7774,7 @@ class GatewayRunner:
         import shutil
         import subprocess
         from datetime import datetime
-        from plutus_cli.config import is_managed, format_managed_message
+        from harness.cli.config import is_managed, format_managed_message
 
         # Block non-messaging platforms (API server, webhooks, ACP)
         platform = event.source.platform
@@ -7784,7 +7784,7 @@ class GatewayRunner:
         if is_managed():
             return f"✗ {format_managed_message('update Hermes Agent')}"
 
-        project_root = Path(__file__).parent.parent.resolve()
+        project_root = Path(__file__).parent.parent.parent.resolve()
         git_dir = project_root / '.git'
 
         if not git_dir.exists():
@@ -8199,7 +8199,7 @@ class GatewayRunner:
         Returns a list of reset tokens; pass them to ``_clear_session_env``
         in a ``finally`` block.
         """
-        from gateway.session_context import set_session_vars
+        from harness.gateway.session_context import set_session_vars
         return set_session_vars(
             platform=context.source.platform.value,
             chat_id=context.source.chat_id,
@@ -8212,7 +8212,7 @@ class GatewayRunner:
 
     def _clear_session_env(self, tokens: list) -> None:
         """Restore session context variables to their pre-handler values."""
-        from gateway.session_context import clear_session_vars
+        from harness.gateway.session_context import clear_session_vars
         clear_session_vars(tokens)
 
     async def _run_in_executor_with_context(self, func, *args):
@@ -8242,7 +8242,7 @@ class GatewayRunner:
         Returns:
             The enriched message string with vision descriptions prepended.
         """
-        from tools.vision_tools import vision_analyze_tool
+        from harness.tools.vision_tools import vision_analyze_tool
 
         analysis_prompt = (
             "Describe everything visible in this image in thorough detail. "
@@ -8316,7 +8316,7 @@ class GatewayRunner:
                 return f"{disabled_note}\n\n{user_text}"
             return disabled_note
 
-        from tools.transcription_tools import transcribe_audio
+        from harness.tools.transcription_tools import transcribe_audio
 
         enriched_parts = []
         for path in audio_paths:
@@ -8380,7 +8380,7 @@ class GatewayRunner:
         Falling back to the currently active foreground event is what causes
         cross-topic bleed, so don't do that.
         """
-        from gateway.session import SessionSource
+        from harness.gateway.session import SessionSource
 
         session_key = str(evt.get("session_key") or "").strip()
         derived_platform = ""
@@ -8481,7 +8481,7 @@ class GatewayRunner:
           - ``error``  — final message only when exit code != 0
           - ``off``    — no messages at all
         """
-        from tools.process_registry import process_registry
+        from harness.tools.process_registry import process_registry
 
         session_id = watcher["session_id"]
         interval = watcher["check_interval"]
@@ -8523,9 +8523,9 @@ class GatewayRunner:
             if session.exited:
                 # --- Agent-triggered completion: inject synthetic message ---
                 # Skip if the agent already consumed the result via wait/poll/log
-                from tools.process_registry import process_registry as _pr_check
+                from harness.tools.process_registry import process_registry as _pr_check
                 if agent_notify and not _pr_check.is_completion_consumed(session_id):
-                    from tools.ansi_strip import strip_ansi
+                    from harness.tools.ansi_strip import strip_ansi
                     _out = strip_ansi(session.output_buffer[-2000:]) if session.output_buffer else ""
                     synth_text = (
                         f"[SYSTEM: Background process {session_id} completed "
@@ -8740,7 +8740,7 @@ class GatewayRunner:
             pending_approvals.pop(session_key, None)
 
         try:
-            from tools.approval import clear_session as _clear_approval_session
+            from harness.tools.approval import clear_session as _clear_approval_session
         except Exception:
             return
 
@@ -9094,12 +9094,12 @@ class GatewayRunner:
         _stream_consumer = None
         _scfg = getattr(getattr(self, "config", None), "streaming", None)
         if _scfg is None:
-            from gateway.config import StreamingConfig
+            from harness.gateway.config import StreamingConfig
             _scfg = StreamingConfig()
 
         platform_key = _platform_config_key(source.platform)
         user_config = _load_gateway_config()
-        from gateway.display_config import resolve_display_setting
+        from harness.gateway.display_config import resolve_display_setting
         _plat_streaming = resolve_display_setting(
             user_config, platform_key, "streaming"
         )
@@ -9116,7 +9116,7 @@ class GatewayRunner:
 
         if _streaming_enabled:
             try:
-                from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
+                from harness.gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
                 _adapter = self.adapters.get(source.platform)
                 if _adapter:
                     _adapter_supports_edit = getattr(_adapter, "SUPPORTS_MESSAGE_EDITING", True)
@@ -9315,7 +9315,7 @@ class GatewayRunner:
                 event_message_id=event_message_id,
             )
 
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         import queue
 
         def _run_still_current() -> bool:
@@ -9326,7 +9326,7 @@ class GatewayRunner:
         user_config = _load_gateway_config()
         platform_key = _platform_config_key(source.platform)
 
-        from plutus_cli.tools_config import _get_platform_tools
+        from harness.cli.tools_config import _get_platform_tools
         enabled_toolsets = sorted(_get_platform_tools(user_config, platform_key))
 
         display_config = user_config.get("display", {})
@@ -9336,11 +9336,11 @@ class GatewayRunner:
         # Per-platform display settings — resolve via display_config module
         # which checks display.platforms.<platform>.<key> first, then
         # display.<key> global, then built-in platform defaults.
-        from gateway.display_config import resolve_display_setting
+        from harness.gateway.display_config import resolve_display_setting
 
         # Apply tool preview length config (0 = no limit)
         try:
-            from agent.display import set_tool_preview_max_len
+            from harness.agent.display import set_tool_preview_max_len
             _tpl = resolve_display_setting(user_config, platform_key, "tool_preview_length", 0)
             set_tool_preview_max_len(int(_tpl) if _tpl else 0)
         except Exception:
@@ -9355,7 +9355,7 @@ class GatewayRunner:
         )
         # Disable tool progress for webhooks - they don't support message editing,
         # so each progress line would be sent as a separate message.
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         tool_progress_enabled = progress_mode != "off" and source.platform != Platform.WEBHOOK
         # Natural assistant status messages are intentionally independent from
         # tool progress and token streaming. Users can keep tool_progress quiet
@@ -9389,13 +9389,13 @@ class GatewayRunner:
             last_tool[0] = tool_name
             
             # Build progress message with primary argument preview
-            from agent.display import get_tool_emoji
+            from harness.agent.display import get_tool_emoji
             emoji = get_tool_emoji(tool_name, default="⚙️")
             
             # Verbose mode: show detailed arguments, respects tool_preview_length
             if progress_mode == "verbose":
                 if args:
-                    from agent.display import get_tool_preview_max_len
+                    from harness.agent.display import get_tool_preview_max_len
                     _pl = get_tool_preview_max_len()
                     args_str = json.dumps(args, ensure_ascii=False, default=str)
                     # When tool_preview_length is 0 (default), don't truncate
@@ -9415,7 +9415,7 @@ class GatewayRunner:
             # config (defaults to 40 chars when unset to keep gateway messages
             # compact — unlike CLI spinners, these persist as permanent messages).
             if preview:
-                from agent.display import get_tool_preview_max_len
+                from harness.agent.display import get_tool_preview_max_len
                 _pl = get_tool_preview_max_len()
                 _cap = _pl if _pl > 0 else 40
                 if len(preview) > _cap:
@@ -9706,7 +9706,7 @@ class GatewayRunner:
             _stream_delta_cb = None
             _scfg = getattr(getattr(self, 'config', None), 'streaming', None)
             if _scfg is None:
-                from gateway.config import StreamingConfig
+                from harness.gateway.config import StreamingConfig
                 _scfg = StreamingConfig()
 
             # Per-platform streaming gate: display.platforms.<plat>.streaming
@@ -9726,7 +9726,7 @@ class GatewayRunner:
             _want_interim_consumer = _want_interim_messages
             if _want_stream_deltas or _want_interim_consumer:
                 try:
-                    from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
+                    from harness.gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
                     _adapter = self.adapters.get(source.platform)
                     if _adapter:
                         # Platforms that don't support editing sent messages
@@ -9993,7 +9993,7 @@ class GatewayRunner:
             # command approval blocks the agent thread (mirrors CLI input()).
             # The callback bridges sync→async to send the approval request
             # to the user immediately.
-            from tools.approval import (
+            from harness.tools.approval import (
                 register_gateway_notify,
                 reset_current_session_key,
                 set_current_session_key,
@@ -10229,7 +10229,7 @@ class GatewayRunner:
             # Auto-generate session title after first exchange (non-blocking)
             if final_response and self._session_db:
                 try:
-                    from agent.title_generator import maybe_auto_title
+                    from harness.agent.title_generator import maybe_auto_title
                     all_msgs = result_holder[0].get("messages", []) if result_holder[0] else []
                     maybe_auto_title(
                         self._session_db,
@@ -10630,7 +10630,7 @@ class GatewayRunner:
                 _pending_cmd_word = _pending_parts[0][1:].lower() if _pending_parts else ""
                 if _pending_cmd_word:
                     try:
-                        from plutus_cli.commands import resolve_command as _rc_pending
+                        from harness.cli.commands import resolve_command as _rc_pending
                         if _rc_pending(_pending_cmd_word):
                             logger.info(
                                 "Discarding command '/%s' from pending queue — "
@@ -10883,8 +10883,8 @@ def _start_cron_ticker(
     Also refreshes the channel directory every 5 minutes and prunes the
     image/audio/document cache once per hour.
     """
-    from cron.scheduler import tick as cron_tick
-    from gateway.platforms.base import cleanup_image_cache, cleanup_document_cache
+    from harness.cron.scheduler import tick as cron_tick
+    from harness.gateway.platforms.base import cleanup_image_cache, cleanup_document_cache
 
     IMAGE_CACHE_EVERY = 60   # ticks — once per hour at default 60s interval
     CHANNEL_DIR_EVERY = 5    # ticks — every 5 minutes
@@ -10904,7 +10904,7 @@ def _start_cron_ticker(
 
         if tick_count % CHANNEL_DIR_EVERY == 0 and adapters:
             try:
-                from gateway.channel_directory import build_channel_directory
+                from harness.gateway.channel_directory import build_channel_directory
                 build_channel_directory(adapters)
             except Exception as e:
                 logger.debug("Channel directory refresh error: %s", e)
@@ -10946,7 +10946,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # The PID file is scoped to HERMES_HOME, so future multi-profile
     # setups (each profile using a distinct HERMES_HOME) will naturally
     # allow concurrent instances without tripping this guard.
-    from gateway.status import (
+    from harness.gateway.status import (
         acquire_gateway_runtime_lock,
         get_running_pid,
         get_process_start_time,
@@ -10968,7 +10968,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             # Restart=on-failure and start a flap loop against us).
             # Best-effort — proceed even if the write fails.
             try:
-                from gateway.status import write_takeover_marker
+                from harness.gateway.status import write_takeover_marker
                 write_takeover_marker(existing_pid)
             except Exception as e:
                 logger.debug("Could not write takeover marker: %s", e)
@@ -10984,7 +10984,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
                 # Marker is scoped to a specific target; clean it up on
                 # give-up so it doesn't grief an unrelated future shutdown.
                 try:
-                    from gateway.status import clear_takeover_marker
+                    from harness.gateway.status import clear_takeover_marker
                     clear_takeover_marker()
                 except Exception:
                     pass
@@ -11017,7 +11017,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             # Clean up any takeover marker the old process didn't consume
             # (e.g. SIGKILL'd before its shutdown handler could read it).
             try:
-                from gateway.status import clear_takeover_marker
+                from harness.gateway.status import clear_takeover_marker
                 clear_takeover_marker()
             except Exception:
                 pass
@@ -11025,7 +11025,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             # Stopped (Ctrl+Z) processes don't release locks on exit,
             # leaving stale lock files that block the new gateway from starting.
             try:
-                from gateway.status import release_all_scoped_locks
+                from harness.gateway.status import release_all_scoped_locks
                 _released = release_all_scoped_locks(
                     owner_pid=existing_pid,
                     owner_start_time=existing_start_time,
@@ -11051,7 +11051,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
 
     # Sync bundled skills on gateway start (fast -- skips unchanged)
     try:
-        from tools.skills_sync import sync_skills
+        from harness.tools.skills_sync import sync_skills
         sync_skills(quiet=True)
     except Exception:
         pass
@@ -11059,7 +11059,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # Centralized logging — agent.log (INFO+), errors.log (WARNING+),
     # and gateway.log (INFO+, gateway-component records only).
     # Idempotent, so repeated calls from AIAgent.__init__ won't duplicate.
-    from plutus_logging import setup_logging
+    from harness.log import setup_logging
     setup_logging(hermes_home=_hermes_home, mode="gateway")
 
     # Optional stderr handler — level driven by -v/-q flags on the CLI.
@@ -11068,7 +11068,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # verbosity=1    (-v):         INFO and above
     # verbosity=2+   (-vv/-vvv):   DEBUG
     if verbosity is not None:
-        from agent.redact import RedactingFormatter
+        from harness.agent.redact import RedactingFormatter
 
         _stderr_level = {0: logging.WARNING, 1: logging.INFO}.get(verbosity, logging.DEBUG)
         _stderr_handler = logging.StreamHandler()
@@ -11100,7 +11100,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
         # gateway.service from pre-rename installs).
         planned_takeover = False
         try:
-            from gateway.status import consume_takeover_marker_for_self
+            from harness.gateway.status import consume_takeover_marker_for_self
             planned_takeover = consume_takeover_marker_for_self()
         except Exception as e:
             logger.debug("Takeover marker check failed: %s", e)
@@ -11162,7 +11162,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # Telegram polling, Discord gateway sockets, etc. The loser exits
     # cleanly before touching any external service.
     import atexit
-    from gateway.status import write_pid_file, remove_pid_file, get_running_pid
+    from harness.gateway.status import write_pid_file, remove_pid_file, get_running_pid
     _current_pid = get_running_pid()
     if _current_pid is not None and _current_pid != os.getpid():
         logger.error(
@@ -11233,7 +11233,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
 
     # Close MCP server connections
     try:
-        from tools.mcp_tool import shutdown_mcp_servers
+        from harness.tools.mcp_tool import shutdown_mcp_servers
         shutdown_mcp_servers()
     except Exception:
         pass

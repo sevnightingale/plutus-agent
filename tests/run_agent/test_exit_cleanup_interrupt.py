@@ -19,7 +19,7 @@ def _mock_runtime_provider(monkeypatch):
     auto-detection (~4s of socket timeouts in hermetic CI). Mock it out
     since these tests don't care about provider resolution — the agent
     is mocked too."""
-    import plutus_cli.runtime_provider as rp
+    import harness.cli.runtime_provider as rp
     def _fake_resolve(*args, **kwargs):
         return {
             "provider": "openrouter",
@@ -32,14 +32,14 @@ def _mock_runtime_provider(monkeypatch):
 
 
 class TestCronJobCleanup:
-    """cron/scheduler.py — end_session + close in the finally block."""
+    """harness/cron/scheduler.py — end_session + close in the finally block."""
 
     def test_keyboard_interrupt_in_end_session_does_not_skip_close(self):
         """If end_session raises KeyboardInterrupt, close() must still run."""
         mock_db = MagicMock()
         mock_db.end_session.side_effect = KeyboardInterrupt
 
-        from cron import scheduler
+        from harness.cron import scheduler
 
         job = {
             "id": "test-job-1",
@@ -49,12 +49,12 @@ class TestCronJobCleanup:
             "model": "test/model",
         }
 
-        with patch("plutus_state.SessionDB", return_value=mock_db), \
+        with patch("harness.state.SessionDB", return_value=mock_db), \
              patch.object(scheduler, "_build_job_prompt", return_value="hello"), \
              patch.object(scheduler, "_resolve_origin", return_value=None), \
              patch.object(scheduler, "_resolve_delivery_target", return_value=None), \
              patch("dotenv.load_dotenv", return_value=None), \
-             patch("run_agent.AIAgent") as MockAgent:
+             patch("harness.run_agent.AIAgent") as MockAgent:
             # Make the agent raise immediately so we hit the finally block
             MockAgent.return_value.run_conversation.side_effect = RuntimeError("boom")
             scheduler.run_job(job)
@@ -67,7 +67,7 @@ class TestCronJobCleanup:
         mock_db = MagicMock()
         mock_db.close.side_effect = KeyboardInterrupt
 
-        from cron import scheduler
+        from harness.cron import scheduler
 
         job = {
             "id": "test-job-2",
@@ -77,12 +77,12 @@ class TestCronJobCleanup:
             "model": "test/model",
         }
 
-        with patch("plutus_state.SessionDB", return_value=mock_db), \
+        with patch("harness.state.SessionDB", return_value=mock_db), \
              patch.object(scheduler, "_build_job_prompt", return_value="hello"), \
              patch.object(scheduler, "_resolve_origin", return_value=None), \
              patch.object(scheduler, "_resolve_delivery_target", return_value=None), \
              patch("dotenv.load_dotenv", return_value=None), \
-             patch("run_agent.AIAgent") as MockAgent:
+             patch("harness.run_agent.AIAgent") as MockAgent:
             MockAgent.return_value.run_conversation.side_effect = RuntimeError("boom")
             # Must not raise
             scheduler.run_job(job)

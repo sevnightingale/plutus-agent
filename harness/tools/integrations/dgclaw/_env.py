@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import List, Optional
 
-from tools.integrations.acp._env import set_env, get_env  # reuse atomic dotenv writer
+from harness.tools.integrations.acp._env import set_env, get_env  # reuse atomic dotenv writer
 
 from . import _cli
 

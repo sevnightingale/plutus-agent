@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from plutus_cli.env_loader import load_hermes_dotenv
+from harness.cli.env_loader import load_hermes_dotenv
 
 
 def test_user_env_overrides_stale_shell_values(tmp_path, monkeypatch):
@@ -82,8 +82,8 @@ def test_main_import_applies_user_env_over_shell_values(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_BASE_URL", "https://old.example/v1")
     monkeypatch.setenv("HERMES_INFERENCE_PROVIDER", "openrouter")
 
-    sys.modules.pop("plutus_cli.main", None)
-    importlib.import_module("plutus_cli.main")
+    sys.modules.pop("harness.cli.main", None)
+    importlib.import_module("harness.cli.main")
 
     assert os.getenv("OPENAI_BASE_URL") == "https://new.example/v1"
     assert os.getenv("HERMES_INFERENCE_PROVIDER") == "custom"

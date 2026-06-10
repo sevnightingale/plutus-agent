@@ -10,7 +10,7 @@ from typing import Optional
 def _hermes_home_path() -> Path:
     """Resolve the active HERMES_HOME (profile-aware) without circular imports."""
     try:
-        from plutus_constants import get_hermes_home  # local import to avoid cycles
+        from harness.constants import get_hermes_home  # local import to avoid cycles
         return get_hermes_home()
     except Exception:
         return Path(os.path.expanduser("~/.hermes"))

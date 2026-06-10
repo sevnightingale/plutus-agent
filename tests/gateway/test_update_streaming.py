@@ -16,9 +16,9 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 def _make_event(text="/update", platform=Platform.TELEGRAM,
@@ -35,7 +35,7 @@ def _make_event(text="/update", platform=Platform.TELEGRAM,
 
 def _make_runner(hermes_home=None):
     """Create a bare GatewayRunner without calling __init__."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -71,7 +71,7 @@ class TestGatewayPrompt:
         thread.start()
 
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from plutus_cli.main import _gateway_prompt
+            from harness.cli.main import _gateway_prompt
             result = _gateway_prompt("Restore? [Y/n]", "y", timeout=5.0)
 
         thread.join()
@@ -102,7 +102,7 @@ class TestGatewayPrompt:
         thread.start()
 
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from plutus_cli.main import _gateway_prompt
+            from harness.cli.main import _gateway_prompt
             _gateway_prompt("Configure now? [Y/n]", "n", timeout=5.0)
 
         thread.join()
@@ -117,7 +117,7 @@ class TestGatewayPrompt:
         hermes_home.mkdir()
 
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from plutus_cli.main import _gateway_prompt
+            from harness.cli.main import _gateway_prompt
             result = _gateway_prompt("test?", "default_val", timeout=0.5)
 
         assert result == "default_val"
@@ -130,7 +130,7 @@ class TestGatewayPrompt:
 
         # Write prompt file so the function starts polling
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from plutus_cli.main import _gateway_prompt
+            from harness.cli.main import _gateway_prompt
             # Pre-create the response
             result = _gateway_prompt("test?", "default_val", timeout=2.0)
 
@@ -147,7 +147,7 @@ class TestRestoreStashWithInputFn:
 
     def test_uses_input_fn_when_provided(self, tmp_path):
         """When input_fn is provided, it's called instead of input()."""
-        from plutus_cli.main import _restore_stashed_changes
+        from harness.cli.main import _restore_stashed_changes
 
         captured_args = []
 
@@ -171,7 +171,7 @@ class TestRestoreStashWithInputFn:
 
     def test_input_fn_yes_proceeds_with_restore(self, tmp_path):
         """When input_fn returns 'y', stash apply is attempted."""
-        from plutus_cli.main import _restore_stashed_changes
+        from harness.cli.main import _restore_stashed_changes
 
         call_count = [0]
 
@@ -218,8 +218,8 @@ class TestUpdateCommandGatewayFlag:
         hermes_home.mkdir()
 
         mock_popen = MagicMock()
-        with patch("gateway.run._hermes_home", hermes_home), \
-             patch("gateway.run.__file__", fake_file), \
+        with patch("harness.gateway.run._hermes_home", hermes_home), \
+             patch("harness.gateway.run.__file__", fake_file), \
              patch("shutil.which", side_effect=lambda x: f"/usr/bin/{x}"), \
              patch("subprocess.Popen", mock_popen):
             result = await runner._handle_update_command(event)
@@ -264,7 +264,7 @@ class TestWatchUpdateProgress:
             )
             (hermes_home / ".update_exit_code").write_text("0")
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             task = asyncio.create_task(write_exit_code())
             await runner._watch_update_progress(
                 poll_interval=0.1,
@@ -305,7 +305,7 @@ class TestWatchUpdateProgress:
             await asyncio.sleep(0.3)
             (hermes_home / ".update_exit_code").write_text("0")
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             task = asyncio.create_task(simulate_prompt_cycle())
             await runner._watch_update_progress(
                 poll_interval=0.1,
@@ -340,7 +340,7 @@ class TestWatchUpdateProgress:
         mock_adapter = AsyncMock()
         runner.adapters = {Platform.TELEGRAM: mock_adapter}
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             await runner._watch_update_progress(
                 poll_interval=0.1,
                 stream_interval=0.2,
@@ -367,7 +367,7 @@ class TestWatchUpdateProgress:
         mock_adapter = AsyncMock()
         runner.adapters = {Platform.TELEGRAM: mock_adapter}
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             await runner._watch_update_progress(
                 poll_interval=0.1,
                 stream_interval=0.2,
@@ -394,7 +394,7 @@ class TestWatchUpdateProgress:
         mock_adapter = AsyncMock()
         runner.adapters = {Platform.TELEGRAM: mock_adapter}
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             await runner._watch_update_progress(
                 poll_interval=0.1,
                 stream_interval=0.2,
@@ -436,7 +436,7 @@ class TestWatchUpdateProgress:
             await asyncio.sleep(0.3)
             (hermes_home / ".update_exit_code").write_text("0")
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             task = asyncio.create_task(finish_after_polls())
             await runner._watch_update_progress(
                 poll_interval=0.1,
@@ -478,7 +478,7 @@ class TestUpdatePromptInterception:
         runner._is_user_authorized = MagicMock(return_value=True)
         runner._session_key_for_source = MagicMock(return_value=session_key)
 
-        with patch("gateway.run._hermes_home", hermes_home):
+        with patch("harness.gateway.run._hermes_home", hermes_home):
             result = await runner._handle_message(event)
 
         assert result is not None
@@ -517,7 +517,7 @@ class TestCmdUpdateGatewayMode:
 
     def test_gateway_flag_enables_gateway_prompt_for_stash(self, tmp_path):
         """With --gateway, stash restore uses _gateway_prompt instead of input()."""
-        from plutus_cli.main import _restore_stashed_changes
+        from harness.cli.main import _restore_stashed_changes
 
         # Use input_fn to verify the gateway path is taken
         calls = []

@@ -5,8 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch as mock_patch
 
-import tools.approval as approval_module
-from tools.approval import (
+import harness.tools.approval as approval_module
+from harness.tools.approval import (
     _get_approval_mode,
     _smart_approve,
     approve_session,
@@ -20,11 +20,11 @@ from tools.approval import (
 
 class TestApprovalModeParsing:
     def test_unquoted_yaml_off_boolean_false_maps_to_off(self):
-        with mock_patch("plutus_cli.config.load_config", return_value={"approvals": {"mode": False}}):
+        with mock_patch("harness.cli.config.load_config", return_value={"approvals": {"mode": False}}):
             assert _get_approval_mode() == "off"
 
     def test_string_off_still_maps_to_off(self):
-        with mock_patch("plutus_cli.config.load_config", return_value={"approvals": {"mode": "off"}}):
+        with mock_patch("harness.cli.config.load_config", return_value={"approvals": {"mode": "off"}}):
             assert _get_approval_mode() == "off"
 
 
@@ -33,7 +33,7 @@ class TestSmartApproval:
         response = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="APPROVE"))]
         )
-        with mock_patch("agent.auxiliary_client.call_llm", return_value=response) as mock_call:
+        with mock_patch("harness.agent.auxiliary_client.call_llm", return_value=response) as mock_call:
             result = _smart_approve("python -c \"print('hello')\"", "script execution via -c flag")
 
         assert result == "approve"
@@ -153,7 +153,7 @@ class TestSessionKeyContext:
             approval_module.reset_current_session_key(token)
 
     def test_gateway_runner_binds_session_key_to_context_before_agent_run(self):
-        run_py = Path(__file__).resolve().parents[2] / "gateway" / "run.py"
+        run_py = Path(__file__).resolve().parents[2] / "harness" / "gateway" / "run.py"
         module = ast.parse(run_py.read_text(encoding="utf-8"))
 
         run_sync = None
@@ -162,7 +162,7 @@ class TestSessionKeyContext:
                 run_sync = node
                 break
 
-        assert run_sync is not None, "gateway.run.run_sync not found"
+        assert run_sync is not None, "harness.gateway.run.run_sync not found"
 
         called_names = set()
         for node in ast.walk(run_sync):
@@ -627,7 +627,7 @@ class TestGatewayProtection:
         assert dangerous is True
 
     def test_gateway_run_with_setsid_detected(self):
-        cmd = "plutus_cli.main gateway run --replace &disown"
+        cmd = "harness.cli.main gateway run --replace &disown"
         dangerous, key, desc = detect_dangerous_command(cmd)
         assert dangerous is True
 

@@ -9,7 +9,7 @@ import yaml
 class TestCLIPersonalityNone:
 
     def _make_cli(self, personalities=None):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         cli = HermesCLI.__new__(HermesCLI)
         cli.personalities = personalities or {
             "helpful": "You are helpful.",
@@ -22,37 +22,37 @@ class TestCLIPersonalityNone:
 
     def test_none_clears_system_prompt(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality none")
         assert cli.system_prompt == ""
 
     def test_default_clears_system_prompt(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality default")
         assert cli.system_prompt == ""
 
     def test_neutral_clears_system_prompt(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality neutral")
         assert cli.system_prompt == ""
 
     def test_none_forces_agent_reinit(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality none")
         assert cli.agent is None
 
     def test_none_saves_to_config(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True) as mock_save:
+        with patch("harness.repl.save_config_value", return_value=True) as mock_save:
             cli._handle_personality_command("/personality none")
         mock_save.assert_called_once_with("agent.system_prompt", "")
 
     def test_known_personality_still_works(self):
         cli = self._make_cli()
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality helpful")
         assert cli.system_prompt == "You are helpful."
 
@@ -81,7 +81,7 @@ class TestGatewayPersonalityNone:
         return event
 
     def _make_runner(self, personalities=None):
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         runner = GatewayRunner.__new__(GatewayRunner)
         runner._ephemeral_system_prompt = "You are kawaii~"
         runner.config = {
@@ -98,7 +98,7 @@ class TestGatewayPersonalityNone:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        with patch("gateway.run._hermes_home", tmp_path):
+        with patch("harness.gateway.run._hermes_home", tmp_path):
             event = self._make_event("none")
             result = await runner._handle_personality_command(event)
 
@@ -112,7 +112,7 @@ class TestGatewayPersonalityNone:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        with patch("gateway.run._hermes_home", tmp_path):
+        with patch("harness.gateway.run._hermes_home", tmp_path):
             event = self._make_event("default")
             result = await runner._handle_personality_command(event)
 
@@ -125,7 +125,7 @@ class TestGatewayPersonalityNone:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        with patch("gateway.run._hermes_home", tmp_path):
+        with patch("harness.gateway.run._hermes_home", tmp_path):
             event = self._make_event("")
             result = await runner._handle_personality_command(event)
 
@@ -138,7 +138,7 @@ class TestGatewayPersonalityNone:
         config_file = tmp_path / "config.yaml"
         config_file.write_text(yaml.dump(config_data))
 
-        with patch("gateway.run._hermes_home", tmp_path):
+        with patch("harness.gateway.run._hermes_home", tmp_path):
             event = self._make_event("nonexistent")
             result = await runner._handle_personality_command(event)
 
@@ -149,8 +149,8 @@ class TestGatewayPersonalityNone:
         runner = self._make_runner(personalities={})
         (tmp_path / "config.yaml").write_text(yaml.dump({"agent": {"personalities": {}}}))
 
-        with patch("gateway.run._hermes_home", tmp_path), \
-             patch("plutus_constants.display_hermes_home", return_value="~/.plutus-agent/profiles/coder"):
+        with patch("harness.gateway.run._hermes_home", tmp_path), \
+             patch("harness.constants.display_hermes_home", return_value="~/.plutus-agent/profiles/coder"):
             event = self._make_event("")
             result = await runner._handle_personality_command(event)
 
@@ -161,7 +161,7 @@ class TestPersonalityDictFormat:
     """Test dict-format custom personalities with description, tone, style."""
 
     def _make_cli(self, personalities):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         cli = HermesCLI.__new__(HermesCLI)
         cli.personalities = personalities
         cli.system_prompt = ""
@@ -178,7 +178,7 @@ class TestPersonalityDictFormat:
                 "style": "concise",
             }
         })
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality coder")
         assert "You are an expert programmer." in cli.system_prompt
 
@@ -189,7 +189,7 @@ class TestPersonalityDictFormat:
                 "tone": "technical and precise",
             }
         })
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality coder")
         assert "Tone: technical and precise" in cli.system_prompt
 
@@ -200,18 +200,18 @@ class TestPersonalityDictFormat:
                 "style": "use code examples",
             }
         })
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality coder")
         assert "Style: use code examples" in cli.system_prompt
 
     def test_string_personality_still_works(self):
         cli = self._make_cli({"helper": "You are helpful."})
-        with patch("cli.save_config_value", return_value=True):
+        with patch("harness.repl.save_config_value", return_value=True):
             cli._handle_personality_command("/personality helper")
         assert cli.system_prompt == "You are helpful."
 
     def test_resolve_prompt_dict_no_tone_no_style(self):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         result = HermesCLI._resolve_personality_prompt({
             "description": "A helper",
             "system_prompt": "You are helpful.",
@@ -219,6 +219,6 @@ class TestPersonalityDictFormat:
         assert result == "You are helpful."
 
     def test_resolve_prompt_string(self):
-        from cli import HermesCLI
+        from harness.repl import HermesCLI
         result = HermesCLI._resolve_personality_prompt("You are helpful.")
         assert result == "You are helpful."

@@ -26,8 +26,8 @@ import logging
 import threading
 from typing import Dict, Any, List, Optional, Tuple
 
-from tools.registry import discover_builtin_tools, registry
-from toolsets import resolve_toolset, validate_toolset
+from harness.tools.registry import discover_builtin_tools, registry
+from harness.toolsets import resolve_toolset, validate_toolset
 
 logger = logging.getLogger(__name__)
 
@@ -139,14 +139,14 @@ discover_builtin_tools()
 
 # MCP tool discovery (external MCP servers from config)
 try:
-    from tools.mcp_tool import discover_mcp_tools
+    from harness.tools.mcp_tool import discover_mcp_tools
     discover_mcp_tools()
 except Exception as e:
     logger.debug("MCP tool discovery failed: %s", e)
 
 # Plugin tool discovery (user/project/pip plugins)
 try:
-    from plutus_cli.plugins import discover_plugins
+    from harness.cli.plugins import discover_plugins
     discover_plugins()
 except Exception as e:
     logger.debug("Plugin discovery failed: %s", e)
@@ -236,7 +236,7 @@ def get_tool_definitions(
                     print(f"⚠️  Unknown toolset: {toolset_name}")
 
     elif disabled_toolsets:
-        from toolsets import get_all_toolsets
+        from harness.toolsets import get_all_toolsets
         for ts_name in get_all_toolsets():
             tools_to_include.update(resolve_toolset(ts_name))
 
@@ -255,7 +255,7 @@ def get_tool_definitions(
                 if not quiet_mode:
                     print(f"⚠️  Unknown toolset: {toolset_name}")
     else:
-        from toolsets import get_all_toolsets
+        from harness.toolsets import get_all_toolsets
         for ts_name in get_all_toolsets():
             tools_to_include.update(resolve_toolset(ts_name))
 
@@ -279,7 +279,7 @@ def get_tool_definitions(
     # execute_code" even when the API key isn't configured or the toolset is
     # disabled (#560-discord).
     if "execute_code" in available_tool_names:
-        from tools.code_execution_tool import SANDBOX_ALLOWED_TOOLS, build_execute_code_schema, _get_execution_mode
+        from harness.tools.code_execution_tool import SANDBOX_ALLOWED_TOOLS, build_execute_code_schema, _get_execution_mode
         sandbox_enabled = SANDBOX_ALLOWED_TOOLS & available_tool_names
         dynamic_schema = build_execute_code_schema(sandbox_enabled, mode=_get_execution_mode())
         for i, td in enumerate(filtered_tools):
@@ -462,7 +462,7 @@ def handle_function_call(
         if not skip_pre_tool_call_hook:
             block_message: Optional[str] = None
             try:
-                from plutus_cli.plugins import get_pre_tool_call_block_message
+                from harness.cli.plugins import get_pre_tool_call_block_message
                 block_message = get_pre_tool_call_block_message(
                     function_name,
                     function_args,
@@ -479,7 +479,7 @@ def handle_function_call(
             # Still fire the hook for observers — just don't check for blocking
             # (the caller already did that).
             try:
-                from plutus_cli.plugins import invoke_hook
+                from harness.cli.plugins import invoke_hook
                 invoke_hook(
                     "pre_tool_call",
                     tool_name=function_name,
@@ -495,7 +495,7 @@ def handle_function_call(
         # so the *consecutive* counter resets (reads after other work are fine).
         if function_name not in _READ_SEARCH_TOOLS:
             try:
-                from tools.file_tools import notify_other_tool_call
+                from harness.tools.file_tools import notify_other_tool_call
                 notify_other_tool_call(task_id or "default")
             except Exception:
                 pass  # file_tools may not be loaded yet
@@ -517,7 +517,7 @@ def handle_function_call(
             )
 
         try:
-            from plutus_cli.plugins import invoke_hook
+            from harness.cli.plugins import invoke_hook
             invoke_hook(
                 "post_tool_call",
                 tool_name=function_name,
@@ -537,7 +537,7 @@ def handle_function_call(
         # is appended back into conversation context. Fail-open; the first
         # valid string return wins; non-string returns are ignored.
         try:
-            from plutus_cli.plugins import invoke_hook
+            from harness.cli.plugins import invoke_hook
             hook_results = invoke_hook(
                 "transform_tool_result",
                 tool_name=function_name,

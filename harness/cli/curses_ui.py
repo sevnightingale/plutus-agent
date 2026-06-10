@@ -7,7 +7,7 @@ text-based numbered fallback for terminals without curses support.
 import sys
 from typing import Callable, List, Optional, Set
 
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 
 def flush_stdin() -> None:

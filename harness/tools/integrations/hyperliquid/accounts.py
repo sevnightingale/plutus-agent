@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import os
 
-from tools.core.account_registry import register_account, RegistryError
+from harness.tools.core.account_registry import register_account, RegistryError
 
 logger = logging.getLogger(__name__)
 

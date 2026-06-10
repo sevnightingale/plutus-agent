@@ -21,8 +21,8 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, SessionResetPolicy
-from gateway.session import SessionEntry, SessionStore
+from harness.gateway.config import GatewayConfig, Platform, SessionResetPolicy
+from harness.gateway.session import SessionEntry, SessionStore
 
 
 def _make_store(tmp_path, max_age_days: int = 90, has_active_processes_fn=None):
@@ -31,7 +31,7 @@ def _make_store(tmp_path, max_age_days: int = 90, has_active_processes_fn=None):
         default_reset_policy=SessionResetPolicy(mode="none"),
         session_store_max_age_days=max_age_days,
     )
-    with patch("gateway.session.SessionStore._ensure_loaded"):
+    with patch("harness.gateway.session.SessionStore._ensure_loaded"):
         store = SessionStore(
             sessions_dir=tmp_path,
             config=config,

@@ -24,9 +24,9 @@ import json
 import time
 from typing import Any, Dict
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.dispatchers._helpers import session_id_from_context
-from tools.registry import registry, tool_error, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.dispatchers._helpers import session_id_from_context
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 VALID_KINDS = (

@@ -27,7 +27,7 @@ import os
 import shlex
 import uuid
 
-from tools.budget_config import (
+from harness.tools.budget_config import (
     DEFAULT_PREVIEW_SIZE_CHARS,
     BudgetConfig,
     DEFAULT_BUDGET,

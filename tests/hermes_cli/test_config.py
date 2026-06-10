@@ -6,7 +6,7 @@ from unittest.mock import patch, MagicMock
 
 import yaml
 
-from plutus_cli.config import (
+from harness.cli.config import (
     DEFAULT_CONFIG,
     get_hermes_home,
     ensure_hermes_home,
@@ -213,7 +213,7 @@ class TestSaveConfigAtomicity:
 
             # Simulate a crash during yaml.dump by making atomic_yaml_write's
             # yaml.dump raise after the temp file is created but before replace.
-            with patch("utils.yaml.dump", side_effect=OSError("disk full")):
+            with patch("harness.utils.yaml.dump", side_effect=OSError("disk full")):
                 try:
                     config["model"] = "should-not-persist"
                     save_config(config)
@@ -230,7 +230,7 @@ class TestSaveConfigAtomicity:
             config = load_config()
             save_config(config)
 
-            with patch("utils.yaml.dump", side_effect=OSError("disk full")):
+            with patch("harness.utils.yaml.dump", side_effect=OSError("disk full")):
                 try:
                     save_config(config)
                 except OSError:
@@ -369,27 +369,27 @@ class TestOptionalEnvVarsRegistry:
 
     def test_tavily_api_key_registered(self):
         """TAVILY_API_KEY is listed in OPTIONAL_ENV_VARS."""
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert "TAVILY_API_KEY" in OPTIONAL_ENV_VARS
 
     def test_tavily_api_key_is_tool_category(self):
         """TAVILY_API_KEY is in the 'tool' category."""
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert OPTIONAL_ENV_VARS["TAVILY_API_KEY"]["category"] == "tool"
 
     def test_tavily_api_key_is_password(self):
         """TAVILY_API_KEY is marked as password."""
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert OPTIONAL_ENV_VARS["TAVILY_API_KEY"]["password"] is True
 
     def test_tavily_api_key_has_url(self):
         """TAVILY_API_KEY has a URL."""
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert OPTIONAL_ENV_VARS["TAVILY_API_KEY"]["url"] == "https://app.tavily.com/home"
 
     def test_tavily_in_env_vars_by_version(self):
         """TAVILY_API_KEY is listed in ENV_VARS_BY_VERSION."""
-        from plutus_cli.config import ENV_VARS_BY_VERSION
+        from harness.cli.config import ENV_VARS_BY_VERSION
         all_vars = []
         for vars_list in ENV_VARS_BY_VERSION.values():
             all_vars.extend(vars_list)
@@ -461,7 +461,7 @@ class TestCustomProviderCompatibility:
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
-        from plutus_cli.config import DEFAULT_CONFIG
+        from harness.cli.config import DEFAULT_CONFIG
         assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
         assert raw["providers"]["openai-direct"] == {
             "api": "https://api.openai.com/v1",
@@ -610,7 +610,7 @@ class TestInterimAssistantMessageConfig:
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
-        from plutus_cli.config import DEFAULT_CONFIG
+        from harness.cli.config import DEFAULT_CONFIG
         assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
         assert raw["display"]["tool_progress"] == "off"
         assert raw["display"]["interim_assistant_messages"] is True
@@ -631,7 +631,7 @@ class TestDiscordChannelPromptsConfig:
             migrate_config(interactive=False, quiet=True)
             raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
 
-        from plutus_cli.config import DEFAULT_CONFIG
+        from harness.cli.config import DEFAULT_CONFIG
         assert raw["_config_version"] == DEFAULT_CONFIG["_config_version"]
         assert raw["discord"]["auto_thread"] is True
         assert raw["discord"]["channel_prompts"] == {}

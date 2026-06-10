@@ -9,16 +9,16 @@ for the full design.
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType
-from gateway.session import SessionSource
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType
+from harness.gateway.session import SessionSource
 
 
 # Helpers ─────────────────────────────────────────────────────────────
 
 
 def _make_adapter(bindings=None, bot_username="plutus_agent_bot", bot_id=99999999):
-    from gateway.platforms.telegram import TelegramAdapter
+    from harness.gateway.platforms.telegram import TelegramAdapter
 
     adapter = object.__new__(TelegramAdapter)
     adapter.platform = Platform.TELEGRAM
@@ -29,7 +29,7 @@ def _make_adapter(bindings=None, bot_username="plutus_agent_bot", bot_id=9999999
     )
     adapter._bot = SimpleNamespace(username=bot_username, id=bot_id)
     # Borrow the real loader so we exercise the parser logic too.
-    from gateway.platforms.telegram import TelegramAdapter as _T
+    from harness.gateway.platforms.telegram import TelegramAdapter as _T
     adapter._unified_redirect_bindings = _T._load_unified_redirect_bindings(adapter)
     return adapter
 

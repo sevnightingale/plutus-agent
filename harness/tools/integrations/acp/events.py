@@ -34,7 +34,7 @@ def start_event_stream(output_file: Optional[str] = None) -> Dict[str, Any]:
         return {}
 
     if output_file is None:
-        from plutus_constants import get_hermes_home
+        from harness.constants import get_hermes_home
         output_file = str(get_hermes_home() / "wake_events.ndjson")
 
     try:

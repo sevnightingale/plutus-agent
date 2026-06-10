@@ -18,7 +18,7 @@ import pytest
 
 @pytest.fixture
 def local_env():
-    from tools.environments.local import LocalEnvironment
+    from harness.tools.environments.local import LocalEnvironment
     env = LocalEnvironment(cwd="/tmp", timeout=30)
     yield env
     env.cleanup()
@@ -31,7 +31,7 @@ def ssh_env():
     user = os.environ.get("TERMINAL_SSH_USER")
     if not host or not user:
         pytest.skip("TERMINAL_SSH_HOST and TERMINAL_SSH_USER required")
-    from tools.environments.ssh import SSHEnvironment
+    from harness.tools.environments.ssh import SSHEnvironment
     env = SSHEnvironment(host=host, user=user, cwd="/tmp", timeout=30)
     yield env
     env.cleanup()

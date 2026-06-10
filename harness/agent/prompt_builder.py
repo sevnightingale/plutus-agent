@@ -12,10 +12,10 @@ import threading
 from collections import OrderedDict
 from pathlib import Path
 
-from plutus_constants import get_hermes_home, get_skills_dir, is_wsl
+from harness.constants import get_hermes_home, get_skills_dir, is_wsl
 from typing import Optional
 
-from agent.skill_utils import (
+from harness.agent.skill_utils import (
     extract_skill_conditions,
     extract_skill_description,
     get_all_skills_dirs,
@@ -24,7 +24,7 @@ from agent.skill_utils import (
     parse_frontmatter,
     skill_matches_platform,
 )
-from utils import atomic_json_write
+from harness.utils import atomic_json_write
 
 logger = logging.getLogger(__name__)
 
@@ -645,7 +645,7 @@ def build_skills_system_prompt(
     # ── Layer 1: in-process LRU cache ─────────────────────────────────
     # Include the resolved platform so per-platform disabled-skill lists
     # produce distinct cache entries (gateway serves multiple platforms).
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     _platform_hint = (
         os.environ.get("HERMES_PLATFORM")
         or get_session_env("HERMES_SESSION_PLATFORM")
@@ -850,8 +850,8 @@ def build_skills_system_prompt(
 def build_nous_subscription_prompt(valid_tool_names: "set[str] | None" = None) -> str:
     """Build a compact Nous subscription capability block for the system prompt."""
     try:
-        from plutus_cli.nous_subscription import get_nous_subscription_features
-        from tools.tool_backend_helpers import managed_nous_tools_enabled
+        from harness.cli.nous_subscription import get_nous_subscription_features
+        from harness.tools.tool_backend_helpers import managed_nous_tools_enabled
     except Exception as exc:
         logger.debug("Failed to import Nous subscription helper: %s", exc)
         return ""
@@ -937,7 +937,7 @@ def load_soul_md() -> Optional[str]:
     ``skip_soul=True`` so SOUL.md isn't injected twice.
     """
     try:
-        from plutus_cli.config import ensure_hermes_home
+        from harness.cli.config import ensure_hermes_home
         ensure_hermes_home()
     except Exception as e:
         logger.debug("Could not ensure HERMES_HOME before loading SOUL.md: %s", e)

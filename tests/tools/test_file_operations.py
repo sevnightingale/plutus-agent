@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from tools.file_operations import (
+from harness.tools.file_operations import (
     _is_write_denied,
     WRITE_DENIED_PATHS,
     WRITE_DENIED_PREFIXES,

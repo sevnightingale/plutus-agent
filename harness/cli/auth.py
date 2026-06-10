@@ -38,8 +38,8 @@ from typing import Any, Dict, List, Optional
 import httpx
 import yaml
 
-from plutus_cli.config import get_hermes_home, get_config_path, read_raw_config
-from plutus_constants import OPENROUTER_BASE_URL
+from harness.cli.config import get_hermes_home, get_config_path, read_raw_config
+from harness.constants import OPENROUTER_BASE_URL
 
 logger = logging.getLogger(__name__)
 
@@ -340,7 +340,7 @@ def get_anthropic_key() -> str:
 
         ANTHROPIC_API_KEY -> ANTHROPIC_TOKEN -> CLAUDE_CODE_OAUTH_TOKEN
     """
-    from plutus_cli.config import get_env_value
+    from harness.cli.config import get_env_value
 
     for var in PROVIDER_REGISTRY["anthropic"].api_key_env_vars:
         value = get_env_value(var) or os.getenv(var, "")
@@ -417,7 +417,7 @@ def _resolve_api_key_provider_secret(
     if provider_id == "copilot":
         # Use the dedicated copilot auth module for proper token validation
         try:
-            from plutus_cli.copilot_auth import resolve_copilot_token
+            from harness.cli.copilot_auth import resolve_copilot_token
             token, source = resolve_copilot_token()
             if token:
                 return token, source
@@ -891,7 +891,7 @@ def is_provider_explicitly_configured(provider_id: str) -> bool:
 
     # 2. Check config.yaml model.provider
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         cfg = load_config()
         model_cfg = cfg.get("model")
         if isinstance(model_cfg, dict):
@@ -978,7 +978,7 @@ def _get_config_hint_for_unknown_provider(provider_name: str) -> str:
     and returns a human-readable diagnostic, or empty string if nothing found.
     """
     try:
-        from plutus_cli.config import validate_config_structure
+        from harness.cli.config import validate_config_structure
         issues = validate_config_structure()
         if not issues:
             return ""
@@ -1094,7 +1094,7 @@ def resolve_provider(
     # AWS Bedrock — detect via boto3 credential chain (IAM roles, SSO, env vars).
     # This runs after API-key providers so explicit keys always win.
     try:
-        from agent.bedrock_adapter import has_aws_credentials
+        from harness.agent.bedrock_adapter import has_aws_credentials
         if has_aws_credentials():
             return "bedrock"
     except ImportError:
@@ -1357,7 +1357,7 @@ def resolve_gemini_oauth_runtime_credentials(
 ) -> Dict[str, Any]:
     """Resolve runtime OAuth creds for google-gemini-cli."""
     try:
-        from agent.google_oauth import (
+        from harness.agent.google_oauth import (
             GoogleOAuthError,
             _credentials_path,
             get_valid_access_token,
@@ -1365,7 +1365,7 @@ def resolve_gemini_oauth_runtime_credentials(
         )
     except ImportError as exc:
         raise AuthError(
-            f"agent.google_oauth is not importable: {exc}",
+            f"harness.agent.google_oauth is not importable: {exc}",
             provider="google-gemini-cli",
             code="google_oauth_module_missing",
         ) from exc
@@ -1396,9 +1396,9 @@ def resolve_gemini_oauth_runtime_credentials(
 def get_gemini_oauth_auth_status() -> Dict[str, Any]:
     """Return a status dict for `hermes auth list` / `plutus status`."""
     try:
-        from agent.google_oauth import _credentials_path, load_credentials
+        from harness.agent.google_oauth import _credentials_path, load_credentials
     except ImportError:
-        return {"logged_in": False, "error": "agent.google_oauth unavailable"}
+        return {"logged_in": False, "error": "harness.agent.google_oauth unavailable"}
     auth_path = _credentials_path()
     creds = load_credentials()
     if creds is None or not creds.access_token:
@@ -2185,7 +2185,7 @@ def persist_nous_credentials(
     Returns the upserted :class:`PooledCredential` entry (or ``None`` if
     seeding somehow produced no match — shouldn't happen).
     """
-    from agent.credential_pool import load_pool
+    from harness.agent.credential_pool import load_pool
 
     state = dict(creds)
     if label and str(label).strip():
@@ -2466,7 +2466,7 @@ def get_nous_auth_status() -> Dict[str, Any]:
     # Check credential pool first — the dashboard device-code flow saves
     # here but may not have written to the auth store yet.
     try:
-        from agent.credential_pool import load_pool
+        from harness.agent.credential_pool import load_pool
         pool = load_pool("nous")
         if pool and pool.has_credentials():
             entry = pool.select()
@@ -2520,7 +2520,7 @@ def get_codex_auth_status() -> Dict[str, Any]:
     # Check credential pool first — this is where `hermes auth` and
     # `plutus model` store device_code tokens.
     try:
-        from agent.credential_pool import load_pool
+        from harness.agent.credential_pool import load_pool
         pool = load_pool("openai-codex")
         if pool and pool.has_credentials():
             entry = pool.select()
@@ -2641,7 +2641,7 @@ def get_auth_status(provider_id: Optional[str] = None) -> Dict[str, Any]:
     # AWS SDK providers (Bedrock) — check via boto3 credential chain
     if pconfig and pconfig.auth_type == "aws_sdk":
         try:
-            from agent.bedrock_adapter import has_aws_credentials
+            from harness.agent.bedrock_adapter import has_aws_credentials
             return {"logged_in": has_aws_credentials(), "provider": target}
         except ImportError:
             return {"logged_in": False, "provider": target, "error": "boto3 not installed"}
@@ -2830,7 +2830,7 @@ def _prompt_model_selection(
     If *unavailable_models* is provided, those models are shown grayed out
     and unselectable, with an upgrade link to *portal_url*.
     """
-    from plutus_cli.models import _format_price_per_mtok
+    from harness.cli.models import _format_price_per_mtok
 
     _unavailable = unavailable_models or []
 
@@ -2940,7 +2940,7 @@ def _prompt_model_selection(
             title=effective_title,
         )
         idx = menu.show()
-        from plutus_cli.curses_ui import flush_stdin
+        from harness.cli.curses_ui import flush_stdin
         flush_stdin()
         if idx is None:
             return None
@@ -2997,7 +2997,7 @@ def _save_model_choice(model_id: str) -> None:
     The model is stored in config.yaml only — NOT in .env.  This avoids
     conflicts in multi-agent setups where env vars would stomp each other.
     """
-    from plutus_cli.config import save_config, load_config
+    from harness.cli.config import save_config, load_config
 
     config = load_config()
     # Always use dict format so provider/base_url can be stored alongside
@@ -3076,7 +3076,7 @@ def _login_openai_codex(args, pconfig: ProviderConfig) -> None:
     config_path = _update_config_for_provider("openai-codex", creds.get("base_url", DEFAULT_CODEX_BASE_URL))
     print()
     print("Login successful!")
-    from plutus_constants import display_hermes_home as _dhh
+    from harness.constants import display_hermes_home as _dhh
     print(f"  Auth state: {_dhh()}/auth.json")
     print(f"  Config updated: {config_path} (model.provider=openai-codex)")
 
@@ -3413,7 +3413,7 @@ def _login_nous(args, pconfig: ProviderConfig) -> None:
                     code="invalid_token",
                 )
 
-            from plutus_cli.models import (
+            from harness.cli.models import (
                 _PROVIDER_MODELS, get_pricing_for_provider,
                 check_nous_free_tier, partition_nous_models_by_tier,
             )

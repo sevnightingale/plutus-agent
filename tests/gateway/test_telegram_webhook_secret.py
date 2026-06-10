@@ -32,7 +32,7 @@ class TestTelegramWebhookSecretRequired:
     """
 
     def _get_source(self) -> str:
-        path = Path(_repo) / "gateway" / "platforms" / "telegram.py"
+        path = Path(_repo) / "harness" / "gateway" / "platforms" / "telegram.py"
         return path.read_text(encoding="utf-8")
 
     def test_webhook_branch_checks_secret(self):

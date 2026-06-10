@@ -3,10 +3,10 @@
 import os
 import pytest
 
-import tools.approval as approval_module
-import tools.tirith_security
+import harness.tools.approval as approval_module
+import harness.tools.tirith_security; import harness.tools as tools
 
-from tools.approval import (
+from harness.tools.approval import (
     check_all_command_guards,
     check_dangerous_command,
     detect_dangerous_command,

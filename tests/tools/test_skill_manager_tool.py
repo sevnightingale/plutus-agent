@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.skill_manager_tool import (
+from harness.tools.skill_manager_tool import (
     _validate_name,
     _validate_category,
     _validate_frontmatter,
@@ -31,8 +31,8 @@ from tools.skill_manager_tool import (
 def _skill_dir(tmp_path):
     """Patch both SKILLS_DIR and get_all_skills_dirs so _find_skill searches
     only the temp directory — not the real ~/.plutus-agent/skills/."""
-    with patch("tools.skill_manager_tool.SKILLS_DIR", tmp_path), \
-         patch("agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]):
+    with patch("harness.tools.skill_manager_tool.SKILLS_DIR", tmp_path), \
+         patch("harness.agent.skill_utils.get_all_skills_dirs", return_value=[tmp_path]):
         yield
 
 
@@ -224,8 +224,8 @@ class TestCreateSkill:
         skills_dir = tmp_path / "skills"
         skills_dir.mkdir()
 
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
+        with patch("harness.tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
+             patch("harness.agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
             result = _create_skill("my-skill", VALID_SKILL_CONTENT, category="../escape")
 
         assert result["success"] is False
@@ -237,8 +237,8 @@ class TestCreateSkill:
         skills_dir.mkdir()
         outside = tmp_path / "outside"
 
-        with patch("tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
-             patch("agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
+        with patch("harness.tools.skill_manager_tool.SKILLS_DIR", skills_dir), \
+             patch("harness.agent.skill_utils.get_all_skills_dirs", return_value=[skills_dir]):
             result = _create_skill("my-skill", VALID_SKILL_CONTENT, category=str(outside))
 
         assert result["success"] is False
@@ -491,10 +491,10 @@ class TestSecurityScanGate:
 
     def test_scan_noop_when_flag_off(self, tmp_path):
         """Default config (flag off) short-circuits before running scan_skill."""
-        from tools.skill_manager_tool import _security_scan_skill
+        from harness.tools.skill_manager_tool import _security_scan_skill
 
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=False), \
-             patch("tools.skill_manager_tool.scan_skill") as mock_scan:
+        with patch("harness.tools.skill_manager_tool._guard_agent_created_enabled", return_value=False), \
+             patch("harness.tools.skill_manager_tool.scan_skill") as mock_scan:
             result = _security_scan_skill(tmp_path)
 
         assert result is None
@@ -502,8 +502,8 @@ class TestSecurityScanGate:
 
     def test_scan_runs_when_flag_on(self, tmp_path):
         """When flag is on, scan_skill is invoked and its verdict is honored."""
-        from tools.skill_manager_tool import _security_scan_skill
-        from tools.skills_guard import ScanResult
+        from harness.tools.skill_manager_tool import _security_scan_skill
+        from harness.tools.skills_guard import ScanResult
 
         # Fake a safe scan result — caller should return None (allow)
         fake_result = ScanResult(
@@ -514,8 +514,8 @@ class TestSecurityScanGate:
             findings=[],
             summary="ok",
         )
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
-             patch("tools.skill_manager_tool.scan_skill", return_value=fake_result) as mock_scan:
+        with patch("harness.tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
+             patch("harness.tools.skill_manager_tool.scan_skill", return_value=fake_result) as mock_scan:
             result = _security_scan_skill(tmp_path)
 
         assert result is None
@@ -523,8 +523,8 @@ class TestSecurityScanGate:
 
     def test_scan_blocks_dangerous_when_flag_on(self, tmp_path):
         """Dangerous verdict + flag on → returns an error string for the agent."""
-        from tools.skill_manager_tool import _security_scan_skill
-        from tools.skills_guard import ScanResult, Finding
+        from harness.tools.skill_manager_tool import _security_scan_skill
+        from harness.tools.skills_guard import ScanResult, Finding
 
         finding = Finding(
             pattern_id="test", severity="critical", category="exfiltration",
@@ -538,8 +538,8 @@ class TestSecurityScanGate:
             findings=[finding],
             summary="dangerous",
         )
-        with patch("tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
-             patch("tools.skill_manager_tool.scan_skill", return_value=fake_result):
+        with patch("harness.tools.skill_manager_tool._guard_agent_created_enabled", return_value=True), \
+             patch("harness.tools.skill_manager_tool.scan_skill", return_value=fake_result):
             result = _security_scan_skill(tmp_path)
 
         assert result is not None
@@ -547,22 +547,22 @@ class TestSecurityScanGate:
 
     def test_guard_flag_reads_config_default_false(self):
         """_guard_agent_created_enabled returns False when config doesn't set it."""
-        from tools.skill_manager_tool import _guard_agent_created_enabled
+        from harness.tools.skill_manager_tool import _guard_agent_created_enabled
 
-        with patch("plutus_cli.config.load_config", return_value={"skills": {}}):
+        with patch("harness.cli.config.load_config", return_value={"skills": {}}):
             assert _guard_agent_created_enabled() is False
 
     def test_guard_flag_reads_config_when_set(self):
         """_guard_agent_created_enabled returns True when user explicitly enables."""
-        from tools.skill_manager_tool import _guard_agent_created_enabled
+        from harness.tools.skill_manager_tool import _guard_agent_created_enabled
 
-        with patch("plutus_cli.config.load_config",
+        with patch("harness.cli.config.load_config",
                    return_value={"skills": {"guard_agent_created": True}}):
             assert _guard_agent_created_enabled() is True
 
     def test_guard_flag_handles_config_error(self):
         """If load_config raises, _guard_agent_created_enabled defaults to False (fail-safe off)."""
-        from tools.skill_manager_tool import _guard_agent_created_enabled
+        from harness.tools.skill_manager_tool import _guard_agent_created_enabled
 
-        with patch("plutus_cli.config.load_config", side_effect=RuntimeError("boom")):
+        with patch("harness.cli.config.load_config", side_effect=RuntimeError("boom")):
             assert _guard_agent_created_enabled() is False

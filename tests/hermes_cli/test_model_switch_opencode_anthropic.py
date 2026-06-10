@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from plutus_cli.model_switch import switch_model
+from harness.cli.model_switch import switch_model
 
 
 _MOCK_VALIDATION = {
@@ -46,10 +46,10 @@ def _run_opencode_switch(
     """
     effective_runtime_base = runtime_base_url or current_base_url
     with (
-        patch("plutus_cli.model_switch.resolve_alias", return_value=None),
-        patch("plutus_cli.model_switch.list_provider_models", return_value=[]),
+        patch("harness.cli.model_switch.resolve_alias", return_value=None),
+        patch("harness.cli.model_switch.list_provider_models", return_value=[]),
         patch(
-            "plutus_cli.runtime_provider.resolve_runtime_provider",
+            "harness.cli.runtime_provider.resolve_runtime_provider",
             return_value={
                 "api_key": "sk-opencode-fake",
                 "base_url": effective_runtime_base,
@@ -57,12 +57,12 @@ def _run_opencode_switch(
             },
         ),
         patch(
-            "plutus_cli.models.validate_requested_model",
+            "harness.cli.models.validate_requested_model",
             return_value=_MOCK_VALIDATION,
         ),
-        patch("plutus_cli.model_switch.get_model_info", return_value=None),
-        patch("plutus_cli.model_switch.get_model_capabilities", return_value=None),
-        patch("plutus_cli.models.detect_provider_for_model", return_value=None),
+        patch("harness.cli.model_switch.get_model_info", return_value=None),
+        patch("harness.cli.model_switch.get_model_capabilities", return_value=None),
+        patch("harness.cli.models.detect_provider_for_model", return_value=None),
     ):
         return switch_model(
             raw_input=raw_input,
@@ -193,11 +193,11 @@ class TestOpenCodeZenV1Strip:
 
 
 class TestAgentSwitchModelDefenseInDepth:
-    """run_agent.AIAgent.switch_model() also strips /v1 as defense-in-depth."""
+    """harness.run_agent.AIAgent.switch_model() also strips /v1 as defense-in-depth."""
 
     def test_agent_switch_model_strips_v1_for_anthropic_messages(self):
         """Even if a caller hands in a /v1 URL, the agent strips it."""
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
 
         # Build a bare agent instance without running __init__; we only want
         # to exercise switch_model's base_url normalization logic.
@@ -232,10 +232,10 @@ class TestAgentSwitchModelDefenseInDepth:
             raise _Sentinel("strip verified")
 
         with patch(
-            "agent.anthropic_adapter.build_anthropic_client",
+            "harness.agent.anthropic_adapter.build_anthropic_client",
             side_effect=_raise_after_capture,
-        ), patch("agent.anthropic_adapter.resolve_anthropic_token", return_value=""), patch(
-            "agent.anthropic_adapter._is_oauth_token", return_value=False
+        ), patch("harness.agent.anthropic_adapter.resolve_anthropic_token", return_value=""), patch(
+            "harness.agent.anthropic_adapter._is_oauth_token", return_value=False
         ):
             with pytest.raises(_Sentinel):
                 agent.switch_model(

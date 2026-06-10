@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import yaml
 
-from plutus_cli.config import get_hermes_home
+from harness.cli.config import get_hermes_home
 
 
 HOOKS_DIR = get_hermes_home() / "hooks"
@@ -54,7 +54,7 @@ class HookRegistry:
     def _register_builtin_hooks(self) -> None:
         """Register built-in hooks that are always active."""
         try:
-            from gateway.builtin_hooks.boot_md import handle as boot_md_handle
+            from harness.gateway.builtin_hooks.boot_md import handle as boot_md_handle
 
             self._handlers.setdefault("gateway:startup", []).append(boot_md_handle)
             self._loaded_hooks.append({

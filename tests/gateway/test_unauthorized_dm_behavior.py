@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 def _clear_auth_env(monkeypatch) -> None:
@@ -37,7 +37,7 @@ def _make_event(platform: Platform, user_id: str, chat_id: str) -> MessageEvent:
 
 
 def _make_runner(platform: Platform, config: GatewayConfig):
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner.config = config

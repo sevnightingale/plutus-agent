@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from tools.skills_hub import ClawHubSource, SkillMeta
+from harness.tools.skills_hub import ClawHubSource, SkillMeta
 
 
 class _MockResponse:
@@ -20,10 +20,10 @@ class TestClawHubSource(unittest.TestCase):
     def setUp(self):
         self.src = ClawHubSource()
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
     @patch.object(ClawHubSource, "_load_catalog_index", return_value=[])
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_uses_listing_endpoint_as_fallback(
         self, mock_get, _mock_load_catalog, _mock_read_cache, _mock_write_cache
     ):
@@ -60,14 +60,14 @@ class TestClawHubSource(unittest.TestCase):
         self.assertTrue(args[0].endswith("/skills"))
         self.assertEqual(kwargs["params"], {"search": "caldav", "limit": 5})
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
     @patch.object(
         ClawHubSource,
         "_load_catalog_index",
         return_value=[],
     )
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_falls_back_to_exact_slug_when_search_results_are_irrelevant(
         self, mock_get, _mock_load_catalog, _mock_read_cache, _mock_write_cache
     ):
@@ -109,7 +109,7 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(results[0].name, "self-improving-agent")
         self.assertIn("continuous improvement", results[0].description)
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_repairs_poisoned_cache_with_exact_slug_lookup(self, mock_get):
         mock_get.return_value = _MockResponse(
             status_code=200,
@@ -161,7 +161,7 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].identifier, "self-improving-agent")
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_inspect_maps_display_name_and_summary(self, mock_get):
         mock_get.return_value = _MockResponse(
             status_code=200,
@@ -180,7 +180,7 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(meta.description, "Calendar integration")
         self.assertEqual(meta.identifier, "caldav-calendar")
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_inspect_handles_nested_skill_payload(self, mock_get):
         mock_get.return_value = _MockResponse(
             status_code=200,
@@ -203,7 +203,7 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(meta.identifier, "self-improving-agent")
         self.assertEqual(meta.tags, ["automation"])
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_fetch_resolves_latest_version_and_downloads_raw_files(self, mock_get):
         def side_effect(url, *args, **kwargs):
             if url.endswith("/skills/caldav-calendar"):
@@ -238,7 +238,7 @@ class TestClawHubSource(unittest.TestCase):
         self.assertEqual(bundle.files["SKILL.md"], "# Skill")
         self.assertEqual(bundle.files["README.md"], "hello")
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_fetch_falls_back_to_versions_list(self, mock_get):
         def side_effect(url, *args, **kwargs):
             if url.endswith("/skills/caldav-calendar"):

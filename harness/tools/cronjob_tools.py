@@ -13,14 +13,14 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from plutus_constants import display_hermes_home
+from harness.constants import display_hermes_home
 
 logger = logging.getLogger(__name__)
 
 # Import from cron module (will be available when properly installed)
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from cron.jobs import (
+from harness.cron.jobs import (
     create_job,
     get_job,
     list_jobs,
@@ -69,7 +69,7 @@ def _scan_cron_prompt(prompt: str) -> str:
 
 
 def _origin_from_env() -> Optional[Dict[str, str]]:
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     origin_platform = get_session_env("HERMES_SESSION_PLATFORM")
     origin_chat_id = get_session_env("HERMES_SESSION_CHAT_ID")
     if origin_platform and origin_chat_id:
@@ -131,7 +131,7 @@ def _resolve_model_override(model_obj: Optional[Dict[str, Any]]) -> tuple:
     if model_name and not provider_name:
         # Pin to the current main provider so the job is stable
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             cfg = load_config()
             model_cfg = cfg.get("model", {})
             if isinstance(model_cfg, dict):
@@ -162,7 +162,7 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
     if not script or not script.strip():
         return None  # empty/None = clearing the field, always OK
 
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
 
     raw = script.strip()
 
@@ -176,7 +176,7 @@ def _validate_cron_script_path(script: Optional[str]) -> Optional[str]:
         )
 
     # Validate containment after resolution
-    from tools.path_security import validate_within_dir
+    from harness.tools.path_security import validate_within_dir
 
     scripts_dir = get_hermes_home() / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
@@ -492,7 +492,7 @@ def check_cronjob_requirements() -> bool:
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 registry.register(
     name="cronjob",

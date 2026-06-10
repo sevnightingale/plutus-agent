@@ -24,7 +24,7 @@ import logging
 import threading
 from typing import Dict, List, Optional
 
-from agent.image_gen_provider import ImageGenProvider
+from harness.agent.image_gen_provider import ImageGenProvider
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,7 @@ def get_active_provider() -> Optional[ImageGenProvider]:
     """
     configured: Optional[str] = None
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None

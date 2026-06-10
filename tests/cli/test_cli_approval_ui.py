@@ -4,8 +4,8 @@ import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import cli as cli_module
-from cli import HermesCLI
+import harness.repl as cli_module
+from harness.repl import HermesCLI
 
 
 class _FakeBuffer:
@@ -169,7 +169,7 @@ class TestCliApprovalUi:
         # Simulate a compact terminal where the old unbounded panel would overflow.
         import shutil as _shutil
 
-        with patch("cli.shutil.get_terminal_size",
+        with patch("harness.repl.shutil.get_terminal_size",
                    return_value=_shutil.os.terminal_size((100, 20))):
             fragments = cli._get_approval_display_fragments()
 
@@ -208,7 +208,7 @@ class TestCliApprovalUi:
 
         import shutil as _shutil
 
-        with patch("cli.shutil.get_terminal_size",
+        with patch("harness.repl.shutil.get_terminal_size",
                    return_value=_shutil.os.terminal_size((100, 12))):
             fragments = cli._get_approval_display_fragments()
 
@@ -241,7 +241,7 @@ class TestCliApprovalUi:
 
         import shutil as _shutil
 
-        with patch("cli.shutil.get_terminal_size",
+        with patch("harness.repl.shutil.get_terminal_size",
                    return_value=_shutil.os.terminal_size((100, 24))):
             fragments = cli._get_approval_display_fragments()
 
@@ -273,7 +273,7 @@ class TestApprovalCallbackThreadLocalWiring:
         If this ever starts passing as "visible", the thread-local isolation
         is gone and the ACP race GHSA-qg5c-hvr5-hjgr may be back.
         """
-        from tools.terminal_tool import (
+        from harness.tools.terminal_tool import (
             set_approval_callback,
             _get_approval_callback,
         )
@@ -301,7 +301,7 @@ class TestApprovalCallbackThreadLocalWiring:
         This is exactly what cli.py's run_agent() closure does. If this test
         fails, the CLI approval prompt freeze (#13617) has regressed.
         """
-        from tools.terminal_tool import (
+        from harness.tools.terminal_tool import (
             set_approval_callback,
             set_sudo_password_callback,
             _get_approval_callback,

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from cli import HermesCLI
+from harness.repl import HermesCLI
 
 
 def _make_cli():

@@ -10,10 +10,10 @@ import sys
 from pathlib import Path
 from typing import Iterable, List, Optional
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 
 def _normalize_skills(single_skill=None, skills: Optional[Iterable[str]] = None) -> Optional[List[str]]:
@@ -33,14 +33,14 @@ def _normalize_skills(single_skill=None, skills: Optional[Iterable[str]] = None)
 
 
 def _cron_api(**kwargs):
-    from tools.cronjob_tools import cronjob as cronjob_tool
+    from harness.tools.cronjob_tools import cronjob as cronjob_tool
 
     return json.loads(cronjob_tool(**kwargs))
 
 
 def cron_list(show_all: bool = False):
     """List all scheduled jobs."""
-    from cron.jobs import list_jobs
+    from harness.cron.jobs import list_jobs
 
     jobs = list_jobs(include_disabled=show_all)
 
@@ -110,7 +110,7 @@ def cron_list(show_all: bool = False):
 
         print()
 
-    from plutus_cli.gateway import find_gateway_pids
+    from harness.cli.gateway import find_gateway_pids
     if not find_gateway_pids():
         print(color("  ⚠  Gateway is not running — jobs won't fire automatically.", Colors.YELLOW))
         print(color("     Start it with: plutus gateway install", Colors.DIM))
@@ -120,14 +120,14 @@ def cron_list(show_all: bool = False):
 
 def cron_tick():
     """Run due jobs once and exit."""
-    from cron.scheduler import tick
+    from harness.cron.scheduler import tick
     tick(verbose=True)
 
 
 def cron_status():
     """Show cron execution status."""
-    from cron.jobs import list_jobs
-    from plutus_cli.gateway import find_gateway_pids
+    from harness.cron.jobs import list_jobs
+    from harness.cli.gateway import find_gateway_pids
 
     print()
 
@@ -185,7 +185,7 @@ def cron_create(args):
 
 
 def cron_edit(args):
-    from cron.jobs import get_job
+    from harness.cron.jobs import get_job
 
     job = get_job(args.job_id)
     if not job:
@@ -286,11 +286,11 @@ def cron_command(args):
         return _job_action("remove", args.job_id, "Removed")
 
     if subcmd == "seed-heartbeat":
-        from plutus_cli.heartbeat import cmd_seed_heartbeat
+        from harness.cli.heartbeat import cmd_seed_heartbeat
         return cmd_seed_heartbeat(args)
 
     if subcmd == "seed-weekly-review":
-        from plutus_cli.heartbeat import cmd_seed_weekly_review
+        from harness.cli.heartbeat import cmd_seed_weekly_review
         return cmd_seed_weekly_review(args)
 
     print(f"Unknown cron command: {subcmd}")

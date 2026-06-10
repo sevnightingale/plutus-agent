@@ -4,7 +4,7 @@ import json
 import pytest
 from pathlib import Path
 
-from tools.cronjob_tools import (
+from harness.tools.cronjob_tools import (
     _scan_cron_prompt,
     check_cronjob_requirements,
     cronjob,
@@ -101,9 +101,9 @@ class TestCronjobRequirements:
 class TestUnifiedCronjobTool:
     @pytest.fixture(autouse=True)
     def _setup_cron_dir(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("cron.jobs.CRON_DIR", tmp_path / "cron")
-        monkeypatch.setattr("cron.jobs.JOBS_FILE", tmp_path / "cron" / "jobs.json")
-        monkeypatch.setattr("cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
+        monkeypatch.setattr("harness.cron.jobs.CRON_DIR", tmp_path / "cron")
+        monkeypatch.setattr("harness.cron.jobs.JOBS_FILE", tmp_path / "cron" / "jobs.json")
+        monkeypatch.setattr("harness.cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
 
     def test_create_and_list(self):
         created = json.loads(

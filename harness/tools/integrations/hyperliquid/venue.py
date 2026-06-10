@@ -14,8 +14,8 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.core.venue_registry import register_venue, RegistryError
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.core.venue_registry import register_venue, RegistryError
 
 from ._client import (
     get_info,

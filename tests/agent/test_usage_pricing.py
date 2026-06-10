@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from agent.usage_pricing import (
+from harness.agent.usage_pricing import (
     CanonicalUsage,
     estimate_usage_cost,
     get_pricing_entry,
@@ -108,7 +108,7 @@ def test_normalize_usage_openai_prefers_prompt_tokens_details_over_top_level():
 
 def test_openrouter_models_api_pricing_is_converted_from_per_token_to_per_million(monkeypatch):
     monkeypatch.setattr(
-        "agent.usage_pricing.fetch_model_metadata",
+        "harness.agent.usage_pricing.fetch_model_metadata",
         lambda: {
             "anthropic/claude-opus-4.6": {
                 "pricing": {
@@ -147,7 +147,7 @@ def test_estimate_usage_cost_marks_subscription_routes_included():
 
 def test_estimate_usage_cost_refuses_cache_pricing_without_official_cache_rate(monkeypatch):
     monkeypatch.setattr(
-        "agent.usage_pricing.fetch_model_metadata",
+        "harness.agent.usage_pricing.fetch_model_metadata",
         lambda: {
             "google/gemini-2.5-pro": {
                 "pricing": {
@@ -170,7 +170,7 @@ def test_estimate_usage_cost_refuses_cache_pricing_without_official_cache_rate(m
 
 def test_custom_endpoint_models_api_pricing_is_supported(monkeypatch):
     monkeypatch.setattr(
-        "agent.usage_pricing.fetch_endpoint_model_metadata",
+        "harness.agent.usage_pricing.fetch_endpoint_model_metadata",
         lambda base_url, api_key=None: {
             "zai-org/GLM-5-TEE": {
                 "pricing": {

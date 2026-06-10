@@ -19,7 +19,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.session import Platform, SessionSource
+from harness.gateway.session import Platform, SessionSource
 
 
 @pytest.fixture(autouse=True)
@@ -50,7 +50,7 @@ def _make_bare_runner():
     Uses ``object.__new__`` to skip the heavy __init__ — many gateway tests
     use this pattern (see AGENTS.md pitfall #17).
     """
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     # _is_user_authorized reads self.pairing_store.is_approved(...) before
     # any allowlist check succeeds; stub it to never approve so we exercise

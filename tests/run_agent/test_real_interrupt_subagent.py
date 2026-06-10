@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import MagicMock, patch, PropertyMock
 
-from tools.interrupt import set_interrupt, is_interrupted
+from harness.tools.interrupt import set_interrupt, is_interrupted
 
 
 def _make_slow_api_response(delay=5.0):
@@ -48,7 +48,7 @@ class TestRealSubagentInterrupt(unittest.TestCase):
 
     def test_interrupt_child_during_api_call(self):
         """Real AIAgent child interrupted while making API call."""
-        from run_agent import AIAgent, IterationBudget
+        from harness.run_agent import AIAgent, IterationBudget
 
         # Create a real parent agent (just enough to be a parent)
         parent = AIAgent.__new__(AIAgent)
@@ -79,7 +79,7 @@ class TestRealSubagentInterrupt(unittest.TestCase):
         parent._client_kwargs = {"api_key": "***", "base_url": "http://localhost:1"}
         parent._execution_thread_id = None
 
-        from tools.delegate_tool import _run_single_child
+        from harness.tools.delegate_tool import _run_single_child
 
         child_started = threading.Event()
         result_holder = [None]
@@ -88,7 +88,7 @@ class TestRealSubagentInterrupt(unittest.TestCase):
         def run_delegate():
             try:
                 # Patch the OpenAI client creation inside AIAgent.__init__
-                with patch('run_agent.OpenAI') as MockOpenAI:
+                with patch('harness.run_agent.OpenAI') as MockOpenAI:
                     mock_client = MagicMock()
                     # API call takes 5 seconds — should be interrupted before that
                     mock_client.chat.completions.create = _make_slow_api_response(delay=5.0)

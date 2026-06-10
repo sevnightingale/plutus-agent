@@ -9,7 +9,7 @@ custom/unknown providers in ``resolve_custom_provider``.
 
 from __future__ import annotations
 
-from plutus_cli.providers import determine_api_mode
+from harness.cli.providers import determine_api_mode
 
 
 class TestOpenAIHostHardening:

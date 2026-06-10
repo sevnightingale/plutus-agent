@@ -61,8 +61,8 @@ _EXTRA_ENV_KEYS = frozenset({
 })
 import yaml
 
-from plutus_cli.colors import Colors, color
-from plutus_cli.default_soul import DEFAULT_SOUL_MD
+from harness.cli.colors import Colors, color
+from harness.cli.default_soul import DEFAULT_SOUL_MD
 
 
 # =============================================================================
@@ -169,7 +169,7 @@ def get_container_exec_info() -> Optional[dict]:
     if os.environ.get("HERMES_DEV") == "1":
         return None
 
-    from plutus_constants import is_container
+    from harness.constants import is_container
     if is_container():
         return None
 
@@ -205,7 +205,7 @@ def get_container_exec_info() -> Optional[dict]:
 # =============================================================================
 
 # Re-export from plutus_constants — canonical definition lives there.
-from plutus_constants import get_hermes_home  # noqa: F811,E402
+from harness.constants import get_hermes_home  # noqa: F811,E402
 
 def get_config_path() -> Path:
     """Get the main config file path."""
@@ -217,7 +217,7 @@ def get_env_path() -> Path:
 
 def get_project_root() -> Path:
     """Get the project installation directory."""
-    return Path(__file__).parent.parent.resolve()
+    return Path(__file__).parent.parent.parent.resolve()
 
 def _secure_dir(path):
     """Set directory to owner-only access (0700 by default). No-op on Windows.
@@ -303,7 +303,7 @@ def _ensure_default_worldview_md(home: Path) -> None:
     Mirrors ``_ensure_default_soul_md``. WORLDVIEW.md is the cross-session
     bridge — Plutus's read-of-the-world it had refined. Idempotent.
     """
-    from plutus_cli.default_worldview import DEFAULT_WORLDVIEW_MD
+    from harness.cli.default_worldview import DEFAULT_WORLDVIEW_MD
     wv_path = home / "WORLDVIEW.md"
     if wv_path.exists():
         return
@@ -2001,7 +2001,7 @@ def get_missing_skill_config_vars() -> List[Dict[str, Any]]:
     config.yaml.  Returns a list of dicts suitable for prompting.
     """
     try:
-        from agent.skill_utils import discover_all_skill_config_vars, SKILL_CONFIG_PREFIX
+        from harness.agent.skill_utils import discover_all_skill_config_vars, SKILL_CONFIG_PREFIX
     except Exception:
         return []
 
@@ -2912,7 +2912,7 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
             print()
             config = load_config()
             try:
-                from agent.skill_utils import SKILL_CONFIG_PREFIX
+                from harness.agent.skill_utils import SKILL_CONFIG_PREFIX
             except Exception:
                 SKILL_CONFIG_PREFIX = "skills.config"
             for var in missing_skill_config:
@@ -3227,7 +3227,7 @@ def save_config(config: Dict[str, Any]):
     if is_managed():
         managed_error("save configuration")
         return
-    from utils import atomic_yaml_write
+    from harness.utils import atomic_yaml_write
 
     ensure_hermes_home()
     config_path = get_config_path()
@@ -3663,7 +3663,7 @@ def show_config():
     for env_key, name in keys:
         value = get_env_value(env_key)
         print(f"  {name:<14} {redact_key(value)}")
-    from plutus_cli.auth import get_anthropic_key
+    from harness.cli.auth import get_anthropic_key
     anthropic_value = get_anthropic_key()
     print(f"  {'Anthropic':<14} {redact_key(anthropic_value)}")
     
@@ -3771,7 +3771,7 @@ def show_config():
     
     # Skill config
     try:
-        from agent.skill_utils import discover_all_skill_config_vars, resolve_skill_config_values
+        from harness.agent.skill_utils import discover_all_skill_config_vars, resolve_skill_config_values
         skill_vars = discover_all_skill_config_vars()
         if skill_vars:
             resolved = resolve_skill_config_values(skill_vars)
@@ -3885,7 +3885,7 @@ def set_config_value(key: str, value: str):
     
     # Write only user config back (not the full merged defaults)
     ensure_hermes_home()
-    from utils import atomic_yaml_write
+    from harness.utils import atomic_yaml_write
     atomic_yaml_write(config_path, user_config, sort_keys=False)
     
     # Keep .env in sync for keys that terminal_tool reads directly from env vars.

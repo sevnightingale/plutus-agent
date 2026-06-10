@@ -30,7 +30,7 @@ import re
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Dict, Any, List, Optional
 
 # fcntl is Unix-only; on Windows use msvcrt for file locking
@@ -563,7 +563,7 @@ MEMORY_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 registry.register(
     name="memory",

@@ -33,8 +33,8 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from agent.memory_provider import MemoryProvider
-from tools.registry import tool_error
+from harness.agent.memory_provider import MemoryProvider
+from harness.tools.registry import tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -361,7 +361,7 @@ class MemoryManager:
         ``get_hermes_home()`` themselves.
         """
         if "hermes_home" not in kwargs:
-            from plutus_constants import get_hermes_home
+            from harness.constants import get_hermes_home
             kwargs["hermes_home"] = str(get_hermes_home())
         for provider in self._providers:
             try:

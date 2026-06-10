@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from difflib import unified_diff
 from pathlib import Path
 
-from utils import safe_json_loads
+from harness.utils import safe_json_loads
 
 # ANSI escape codes for coloring tool failure indicators
 _RED = "\033[31m"
@@ -43,7 +43,7 @@ def _diff_ansi() -> dict[str, str]:
     plus = "\033[38;2;255;255;255;48;2;20;90;20m"
 
     try:
-        from plutus_cli.skin_engine import get_active_skin
+        from harness.cli.skin_engine import get_active_skin
         skin = get_active_skin()
 
         def _hex_fg(key: str, fallback_rgb: tuple[int, int, int]) -> str:
@@ -118,7 +118,7 @@ def get_tool_preview_max_len() -> int:
 def _get_skin():
     """Get the active skin config, or None if not available."""
     try:
-        from plutus_cli.skin_engine import get_active_skin
+        from harness.cli.skin_engine import get_active_skin
         return get_active_skin()
     except Exception:
         return None
@@ -148,7 +148,7 @@ def get_tool_emoji(tool_name: str, default: str = "⚡") -> str:
             return override
     # 2. Registry default
     try:
-        from tools.registry import registry
+        from harness.tools.registry import registry
         emoji = registry.get_emoji(tool_name, default="")
         if emoji:
             return emoji
@@ -311,7 +311,7 @@ def _resolve_skill_manage_paths(args: dict) -> list[Path]:
     if not action or not name:
         return []
 
-    from tools.skill_manager_tool import _find_skill, _resolve_skill_dir
+    from harness.tools.skill_manager_tool import _find_skill, _resolve_skill_dir
 
     if action == "create":
         skill_dir = _resolve_skill_dir(name, args.get("category"))

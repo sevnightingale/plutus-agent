@@ -5,7 +5,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.subdirectory_hints import SubdirectoryHintTracker
+from harness.agent.subdirectory_hints import SubdirectoryHintTracker
 
 
 @pytest.fixture

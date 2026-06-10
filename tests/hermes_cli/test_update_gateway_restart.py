@@ -12,9 +12,9 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-import plutus_cli.gateway as gateway_cli
-import plutus_cli.main as cli_main
-from plutus_cli.main import cmd_update
+import harness.cli.gateway as gateway_cli
+import harness.cli.main as cli_main
+from harness.cli.main import cmd_update
 
 
 # ---------------------------------------------------------------------------
@@ -24,7 +24,7 @@ from plutus_cli.main import cmd_update
 
 @pytest.fixture(autouse=True)
 def _no_restart_verify_sleep(monkeypatch):
-    """plutus_cli/main.py uses time.sleep(3) after systemctl restart to
+    """harness/cli/main.py uses time.sleep(3) after systemctl restart to
     verify the service survived. Tests mock subprocess.run — nothing
     actually restarts — so the 3s wait is dead time.
 
@@ -551,7 +551,7 @@ class TestCmdUpdateLaunchdRestart:
         # because the gateway ignored SIGUSR1 or the drain budget was
         # exceeded.  cmd_update() should detect this and escalate.
         monkeypatch.setattr(
-            "plutus_cli.gateway._graceful_restart_via_sigusr1",
+            "harness.cli.gateway._graceful_restart_via_sigusr1",
             lambda pid, drain_timeout: False,
         )
 
@@ -583,7 +583,7 @@ class TestCmdUpdateLaunchdRestart:
             systemd_active=False,
         )
 
-        with patch("gateway.status.get_running_pid", return_value=None):
+        with patch("harness.gateway.status.get_running_pid", return_value=None):
             cmd_update(mock_args)
 
         captured = capsys.readouterr().out
@@ -993,10 +993,10 @@ class TestGatewayModeWritesExitCodeEarly:
         hermes_home = tmp_path / ".hermes"
         hermes_home.mkdir()
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        import plutus_cli.config as _cfg
+        import harness.cli.config as _cfg
         monkeypatch.setattr(_cfg, "get_hermes_home", lambda: hermes_home)
         # Also patch the module-level ref used by cmd_update
-        import plutus_cli.main as _main_mod
+        import harness.cli.main as _main_mod
         monkeypatch.setattr(_main_mod, "get_hermes_home", lambda: hermes_home)
 
         mock_run.side_effect = _make_run_side_effect(commit_count="1")
@@ -1023,9 +1023,9 @@ class TestGatewayModeWritesExitCodeEarly:
         hermes_home = tmp_path / ".hermes"
         hermes_home.mkdir()
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        import plutus_cli.config as _cfg
+        import harness.cli.config as _cfg
         monkeypatch.setattr(_cfg, "get_hermes_home", lambda: hermes_home)
-        import plutus_cli.main as _main_mod
+        import harness.cli.main as _main_mod
         monkeypatch.setattr(_main_mod, "get_hermes_home", lambda: hermes_home)
 
         mock_run.side_effect = _make_run_side_effect(commit_count="1")
@@ -1051,9 +1051,9 @@ class TestGatewayModeWritesExitCodeEarly:
         hermes_home = tmp_path / ".hermes"
         hermes_home.mkdir()
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-        import plutus_cli.config as _cfg
+        import harness.cli.config as _cfg
         monkeypatch.setattr(_cfg, "get_hermes_home", lambda: hermes_home)
-        import plutus_cli.main as _main_mod
+        import harness.cli.main as _main_mod
         monkeypatch.setattr(_main_mod, "get_hermes_home", lambda: hermes_home)
 
         exit_code_path = hermes_home / ".update_exit_code"

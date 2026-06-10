@@ -22,9 +22,9 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from tools.core.alert_registry import register_alert
+from harness.tools.core.alert_registry import register_alert
 
-from watchers.price_alerts import (
+from harness.watchers.price_alerts import (
     auto_disable_after_fire,
     should_fire,
 )

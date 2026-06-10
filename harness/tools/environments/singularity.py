@@ -14,8 +14,8 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from plutus_constants import get_hermes_home
-from tools.environments.base import (
+from harness.constants import get_hermes_home
+from harness.tools.environments.base import (
     BaseEnvironment,
     _load_json_store,
     _popen_bash,
@@ -75,7 +75,7 @@ def _get_scratch_dir() -> Path:
         scratch_path.mkdir(parents=True, exist_ok=True)
         return scratch_path
 
-    from tools.environments.base import get_sandbox_dir
+    from harness.tools.environments.base import get_sandbox_dir
     sandbox = get_sandbox_dir() / "singularity"
 
     scratch = Path("/scratch")
@@ -202,7 +202,7 @@ class SingularityEnvironment(BaseEnvironment):
             cmd.append("--writable-tmpfs")
 
         try:
-            from tools.credential_files import get_credential_file_mounts, get_skills_directory_mount
+            from harness.tools.credential_files import get_credential_file_mounts, get_skills_directory_mount
             for mount_entry in get_credential_file_mounts():
                 cmd.extend(["--bind", f"{mount_entry['host_path']}:{mount_entry['container_path']}:ro"])
             for skills_mount in get_skills_directory_mount():

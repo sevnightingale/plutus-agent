@@ -14,7 +14,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 from . import state as watcher_state
 
@@ -136,7 +136,7 @@ def schedule_wake_session(events: List[Dict[str, Any]]) -> Dict[str, Any] | None
     """
     if not events:
         return None
-    from cron.jobs import create_job
+    from harness.cron.jobs import create_job
 
     skill = _route_skill_for(events)
     prompt = _build_prompt_for(events)

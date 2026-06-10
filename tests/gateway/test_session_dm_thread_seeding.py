@@ -17,15 +17,15 @@ Covers:
 import pytest
 from unittest.mock import patch
 
-from gateway.config import Platform, GatewayConfig
-from gateway.session import SessionSource, SessionStore, build_session_key
+from harness.gateway.config import Platform, GatewayConfig
+from harness.gateway.session import SessionSource, SessionStore, build_session_key
 
 
 @pytest.fixture()
 def store(tmp_path):
     """SessionStore with no SQLite, for fast unit tests."""
     config = GatewayConfig()
-    with patch("gateway.session.SessionStore._ensure_loaded"):
+    with patch("harness.gateway.session.SessionStore._ensure_loaded"):
         s = SessionStore(sessions_dir=tmp_path, config=config)
     s._db = None
     s._loaded = True

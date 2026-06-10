@@ -9,15 +9,15 @@ import threading
 from pathlib import Path
 from typing import Optional
 
-from agent.file_safety import get_read_block_error
-from tools.binary_extensions import has_binary_extension
-from tools.file_operations import (
+from harness.agent.file_safety import get_read_block_error
+from harness.tools.binary_extensions import has_binary_extension
+from harness.tools.file_operations import (
     ShellFileOperations,
     normalize_read_pagination,
     normalize_search_pagination,
 )
-from tools import file_state
-from agent.redact import redact_sensitive_text
+from harness.tools import file_state
+from harness.agent.redact import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ def _get_max_read_chars() -> int:
     if _max_read_chars_cached is not None:
         return _max_read_chars_cached
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         cfg = load_config()
         val = cfg.get("file_read_max_chars")
         if isinstance(val, (int, float)) and val > 0:
@@ -98,7 +98,7 @@ def _get_live_tracking_cwd(task_id: str = "default") -> str | None:
             return live_cwd
 
     try:
-        from tools.terminal_tool import _active_environments, _env_lock
+        from harness.tools.terminal_tool import _active_environments, _env_lock
 
         with _env_lock:
             env = _active_environments.get(task_id)
@@ -262,7 +262,7 @@ def _get_file_ops(task_id: str = "default") -> ShellFileOperations:
     Thread-safe: uses the same per-task creation locks as terminal_tool to
     prevent duplicate sandbox creation from concurrent tool calls.
     """
-    from tools.terminal_tool import (
+    from harness.tools.terminal_tool import (
         _active_environments, _env_lock, _create_environment,
         _get_env_config, _last_activity, _start_cleanup_thread,
         _creation_locks,
@@ -301,7 +301,7 @@ def _get_file_ops(task_id: str = "default") -> ShellFileOperations:
                 terminal_env = None
 
         if terminal_env is None:
-            from tools.terminal_tool import _task_env_overrides
+            from harness.tools.terminal_tool import _task_env_overrides
 
             config = _get_env_config()
             env_type = config["env_type"]
@@ -875,12 +875,12 @@ def search_tool(pattern: str, target: str = "content", path: str = ".",
 # ---------------------------------------------------------------------------
 # Schemas + Registry
 # ---------------------------------------------------------------------------
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 
 def _check_file_reqs():
     """Lazy wrapper to avoid circular import with tools/__init__.py."""
-    from tools import check_file_requirements
+    from harness.tools import check_file_requirements
     return check_file_requirements()
 
 READ_FILE_SCHEMA = {

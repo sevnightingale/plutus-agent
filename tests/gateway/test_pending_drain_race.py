@@ -26,13 +26,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import (
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
 )
-from gateway.session import SessionSource, build_session_key
+from harness.gateway.session import SessionSource, build_session_key
 
 
 class _StubAdapter(BasePlatformAdapter):

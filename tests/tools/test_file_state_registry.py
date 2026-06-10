@@ -23,8 +23,8 @@ import threading
 import time
 import unittest
 
-from tools import file_state
-from tools.file_tools import (
+from harness.tools import file_state
+from harness.tools.file_tools import (
     read_file_tool,
     write_file_tool,
     patch_tool,

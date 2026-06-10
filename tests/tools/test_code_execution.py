@@ -36,7 +36,7 @@ import threading
 import unittest
 from unittest.mock import patch, MagicMock
 
-from tools.code_execution_tool import (
+from harness.tools.code_execution_tool import (
     SANDBOX_ALLOWED_TOOLS,
     execute_code,
     generate_hermes_tools_module,
@@ -143,10 +143,10 @@ class TestExecuteCodeRemoteTempDir(unittest.TestCase):
         env = FakeEnv()
         fake_thread = MagicMock()
 
-        with patch("tools.code_execution_tool._load_config", return_value={"timeout": 30, "max_tool_calls": 5}), \
-             patch("tools.code_execution_tool._get_or_create_env", return_value=(env, "ssh")), \
-             patch("tools.code_execution_tool._ship_file_to_remote"), \
-             patch("tools.code_execution_tool.threading.Thread", return_value=fake_thread):
+        with patch("harness.tools.code_execution_tool._load_config", return_value={"timeout": 30, "max_tool_calls": 5}), \
+             patch("harness.tools.code_execution_tool._get_or_create_env", return_value=(env, "ssh")), \
+             patch("harness.tools.code_execution_tool._ship_file_to_remote"), \
+             patch("harness.tools.code_execution_tool.threading.Thread", return_value=fake_thread):
             result = json.loads(_execute_remote("print('hello')", "task-1", ["terminal"]))
 
         self.assertEqual(result["status"], "success")
@@ -165,11 +165,11 @@ class TestExecuteCode(unittest.TestCase):
 
     def _run(self, code, enabled_tools=None):
         """Helper: run code with mocked handle_function_call."""
-        with patch("tools.code_execution_tool._rpc_server_loop") as mock_rpc:
+        with patch("harness.tools.code_execution_tool._rpc_server_loop") as mock_rpc:
             # Use real execution but mock the tool dispatcher
             pass
         # Actually run with full integration, mocking at the model_tools level
-        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+        with patch("harness.model_tools.handle_function_call", side_effect=_mock_handle_function_call):
             result = execute_code(
                 code=code,
                 task_id="test-task",
@@ -188,7 +188,7 @@ class TestExecuteCode(unittest.TestCase):
         """Sandboxed scripts can import modules that live at the repo root."""
         result = self._run('import plutus_constants; print(plutus_constants.__file__)')
         self.assertEqual(result["status"], "success")
-        self.assertIn("plutus_constants.py", result["output"])
+        self.assertIn("harness.constants.py", result["output"])
 
     def test_single_tool_call(self):
         """Script calls terminal and prints the result."""
@@ -269,9 +269,9 @@ raise RuntimeError("deliberate crash")
     def test_timeout_enforcement(self):
         """Script that sleeps too long is killed."""
         code = "import time; time.sleep(999)"
-        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+        with patch("harness.model_tools.handle_function_call", side_effect=_mock_handle_function_call):
             # Override config to use a very short timeout
-            with patch("tools.code_execution_tool._load_config", return_value={"timeout": 2, "max_tool_calls": 50}):
+            with patch("harness.tools.code_execution_tool._load_config", return_value={"timeout": 2, "max_tool_calls": 50}):
                 result = json.loads(execute_code(
                     code=code,
                     task_id="test-task",
@@ -390,12 +390,12 @@ class TestStubSchemaDrift(unittest.TestCase):
         """Every user-facing parameter in the real schema must appear in the
         corresponding _TOOL_STUBS entry."""
         import re
-        from tools.code_execution_tool import _TOOL_STUBS
+        from harness.tools.code_execution_tool import _TOOL_STUBS
 
         # Import the registry and trigger tool registration
-        from tools.registry import registry
-        import tools.file_tools  # noqa: F401 - registers read_file, write_file, patch, search_files
-        import tools.web_tools  # noqa: F401 - registers web_search, web_extract
+        from harness.tools.registry import registry
+        import harness.tools.file_tools  # noqa: F401 - registers read_file, write_file, patch, search_files
+        import harness.tools.web_tools  # noqa: F401 - registers web_search, web_extract
 
         for tool_name, (func_name, sig, doc, args_expr) in _TOOL_STUBS.items():
             entry = registry._tools.get(tool_name)
@@ -425,7 +425,7 @@ class TestStubSchemaDrift(unittest.TestCase):
         """The args_dict_expr in each stub must include every parameter from
         the signature, so that all params are actually sent over RPC."""
         import re
-        from tools.code_execution_tool import _TOOL_STUBS
+        from harness.tools.code_execution_tool import _TOOL_STUBS
 
         for tool_name, (func_name, sig, doc, args_expr) in _TOOL_STUBS.items():
             stub_params = set(re.findall(r'(\w+)\s*:', sig))
@@ -440,7 +440,7 @@ class TestStubSchemaDrift(unittest.TestCase):
 
     def test_search_files_target_uses_current_values(self):
         """search_files stub should use 'content'/'files', not old 'grep'/'find'."""
-        from tools.code_execution_tool import _TOOL_STUBS
+        from harness.tools.code_execution_tool import _TOOL_STUBS
         _, sig, doc, _ = _TOOL_STUBS["search_files"]
         self.assertIn('"content"', sig,
                       "search_files stub should default target to 'content', not 'grep'")
@@ -612,8 +612,8 @@ class TestEnvVarFiltering(unittest.TestCase):
         try:
             if extra_env:
                 os.environ.update(extra_env)
-            with patch("model_tools.handle_function_call", return_value='{}'), \
-                 patch("tools.code_execution_tool._load_config",
+            with patch("harness.model_tools.handle_function_call", return_value='{}'), \
+                 patch("harness.tools.code_execution_tool._load_config",
                        return_value={"timeout": 10, "max_tool_calls": 50}):
                 raw = execute_code(code, task_id="test-env",
                                    enabled_tools=list(SANDBOX_ALLOWED_TOOLS))
@@ -701,7 +701,7 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
 
     def test_windows_returns_error(self):
         """On Windows (or when SANDBOX_AVAILABLE is False), returns error JSON."""
-        with patch("tools.code_execution_tool.SANDBOX_AVAILABLE", False):
+        with patch("harness.tools.code_execution_tool.SANDBOX_AVAILABLE", False):
             result = json.loads(execute_code("print('hi')", task_id="test"))
             self.assertIn("error", result)
             self.assertIn("Windows", result["error"])
@@ -718,7 +718,7 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
             "from hermes_tools import terminal, web_search, read_file\n"
             "print('all imports ok')\n"
         )
-        with patch("model_tools.handle_function_call",
+        with patch("harness.model_tools.handle_function_call",
                     return_value=json.dumps({"ok": True})):
             result = json.loads(execute_code(code, task_id="test-none",
                                              enabled_tools=None))
@@ -732,7 +732,7 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
             "from hermes_tools import terminal, web_search\n"
             "print('imports ok')\n"
         )
-        with patch("model_tools.handle_function_call",
+        with patch("harness.model_tools.handle_function_call",
                     return_value=json.dumps({"ok": True})):
             result = json.loads(execute_code(code, task_id="test-empty",
                                              enabled_tools=[]))
@@ -747,7 +747,7 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
             "from hermes_tools import terminal\n"
             "print('fallback ok')\n"
         )
-        with patch("model_tools.handle_function_call",
+        with patch("harness.model_tools.handle_function_call",
                     return_value=json.dumps({"ok": True})):
             result = json.loads(execute_code(
                 code, task_id="test-nonoverlap",
@@ -763,13 +763,13 @@ class TestExecuteCodeEdgeCases(unittest.TestCase):
 
 class TestLoadConfig(unittest.TestCase):
     def test_returns_empty_dict_when_cli_config_unavailable(self):
-        from tools.code_execution_tool import _load_config
+        from harness.tools.code_execution_tool import _load_config
         with patch.dict("sys.modules", {"cli": None}):
             result = _load_config()
             self.assertIsInstance(result, dict)
 
     def test_returns_code_execution_section(self):
-        from tools.code_execution_tool import _load_config
+        from harness.tools.code_execution_tool import _load_config
         mock_cli = MagicMock()
         mock_cli.CLI_CONFIG = {"code_execution": {"timeout": 120, "max_tool_calls": 10}}
         with patch.dict("sys.modules", {"cli": mock_cli}):
@@ -786,7 +786,7 @@ class TestInterruptHandling(unittest.TestCase):
     def test_interrupt_event_stops_execution(self):
         """When interrupt is set for the execution thread, execute_code should stop."""
         code = "import time; time.sleep(60); print('should not reach')"
-        from tools.interrupt import set_interrupt
+        from harness.tools.interrupt import set_interrupt
 
         # Capture the main thread ID so we can target the interrupt correctly.
         # execute_code runs in the current thread; set_interrupt needs its ID.
@@ -801,9 +801,9 @@ class TestInterruptHandling(unittest.TestCase):
         t.start()
 
         try:
-            with patch("model_tools.handle_function_call",
+            with patch("harness.model_tools.handle_function_call",
                         return_value=json.dumps({"ok": True})), \
-                 patch("tools.code_execution_tool._load_config",
+                 patch("harness.tools.code_execution_tool._load_config",
                        return_value={"timeout": 30, "max_tool_calls": 50}):
                 result = json.loads(execute_code(
                     code, task_id="test-interrupt",
@@ -820,7 +820,7 @@ class TestHeadTailTruncation(unittest.TestCase):
     """Tests for head+tail truncation of large stdout in execute_code."""
 
     def _run(self, code):
-        with patch("model_tools.handle_function_call", side_effect=_mock_handle_function_call):
+        with patch("harness.model_tools.handle_function_call", side_effect=_mock_handle_function_call):
             result = execute_code(
                 code=code,
                 task_id="test-task",

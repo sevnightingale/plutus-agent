@@ -7,7 +7,7 @@ import pytest
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import to_plain_text
 
-from plutus_cli.commands import SlashCommandCompleter, _file_size_label
+from harness.cli.commands import SlashCommandCompleter, _file_size_label
 
 
 def _display_names(completions):

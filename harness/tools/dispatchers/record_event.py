@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from tools.core import event_registry
-from tools.registry import registry, tool_error, tool_result
+from harness.tools.core import event_registry
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 SCHEMA = {

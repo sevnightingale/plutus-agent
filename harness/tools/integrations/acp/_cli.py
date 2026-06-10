@@ -99,7 +99,7 @@ def acp_async_spawn(*args: str,
     waits on browser approval) and ``acp events listen`` (long-running
     NDJSON stream). Delegates to ``tools.process_registry.spawn_local``.
     """
-    from tools.process_registry import process_registry
+    from harness.tools.process_registry import process_registry
 
     cmd = "acp " + " ".join(args)
     if output_file:

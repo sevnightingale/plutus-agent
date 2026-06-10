@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-from plutus_cli.config import config_command, show_config
-from plutus_cli.setup import _print_setup_summary
+from harness.cli.config import config_command, show_config
+from harness.cli.setup import _print_setup_summary
 
 
 def test_config_set_usage_marks_placeholders(capsys):

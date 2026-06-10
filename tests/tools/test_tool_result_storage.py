@@ -3,13 +3,13 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
-from tools.budget_config import (
+from harness.tools.budget_config import (
     DEFAULT_RESULT_SIZE_CHARS,
     DEFAULT_TURN_BUDGET_CHARS,
     DEFAULT_PREVIEW_SIZE_CHARS,
     BudgetConfig,
 )
-from tools.tool_result_storage import (
+from harness.tools.tool_result_storage import (
     HEREDOC_MARKER,
     PERSISTED_OUTPUT_TAG,
     PERSISTED_OUTPUT_CLOSING_TAG,
@@ -314,7 +314,7 @@ class TestMaybePersistToolResult:
         mock_registry = MagicMock()
         mock_registry.get_max_result_size.return_value = 30_000
 
-        with patch("tools.registry.registry", mock_registry):
+        with patch("harness.tools.registry.registry", mock_registry):
             result = maybe_persist_tool_result(
                 content=content,
                 tool_name="terminal",
@@ -497,38 +497,38 @@ class TestPerToolThresholds:
     """Verify registry wiring for per-tool thresholds."""
 
     def test_registry_has_get_max_result_size(self):
-        from tools.registry import registry
+        from harness.tools.registry import registry
         assert hasattr(registry, "get_max_result_size")
 
     def test_default_threshold(self):
-        from tools.registry import registry
+        from harness.tools.registry import registry
         # Unknown tool should return the default
         val = registry.get_max_result_size("nonexistent_tool_xyz")
         assert val == DEFAULT_RESULT_SIZE_CHARS
 
     def test_terminal_threshold(self):
-        from tools.registry import registry
+        from harness.tools.registry import registry
         # Trigger import of terminal_tool to register the tool
         try:
-            import tools.terminal_tool  # noqa: F401
+            import harness.tools.terminal_tool  # noqa: F401
             val = registry.get_max_result_size("terminal")
             assert val == 100_000
         except ImportError:
             pytest.skip("terminal_tool not importable in test env")
 
     def test_read_file_never_persisted(self):
-        from tools.registry import registry
+        from harness.tools.registry import registry
         try:
-            import tools.file_tools  # noqa: F401
+            import harness.tools.file_tools  # noqa: F401
             val = registry.get_max_result_size("read_file")
             assert val == float("inf")
         except ImportError:
             pytest.skip("file_tools not importable in test env")
 
     def test_search_files_threshold(self):
-        from tools.registry import registry
+        from harness.tools.registry import registry
         try:
-            import tools.file_tools  # noqa: F401
+            import harness.tools.file_tools  # noqa: F401
             val = registry.get_max_result_size("search_files")
             assert val == 100_000
         except ImportError:

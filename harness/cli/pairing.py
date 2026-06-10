@@ -10,7 +10,7 @@ Usage:
 
 def pairing_command(args):
     """Handle hermes pairing subcommands."""
-    from gateway.pairing import PairingStore
+    from harness.gateway.pairing import PairingStore
 
     store = PairingStore()
     action = getattr(args, "pairing_action", None)

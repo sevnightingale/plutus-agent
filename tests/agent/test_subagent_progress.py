@@ -15,8 +15,8 @@ import threading
 import pytest
 from unittest.mock import MagicMock, patch
 
-from agent.display import KawaiiSpinner
-from tools.delegate_tool import _build_child_progress_callback
+from harness.agent.display import KawaiiSpinner
+from harness.tools.delegate_tool import _build_child_progress_callback
 
 
 # =========================================================================

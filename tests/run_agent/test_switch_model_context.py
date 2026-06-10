@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from run_agent import AIAgent
-from agent.context_compressor import ContextCompressor
+from harness.run_agent import AIAgent
+from harness.agent.context_compressor import ContextCompressor
 
 
 def _make_agent_with_compressor(config_context_length=None) -> AIAgent:
@@ -40,7 +40,7 @@ def _make_agent_with_compressor(config_context_length=None) -> AIAgent:
     return agent
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=131_072)
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=131_072)
 def test_switch_model_preserves_config_context_length(mock_ctx_len):
     """When switching models, config_context_length should be passed to get_model_context_length."""
     agent = _make_agent_with_compressor(config_context_length=32_768)
@@ -64,7 +64,7 @@ def test_switch_model_without_config_context_length():
     """When switching models without config override, config_context_length should be None."""
     agent = _make_agent_with_compressor(config_context_length=None)
 
-    with patch("agent.model_metadata.get_model_context_length", return_value=128_000) as mock_ctx_len:
+    with patch("harness.agent.model_metadata.get_model_context_length", return_value=128_000) as mock_ctx_len:
         # Switch model
         agent.switch_model("new-model", "openrouter", api_key="sk-new", base_url="https://openrouter.ai/api/v1")
 

@@ -19,8 +19,8 @@ import statistics
 import time
 from typing import Any, Dict, List, Optional
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.registry import registry, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.registry import registry, tool_result
 
 
 SCHEMA = {

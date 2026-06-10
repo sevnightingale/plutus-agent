@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from zoneinfo import ZoneInfo
 
-import plutus_time
+import harness.clock as plutus_time
 
 
 def _reset_hermes_time_cache():
@@ -146,10 +146,10 @@ class TestCodeExecutionTZ:
         # TERMINAL_ENV=modal/docker which causes modal.exception.AuthError.
         monkeypatch.setenv("TERMINAL_ENV", "local")
         try:
-            from tools.code_execution_tool import execute_code
+            from harness.tools.code_execution_tool import execute_code
             self._execute_code = execute_code
         except ImportError:
-            pytest.skip("tools.code_execution_tool not importable (missing deps)")
+            pytest.skip("harness.tools.code_execution_tool not importable (missing deps)")
 
     def teardown_method(self):
         os.environ.pop("HERMES_TIMEZONE", None)
@@ -176,7 +176,7 @@ class TestCodeExecutionTZ:
             'print("TZ=" + os.environ.get("TZ", "NOT_SET")); '
             'print("HERMES_TIMEZONE=" + os.environ.get("HERMES_TIMEZONE", "NOT_SET"))'
         )
-        with patch("model_tools.handle_function_call", side_effect=self._mock_handle):
+        with patch("harness.model_tools.handle_function_call", side_effect=self._mock_handle):
             result = _json.loads(self._execute_code(
                 code=probe,
                 task_id="tz-combined-test",
@@ -193,7 +193,7 @@ class TestCodeExecutionTZ:
         import json as _json
         os.environ.pop("HERMES_TIMEZONE", None)
 
-        with patch("model_tools.handle_function_call", side_effect=self._mock_handle):
+        with patch("harness.model_tools.handle_function_call", side_effect=self._mock_handle):
             result = _json.loads(self._execute_code(
                 code='import os; print(os.environ.get("TZ", "NOT_SET"))',
                 task_id="tz-test-empty",
@@ -220,7 +220,7 @@ class TestCronTimezone:
     def test_parse_schedule_duration_uses_tz_aware_now(self):
         """parse_schedule('30m') should produce a tz-aware run_at."""
         os.environ["HERMES_TIMEZONE"] = "Asia/Kolkata"
-        from cron.jobs import parse_schedule
+        from harness.cron.jobs import parse_schedule
         result = parse_schedule("30m")
         run_at = datetime.fromisoformat(result["run_at"])
         # The stored timestamp should be tz-aware
@@ -229,7 +229,7 @@ class TestCronTimezone:
     def test_compute_next_run_tz_aware(self):
         """compute_next_run returns tz-aware timestamps."""
         os.environ["HERMES_TIMEZONE"] = "Asia/Kolkata"
-        from cron.jobs import compute_next_run
+        from harness.cron.jobs import compute_next_run
         schedule = {"kind": "interval", "minutes": 60}
         result = compute_next_run(schedule)
         next_dt = datetime.fromisoformat(result)
@@ -237,7 +237,7 @@ class TestCronTimezone:
 
     def test_get_due_jobs_handles_naive_timestamps(self, tmp_path, monkeypatch):
         """Backward compat: naive timestamps from before tz support don't crash."""
-        import cron.jobs as jobs_module
+        import harness.cron.jobs as jobs_module
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -246,7 +246,7 @@ class TestCronTimezone:
         _reset_hermes_time_cache()
 
         # Create a job with a NAIVE past timestamp (simulating pre-tz data)
-        from cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
+        from harness.cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
         job = create_job(prompt="Test job", schedule="every 1h")
         jobs = load_jobs()
         # Force a naive (no timezone) past timestamp
@@ -265,7 +265,7 @@ class TestCronTimezone:
         absolute time when system-local tz != Hermes tz.  The fix interprets
         naive values as system-local wall time, then converts.
         """
-        from cron.jobs import _ensure_aware
+        from harness.cron.jobs import _ensure_aware
 
         os.environ["HERMES_TIMEZONE"] = "Asia/Kolkata"
         _reset_hermes_time_cache()
@@ -289,7 +289,7 @@ class TestCronTimezone:
 
     def test_ensure_aware_normalizes_aware_to_hermes_tz(self):
         """Already-aware datetimes should be normalized to Hermes tz."""
-        from cron.jobs import _ensure_aware
+        from harness.cron.jobs import _ensure_aware
 
         os.environ["HERMES_TIMEZONE"] = "Asia/Kolkata"
         _reset_hermes_time_cache()
@@ -312,7 +312,7 @@ class TestCronTimezone:
         A naive timestamp from 5 minutes ago (local time) should still
         be recognized as due after conversion.
         """
-        import cron.jobs as jobs_module
+        import harness.cron.jobs as jobs_module
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -320,7 +320,7 @@ class TestCronTimezone:
         os.environ["HERMES_TIMEZONE"] = "UTC"
         _reset_hermes_time_cache()
 
-        from cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
+        from harness.cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
 
         job = create_job(prompt="Bug repro", schedule="every 1h")
         jobs = load_jobs()
@@ -340,7 +340,7 @@ class TestCronTimezone:
     def test_get_due_jobs_naive_cross_timezone(self, tmp_path, monkeypatch):
         """Naive past timestamps must be detected as due even when Hermes tz
         is behind system local tz — the scenario that triggered #806."""
-        import cron.jobs as jobs_module
+        import harness.cron.jobs as jobs_module
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -351,7 +351,7 @@ class TestCronTimezone:
         os.environ["HERMES_TIMEZONE"] = "Pacific/Midway"  # UTC-11
         _reset_hermes_time_cache()
 
-        from cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
+        from harness.cron.jobs import create_job, load_jobs, save_jobs, get_due_jobs
         create_job(prompt="Cross-tz job", schedule="every 1h")
         jobs = load_jobs()
 
@@ -367,7 +367,7 @@ class TestCronTimezone:
 
     def test_create_job_stores_tz_aware_timestamps(self, tmp_path, monkeypatch):
         """New jobs store timezone-aware created_at and next_run_at."""
-        import cron.jobs as jobs_module
+        import harness.cron.jobs as jobs_module
         monkeypatch.setattr(jobs_module, "CRON_DIR", tmp_path / "cron")
         monkeypatch.setattr(jobs_module, "JOBS_FILE", tmp_path / "cron" / "jobs.json")
         monkeypatch.setattr(jobs_module, "OUTPUT_DIR", tmp_path / "cron" / "output")
@@ -375,7 +375,7 @@ class TestCronTimezone:
         os.environ["HERMES_TIMEZONE"] = "US/Eastern"
         _reset_hermes_time_cache()
 
-        from cron.jobs import create_job
+        from harness.cron.jobs import create_job
         job = create_job(prompt="TZ test", schedule="every 2h")
 
         created = datetime.fromisoformat(job["created_at"])

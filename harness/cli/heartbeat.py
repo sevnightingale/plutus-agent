@@ -35,7 +35,7 @@ def seed_heartbeat(
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Install (or replace) the hourly Plutus heartbeat cron job."""
-    from cron.jobs import create_job, list_jobs, remove_job
+    from harness.cron.jobs import create_job, list_jobs, remove_job
 
     # Idempotent replace — remove any existing job with the same name first.
     for job in list_jobs():
@@ -58,7 +58,7 @@ def seed_weekly_review(
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Install (or replace) the Sunday 18:00 UTC weekly review cron job."""
-    from cron.jobs import create_job, list_jobs, remove_job
+    from harness.cron.jobs import create_job, list_jobs, remove_job
 
     for job in list_jobs():
         if job.get("name") == "plutus-weekly-review":

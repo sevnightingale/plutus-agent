@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any, Dict
 
-from tools.core import identity_registry
-from tools.registry import registry, tool_result
+from harness.tools.core import identity_registry
+from harness.tools.registry import registry, tool_result
 
 
 SCHEMA = {

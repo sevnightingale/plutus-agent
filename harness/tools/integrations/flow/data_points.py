@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from tools.core.data_point_registry import register_data_point
-from tools.integrations.hyperliquid.data_points import hl_candles as _hl_candles
-from tools.integrations.ta._calc import candles_to_df
+from harness.tools.core.data_point_registry import register_data_point
+from harness.tools.integrations.hyperliquid.data_points import hl_candles as _hl_candles
+from harness.tools.integrations.ta._calc import candles_to_df
 from ._calc import calc_cvd
 
 

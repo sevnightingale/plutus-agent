@@ -9,7 +9,7 @@ import logging
 import types
 from unittest.mock import MagicMock, patch
 
-from run_agent import AIAgent
+from harness.run_agent import AIAgent
 
 
 # ---------------------------------------------------------------------------

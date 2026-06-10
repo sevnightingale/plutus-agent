@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.lifecycle._helpers import rows_to_dicts
-from tools.registry import registry, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.lifecycle._helpers import rows_to_dicts
+from harness.tools.registry import registry, tool_result
 
 
 SCHEMA = {

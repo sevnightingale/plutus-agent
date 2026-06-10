@@ -12,7 +12,7 @@ the past, the entry is treated as expired and the message is allowed through.
 import time
 from unittest.mock import patch
 
-from gateway.platforms.helpers import MessageDeduplicator
+from harness.gateway.platforms.helpers import MessageDeduplicator
 
 
 class TestMessageDeduplicatorTTL:

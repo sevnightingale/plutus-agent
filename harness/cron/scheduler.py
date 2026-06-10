@@ -33,11 +33,11 @@ from typing import List, Optional
 # Add parent directory to path for imports BEFORE repo-level imports.
 # Without this, standalone invocations (e.g. after `hermes update` reloads
 # the module) fail with ModuleNotFoundError for plutus_time et al.
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from plutus_constants import get_hermes_home
-from plutus_cli.config import load_config
-from plutus_time import now as _hermes_now
+from harness.constants import get_hermes_home
+from harness.cli.config import load_config
+from harness.clock import now as _hermes_now
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ _HOME_TARGET_ENV_VARS = {
 # old name before the rename keep working until they migrate.
 _LEGACY_HOME_TARGET_ENV_VARS = {}
 
-from cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_run
+from harness.cron.jobs import get_due_jobs, mark_job_run, save_job_output, advance_next_run
 
 # Sentinel: when a cron agent has nothing new to report, it can start its
 # response with this marker to suppress delivery.  Output is still saved
@@ -242,7 +242,7 @@ def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[d
         platform_name, rest = deliver_value.split(":", 1)
         platform_key = platform_name.lower()
 
-        from tools.send_message_tool import _parse_target_ref
+        from harness.tools.send_message_tool import _parse_target_ref
 
         parsed_chat_id, parsed_thread_id, is_explicit = _parse_target_ref(platform_key, rest)
         if is_explicit:
@@ -252,7 +252,7 @@ def _resolve_single_delivery_target(job: dict, deliver_value: str) -> Optional[d
 
         # Resolve human-friendly labels like "Alice (dm)" to real IDs.
         try:
-            from gateway.channel_directory import resolve_channel_name
+            from harness.gateway.channel_directory import resolve_channel_name
             resolved = resolve_channel_name(platform_key, chat_id)
             if resolved:
                 parsed_chat_id, parsed_thread_id, resolved_is_explicit = _parse_target_ref(platform_key, resolved)
@@ -375,8 +375,8 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
             return msg
         return None  # local-only jobs don't deliver — not a failure
 
-    from tools.send_message_tool import _send_to_platform
-    from gateway.config import load_gateway_config, Platform
+    from harness.tools.send_message_tool import _send_to_platform
+    from harness.gateway.config import load_gateway_config, Platform
 
     platform_map = {
         "telegram": Platform.TELEGRAM,
@@ -408,7 +408,7 @@ def _deliver_result(job: dict, content: str, adapters=None, loop=None) -> Option
         delivery_content = content
 
     # Extract MEDIA: tags so attachments are forwarded as files, not raw text
-    from gateway.platforms.base import BasePlatformAdapter
+    from harness.gateway.platforms.base import BasePlatformAdapter
     media_files, cleaned_delivery_content = BasePlatformAdapter.extract_media(delivery_content)
 
     try:
@@ -583,7 +583,7 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
         (success, output) — on failure *output* contains the error message so the
         LLM can report the problem to the user.
     """
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
 
     scripts_dir = get_hermes_home() / "scripts"
     scripts_dir.mkdir(parents=True, exist_ok=True)
@@ -625,7 +625,7 @@ def _run_job_script(script_path: str) -> tuple[bool, str]:
 
         # Redact secrets from both stdout and stderr before any return path.
         try:
-            from agent.redact import redact_sensitive_text
+            from harness.agent.redact import redact_sensitive_text
             stdout = redact_sensitive_text(stdout)
             stderr = redact_sensitive_text(stderr)
         except Exception:
@@ -738,7 +738,7 @@ def _build_job_prompt(job: dict, prerun_script: Optional[tuple] = None) -> str:
     if not skill_names:
         return prompt
 
-    from tools.skills_tool import skill_view
+    from harness.tools.skills_tool import skill_view
 
     parts = []
     skipped: list[str] = []
@@ -806,8 +806,8 @@ def _run_job_via_synthetic(
     Returns the same tuple as the legacy path so save/deliver/mark all
     work without changes.
     """
-    from gateway.config import Platform
-    from plutus_time import now as _hermes_now
+    from harness.gateway.config import Platform
+    from harness.clock import now as _hermes_now
 
     job_id = job["id"]
     job_name = job["name"]
@@ -904,13 +904,13 @@ def _log_job_completion(
 
     if success:
         logger.info(
-            "cron.scheduler: Job '%s' (ID %s) completed in %.2fs — "
+            "harness.cron.scheduler: Job '%s' (ID %s) completed in %.2fs — "
             "model=%s, mode=%s, api_calls=%d, output_chars=%d",
             job_name, job_id, duration, _model, mode, api_calls, output_chars,
         )
     else:
         logger.error(
-            "cron.scheduler: Job '%s' (ID %s) FAILED after %.2fs — "
+            "harness.cron.scheduler: Job '%s' (ID %s) FAILED after %.2fs — "
             "model=%s, mode=%s, error=%s",
             job_name, job_id, duration, _model, mode, error or "unknown",
         )
@@ -1048,7 +1048,7 @@ def _legacy_run_job(
     session_id, runs the agent in a worker thread, ends the session.
     Same shape as the original ``run_job`` body before Phase 5.
     """
-    from run_agent import AIAgent
+    from harness.run_agent import AIAgent
 
     _start_time = time.time()
     _job_id = job.get("id", "?")
@@ -1059,7 +1059,7 @@ def _legacy_run_job(
     # and discoverable via session_search (same pattern as gateway/run.py).
     _session_db = None
     try:
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         _session_db = SessionDB()
     except Exception as e:
         logger.debug("Job '%s': SQLite session store not available: %s", _job_id, e)
@@ -1075,7 +1075,7 @@ def _legacy_run_job(
 
     # Use ContextVars for per-job session/delivery state so parallel jobs
     # don't clobber each other's targets (os.environ is process-global).
-    from gateway.session_context import set_session_vars, clear_session_vars, _VAR_MAP
+    from harness.gateway.session_context import set_session_vars, clear_session_vars, _VAR_MAP
 
     _ctx_tokens = set_session_vars(
         platform=origin["platform"] if origin else "",
@@ -1120,7 +1120,7 @@ def _legacy_run_job(
 
         # Apply IPv4 preference if configured.
         try:
-            from plutus_constants import apply_ipv4_preference
+            from harness.constants import apply_ipv4_preference
             _net_cfg = _cfg.get("network", {})
             if isinstance(_net_cfg, dict) and _net_cfg.get("force_ipv4"):
                 apply_ipv4_preference(force=True)
@@ -1128,7 +1128,7 @@ def _legacy_run_job(
             pass
 
         # Reasoning config from config.yaml
-        from plutus_constants import parse_reasoning_effort
+        from harness.constants import parse_reasoning_effort
         effort = str(_cfg.get("agent", {}).get("reasoning_effort", "")).strip()
         reasoning_config = parse_reasoning_effort(effort)
 
@@ -1155,7 +1155,7 @@ def _legacy_run_job(
         # Provider routing
         pr = _cfg.get("provider_routing", {})
 
-        from plutus_cli.runtime_provider import (
+        from harness.cli.runtime_provider import (
             resolve_runtime_provider,
             format_runtime_provider_error,
         )
@@ -1179,7 +1179,7 @@ def _legacy_run_job(
         runtime_provider = str(runtime.get("provider") or "").strip().lower()
         if runtime_provider:
             try:
-                from agent.credential_pool import load_pool
+                from harness.agent.credential_pool import load_pool
                 pool = load_pool(runtime_provider)
                 if pool.has_credentials():
                     credential_pool = pool

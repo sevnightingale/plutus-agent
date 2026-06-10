@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
-from agent.gemini_schema import sanitize_gemini_tool_parameters
+from harness.agent.gemini_schema import sanitize_gemini_tool_parameters
 
 logger = logging.getLogger(__name__)
 

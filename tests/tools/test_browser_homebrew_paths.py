@@ -8,14 +8,14 @@ from unittest.mock import patch, MagicMock, mock_open
 
 import pytest
 
-from tools.browser_tool import (
+from harness.tools.browser_tool import (
     _discover_homebrew_node_dirs,
     _find_agent_browser,
     _run_browser_command,
     _SANE_PATH,
     check_browser_requirements,
 )
-import tools.browser_tool as _bt
+import harness.tools.browser_tool as _bt
 
 
 @pytest.fixture(autouse=True)
@@ -115,7 +115,7 @@ class TestFindAgentBrowser:
         with patch("shutil.which", side_effect=mock_which), \
              patch("os.path.isdir", return_value=True), \
              patch(
-                 "tools.browser_tool._discover_homebrew_node_dirs",
+                 "harness.tools.browser_tool._discover_homebrew_node_dirs",
                  return_value=[],
              ):
             result = _find_agent_browser()
@@ -144,7 +144,7 @@ class TestFindAgentBrowser:
              patch("os.path.isdir", return_value=True), \
              patch.object(Path, "exists", mock_path_exists), \
              patch(
-                 "tools.browser_tool._discover_homebrew_node_dirs",
+                 "harness.tools.browser_tool._discover_homebrew_node_dirs",
                  return_value=[],
              ):
             result = _find_agent_browser()
@@ -182,7 +182,7 @@ class TestFindAgentBrowser:
              patch("os.path.isdir", side_effect=selective_isdir), \
              patch.object(Path, "exists", mock_path_exists), \
              patch(
-                 "tools.browser_tool._discover_homebrew_node_dirs",
+                 "harness.tools.browser_tool._discover_homebrew_node_dirs",
                  return_value=[],
              ):
             result = _find_agent_browser()
@@ -201,7 +201,7 @@ class TestFindAgentBrowser:
              patch("os.path.isdir", return_value=False), \
              patch.object(Path, "exists", mock_path_exists), \
              patch(
-                 "tools.browser_tool._discover_homebrew_node_dirs",
+                 "harness.tools.browser_tool._discover_homebrew_node_dirs",
                  return_value=[],
              ):
             with pytest.raises(FileNotFoundError, match="agent-browser CLI not found"):
@@ -212,9 +212,9 @@ class TestBrowserRequirements:
     def test_termux_requires_real_agent_browser_install_not_npx_fallback(self, monkeypatch):
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.browser_tool._is_camofox_mode", lambda: False)
-        monkeypatch.setattr("tools.browser_tool._get_cloud_provider", lambda: None)
-        monkeypatch.setattr("tools.browser_tool._find_agent_browser", lambda: "npx agent-browser")
+        monkeypatch.setattr("harness.tools.browser_tool._is_camofox_mode", lambda: False)
+        monkeypatch.setattr("harness.tools.browser_tool._get_cloud_provider", lambda: None)
+        monkeypatch.setattr("harness.tools.browser_tool._find_agent_browser", lambda: "npx agent-browser")
 
         assert check_browser_requirements() is False
 
@@ -223,8 +223,8 @@ class TestRunBrowserCommandTermuxFallback:
     def test_termux_local_mode_rejects_bare_npx_fallback(self, monkeypatch):
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.browser_tool._find_agent_browser", lambda: "npx agent-browser")
-        monkeypatch.setattr("tools.browser_tool._get_cloud_provider", lambda: None)
+        monkeypatch.setattr("harness.tools.browser_tool._find_agent_browser", lambda: "npx agent-browser")
+        monkeypatch.setattr("harness.tools.browser_tool._get_cloud_provider", lambda: None)
 
         result = _run_browser_command("task-1", "navigate", ["https://example.com"])
 
@@ -258,15 +258,15 @@ class TestRunBrowserCommandPathConstruction:
         browser_path = "/Users/test/Library/Application Support/hermes/node_modules/.bin/agent-browser"
         hermes_home = str(tmp_path / "hermes-home")
 
-        with patch("tools.browser_tool._find_agent_browser", return_value=browser_path), \
-             patch("tools.browser_tool._get_session_info", return_value=fake_session), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
-             patch("plutus_constants.Path.home", return_value=tmp_path), \
+        with patch("harness.tools.browser_tool._find_agent_browser", return_value=browser_path), \
+             patch("harness.tools.browser_tool._get_session_info", return_value=fake_session), \
+             patch("harness.tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
+             patch("harness.tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
+             patch("harness.constants.Path.home", return_value=tmp_path), \
              patch("subprocess.Popen", side_effect=capture_popen), \
              patch("os.open", return_value=99), \
              patch("os.close"), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False), \
              patch.dict(
                  os.environ,
                  {
@@ -309,15 +309,15 @@ class TestRunBrowserCommandPathConstruction:
         fake_json = json.dumps({"success": True})
         hermes_home = str(tmp_path / "hermes-home")
 
-        with patch("tools.browser_tool._find_agent_browser", return_value="npx agent-browser"), \
-             patch("tools.browser_tool._get_session_info", return_value=fake_session), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
-             patch("plutus_constants.Path.home", return_value=tmp_path), \
+        with patch("harness.tools.browser_tool._find_agent_browser", return_value="npx agent-browser"), \
+             patch("harness.tools.browser_tool._get_session_info", return_value=fake_session), \
+             patch("harness.tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
+             patch("harness.tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
+             patch("harness.constants.Path.home", return_value=tmp_path), \
              patch("subprocess.Popen", side_effect=capture_popen), \
              patch("os.open", return_value=99), \
              patch("os.close"), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False), \
              patch.dict(
                  os.environ,
                  {
@@ -380,15 +380,15 @@ class TestRunBrowserCommandPathConstruction:
                 return True  # _SANE_PATH dirs
             return real_isdir(p)
 
-        with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
-             patch("tools.browser_tool._get_session_info", return_value=fake_session), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool._discover_homebrew_node_dirs", return_value=fake_homebrew_dirs), \
+        with patch("harness.tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
+             patch("harness.tools.browser_tool._get_session_info", return_value=fake_session), \
+             patch("harness.tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
+             patch("harness.tools.browser_tool._discover_homebrew_node_dirs", return_value=fake_homebrew_dirs), \
              patch("os.path.isdir", side_effect=selective_isdir), \
              patch("subprocess.Popen", side_effect=capture_popen), \
              patch("os.open", return_value=99), \
              patch("os.close"), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False), \
              patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
             # The function reads from temp files for stdout/stderr
             with patch("builtins.open", mock_open(read_data=fake_json)):
@@ -428,15 +428,15 @@ class TestRunBrowserCommandPathConstruction:
                 return True
             return real_isdir(p)
 
-        with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
-             patch("tools.browser_tool._get_session_info", return_value=fake_session), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
+        with patch("harness.tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
+             patch("harness.tools.browser_tool._get_session_info", return_value=fake_session), \
+             patch("harness.tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
+             patch("harness.tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
              patch("os.path.isdir", side_effect=selective_isdir), \
              patch("subprocess.Popen", side_effect=capture_popen), \
              patch("os.open", return_value=99), \
              patch("os.close"), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False), \
              patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
             with patch("builtins.open", mock_open(read_data=fake_json)):
                 _run_browser_command("test-task", "navigate", ["https://example.com"])
@@ -476,15 +476,15 @@ class TestRunBrowserCommandPathConstruction:
                 return True
             return real_isdir(path)
 
-        with patch("tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
-             patch("tools.browser_tool._get_session_info", return_value=fake_session), \
-             patch("tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
-             patch("tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
+        with patch("harness.tools.browser_tool._find_agent_browser", return_value="/usr/local/bin/agent-browser"), \
+             patch("harness.tools.browser_tool._get_session_info", return_value=fake_session), \
+             patch("harness.tools.browser_tool._socket_safe_tmpdir", return_value=str(tmp_path)), \
+             patch("harness.tools.browser_tool._discover_homebrew_node_dirs", return_value=[]), \
              patch("os.path.isdir", side_effect=selective_isdir), \
              patch("subprocess.Popen", side_effect=capture_popen), \
              patch("os.open", return_value=99), \
              patch("os.close"), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False), \
              patch.dict(os.environ, {"PATH": "/usr/bin:/bin", "HOME": "/home/test"}, clear=True):
             with patch("builtins.open", mock_open(read_data=fake_json)):
                 _run_browser_command("test-task", "navigate", ["https://example.com"])

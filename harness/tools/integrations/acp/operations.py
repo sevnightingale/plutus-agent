@@ -23,7 +23,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from tools.registry import registry, tool_error, tool_result
+from harness.tools.registry import registry, tool_error, tool_result
 
 from . import _cli
 from .data_points import DEFAULT_CHAIN_ID

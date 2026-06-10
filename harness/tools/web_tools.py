@@ -48,20 +48,20 @@ import asyncio
 from typing import List, Dict, Any, Optional
 import httpx
 from firecrawl import Firecrawl
-from agent.auxiliary_client import (
+from harness.agent.auxiliary_client import (
     async_call_llm,
     extract_content_or_reasoning,
     get_async_text_auxiliary_client,
 )
-from tools.debug_helpers import DebugSession
-from tools.managed_tool_gateway import (
+from harness.tools.debug_helpers import DebugSession
+from harness.tools.managed_tool_gateway import (
     build_vendor_gateway_url,
     read_nous_access_token as _read_nous_access_token,
     resolve_managed_tool_gateway,
 )
-from tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway
-from tools.url_safety import is_safe_url
-from tools.website_policy import check_website_access
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway
+from harness.tools.url_safety import is_safe_url
+from harness.tools.website_policy import check_website_access
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def _has_env(name: str) -> bool:
 def _load_web_config() -> dict:
     """Load the ``web:`` section from ~/.plutus-agent/config.yaml."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         return load_config().get("web", {})
     except (ImportError, Exception):
         return {}
@@ -461,7 +461,7 @@ def _resolve_web_extract_auxiliary(model: Optional[str] = None) -> tuple[Optiona
 
     extra_body: Dict[str, Any] = {}
     if client is not None and _is_nous_auxiliary_client(client):
-        from agent.auxiliary_client import get_auxiliary_extra_body
+        from harness.agent.auxiliary_client import get_auxiliary_extra_body
         extra_body = get_auxiliary_extra_body() or {"tags": ["product=hermes-agent"]}
 
     return client, effective_model, extra_body
@@ -898,7 +898,7 @@ def _get_exa_client():
 
 def _exa_search(query: str, limit: int = 10) -> dict:
     """Search using the Exa SDK and return results as a dict."""
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return {"error": "Interrupted", "success": False}
 
@@ -930,7 +930,7 @@ def _exa_extract(urls: List[str]) -> List[Dict[str, Any]]:
     Returns a list of result dicts matching the structure expected by the
     LLM post-processing pipeline (url, title, content, metadata).
     """
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return [{"url": u, "error": "Interrupted", "title": ""} for u in urls]
 
@@ -960,7 +960,7 @@ def _exa_extract(urls: List[str]) -> List[Dict[str, Any]]:
 
 def _parallel_search(query: str, limit: int = 5) -> dict:
     """Search using the Parallel SDK and return results as a dict."""
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return {"error": "Interrupted", "success": False}
 
@@ -995,7 +995,7 @@ async def _parallel_extract(urls: List[str]) -> List[Dict[str, Any]]:
     Returns a list of result dicts matching the structure expected by the
     LLM post-processing pipeline (url, title, content, metadata).
     """
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return [{"url": u, "error": "Interrupted", "title": ""} for u in urls]
 
@@ -1078,7 +1078,7 @@ def web_search_tool(query: str, limit: int = 5) -> str:
     }
     
     try:
-        from tools.interrupt import is_interrupted
+        from harness.tools.interrupt import is_interrupted
         if is_interrupted():
             return tool_error("Interrupted", success=False)
 
@@ -1193,7 +1193,7 @@ async def web_extract_tool(
     """
     # Block URLs containing embedded secrets (exfiltration prevention).
     # URL-decode first so percent-encoded secrets (%73k- = sk-) are caught.
-    from agent.redact import _PREFIX_RE
+    from harness.agent.redact import _PREFIX_RE
     from urllib.parse import unquote
     for _url in urls:
         if _PREFIX_RE.search(_url) or _PREFIX_RE.search(unquote(_url)):
@@ -1268,7 +1268,7 @@ async def web_extract_tool(
                 # Batch scraping adds complexity without much benefit for small numbers of URLs
                 results: List[Dict[str, Any]] = []
 
-                from tools.interrupt import is_interrupted as _is_interrupted
+                from harness.tools.interrupt import is_interrupted as _is_interrupted
                 for url in safe_urls:
                     if _is_interrupted():
                         results.append({"url": url, "error": "Interrupted", "title": ""})
@@ -1561,7 +1561,7 @@ async def web_crawl_tool(
                 return json.dumps({"results": [{"url": url, "title": "", "content": "", "error": blocked["message"],
                     "blocked_by_policy": {"host": blocked["host"], "rule": blocked["rule"], "source": blocked["source"]}}]}, ensure_ascii=False)
 
-            from tools.interrupt import is_interrupted as _is_int
+            from harness.tools.interrupt import is_interrupted as _is_int
             if _is_int():
                 return tool_error("Interrupted", success=False)
 
@@ -1672,7 +1672,7 @@ async def web_crawl_tool(
         if instructions:
             logger.info("Instructions parameter ignored (not supported in crawl API)")
         
-        from tools.interrupt import is_interrupted as _is_int
+        from harness.tools.interrupt import is_interrupted as _is_int
         if _is_int():
             return tool_error("Interrupted", success=False)
 
@@ -2043,7 +2043,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 WEB_SEARCH_SCHEMA = {
     "name": "web_search",

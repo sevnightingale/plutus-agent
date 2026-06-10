@@ -24,14 +24,14 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from agent.auxiliary_client import call_llm
-from agent.context_engine import ContextEngine
-from agent.model_metadata import (
+from harness.agent.auxiliary_client import call_llm
+from harness.agent.context_engine import ContextEngine
+from harness.agent.model_metadata import (
     MINIMUM_CONTEXT_LENGTH,
     get_model_context_length,
     estimate_messages_tokens_rough,
 )
-from agent.redact import redact_sensitive_text
+from harness.agent.redact import redact_sensitive_text
 
 logger = logging.getLogger(__name__)
 

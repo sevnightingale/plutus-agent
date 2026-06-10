@@ -14,7 +14,7 @@ from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 
-from plutus_cli.config import get_hermes_home
+from harness.cli.config import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from gateway.config import (
+from harness.gateway.config import (
     GatewayConfig,
     HomeChannel,
     Platform,

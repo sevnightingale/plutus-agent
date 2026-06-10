@@ -7,7 +7,7 @@ so that parallel tool calls are never split during compression.
 import pytest
 from unittest.mock import patch, MagicMock
 
-from agent.context_compressor import ContextCompressor
+from harness.agent.context_compressor import ContextCompressor
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ def _make_compressor(**kwargs) -> ContextCompressor:
         quiet_mode=True,
     )
     defaults.update(kwargs)
-    with patch("agent.context_compressor.get_model_context_length", return_value=8000):
+    with patch("harness.agent.context_compressor.get_model_context_length", return_value=8000):
         return ContextCompressor(**defaults)
 
 

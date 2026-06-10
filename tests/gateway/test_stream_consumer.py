@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
+from harness.gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 
 
 # ── _clean_for_display unit tests ────────────────────────────────────────
@@ -148,9 +148,9 @@ class TestEditMessageFinalizeSignature:
     @pytest.mark.parametrize(
         "module_path,class_name",
         [
-            ("gateway.platforms.telegram", "TelegramAdapter"),
-            ("gateway.platforms.discord", "DiscordAdapter"),
-            ("gateway.platforms.slack", "SlackAdapter"),
+            ("harness.gateway.platforms.telegram", "TelegramAdapter"),
+            ("harness.gateway.platforms.discord", "DiscordAdapter"),
+            ("harness.gateway.platforms.slack", "SlackAdapter"),
         ],
     )
     def test_edit_message_accepts_finalize(self, module_path, class_name):

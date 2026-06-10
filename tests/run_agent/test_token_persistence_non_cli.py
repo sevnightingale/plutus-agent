@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from run_agent import AIAgent
+from harness.run_agent import AIAgent
 
 
 def _mock_response(*, usage: dict, content: str = "done"):
@@ -16,9 +16,9 @@ def _mock_response(*, usage: dict, content: str = "done"):
 
 def _make_agent(session_db, *, platform: str):
     with (
-        patch("run_agent.get_tool_definitions", return_value=[]),
-        patch("run_agent.check_toolset_requirements", return_value={}),
-        patch("run_agent.OpenAI"),
+        patch("harness.run_agent.get_tool_definitions", return_value=[]),
+        patch("harness.run_agent.check_toolset_requirements", return_value={}),
+        patch("harness.run_agent.OpenAI"),
     ):
         agent = AIAgent(
             api_key="test-key",

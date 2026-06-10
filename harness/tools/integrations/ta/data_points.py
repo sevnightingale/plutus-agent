@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Any, Dict
 
-from tools.core.data_point_registry import register_data_point
+from harness.tools.core.data_point_registry import register_data_point
 
 from . import _calc
 

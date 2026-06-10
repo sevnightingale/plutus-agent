@@ -17,10 +17,10 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from gateway.config import PlatformConfig
-from gateway.platforms.api_server import APIServerAdapter, cors_middleware
+from harness.gateway.config import PlatformConfig
+from harness.gateway.platforms.api_server import APIServerAdapter, cors_middleware
 
-_MOD = "gateway.platforms.api_server"
+_MOD = "harness.gateway.platforms.api_server"
 
 
 # ---------------------------------------------------------------------------

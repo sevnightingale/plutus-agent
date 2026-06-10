@@ -67,8 +67,8 @@ def _load_terminalbench_module(monkeypatch):
             "environments.tool_context",
             ToolContext=_ToolContext,
         ),
-        "tools.terminal_tool": _stub_module(
-            "tools.terminal_tool",
+        "harness.tools.terminal_tool": _stub_module(
+            "harness.tools.terminal_tool",
             register_task_env_overrides=lambda *args, **kwargs: None,
             clear_task_env_overrides=lambda *args, **kwargs: None,
             cleanup_vm=lambda *args, **kwargs: None,

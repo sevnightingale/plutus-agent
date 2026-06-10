@@ -29,7 +29,7 @@ class TestQueryLocalContextLengthOllama:
 
     def test_ollama_model_info_context_length(self):
         """Reads context length from model_info dict in /api/show response."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         show_resp = self._make_resp(200, {
             "model_info": {"llama.context_length": 131072}
@@ -42,7 +42,7 @@ class TestQueryLocalContextLengthOllama:
         client_mock.post.return_value = show_resp
         client_mock.get.return_value = models_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="ollama"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
@@ -50,7 +50,7 @@ class TestQueryLocalContextLengthOllama:
 
     def test_ollama_parameters_num_ctx(self):
         """Falls back to num_ctx in parameters string when model_info lacks context_length."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         show_resp = self._make_resp(200, {
             "model_info": {},
@@ -64,7 +64,7 @@ class TestQueryLocalContextLengthOllama:
         client_mock.post.return_value = show_resp
         client_mock.get.return_value = models_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="ollama"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("some-model", "http://localhost:11434/v1")
 
@@ -83,7 +83,7 @@ class TestQueryLocalContextLengthOllama:
         Hermes used 40960 it would let the conversation grow past 32768
         before compressing, and Ollama would truncate the prefix.
         """
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         show_resp = self._make_resp(200, {
             "model_info": {"qwen3.context_length": 40960},
@@ -97,7 +97,7 @@ class TestQueryLocalContextLengthOllama:
         client_mock.post.return_value = show_resp
         client_mock.get.return_value = models_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="ollama"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length(
                 "hermes-brain:qwen3-14b-ctx32k", "http://100.77.243.5:11434/v1"
@@ -110,7 +110,7 @@ class TestQueryLocalContextLengthOllama:
 
     def test_ollama_show_404_falls_through(self):
         """When /api/show returns 404, falls through to /v1/models/{model}."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         show_resp = self._make_resp(404, {})
         model_detail_resp = self._make_resp(200, {"max_model_len": 65536})
@@ -121,7 +121,7 @@ class TestQueryLocalContextLengthOllama:
         client_mock.post.return_value = show_resp
         client_mock.get.return_value = model_detail_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="ollama"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="ollama"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("some-model", "http://localhost:11434/v1")
 
@@ -139,7 +139,7 @@ class TestQueryLocalContextLengthVllm:
 
     def test_vllm_max_model_len(self):
         """Reads max_model_len from /v1/models/{model} response."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         detail_resp = self._make_resp(200, {"id": "omnicoder-9b", "max_model_len": 100000})
         list_resp = self._make_resp(404, {})
@@ -150,7 +150,7 @@ class TestQueryLocalContextLengthVllm:
         client_mock.post.return_value = self._make_resp(404, {})
         client_mock.get.return_value = detail_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="vllm"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="vllm"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("omnicoder-9b", "http://localhost:8000/v1")
 
@@ -158,7 +158,7 @@ class TestQueryLocalContextLengthVllm:
 
     def test_vllm_context_length_key(self):
         """Reads context_length from /v1/models/{model} response."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         detail_resp = self._make_resp(200, {"id": "some-model", "context_length": 32768})
 
@@ -168,7 +168,7 @@ class TestQueryLocalContextLengthVllm:
         client_mock.post.return_value = self._make_resp(404, {})
         client_mock.get.return_value = detail_resp
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="vllm"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="vllm"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("some-model", "http://localhost:8000/v1")
 
@@ -186,7 +186,7 @@ class TestQueryLocalContextLengthModelsList:
 
     def test_models_list_max_model_len(self):
         """Finds context length for model in /v1/models list."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         detail_resp = self._make_resp(404, {})
         list_resp = self._make_resp(200, {
@@ -209,7 +209,7 @@ class TestQueryLocalContextLengthModelsList:
         client_mock.post.return_value = self._make_resp(404, {})
         client_mock.get.side_effect = side_effect
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value=None), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value=None), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("omnicoder-9b", "http://localhost:1234")
 
@@ -217,7 +217,7 @@ class TestQueryLocalContextLengthModelsList:
 
     def test_models_list_model_not_found_returns_none(self):
         """Returns None when model is not in the /v1/models list."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         detail_resp = self._make_resp(404, {})
         list_resp = self._make_resp(200, {
@@ -237,7 +237,7 @@ class TestQueryLocalContextLengthModelsList:
         client_mock.post.return_value = self._make_resp(404, {})
         client_mock.get.side_effect = side_effect
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value=None), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value=None), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("omnicoder-9b", "http://localhost:1234")
 
@@ -275,7 +275,7 @@ class TestQueryLocalContextLengthLmStudio:
 
     def test_lmstudio_exact_key_match(self):
         """Reads max_context_length when key matches exactly."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         native_resp = self._make_resp(200, {
             "models": [
@@ -289,7 +289,7 @@ class TestQueryLocalContextLengthLmStudio:
             self._make_resp(404, {}),
         )
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length(
                 "nvidia/nvidia-nemotron-super-49b-v1", "http://192.168.1.22:1234/v1"
@@ -304,7 +304,7 @@ class TestQueryLocalContextLengthLmStudio:
         (slug only, no publisher), but LM Studio's native API stores it as
         "nvidia/nvidia-nemotron-super-49b-v1", the lookup must still succeed.
         """
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         native_resp = self._make_resp(200, {
             "models": [
@@ -319,7 +319,7 @@ class TestQueryLocalContextLengthLmStudio:
             self._make_resp(404, {}),
         )
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
              patch("httpx.Client", return_value=client_mock):
             # Model passed in is just the slug after stripping "local:" prefix
             result = _query_local_context_length(
@@ -334,7 +334,7 @@ class TestQueryLocalContextLengthLmStudio:
         LM Studio's OpenAI-compat /v1/models returns id like
         "nvidia/nvidia-nemotron-super-49b-v1" — must match bare slug.
         """
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         # native /api/v1/models: no match
         native_resp = self._make_resp(404, {})
@@ -348,7 +348,7 @@ class TestQueryLocalContextLengthLmStudio:
         })
         client_mock = self._make_client(native_resp, detail_resp, list_resp)
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length(
                 "nvidia-nemotron-super-49b-v1", "http://192.168.1.22:1234/v1"
@@ -358,7 +358,7 @@ class TestQueryLocalContextLengthLmStudio:
 
     def test_lmstudio_loaded_instances_context_length(self):
         """Reads active context_length from loaded_instances when max_context_length absent."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         native_resp = self._make_resp(200, {
             "models": [
@@ -377,7 +377,7 @@ class TestQueryLocalContextLengthLmStudio:
             self._make_resp(404, {}),
         )
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length(
                 "nvidia-nemotron-super-49b-v1", "http://192.168.1.22:1234/v1"
@@ -392,7 +392,7 @@ class TestQueryLocalContextLengthLmStudio:
         while the actual loaded context is 122_651 (runtime setting). The loaded
         value is the real constraint and must be preferred.
         """
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         native_resp = self._make_resp(200, {
             "models": [
@@ -412,7 +412,7 @@ class TestQueryLocalContextLengthLmStudio:
             self._make_resp(404, {}),
         )
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length(
                 "nvidia-nemotron-3-nano-4b", "http://192.168.1.22:1234/v1"
@@ -426,7 +426,7 @@ class TestQueryLocalContextLengthLmStudio:
 
 class TestDetectLocalServerTypeAuth:
     def test_passes_bearer_token_to_probe_requests(self):
-        from agent.model_metadata import detect_local_server_type
+        from harness.agent.model_metadata import detect_local_server_type
 
         resp = MagicMock()
         resp.status_code = 200
@@ -455,7 +455,7 @@ class TestFetchEndpointModelMetadataLmStudio:
         return resp
 
     def test_uses_native_models_endpoint_only(self):
-        from agent.model_metadata import fetch_endpoint_model_metadata
+        from harness.agent.model_metadata import fetch_endpoint_model_metadata
 
         native_resp = self._make_resp(
             {
@@ -469,8 +469,8 @@ class TestFetchEndpointModelMetadataLmStudio:
             }
         )
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
-             patch("agent.model_metadata.requests.get", return_value=native_resp) as mock_get:
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value="lm-studio"), \
+             patch("harness.agent.model_metadata.requests.get", return_value=native_resp) as mock_get:
             result = fetch_endpoint_model_metadata(
                 "http://localhost:1234/v1",
                 api_key="lm-token",
@@ -491,7 +491,7 @@ class TestQueryLocalContextLengthNetworkError:
 
     def test_connection_error_returns_none(self):
         """Returns None when the server is unreachable."""
-        from agent.model_metadata import _query_local_context_length
+        from harness.agent.model_metadata import _query_local_context_length
 
         client_mock = MagicMock()
         client_mock.__enter__ = lambda s: client_mock
@@ -499,7 +499,7 @@ class TestQueryLocalContextLengthNetworkError:
         client_mock.post.side_effect = Exception("Connection refused")
         client_mock.get.side_effect = Exception("Connection refused")
 
-        with patch("agent.model_metadata.detect_local_server_type", return_value=None), \
+        with patch("harness.agent.model_metadata.detect_local_server_type", return_value=None), \
              patch("httpx.Client", return_value=client_mock):
             result = _query_local_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
@@ -515,54 +515,54 @@ class TestGetModelContextLengthLocalFallback:
 
     def test_local_endpoint_unknown_model_queries_server(self):
         """Unknown model on local endpoint gets ctx from server, not 2M default."""
-        from agent.model_metadata import get_model_context_length
+        from harness.agent.model_metadata import get_model_context_length
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=None), \
-             patch("agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
-             patch("agent.model_metadata.fetch_model_metadata", return_value={}), \
-             patch("agent.model_metadata.is_local_endpoint", return_value=True), \
-             patch("agent.model_metadata._query_local_context_length", return_value=131072), \
-             patch("agent.model_metadata.save_context_length") as mock_save:
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=None), \
+             patch("harness.agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.fetch_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.is_local_endpoint", return_value=True), \
+             patch("harness.agent.model_metadata._query_local_context_length", return_value=131072), \
+             patch("harness.agent.model_metadata.save_context_length") as mock_save:
             result = get_model_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
         assert result == 131072
 
     def test_local_endpoint_unknown_model_result_is_cached(self):
         """Context length returned from local server is persisted to cache."""
-        from agent.model_metadata import get_model_context_length
+        from harness.agent.model_metadata import get_model_context_length
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=None), \
-             patch("agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
-             patch("agent.model_metadata.fetch_model_metadata", return_value={}), \
-             patch("agent.model_metadata.is_local_endpoint", return_value=True), \
-             patch("agent.model_metadata._query_local_context_length", return_value=131072), \
-             patch("agent.model_metadata.save_context_length") as mock_save:
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=None), \
+             patch("harness.agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.fetch_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.is_local_endpoint", return_value=True), \
+             patch("harness.agent.model_metadata._query_local_context_length", return_value=131072), \
+             patch("harness.agent.model_metadata.save_context_length") as mock_save:
             get_model_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
         mock_save.assert_called_once_with("omnicoder-9b", "http://localhost:11434/v1", 131072)
 
     def test_local_endpoint_server_returns_none_falls_back_to_2m(self):
         """When local server returns None, still falls back to 2M probe tier."""
-        from agent.model_metadata import get_model_context_length, CONTEXT_PROBE_TIERS
+        from harness.agent.model_metadata import get_model_context_length, CONTEXT_PROBE_TIERS
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=None), \
-             patch("agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
-             patch("agent.model_metadata.fetch_model_metadata", return_value={}), \
-             patch("agent.model_metadata.is_local_endpoint", return_value=True), \
-             patch("agent.model_metadata._query_local_context_length", return_value=None):
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=None), \
+             patch("harness.agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.fetch_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.is_local_endpoint", return_value=True), \
+             patch("harness.agent.model_metadata._query_local_context_length", return_value=None):
             result = get_model_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
         assert result == CONTEXT_PROBE_TIERS[0]
 
     def test_non_local_endpoint_does_not_query_local_server(self):
         """For non-local endpoints, _query_local_context_length is not called."""
-        from agent.model_metadata import get_model_context_length, CONTEXT_PROBE_TIERS
+        from harness.agent.model_metadata import get_model_context_length, CONTEXT_PROBE_TIERS
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=None), \
-             patch("agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
-             patch("agent.model_metadata.fetch_model_metadata", return_value={}), \
-             patch("agent.model_metadata.is_local_endpoint", return_value=False), \
-             patch("agent.model_metadata._query_local_context_length") as mock_query:
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=None), \
+             patch("harness.agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.fetch_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.is_local_endpoint", return_value=False), \
+             patch("harness.agent.model_metadata._query_local_context_length") as mock_query:
             result = get_model_context_length(
                 "unknown-model", "https://some-cloud-api.example.com/v1"
             )
@@ -571,10 +571,10 @@ class TestGetModelContextLengthLocalFallback:
 
     def test_cached_result_skips_local_query(self):
         """Cached context length is returned without querying the local server."""
-        from agent.model_metadata import get_model_context_length
+        from harness.agent.model_metadata import get_model_context_length
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=65536), \
-             patch("agent.model_metadata._query_local_context_length") as mock_query:
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=65536), \
+             patch("harness.agent.model_metadata._query_local_context_length") as mock_query:
             result = get_model_context_length("omnicoder-9b", "http://localhost:11434/v1")
 
         assert result == 65536
@@ -582,12 +582,12 @@ class TestGetModelContextLengthLocalFallback:
 
     def test_no_base_url_does_not_query_local_server(self):
         """When base_url is empty, local server is not queried."""
-        from agent.model_metadata import get_model_context_length
+        from harness.agent.model_metadata import get_model_context_length
 
-        with patch("agent.model_metadata.get_cached_context_length", return_value=None), \
-             patch("agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
-             patch("agent.model_metadata.fetch_model_metadata", return_value={}), \
-             patch("agent.model_metadata._query_local_context_length") as mock_query:
+        with patch("harness.agent.model_metadata.get_cached_context_length", return_value=None), \
+             patch("harness.agent.model_metadata.fetch_endpoint_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata.fetch_model_metadata", return_value={}), \
+             patch("harness.agent.model_metadata._query_local_context_length") as mock_query:
             result = get_model_context_length("unknown-xyz-model", "")
 
         mock_query.assert_not_called()

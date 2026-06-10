@@ -17,7 +17,7 @@ import pytest
 import websockets
 from websockets.asyncio.server import serve
 
-from tools import browser_cdp_tool
+from harness.tools import browser_cdp_tool
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +347,7 @@ def test_invalid_timeout_falls_back_to_default(cdp_server):
 
 
 def test_registered_in_browser_toolset():
-    from tools.registry import registry
+    from harness.tools.registry import registry
 
     entry = registry.get_entry("browser_cdp")
     assert entry is not None
@@ -359,7 +359,7 @@ def test_registered_in_browser_toolset():
 
 
 def test_dispatch_through_registry(cdp_server):
-    from tools.registry import registry
+    from harness.tools.registry import registry
 
     cdp_server.on("Target.getTargets", lambda p, s: {"targetInfos": []})
     raw = registry.dispatch(
@@ -378,7 +378,7 @@ def test_dispatch_through_registry(cdp_server):
 def test_check_fn_false_when_no_cdp_url(monkeypatch):
     """Gate closes when no CDP URL is set — even if the browser toolset is
     otherwise configured."""
-    import tools.browser_tool as bt
+    import harness.tools.browser_tool as bt
 
     monkeypatch.setattr(bt, "check_browser_requirements", lambda: True)
     monkeypatch.setattr(bt, "_get_cdp_override", lambda: "")
@@ -387,7 +387,7 @@ def test_check_fn_false_when_no_cdp_url(monkeypatch):
 
 def test_check_fn_true_when_cdp_url_set(monkeypatch):
     """Gate opens as soon as a CDP URL is resolvable."""
-    import tools.browser_tool as bt
+    import harness.tools.browser_tool as bt
 
     monkeypatch.setattr(bt, "check_browser_requirements", lambda: True)
     monkeypatch.setattr(
@@ -399,7 +399,7 @@ def test_check_fn_true_when_cdp_url_set(monkeypatch):
 def test_check_fn_false_when_browser_requirements_fail(monkeypatch):
     """Even with a CDP URL, gate closes if the overall browser toolset is
     unavailable (e.g. agent-browser not installed)."""
-    import tools.browser_tool as bt
+    import harness.tools.browser_tool as bt
 
     monkeypatch.setattr(bt, "check_browser_requirements", lambda: False)
     monkeypatch.setattr(

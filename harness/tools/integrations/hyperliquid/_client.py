@@ -25,7 +25,7 @@ from hyperliquid.info import Info
 from hyperliquid.exchange import Exchange
 from hyperliquid.utils import constants
 
-from tools.core.account_registry import lookup as lookup_account
+from harness.tools.core.account_registry import lookup as lookup_account
 
 logger = logging.getLogger(__name__)
 

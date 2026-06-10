@@ -355,7 +355,7 @@ class MCPOAuthManager:
             return None
 
         # Local imports avoid circular deps at module import time.
-        from tools.mcp_oauth import (
+        from harness.tools.mcp_oauth import (
             HermesTokenStorage,
             _OAUTH_AVAILABLE,
             _build_client_metadata,
@@ -404,7 +404,7 @@ class MCPOAuthManager:
         with self._entries_lock:
             self._entries.pop(server_name, None)
 
-        from tools.mcp_oauth import remove_oauth_tokens
+        from harness.tools.mcp_oauth import remove_oauth_tokens
         remove_oauth_tokens(server_name)
         logger.info(
             "MCP OAuth '%s': evicted from cache and removed from disk",
@@ -422,7 +422,7 @@ class MCPOAuthManager:
         fresh tokens to disk, and on the next tool call the running MCP
         session picks them up without a restart.
         """
-        from tools.mcp_oauth import _get_token_dir, _safe_filename
+        from harness.tools.mcp_oauth import _get_token_dir, _safe_filename
 
         entry = self._entries.get(server_name)
         if entry is None or entry.provider is None:

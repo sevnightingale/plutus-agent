@@ -6,7 +6,7 @@ parameter correctly.  Inspired by Claude Code's /compact <focus>.
 
 from unittest.mock import MagicMock, patch
 
-from agent.context_compressor import ContextCompressor
+from harness.agent.context_compressor import ContextCompressor
 
 
 def _make_compressor():
@@ -50,7 +50,7 @@ def test_focus_topic_injected_into_summary_prompt():
         resp.choices[0].message.content = "## Goal\nUnderstand DB schema."
         return resp
 
-    with patch("agent.context_compressor.call_llm", mock_call_llm):
+    with patch("harness.agent.context_compressor.call_llm", mock_call_llm):
         result = compressor._generate_summary(turns, focus_topic="database schema")
 
     assert result is not None
@@ -77,7 +77,7 @@ def test_no_focus_topic_no_injection():
         resp.choices[0].message.content = "## Goal\nGreeting."
         return resp
 
-    with patch("agent.context_compressor.call_llm", mock_call_llm):
+    with patch("harness.agent.context_compressor.call_llm", mock_call_llm):
         result = compressor._generate_summary(turns)
 
     prompt_text = captured_prompt["messages"][0]["content"]

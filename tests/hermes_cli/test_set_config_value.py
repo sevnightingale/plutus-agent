@@ -7,7 +7,7 @@ from unittest.mock import patch, call
 
 import pytest
 
-from plutus_cli.config import set_config_value, config_command
+from harness.cli.config import set_config_value, config_command
 
 
 @pytest.fixture(autouse=True)

@@ -102,17 +102,14 @@ all = [
 ]
 
 [project.scripts]
-plutus = "plutus_cli.main:main"
-plutus-agent = "plutus_cli.main:main"
-
-[tool.setuptools]
-py-modules = ["run_agent", "model_tools", "toolsets", "cli", "plutus_constants", "plutus_state", "plutus_time", "plutus_logging", "utils"]
+plutus = "harness.cli.main:main"
+plutus-agent = "harness.cli.main:main"
 
 [tool.setuptools.package-data]
-plutus_cli = ["web_dist/**/*"]
+"harness.cli" = ["web_dist/**/*"]
 
 [tool.setuptools.packages.find]
-include = ["agent", "agent.*", "tools", "tools.*", "plutus_cli", "gateway", "gateway.*", "cron", "plugins", "plugins.*"]
+include = ["harness", "harness.*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

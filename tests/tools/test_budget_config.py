@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.budget_config import (
+from harness.tools.budget_config import (
     DEFAULT_BUDGET,
     DEFAULT_PREVIEW_SIZE_CHARS,
     DEFAULT_RESULT_SIZE_CHARS,
@@ -149,7 +149,7 @@ class TestResolveThreshold:
         result = cfg.resolve_threshold("my_tool")
         assert result == 42
 
-    @patch("tools.registry.registry")
+    @patch("harness.tools.registry.registry")
     def test_falls_back_to_registry(self, mock_registry):
         """When not pinned and not in overrides, delegate to registry."""
         mock_registry.get_max_result_size.return_value = 77_777
@@ -160,7 +160,7 @@ class TestResolveThreshold:
         )
         assert result == 77_777
 
-    @patch("tools.registry.registry")
+    @patch("harness.tools.registry.registry")
     def test_registry_receives_custom_default(self, mock_registry):
         """Custom default_result_size flows through to registry call."""
         mock_registry.get_max_result_size.return_value = 50_000

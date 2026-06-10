@@ -18,9 +18,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, SendResult
-from gateway.session import SessionEntry, SessionSource, build_session_key
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, SendResult
+from harness.gateway.session import SessionEntry, SessionSource, build_session_key
 
 E2E_MESSAGE_SETTLE_DELAY = 0.3
 
@@ -115,12 +115,12 @@ _ensure_discord_mock()
 _ensure_slack_mock()
 
 import discord  # noqa: E402 — mocked above
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
-import gateway.platforms.slack as _slack_mod  # noqa: E402
+import harness.gateway.platforms.slack as _slack_mod  # noqa: E402
 _slack_mod.SLACK_AVAILABLE = True
-from gateway.platforms.slack import SlackAdapter  # noqa: E402
+from harness.gateway.platforms.slack import SlackAdapter  # noqa: E402
 
 
 # Platform-generic factories
@@ -160,7 +160,7 @@ def make_runner(platform: Platform, session_entry: SessionEntry = None) -> "Gate
 
     Skips __init__ to avoid filesystem/network side effects.
     """
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     if session_entry is None:
         session_entry = make_session_entry(platform)
@@ -213,7 +213,7 @@ def make_adapter(platform: Platform, runner=None):
     config = PlatformConfig(enabled=True, token="e2e-test-token")
 
     if platform == Platform.DISCORD:
-        from gateway.platforms.helpers import ThreadParticipationTracker
+        from harness.gateway.platforms.helpers import ThreadParticipationTracker
         with patch.object(ThreadParticipationTracker, "_load", return_value=set()):
             adapter = DiscordAdapter(config)
         platform_key = Platform.DISCORD
@@ -366,7 +366,7 @@ def _make_discord_adapter_wired(runner=None):
         runner = make_runner(Platform.DISCORD)
 
     config = PlatformConfig(enabled=True, token="e2e-test-token")
-    from gateway.platforms.helpers import ThreadParticipationTracker
+    from harness.gateway.platforms.helpers import ThreadParticipationTracker
     with patch.object(ThreadParticipationTracker, "_load", return_value=set()):
         adapter = DiscordAdapter(config)
 

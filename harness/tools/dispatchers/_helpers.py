@@ -17,7 +17,7 @@ def session_id_from_context() -> Optional[str]:
     Stored as ``session_id`` on lifecycle.db rows; nullable.
     """
     try:
-        from gateway.session_context import get_session_env
+        from harness.gateway.session_context import get_session_env
     except Exception:
         return None
     return (get_session_env("HERMES_SESSION_KEY") or None) \

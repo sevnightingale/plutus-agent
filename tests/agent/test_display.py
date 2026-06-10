@@ -4,7 +4,7 @@ import os
 import pytest
 from unittest.mock import MagicMock, patch
 
-from agent.display import (
+from harness.agent.display import (
     build_tool_preview,
     capture_local_edit_snapshot,
     extract_edit_diff,
@@ -175,7 +175,7 @@ class TestEditDiffPreview:
     def test_render_edit_diff_with_delta_handles_renderer_errors(self, monkeypatch):
         printer = MagicMock()
 
-        monkeypatch.setattr("agent.display._summarize_rendered_diff_sections", MagicMock(side_effect=RuntimeError("boom")))
+        monkeypatch.setattr("harness.agent.display._summarize_rendered_diff_sections", MagicMock(side_effect=RuntimeError("boom")))
 
         rendered = render_edit_diff_with_delta(
             "patch",

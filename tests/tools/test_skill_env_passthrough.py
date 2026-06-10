@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-import tools.env_passthrough as _ep_mod
-from tools.env_passthrough import clear_env_passthrough, is_env_passthrough
+import harness.tools.env_passthrough as _ep_mod
+from harness.tools.env_passthrough import clear_env_passthrough, is_env_passthrough
 
 
 @pytest.fixture(autouse=True)
@@ -50,14 +50,14 @@ class TestSkillViewRegistersPassthrough:
             ),
         )
         monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
+            "harness.tools.skills_tool.SKILLS_DIR", tmp_path
         )
         # Set the env var so it's "available"
         monkeypatch.setenv("TENOR_API_KEY", "test-value-123")
 
         # Patch the secret capture callback to not prompt
-        with patch("tools.skills_tool._secret_capture_callback", None):
-            from tools.skills_tool import skill_view
+        with patch("harness.tools.skills_tool._secret_capture_callback", None):
+            from harness.tools.skills_tool import skill_view
 
             result = json.loads(skill_view(name="test-skill"))
 
@@ -76,15 +76,15 @@ class TestSkillViewRegistersPassthrough:
                 "    prompt: Enter your Tenor API key\n"
             ),
         )
-        monkeypatch.setattr("tools.skills_tool.SKILLS_DIR", tmp_path)
+        monkeypatch.setattr("harness.tools.skills_tool.SKILLS_DIR", tmp_path)
 
-        from plutus_cli.config import save_env_value
+        from harness.cli.config import save_env_value
 
         save_env_value("TENOR_API_KEY", "persisted-value-123")
         monkeypatch.delenv("TENOR_API_KEY", raising=False)
 
-        with patch("tools.skills_tool._secret_capture_callback", None):
-            from tools.skills_tool import skill_view
+        with patch("harness.tools.skills_tool._secret_capture_callback", None):
+            from harness.tools.skills_tool import skill_view
 
             result = json.loads(skill_view(name="test-skill"))
 
@@ -106,12 +106,12 @@ class TestSkillViewRegistersPassthrough:
             ),
         )
         monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
+            "harness.tools.skills_tool.SKILLS_DIR", tmp_path
         )
         monkeypatch.delenv("NONEXISTENT_SKILL_KEY_XYZ", raising=False)
 
-        with patch("tools.skills_tool._secret_capture_callback", None):
-            from tools.skills_tool import skill_view
+        with patch("harness.tools.skills_tool._secret_capture_callback", None):
+            from harness.tools.skills_tool import skill_view
 
             result = json.loads(skill_view(name="test-skill"))
 
@@ -122,14 +122,14 @@ class TestSkillViewRegistersPassthrough:
         """Skills without required_environment_variables shouldn't register anything."""
         _create_skill(tmp_path, "simple-skill")
         monkeypatch.setattr(
-            "tools.skills_tool.SKILLS_DIR", tmp_path
+            "harness.tools.skills_tool.SKILLS_DIR", tmp_path
         )
 
-        with patch("tools.skills_tool._secret_capture_callback", None):
-            from tools.skills_tool import skill_view
+        with patch("harness.tools.skills_tool._secret_capture_callback", None):
+            from harness.tools.skills_tool import skill_view
 
             result = json.loads(skill_view(name="simple-skill"))
 
         assert result["success"] is True
-        from tools.env_passthrough import get_all_passthrough
+        from harness.tools.env_passthrough import get_all_passthrough
         assert len(get_all_passthrough()) == 0

@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType, SessionSource
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType, SessionSource
 
 
 # =====================================================================
@@ -40,7 +40,7 @@ def _make_event(
 
 def _make_discord_adapter():
     """Create a minimal DiscordAdapter for testing text batching."""
-    from gateway.platforms.discord import DiscordAdapter
+    from harness.gateway.platforms.discord import DiscordAdapter
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(DiscordAdapter)
@@ -218,7 +218,7 @@ class TestDiscordTextBatching:
 
 def _make_telegram_adapter():
     """Create a minimal TelegramAdapter for testing adaptive delay."""
-    from gateway.platforms.telegram import TelegramAdapter
+    from harness.gateway.platforms.telegram import TelegramAdapter
 
     config = PlatformConfig(enabled=True, token="test-token")
     adapter = object.__new__(TelegramAdapter)

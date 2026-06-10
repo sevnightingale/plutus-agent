@@ -18,7 +18,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from tools.core.data_point_registry import register_data_point
+from harness.tools.core.data_point_registry import register_data_point
 
 from ._client import (
     get_info,
@@ -318,7 +318,7 @@ def hl_total_equity(account_name: str) -> Dict[str, Any]:
     tags=["account", "equity", "drawdown", "derived"],
 )
 def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[str, Any]:
-    from agent.lifecycle_db import get_lifecycle_db
+    from harness.agent.lifecycle_db import get_lifecycle_db
 
     info = get_info()
     addr = resolve_account_address(account_name)

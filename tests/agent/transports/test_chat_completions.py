@@ -3,13 +3,13 @@
 import pytest
 from types import SimpleNamespace
 
-from agent.transports import get_transport
-from agent.transports.types import NormalizedResponse, ToolCall
+from harness.agent.transports import get_transport
+from harness.agent.transports.types import NormalizedResponse, ToolCall
 
 
 @pytest.fixture
 def transport():
-    import agent.transports.chat_completions  # noqa: F401
+    import harness.agent.transports.chat_completions  # noqa: F401
     return get_transport("chat_completions")
 
 

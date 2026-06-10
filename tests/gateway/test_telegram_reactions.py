@@ -5,13 +5,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType, ProcessingOutcome
-from gateway.session import SessionSource
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType, ProcessingOutcome
+from harness.gateway.session import SessionSource
 
 
 def _make_adapter(**extra_env):
-    from gateway.platforms.telegram import TelegramAdapter
+    from harness.gateway.platforms.telegram import TelegramAdapter
 
     adapter = object.__new__(TelegramAdapter)
     adapter.platform = Platform.TELEGRAM
@@ -233,7 +233,7 @@ async def test_on_processing_complete_cancelled_keeps_existing_reaction(monkeypa
 
 
 def test_config_bridges_telegram_reactions(monkeypatch, tmp_path):
-    """gateway/config.py bridges telegram.reactions to TELEGRAM_REACTIONS env var."""
+    """harness/gateway/config.py bridges telegram.reactions to TELEGRAM_REACTIONS env var."""
     import yaml
     config_file = tmp_path / "config.yaml"
     config_file.write_text(yaml.dump({
@@ -246,7 +246,7 @@ def test_config_bridges_telegram_reactions(monkeypatch, tmp_path):
     # the var doesn't exist yet — load_gateway_config will overwrite it.
     monkeypatch.setenv("TELEGRAM_REACTIONS", "")
 
-    from gateway.config import load_gateway_config
+    from harness.gateway.config import load_gateway_config
     load_gateway_config()
 
     import os
@@ -265,7 +265,7 @@ def test_config_reactions_env_takes_precedence(monkeypatch, tmp_path):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setenv("TELEGRAM_REACTIONS", "false")
 
-    from gateway.config import load_gateway_config
+    from harness.gateway.config import load_gateway_config
     load_gateway_config()
 
     import os

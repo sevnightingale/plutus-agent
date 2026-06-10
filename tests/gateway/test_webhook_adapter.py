@@ -25,9 +25,9 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType, SendResult
-from gateway.platforms.webhook import (
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType, SendResult
+from harness.gateway.platforms.webhook import (
     WebhookAdapter,
     _INSECURE_NO_AUTH,
     check_webhook_requirements,
@@ -356,8 +356,8 @@ class TestHTTPHandling:
         # Use port 0 — the OS picks a free port, but aiohttp requires a real bind.
         # We just test that the method completes and marks connected.
         # Need to mock TCPSite to avoid actual binding.
-        with patch("gateway.platforms.webhook.web.AppRunner") as MockRunner, \
-             patch("gateway.platforms.webhook.web.TCPSite") as MockSite:
+        with patch("harness.gateway.platforms.webhook.web.AppRunner") as MockRunner, \
+             patch("harness.gateway.platforms.webhook.web.TCPSite") as MockSite:
             mock_runner_inst = AsyncMock()
             MockRunner.return_value = mock_runner_inst
             mock_site_inst = AsyncMock()
@@ -651,7 +651,7 @@ class TestCheckRequirements:
     def test_returns_true_when_aiohttp_available(self):
         assert check_webhook_requirements() is True
 
-    @patch("gateway.platforms.webhook.AIOHTTP_AVAILABLE", False)
+    @patch("harness.gateway.platforms.webhook.AIOHTTP_AVAILABLE", False)
     def test_returns_false_without_aiohttp(self):
         assert check_webhook_requirements() is False
 

@@ -9,16 +9,16 @@ import sys
 import subprocess
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
-from plutus_cli.auth import AuthError, resolve_provider
-from plutus_cli.colors import Colors, color
-from plutus_cli.config import get_env_path, get_env_value, get_hermes_home, load_config
-from plutus_cli.models import provider_label
-from plutus_cli.nous_subscription import get_nous_subscription_features
-from plutus_cli.runtime_provider import resolve_requested_provider
-from plutus_constants import OPENROUTER_MODELS_URL
-from tools.tool_backend_helpers import managed_nous_tools_enabled
+from harness.cli.auth import AuthError, resolve_provider
+from harness.cli.colors import Colors, color
+from harness.cli.config import get_env_path, get_env_value, get_hermes_home, load_config
+from harness.cli.models import provider_label
+from harness.cli.nous_subscription import get_nous_subscription_features
+from harness.cli.runtime_provider import resolve_requested_provider
+from harness.constants import OPENROUTER_MODELS_URL
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled
 
 def check_mark(ok: bool) -> str:
     if ok:
@@ -79,7 +79,7 @@ def _effective_provider_label() -> str:
     return provider_label(effective)
 
 
-from plutus_constants import is_termux as _is_termux
+from harness.constants import is_termux as _is_termux
 
 
 def show_status(args):
@@ -142,7 +142,7 @@ def show_status(args):
         display = redact_key(value) if not show_all else value
         print(f"  {name:<12}  {check_mark(has_key)} {display}")
 
-    from plutus_cli.auth import get_anthropic_key
+    from harness.cli.auth import get_anthropic_key
     anthropic_value = get_anthropic_key()
     anthropic_display = redact_key(anthropic_value) if not show_all else anthropic_value
     print(f"  {'Anthropic':<12}  {check_mark(bool(anthropic_value))} {anthropic_display}")
@@ -154,7 +154,7 @@ def show_status(args):
     print(color("◆ Auth Providers", Colors.CYAN, Colors.BOLD))
 
     try:
-        from plutus_cli.auth import get_nous_auth_status, get_codex_auth_status, get_qwen_auth_status
+        from harness.cli.auth import get_nous_auth_status, get_codex_auth_status, get_qwen_auth_status
         nous_status = get_nous_auth_status()
         codex_status = get_codex_auth_status()
         qwen_status = get_qwen_auth_status()
@@ -346,7 +346,7 @@ def show_status(args):
     print(color("◆ Gateway Service", Colors.CYAN, Colors.BOLD))
 
     try:
-        from plutus_cli.gateway import get_gateway_runtime_snapshot, _format_gateway_pids
+        from harness.cli.gateway import get_gateway_runtime_snapshot, _format_gateway_pids
 
         snapshot = get_gateway_runtime_snapshot()
         is_running = snapshot.running

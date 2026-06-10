@@ -21,7 +21,7 @@ from rich.table import Table
 
 # Lazy imports to avoid circular dependencies and slow startup.
 # tools.skills_hub and tools.skills_guard are imported inside functions.
-from plutus_constants import display_hermes_home
+from harness.constants import display_hermes_home
 
 _console = Console()
 
@@ -37,7 +37,7 @@ def _resolve_short_name(name: str, sources, console: Console) -> str:
     matches exist, shows them and asks the user to use the full identifier.
     Returns empty string if nothing found or ambiguous.
     """
-    from tools.skills_hub import unified_search
+    from harness.tools.skills_hub import unified_search
 
     c = console or _console
     c.print(f"[dim]Resolving '{name}'...[/]")
@@ -144,7 +144,7 @@ def _derive_category_from_install_path(install_path: str) -> str:
 def do_search(query: str, source: str = "all", limit: int = 10,
               console: Optional[Console] = None) -> None:
     """Search registries and display results as a Rich table."""
-    from tools.skills_hub import GitHubAuth, create_source_router, unified_search
+    from harness.tools.skills_hub import GitHubAuth, create_source_router, unified_search
 
     c = console or _console
     c.print(f"\n[bold]Searching for:[/] {query}")
@@ -187,7 +187,7 @@ def do_browse(page: int = 1, page_size: int = 20, source: str = "all",
 
     Official skills are always shown first, regardless of source filter.
     """
-    from tools.skills_hub import (
+    from harness.tools.skills_hub import (
         GitHubAuth, create_source_router, parallel_search_sources,
     )
 
@@ -311,11 +311,11 @@ def do_install(identifier: str, category: str = "", force: bool = False,
                console: Optional[Console] = None, skip_confirm: bool = False,
                invalidate_cache: bool = True) -> None:
     """Fetch, quarantine, scan, confirm, and install a skill."""
-    from tools.skills_hub import (
+    from harness.tools.skills_hub import (
         GitHubAuth, create_source_router, ensure_hub_dirs,
         quarantine_bundle, install_from_quarantine, HubLockFile,
     )
-    from tools.skills_guard import scan_skill, should_allow_install, format_scan_report
+    from harness.tools.skills_guard import scan_skill, should_allow_install, format_scan_report
 
     c = console or _console
     ensure_hub_dirs()
@@ -377,7 +377,7 @@ def do_install(identifier: str, category: str = "", force: bool = False,
         q_path = quarantine_bundle(bundle)
     except ValueError as exc:
         c.print(f"[bold red]Installation blocked:[/] {exc}\n")
-        from tools.skills_hub import append_audit_log
+        from harness.tools.skills_hub import append_audit_log
         append_audit_log("BLOCKED", bundle.name, bundle.source,
                          bundle.trust_level, "invalid_path", str(exc))
         return
@@ -395,7 +395,7 @@ def do_install(identifier: str, category: str = "", force: bool = False,
         c.print(f"\n[bold red]Installation blocked:[/] {reason}")
         # Clean up quarantine
         shutil.rmtree(q_path, ignore_errors=True)
-        from tools.skills_hub import append_audit_log
+        from harness.tools.skills_hub import append_audit_log
         append_audit_log("BLOCKED", bundle.name, bundle.source,
                          bundle.trust_level, result.verdict,
                          f"{len(result.findings)}_findings")
@@ -445,18 +445,18 @@ def do_install(identifier: str, category: str = "", force: bool = False,
     except ValueError as exc:
         c.print(f"[bold red]Installation blocked:[/] {exc}\n")
         shutil.rmtree(q_path, ignore_errors=True)
-        from tools.skills_hub import append_audit_log
+        from harness.tools.skills_hub import append_audit_log
         append_audit_log("BLOCKED", bundle.name, bundle.source,
                          bundle.trust_level, "invalid_path", str(exc))
         return
-    from tools.skills_hub import SKILLS_DIR
+    from harness.tools.skills_hub import SKILLS_DIR
     c.print(f"[bold green]Installed:[/] {install_dir.relative_to(SKILLS_DIR)}")
     c.print(f"[dim]Files: {', '.join(bundle.files.keys())}[/]\n")
 
     if invalidate_cache:
         # Invalidate the skills prompt cache so the new skill appears immediately
         try:
-            from agent.prompt_builder import clear_skills_system_prompt_cache
+            from harness.agent.prompt_builder import clear_skills_system_prompt_cache
             clear_skills_system_prompt_cache(clear_snapshot=True)
         except Exception:
             pass
@@ -467,7 +467,7 @@ def do_install(identifier: str, category: str = "", force: bool = False,
 
 def do_inspect(identifier: str, console: Optional[Console] = None) -> None:
     """Preview a skill's SKILL.md content without installing."""
-    from tools.skills_hub import GitHubAuth, create_source_router
+    from harness.tools.skills_hub import GitHubAuth, create_source_router
 
     c = console or _console
     auth = GitHubAuth()
@@ -520,7 +520,7 @@ def browse_skills(page: int = 1, page_size: int = 20, source: str = "all") -> di
 
     Returns ``{"items": [...], "page": int, "total_pages": int, "total": int}``.
     """
-    from tools.skills_hub import GitHubAuth, create_source_router
+    from harness.tools.skills_hub import GitHubAuth, create_source_router
 
     page_size = max(1, min(page_size, 100))
     _TRUST_RANK = {"builtin": 3, "trusted": 2, "community": 1}
@@ -563,7 +563,7 @@ def browse_skills(page: int = 1, page_size: int = 20, source: str = "all") -> di
 
 def inspect_skill(identifier: str) -> Optional[dict]:
     """Skill metadata (+ SKILL.md preview) for programmatic callers."""
-    from tools.skills_hub import GitHubAuth, create_source_router
+    from harness.tools.skills_hub import GitHubAuth, create_source_router
 
     class _Q:
         def print(self, *a, **k):
@@ -601,9 +601,9 @@ def inspect_skill(identifier: str) -> Optional[dict]:
 
 def do_list(source_filter: str = "all", console: Optional[Console] = None) -> None:
     """List installed skills, distinguishing hub, builtin, and local skills."""
-    from tools.skills_hub import HubLockFile, ensure_hub_dirs
-    from tools.skills_sync import _read_manifest
-    from tools.skills_tool import _find_all_skills
+    from harness.tools.skills_hub import HubLockFile, ensure_hub_dirs
+    from harness.tools.skills_sync import _read_manifest
+    from harness.tools.skills_tool import _find_all_skills
 
     c = console or _console
     ensure_hub_dirs()
@@ -659,7 +659,7 @@ def do_list(source_filter: str = "all", console: Optional[Console] = None) -> No
 
 def do_check(name: Optional[str] = None, console: Optional[Console] = None) -> None:
     """Check hub-installed skills for upstream updates."""
-    from tools.skills_hub import check_for_skill_updates
+    from harness.tools.skills_hub import check_for_skill_updates
 
     c = console or _console
     results = check_for_skill_updates(name=name)
@@ -682,7 +682,7 @@ def do_check(name: Optional[str] = None, console: Optional[Console] = None) -> N
 
 def do_update(name: Optional[str] = None, console: Optional[Console] = None) -> None:
     """Update hub-installed skills with upstream changes."""
-    from tools.skills_hub import HubLockFile, check_for_skill_updates
+    from harness.tools.skills_hub import HubLockFile, check_for_skill_updates
 
     c = console or _console
     lock = HubLockFile()
@@ -702,8 +702,8 @@ def do_update(name: Optional[str] = None, console: Optional[Console] = None) -> 
 
 def do_audit(name: Optional[str] = None, console: Optional[Console] = None) -> None:
     """Re-run security scan on installed hub skills."""
-    from tools.skills_hub import HubLockFile, SKILLS_DIR
-    from tools.skills_guard import scan_skill, format_scan_report
+    from harness.tools.skills_hub import HubLockFile, SKILLS_DIR
+    from harness.tools.skills_guard import scan_skill, format_scan_report
 
     c = console or _console
     lock = HubLockFile()
@@ -737,7 +737,7 @@ def do_uninstall(name: str, console: Optional[Console] = None,
                  skip_confirm: bool = False,
                  invalidate_cache: bool = True) -> None:
     """Remove a hub-installed skill with confirmation."""
-    from tools.skills_hub import uninstall_skill
+    from harness.tools.skills_hub import uninstall_skill
 
     c = console or _console
 
@@ -757,7 +757,7 @@ def do_uninstall(name: str, console: Optional[Console] = None,
         c.print(f"[bold green]{msg}[/]\n")
         if invalidate_cache:
             try:
-                from agent.prompt_builder import clear_skills_system_prompt_cache
+                from harness.agent.prompt_builder import clear_skills_system_prompt_cache
                 clear_skills_system_prompt_cache(clear_snapshot=True)
             except Exception:
                 pass
@@ -773,7 +773,7 @@ def do_reset(name: str, restore: bool = False,
              skip_confirm: bool = False,
              invalidate_cache: bool = True) -> None:
     """Reset a bundled skill's manifest tracking (+ optionally restore from bundled)."""
-    from tools.skills_sync import reset_bundled_skill
+    from harness.tools.skills_sync import reset_bundled_skill
 
     c = console or _console
 
@@ -804,7 +804,7 @@ def do_reset(name: str, restore: bool = False,
 
     if invalidate_cache:
         try:
-            from agent.prompt_builder import clear_skills_system_prompt_cache
+            from harness.agent.prompt_builder import clear_skills_system_prompt_cache
             clear_skills_system_prompt_cache(clear_snapshot=True)
         except Exception:
             pass
@@ -815,7 +815,7 @@ def do_reset(name: str, restore: bool = False,
 
 def do_tap(action: str, repo: str = "", console: Optional[Console] = None) -> None:
     """Manage taps (custom GitHub repo sources)."""
-    from tools.skills_hub import TapsManager
+    from harness.tools.skills_hub import TapsManager
 
     c = console or _console
     mgr = TapsManager()
@@ -859,8 +859,8 @@ def do_tap(action: str, repo: str = "", console: Optional[Console] = None) -> No
 def do_publish(skill_path: str, target: str = "github", repo: str = "",
                console: Optional[Console] = None) -> None:
     """Publish a local skill to a registry (GitHub PR or ClawHub submission)."""
-    from tools.skills_hub import GitHubAuth, SKILLS_DIR
-    from tools.skills_guard import scan_skill, format_scan_report
+    from harness.tools.skills_hub import GitHubAuth, SKILLS_DIR
+    from harness.tools.skills_guard import scan_skill, format_scan_report
 
     c = console or _console
     path = Path(skill_path)
@@ -1024,7 +1024,7 @@ def _github_publish(skill_path: Path, skill_name: str, target_repo: str,
 
 def do_snapshot_export(output_path: str, console: Optional[Console] = None) -> None:
     """Export current hub skill configuration to a portable JSON file."""
-    from tools.skills_hub import HubLockFile, TapsManager
+    from harness.tools.skills_hub import HubLockFile, TapsManager
 
     c = console or _console
     lock = HubLockFile()
@@ -1065,7 +1065,7 @@ def do_snapshot_export(output_path: str, console: Optional[Console] = None) -> N
 def do_snapshot_import(input_path: str, force: bool = False,
                        console: Optional[Console] = None) -> None:
     """Re-install skills from a snapshot file."""
-    from tools.skills_hub import TapsManager
+    from harness.tools.skills_hub import TapsManager
 
     c = console or _console
     inp = Path(input_path)

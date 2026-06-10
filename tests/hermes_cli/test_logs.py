@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from plutus_cli.logs import (
+from harness.cli.logs import (
     LOG_FILES,
     _extract_level,
     _extract_logger_name,
@@ -87,23 +87,23 @@ class TestExtractLevel:
 class TestExtractLoggerName:
     def test_standard_line(self):
         line = "2026-04-11 10:23:45 INFO gateway.run: Starting gateway"
-        assert _extract_logger_name(line) == "gateway.run"
+        assert _extract_logger_name(line) == "harness.gateway.run"
 
     def test_nested_logger(self):
         line = "2026-04-11 10:23:45 INFO gateway.platforms.telegram: connected"
-        assert _extract_logger_name(line) == "gateway.platforms.telegram"
+        assert _extract_logger_name(line) == "harness.gateway.platforms.telegram"
 
     def test_warning_level(self):
         line = "2026-04-11 10:23:45 WARNING tools.terminal_tool: timeout"
-        assert _extract_logger_name(line) == "tools.terminal_tool"
+        assert _extract_logger_name(line) == "harness.tools.terminal_tool"
 
     def test_with_session_tag(self):
         line = "2026-04-11 10:23:45 INFO [abc123] tools.file_tools: reading file"
-        assert _extract_logger_name(line) == "tools.file_tools"
+        assert _extract_logger_name(line) == "harness.tools.file_tools"
 
     def test_with_session_tag_and_error(self):
         line = "2026-04-11 10:23:45 ERROR [sess_xyz] agent.context_compressor: failed"
-        assert _extract_logger_name(line) == "agent.context_compressor"
+        assert _extract_logger_name(line) == "harness.agent.context_compressor"
 
     def test_top_level_module(self):
         line = "2026-04-11 10:23:45 INFO run_agent: starting conversation"

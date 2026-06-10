@@ -10,8 +10,8 @@ import os
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import plutus_cli.plugins as plugins_mod
-import model_tools
+import harness.cli.plugins as plugins_mod
+import harness.model_tools as model_tools
 
 
 _UNSET = object()
@@ -26,7 +26,7 @@ def _run_handle_function_call(
     invoke_hook=_UNSET,
 ):
     """Drive ``handle_function_call`` with a mocked registry dispatch."""
-    from tools.registry import registry
+    from harness.tools.registry import registry
 
     monkeypatch.setattr(
         registry, "dispatch",
@@ -37,7 +37,7 @@ def _run_handle_function_call(
 
     if invoke_hook is not _UNSET:
         # Patch the symbol actually imported inside handle_function_call.
-        monkeypatch.setattr("plutus_cli.plugins.invoke_hook", invoke_hook)
+        monkeypatch.setattr("harness.cli.plugins.invoke_hook", invoke_hook)
 
     return model_tools.handle_function_call(
         tool_name,

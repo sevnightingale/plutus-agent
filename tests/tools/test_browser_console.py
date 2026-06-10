@@ -18,7 +18,7 @@ class TestBrowserConsole:
     """browser_console() returns console messages + JS errors in one call."""
 
     def test_returns_console_messages_and_errors(self):
-        from tools.browser_tool import browser_console
+        from harness.tools.browser_tool import browser_console
 
         console_response = {
             "success": True,
@@ -38,7 +38,7 @@ class TestBrowserConsole:
             },
         }
 
-        with patch("tools.browser_tool._run_browser_command") as mock_cmd:
+        with patch("harness.tools.browser_tool._run_browser_command") as mock_cmd:
             mock_cmd.side_effect = [console_response, errors_response]
             result = json.loads(browser_console(task_id="test"))
 
@@ -50,10 +50,10 @@ class TestBrowserConsole:
         assert result["js_errors"][0]["message"] == "Uncaught TypeError"
 
     def test_passes_clear_flag(self):
-        from tools.browser_tool import browser_console
+        from harness.tools.browser_tool import browser_console
 
         empty = {"success": True, "data": {"messages": [], "errors": []}}
-        with patch("tools.browser_tool._run_browser_command", return_value=empty) as mock_cmd:
+        with patch("harness.tools.browser_tool._run_browser_command", return_value=empty) as mock_cmd:
             browser_console(clear=True, task_id="test")
 
         calls = mock_cmd.call_args_list
@@ -62,10 +62,10 @@ class TestBrowserConsole:
         assert calls[1][0] == ("test", "errors", ["--clear"])
 
     def test_no_clear_by_default(self):
-        from tools.browser_tool import browser_console
+        from harness.tools.browser_tool import browser_console
 
         empty = {"success": True, "data": {"messages": [], "errors": []}}
-        with patch("tools.browser_tool._run_browser_command", return_value=empty) as mock_cmd:
+        with patch("harness.tools.browser_tool._run_browser_command", return_value=empty) as mock_cmd:
             browser_console(task_id="test")
 
         calls = mock_cmd.call_args_list
@@ -73,10 +73,10 @@ class TestBrowserConsole:
         assert calls[1][0] == ("test", "errors", [])
 
     def test_empty_console_and_errors(self):
-        from tools.browser_tool import browser_console
+        from harness.tools.browser_tool import browser_console
 
         empty = {"success": True, "data": {"messages": [], "errors": []}}
-        with patch("tools.browser_tool._run_browser_command", return_value=empty):
+        with patch("harness.tools.browser_tool._run_browser_command", return_value=empty):
             result = json.loads(browser_console(task_id="test"))
 
         assert result["total_messages"] == 0
@@ -85,10 +85,10 @@ class TestBrowserConsole:
         assert result["js_errors"] == []
 
     def test_handles_failed_commands(self):
-        from tools.browser_tool import browser_console
+        from harness.tools.browser_tool import browser_console
 
         failed = {"success": False, "error": "No session"}
-        with patch("tools.browser_tool._run_browser_command", return_value=failed):
+        with patch("harness.tools.browser_tool._run_browser_command", return_value=failed):
             result = json.loads(browser_console(task_id="test"))
 
         # Should still return success with empty data
@@ -104,13 +104,13 @@ class TestBrowserConsoleSchema:
     """browser_console is properly registered in the tool registry."""
 
     def test_schema_in_browser_schemas(self):
-        from tools.browser_tool import BROWSER_TOOL_SCHEMAS
+        from harness.tools.browser_tool import BROWSER_TOOL_SCHEMAS
 
         names = [s["name"] for s in BROWSER_TOOL_SCHEMAS]
         assert "browser_console" in names
 
     def test_schema_has_clear_param(self):
-        from tools.browser_tool import BROWSER_TOOL_SCHEMAS
+        from harness.tools.browser_tool import BROWSER_TOOL_SCHEMAS
 
         schema = next(s for s in BROWSER_TOOL_SCHEMAS if s["name"] == "browser_console")
         props = schema["parameters"]["properties"]
@@ -122,20 +122,20 @@ class TestBrowserConsoleToolsetWiring:
     """browser_console must be reachable via toolset resolution."""
 
     def test_in_browser_toolset(self):
-        from toolsets import TOOLSETS
+        from harness.toolsets import TOOLSETS
         assert "browser_console" in TOOLSETS["browser"]["tools"]
 
     def test_in_hermes_core_tools(self):
-        from toolsets import _HERMES_CORE_TOOLS
+        from harness.toolsets import _HERMES_CORE_TOOLS
         assert "browser_console" in _HERMES_CORE_TOOLS
 
     def test_in_legacy_toolset_map(self):
-        from model_tools import _LEGACY_TOOLSET_MAP
+        from harness.model_tools import _LEGACY_TOOLSET_MAP
         assert "browser_console" in _LEGACY_TOOLSET_MAP["browser_tools"]
 
     def test_in_registry(self):
-        from tools.registry import registry
-        from tools import browser_tool  # noqa: F401
+        from harness.tools.registry import registry
+        from harness.tools import browser_tool  # noqa: F401
         assert "browser_console" in registry._tools
 
 
@@ -146,7 +146,7 @@ class TestBrowserVisionAnnotate:
     """browser_vision supports annotate parameter."""
 
     def test_schema_has_annotate_param(self):
-        from tools.browser_tool import BROWSER_TOOL_SCHEMAS
+        from harness.tools.browser_tool import BROWSER_TOOL_SCHEMAS
 
         schema = next(s for s in BROWSER_TOOL_SCHEMAS if s["name"] == "browser_vision")
         props = schema["parameters"]["properties"]
@@ -155,12 +155,12 @@ class TestBrowserVisionAnnotate:
 
     def test_annotate_false_no_flag(self):
         """Without annotate, screenshot command has no --annotate flag."""
-        from tools.browser_tool import browser_vision
+        from harness.tools.browser_tool import browser_vision
 
         with (
-            patch("tools.browser_tool._run_browser_command") as mock_cmd,
-            patch("tools.browser_tool.call_llm") as mock_call_llm,
-            patch("tools.browser_tool._get_vision_model", return_value="test-model"),
+            patch("harness.tools.browser_tool._run_browser_command") as mock_cmd,
+            patch("harness.tools.browser_tool.call_llm") as mock_call_llm,
+            patch("harness.tools.browser_tool._get_vision_model", return_value="test-model"),
         ):
             mock_cmd.return_value = {"success": True, "data": {}}
             # Will fail at screenshot file read, but we can check the command
@@ -176,12 +176,12 @@ class TestBrowserVisionAnnotate:
 
     def test_annotate_true_adds_flag(self):
         """With annotate=True, screenshot command includes --annotate."""
-        from tools.browser_tool import browser_vision
+        from harness.tools.browser_tool import browser_vision
 
         with (
-            patch("tools.browser_tool._run_browser_command") as mock_cmd,
-            patch("tools.browser_tool.call_llm") as mock_call_llm,
-            patch("tools.browser_tool._get_vision_model", return_value="test-model"),
+            patch("harness.tools.browser_tool._run_browser_command") as mock_cmd,
+            patch("harness.tools.browser_tool.call_llm") as mock_call_llm,
+            patch("harness.tools.browser_tool._get_vision_model", return_value="test-model"),
         ):
             mock_cmd.return_value = {"success": True, "data": {}}
             try:
@@ -204,7 +204,7 @@ class TestBrowserVisionConfig:
         return shots_dir, screenshot
 
     def test_browser_vision_uses_configured_temperature_and_timeout(self, tmp_path):
-        from tools.browser_tool import browser_vision
+        from harness.tools.browser_tool import browser_vision
 
         shots_dir, screenshot = self._setup_screenshot(tmp_path)
         mock_response = MagicMock()
@@ -213,12 +213,12 @@ class TestBrowserVisionConfig:
         mock_response.choices = [mock_choice]
 
         with (
-            patch("plutus_constants.get_hermes_dir", return_value=shots_dir),
-            patch("tools.browser_tool._cleanup_old_screenshots"),
-            patch("tools.browser_tool._run_browser_command", return_value={"success": True, "data": {"path": str(screenshot)}}),
-            patch("tools.browser_tool._get_vision_model", return_value="test-model"),
-            patch("plutus_cli.config.load_config", return_value={"auxiliary": {"vision": {"temperature": 1, "timeout": 45}}}),
-            patch("tools.browser_tool.call_llm", return_value=mock_response) as mock_llm,
+            patch("harness.constants.get_hermes_dir", return_value=shots_dir),
+            patch("harness.tools.browser_tool._cleanup_old_screenshots"),
+            patch("harness.tools.browser_tool._run_browser_command", return_value={"success": True, "data": {"path": str(screenshot)}}),
+            patch("harness.tools.browser_tool._get_vision_model", return_value="test-model"),
+            patch("harness.cli.config.load_config", return_value={"auxiliary": {"vision": {"temperature": 1, "timeout": 45}}}),
+            patch("harness.tools.browser_tool.call_llm", return_value=mock_response) as mock_llm,
         ):
             result = json.loads(browser_vision("what is on the page?", task_id="test"))
 
@@ -228,7 +228,7 @@ class TestBrowserVisionConfig:
         assert mock_llm.call_args.kwargs["timeout"] == 45.0
 
     def test_browser_vision_defaults_temperature_when_config_omits_it(self, tmp_path):
-        from tools.browser_tool import browser_vision
+        from harness.tools.browser_tool import browser_vision
 
         shots_dir, screenshot = self._setup_screenshot(tmp_path)
         mock_response = MagicMock()
@@ -237,12 +237,12 @@ class TestBrowserVisionConfig:
         mock_response.choices = [mock_choice]
 
         with (
-            patch("plutus_constants.get_hermes_dir", return_value=shots_dir),
-            patch("tools.browser_tool._cleanup_old_screenshots"),
-            patch("tools.browser_tool._run_browser_command", return_value={"success": True, "data": {"path": str(screenshot)}}),
-            patch("tools.browser_tool._get_vision_model", return_value="test-model"),
-            patch("plutus_cli.config.load_config", return_value={"auxiliary": {"vision": {}}}),
-            patch("tools.browser_tool.call_llm", return_value=mock_response) as mock_llm,
+            patch("harness.constants.get_hermes_dir", return_value=shots_dir),
+            patch("harness.tools.browser_tool._cleanup_old_screenshots"),
+            patch("harness.tools.browser_tool._run_browser_command", return_value={"success": True, "data": {"path": str(screenshot)}}),
+            patch("harness.tools.browser_tool._get_vision_model", return_value="test-model"),
+            patch("harness.cli.config.load_config", return_value={"auxiliary": {"vision": {}}}),
+            patch("harness.tools.browser_tool.call_llm", return_value=mock_response) as mock_llm,
         ):
             result = json.loads(browser_vision("what is on the page?", task_id="test"))
 
@@ -259,7 +259,7 @@ class TestRecordSessionsConfig:
     """browser.record_sessions config option."""
 
     def test_default_config_has_record_sessions(self):
-        from plutus_cli.config import DEFAULT_CONFIG
+        from harness.cli.config import DEFAULT_CONFIG
 
         browser_cfg = DEFAULT_CONFIG.get("browser", {})
         assert "record_sessions" in browser_cfg
@@ -267,10 +267,10 @@ class TestRecordSessionsConfig:
 
     def test_maybe_start_recording_disabled(self):
         """Recording doesn't start when config says record_sessions: false."""
-        from tools.browser_tool import _maybe_start_recording, _recording_sessions
+        from harness.tools.browser_tool import _maybe_start_recording, _recording_sessions
 
         with (
-            patch("tools.browser_tool._run_browser_command") as mock_cmd,
+            patch("harness.tools.browser_tool._run_browser_command") as mock_cmd,
             patch("builtins.open", side_effect=FileNotFoundError),
         ):
             _maybe_start_recording("test-task")
@@ -280,10 +280,10 @@ class TestRecordSessionsConfig:
 
     def test_maybe_stop_recording_noop_when_not_recording(self):
         """Stopping when not recording is a no-op."""
-        from tools.browser_tool import _maybe_stop_recording, _recording_sessions
+        from harness.tools.browser_tool import _maybe_stop_recording, _recording_sessions
 
         _recording_sessions.discard("test-task")  # ensure not in set
-        with patch("tools.browser_tool._run_browser_command") as mock_cmd:
+        with patch("harness.tools.browser_tool._run_browser_command") as mock_cmd:
             _maybe_stop_recording("test-task")
 
         mock_cmd.assert_not_called()

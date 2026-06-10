@@ -1,6 +1,6 @@
 """Tests for Nous subscription feature detection."""
 
-from plutus_cli import nous_subscription as ns
+from harness.cli import nous_subscription as ns
 
 
 def test_get_nous_subscription_features_recognizes_direct_exa_backend(monkeypatch):
@@ -24,7 +24,7 @@ def test_get_nous_subscription_features_recognizes_direct_exa_backend(monkeypatc
 
 
 def test_get_nous_subscription_features_prefers_managed_modal_in_auto_mode(monkeypatch):
-    monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
+    monkeypatch.setattr("harness.tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
     monkeypatch.setattr(ns, "get_env_value", lambda name: "")
     monkeypatch.setattr(ns, "get_nous_auth_status", lambda: {"logged_in": True})
     monkeypatch.setattr(ns, "managed_nous_tools_enabled", lambda: True)

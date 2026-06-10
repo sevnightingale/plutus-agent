@@ -1,6 +1,6 @@
 """Tests for the fuzzy matching module."""
 
-from tools.fuzzy_match import fuzzy_find_and_replace
+from harness.tools.fuzzy_match import fuzzy_find_and_replace
 
 
 class TestExactMatch:
@@ -234,7 +234,7 @@ class TestEscapeDriftGuard:
 
 class TestFindClosestLines:
     def setup_method(self):
-        from tools.fuzzy_match import find_closest_lines
+        from harness.tools.fuzzy_match import find_closest_lines
         self.find_closest_lines = find_closest_lines
 
     def test_finds_similar_line(self):
@@ -269,7 +269,7 @@ class TestFormatNoMatchHint:
     """
 
     def setup_method(self):
-        from tools.fuzzy_match import format_no_match_hint
+        from harness.tools.fuzzy_match import format_no_match_hint
         self.fmt = format_no_match_hint
 
     def test_fires_on_could_not_find_with_match(self):

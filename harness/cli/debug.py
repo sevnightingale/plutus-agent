@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 
 # ---------------------------------------------------------------------------
@@ -335,7 +335,7 @@ class LogSnapshot:
 
 def _primary_log_path(log_name: str) -> Optional[Path]:
     """Where *log_name* would live if present. Doesn't check existence."""
-    from plutus_cli.logs import LOG_FILES
+    from harness.cli.logs import LOG_FILES
 
     filename = LOG_FILES.get(log_name)
     return (get_hermes_home() / "logs" / filename) if filename else None
@@ -453,7 +453,7 @@ def _capture_default_log_snapshots(log_lines: int) -> dict[str, LogSnapshot]:
 
 def _capture_dump() -> str:
     """Run ``hermes dump`` and return its stdout as a string."""
-    from plutus_cli.dump import run_dump
+    from harness.cli.dump import run_dump
 
     class _FakeArgs:
         show_keys = False

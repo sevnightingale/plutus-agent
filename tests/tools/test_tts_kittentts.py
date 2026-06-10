@@ -16,7 +16,7 @@ def clean_env(monkeypatch):
 @pytest.fixture(autouse=True)
 def clear_kittentts_cache():
     """Reset the module-level model cache between tests."""
-    from tools import tts_tool as _tt
+    from harness.tools import tts_tool as _tt
     _tt._kittentts_model_cache.clear()
     yield
     _tt._kittentts_model_cache.clear()
@@ -50,7 +50,7 @@ def mock_kittentts_module():
 
 class TestGenerateKittenTts:
     def test_successful_wav_generation(self, tmp_path, mock_kittentts_module):
-        from tools.tts_tool import _generate_kittentts
+        from harness.tools.tts_tool import _generate_kittentts
 
         fake_model, fake_cls = mock_kittentts_module
         output_path = str(tmp_path / "test.wav")
@@ -62,7 +62,7 @@ class TestGenerateKittenTts:
         fake_model.generate.assert_called_once()
 
     def test_config_passes_voice_speed_cleantext(self, tmp_path, mock_kittentts_module):
-        from tools.tts_tool import _generate_kittentts
+        from harness.tools.tts_tool import _generate_kittentts
 
         fake_model, _ = mock_kittentts_module
         config = {
@@ -81,7 +81,7 @@ class TestGenerateKittenTts:
         assert call_kwargs["clean_text"] is False
 
     def test_default_model_and_voice(self, tmp_path, mock_kittentts_module):
-        from tools.tts_tool import (
+        from harness.tools.tts_tool import (
             DEFAULT_KITTENTTS_MODEL,
             DEFAULT_KITTENTTS_VOICE,
             _generate_kittentts,
@@ -94,7 +94,7 @@ class TestGenerateKittenTts:
         assert fake_model.generate.call_args.kwargs["voice"] == DEFAULT_KITTENTTS_VOICE
 
     def test_model_is_cached_across_calls(self, tmp_path, mock_kittentts_module):
-        from tools.tts_tool import _generate_kittentts
+        from harness.tools.tts_tool import _generate_kittentts
 
         _, fake_cls = mock_kittentts_module
         _generate_kittentts("One", str(tmp_path / "a.wav"), {})
@@ -104,7 +104,7 @@ class TestGenerateKittenTts:
         assert fake_cls.call_count == 1
 
     def test_different_models_are_cached_separately(self, tmp_path, mock_kittentts_module):
-        from tools.tts_tool import _generate_kittentts
+        from harness.tools.tts_tool import _generate_kittentts
 
         _, fake_cls = mock_kittentts_module
         _generate_kittentts(
@@ -122,7 +122,7 @@ class TestGenerateKittenTts:
         self, tmp_path, mock_kittentts_module, monkeypatch
     ):
         """Non-.wav output path causes WAV → target ffmpeg conversion."""
-        from tools import tts_tool as _tt
+        from harness.tools import tts_tool as _tt
 
         calls = []
 
@@ -151,7 +151,7 @@ class TestGenerateKittenTts:
         """When kittentts package is not installed, _import_kittentts raises."""
         import sys
         monkeypatch.setitem(sys.modules, "kittentts", None)
-        from tools.tts_tool import _generate_kittentts
+        from harness.tools.tts_tool import _generate_kittentts
 
         with pytest.raises((ImportError, TypeError)):
             _generate_kittentts("Hi", str(tmp_path / "out.wav"), {})
@@ -160,7 +160,7 @@ class TestGenerateKittenTts:
 class TestCheckKittenttsAvailable:
     def test_reports_available_when_package_present(self, monkeypatch):
         import importlib.util
-        from tools.tts_tool import _check_kittentts_available
+        from harness.tools.tts_tool import _check_kittentts_available
 
         fake_spec = MagicMock()
         monkeypatch.setattr(
@@ -171,7 +171,7 @@ class TestCheckKittenttsAvailable:
 
     def test_reports_unavailable_when_package_missing(self, monkeypatch):
         import importlib.util
-        from tools.tts_tool import _check_kittentts_available
+        from harness.tools.tts_tool import _check_kittentts_available
 
         monkeypatch.setattr(importlib.util, "find_spec", lambda name: None)
         assert _check_kittentts_available() is False
@@ -184,7 +184,7 @@ class TestDispatcherBranch:
         monkeypatch.setitem(sys.modules, "kittentts", None)
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
 
-        from tools.tts_tool import text_to_speech_tool
+        from harness.tools.tts_tool import text_to_speech_tool
 
         # Write a config telling it to use kittentts
         import yaml

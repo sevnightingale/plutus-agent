@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent.auxiliary_client import extract_content_or_reasoning
+from harness.agent.auxiliary_client import extract_content_or_reasoning
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ def _run(coro):
 # ── web_tools — LLM content processor (line 419) ─────────────────────────
 
 class TestWebToolsProcessorContentNone:
-    """tools/web_tools.py — _process_with_llm() return line"""
+    """harness/tools/web_tools.py — _process_with_llm() return line"""
 
     def test_none_content_raises_before_fix(self):
         response = _make_response(None)
@@ -58,7 +58,7 @@ class TestWebToolsProcessorContentNone:
 # ── web_tools — synthesis/summarization (line 538) ────────────────────────
 
 class TestWebToolsSynthesisContentNone:
-    """tools/web_tools.py — synthesize_content() final_summary line"""
+    """harness/tools/web_tools.py — synthesize_content() final_summary line"""
 
     def test_none_content_raises_before_fix(self):
         response = _make_response(None)
@@ -76,7 +76,7 @@ class TestWebToolsSynthesisContentNone:
 # ── vision_tools (line 350) ───────────────────────────────────────────────
 
 class TestVisionToolsContentNone:
-    """tools/vision_tools.py — analyze_image() analysis extraction"""
+    """harness/tools/vision_tools.py — analyze_image() analysis extraction"""
 
     def test_none_content_raises_before_fix(self):
         response = _make_response(None)
@@ -94,7 +94,7 @@ class TestVisionToolsContentNone:
 # ── skills_guard (line 963) ───────────────────────────────────────────────
 
 class TestSkillsGuardContentNone:
-    """tools/skills_guard.py — _llm_audit_skill() llm_text extraction"""
+    """harness/tools/skills_guard.py — _llm_audit_skill() llm_text extraction"""
 
     def test_none_content_raises_before_fix(self):
         response = _make_response(None)
@@ -112,7 +112,7 @@ class TestSkillsGuardContentNone:
 # ── session_search_tool (line 164) ────────────────────────────────────────
 
 class TestSessionSearchContentNone:
-    """tools/session_search_tool.py — _summarize_session() return line"""
+    """harness/tools/session_search_tool.py — _summarize_session() return line"""
 
     def test_none_content_raises_before_fix(self):
         response = _make_response(None)
@@ -144,30 +144,30 @@ class TestSourceLinesAreGuarded:
             return f.read()
 
     def test_web_tools_guarded(self):
-        src = self._read_file("tools/web_tools.py")
+        src = self._read_file("harness/tools/web_tools.py")
         assert ".message.content.strip()" not in src, (
-            "tools/web_tools.py still has unguarded "
+            "harness/tools/web_tools.py still has unguarded "
             ".content.strip() — apply `(... or \"\").strip()` guard"
         )
 
     def test_vision_tools_guarded(self):
-        src = self._read_file("tools/vision_tools.py")
+        src = self._read_file("harness/tools/vision_tools.py")
         assert ".message.content.strip()" not in src, (
-            "tools/vision_tools.py still has unguarded "
+            "harness/tools/vision_tools.py still has unguarded "
             ".content.strip() — apply `(... or \"\").strip()` guard"
         )
 
     def test_skills_guard_guarded(self):
-        src = self._read_file("tools/skills_guard.py")
+        src = self._read_file("harness/tools/skills_guard.py")
         assert ".message.content.strip()" not in src, (
-            "tools/skills_guard.py still has unguarded "
+            "harness/tools/skills_guard.py still has unguarded "
             ".content.strip() — apply `(... or \"\").strip()` guard"
         )
 
     def test_session_search_tool_guarded(self):
-        src = self._read_file("tools/session_search_tool.py")
+        src = self._read_file("harness/tools/session_search_tool.py")
         assert ".message.content.strip()" not in src, (
-            "tools/session_search_tool.py still has unguarded "
+            "harness/tools/session_search_tool.py still has unguarded "
             ".content.strip() — apply `(... or \"\").strip()` guard"
         )
 
@@ -175,7 +175,7 @@ class TestSourceLinesAreGuarded:
 # ── extract_content_or_reasoning() ────────────────────────────────────────
 
 class TestExtractContentOrReasoning:
-    """agent/auxiliary_client.py — extract_content_or_reasoning()"""
+    """harness/agent/auxiliary_client.py — extract_content_or_reasoning()"""
 
     def test_normal_content_returned(self):
         response = _make_response("  Hello world  ")

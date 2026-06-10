@@ -53,6 +53,23 @@ def _module_registers_tools(module_path: Path) -> bool:
     return any(_is_registry_register_call(stmt) for stmt in tree.body)
 
 
+def _derive_package_prefix(tools_path: Path) -> str:
+    """Derive the dotted import prefix for a tools directory from disk layout.
+
+    Walks up from ``tools_path`` accumulating directory names as long as each
+    parent is an importable package (contains ``__init__.py``). The real tree
+    (``harness/tools`` under a non-package repo root) derives ``harness.tools``;
+    the synthetic ``tmp/tools`` fixtures used in tests derive ``tools``. This
+    keeps the registry location-agnostic instead of hardcoding ``harness.tools``.
+    """
+    parts = [tools_path.name]
+    cur = tools_path.parent
+    while (cur / "__init__.py").exists():
+        parts.append(cur.name)
+        cur = cur.parent
+    return ".".join(reversed(parts))
+
+
 def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
     """Return (module_name, file_path) for every Python file in tools/ that
     might register a tool — before AST-checking for the actual register call.
@@ -68,14 +85,19 @@ def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
     under ``tools/`` (``__pycache__``, ``browser_providers``, ``environments``,
     ``core``) are intentionally not scanned — they contain support code, not
     registered tools.
+
+    Module names are derived from the on-disk package layout (see
+    ``_derive_package_prefix``) rather than hardcoded, so the same logic serves
+    both the real ``harness/tools`` tree and the synthetic fixtures in tests.
     """
     out: List[tuple] = []
+    prefix = _derive_package_prefix(tools_path)
 
     # Flat tools/*.py (upstream layout).
     for path in sorted(tools_path.glob("*.py")):
         if path.name in {"__init__.py", "registry.py", "mcp_tool.py"}:
             continue
-        out.append((f"tools.{path.stem}", path))
+        out.append((f"{prefix}.{path.stem}", path))
 
     # tools/dispatchers/*.py
     dispatchers_dir = tools_path / "dispatchers"
@@ -83,7 +105,7 @@ def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
         for path in sorted(dispatchers_dir.glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            out.append((f"tools.dispatchers.{path.stem}", path))
+            out.append((f"{prefix}.dispatchers.{path.stem}", path))
 
     # tools/lifecycle/*.py
     lifecycle_dir = tools_path / "lifecycle"
@@ -91,7 +113,7 @@ def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
         for path in sorted(lifecycle_dir.glob("*.py")):
             if path.name == "__init__.py":
                 continue
-            out.append((f"tools.lifecycle.{path.stem}", path))
+            out.append((f"{prefix}.lifecycle.{path.stem}", path))
 
     # tools/integrations/<source>/*.py
     integrations_dir = tools_path / "integrations"
@@ -102,7 +124,7 @@ def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
             for path in sorted(source_dir.glob("*.py")):
                 if path.name == "__init__.py":
                     continue
-                out.append((f"tools.integrations.{source_dir.name}.{path.stem}", path))
+                out.append((f"{prefix}.integrations.{source_dir.name}.{path.stem}", path))
 
     return out
 
@@ -140,6 +162,7 @@ def discover_builtin_tools(tools_dir: Optional[Path] = None) -> List[str]:
 
     # PLUTUS integrations: import each integration package so its
     # decorator-driven registrations execute.
+    prefix = _derive_package_prefix(tools_path)
     integrations_dir = tools_path / "integrations"
     if integrations_dir.is_dir():
         for source_dir in sorted(integrations_dir.iterdir()):
@@ -148,7 +171,7 @@ def discover_builtin_tools(tools_dir: Optional[Path] = None) -> List[str]:
             init_path = source_dir / "__init__.py"
             if not init_path.exists():
                 continue
-            mod_name = f"tools.integrations.{source_dir.name}"
+            mod_name = f"{prefix}.integrations.{source_dir.name}"
             try:
                 importlib.import_module(mod_name)
                 imported.append(mod_name)
@@ -386,7 +409,7 @@ class ToolRegistry:
             return json.dumps({"error": f"Unknown tool: {name}"})
         try:
             if entry.is_async:
-                from model_tools import _run_async
+                from harness.model_tools import _run_async
                 return _run_async(entry.handler(args, **kwargs))
             return entry.handler(args, **kwargs)
         except Exception as e:
@@ -404,7 +427,7 @@ class ToolRegistry:
             return entry.max_result_size_chars
         if default is not None:
             return default
-        from tools.budget_config import DEFAULT_RESULT_SIZE_CHARS
+        from harness.tools.budget_config import DEFAULT_RESULT_SIZE_CHARS
         return DEFAULT_RESULT_SIZE_CHARS
 
     def get_all_tool_names(self) -> List[str]:

@@ -41,7 +41,7 @@ def test_auth_add_api_key_persists_manual_entry(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "openrouter"
@@ -68,7 +68,7 @@ def test_auth_add_anthropic_oauth_persists_pool_entry(tmp_path, monkeypatch):
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
     token = _jwt_with_email("claude@example.com")
     monkeypatch.setattr(
-        "agent.anthropic_adapter.run_hermes_oauth_login_pure",
+        "harness.agent.anthropic_adapter.run_hermes_oauth_login_pure",
         lambda: {
             "access_token": token,
             "refresh_token": "refresh-token",
@@ -76,7 +76,7 @@ def test_auth_add_anthropic_oauth_persists_pool_entry(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "anthropic"
@@ -100,7 +100,7 @@ def test_auth_add_nous_oauth_persists_pool_entry(tmp_path, monkeypatch):
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
     token = _jwt_with_email("nous@example.com")
     monkeypatch.setattr(
-        "plutus_cli.auth._nous_device_code_login",
+        "harness.cli.auth._nous_device_code_login",
         lambda **kwargs: {
             "portal_base_url": "https://portal.example.com",
             "inference_base_url": "https://inference.example.com/v1",
@@ -122,7 +122,7 @@ def test_auth_add_nous_oauth_persists_pool_entry(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "nous"
@@ -177,7 +177,7 @@ def test_auth_add_nous_oauth_honors_custom_label(tmp_path, monkeypatch):
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
     token = _jwt_with_email("nous@example.com")
     monkeypatch.setattr(
-        "plutus_cli.auth._nous_device_code_login",
+        "harness.cli.auth._nous_device_code_login",
         lambda **kwargs: {
             "portal_base_url": "https://portal.example.com",
             "inference_base_url": "https://inference.example.com/v1",
@@ -199,7 +199,7 @@ def test_auth_add_nous_oauth_honors_custom_label(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "nous"
@@ -234,7 +234,7 @@ def test_auth_add_codex_oauth_persists_pool_entry(tmp_path, monkeypatch):
     _write_auth_store(tmp_path, {"version": 1, "providers": {}})
     token = _jwt_with_email("codex@example.com")
     monkeypatch.setattr(
-        "plutus_cli.auth._codex_device_code_login",
+        "harness.cli.auth._codex_device_code_login",
         lambda: {
             "tokens": {
                 "access_token": token,
@@ -245,7 +245,7 @@ def test_auth_add_codex_oauth_persists_pool_entry(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "openai-codex"
@@ -271,7 +271,7 @@ def test_auth_remove_reindexes_priorities(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, set()),
     )
     _write_auth_store(
@@ -301,7 +301,7 @@ def test_auth_remove_reindexes_priorities(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "anthropic"
@@ -319,7 +319,7 @@ def test_auth_remove_reindexes_priorities(tmp_path, monkeypatch):
 def test_auth_remove_accepts_label_target(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, set()),
     )
     _write_auth_store(
@@ -349,7 +349,7 @@ def test_auth_remove_accepts_label_target(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "openai-codex"
@@ -366,7 +366,7 @@ def test_auth_remove_accepts_label_target(tmp_path, monkeypatch):
 def test_auth_remove_prefers_exact_numeric_label_over_index(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, set()),
     )
     _write_auth_store(
@@ -404,7 +404,7 @@ def test_auth_remove_prefers_exact_numeric_label_over_index(tmp_path, monkeypatc
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "openai-codex"
@@ -441,7 +441,7 @@ def test_auth_reset_clears_provider_statuses(tmp_path, monkeypatch, capsys):
         },
     )
 
-    from plutus_cli.auth_commands import auth_reset_command
+    from harness.cli.auth_commands import auth_reset_command
 
     class _Args:
         provider = "anthropic"
@@ -493,7 +493,7 @@ def test_clear_provider_auth_removes_provider_pool_entries(tmp_path, monkeypatch
         },
     )
 
-    from plutus_cli.auth import clear_provider_auth
+    from harness.cli.auth import clear_provider_auth
 
     assert clear_provider_auth("anthropic") is True
 
@@ -505,7 +505,7 @@ def test_clear_provider_auth_removes_provider_pool_entries(tmp_path, monkeypatch
 
 
 def test_auth_list_does_not_call_mutating_select(monkeypatch, capsys):
-    from plutus_cli.auth_commands import auth_list_command
+    from harness.cli.auth_commands import auth_list_command
 
     class _Entry:
         id = "cred-1"
@@ -527,7 +527,7 @@ def test_auth_list_does_not_call_mutating_select(monkeypatch, capsys):
             raise AssertionError("auth_list_command should not call select()")
 
     monkeypatch.setattr(
-        "plutus_cli.auth_commands.load_pool",
+        "harness.cli.auth_commands.load_pool",
         lambda provider: _Pool() if provider == "openrouter" else type("_EmptyPool", (), {"entries": lambda self: []})(),
     )
 
@@ -542,7 +542,7 @@ def test_auth_list_does_not_call_mutating_select(monkeypatch, capsys):
 
 
 def test_auth_list_shows_exhausted_cooldown(monkeypatch, capsys):
-    from plutus_cli.auth_commands import auth_list_command
+    from harness.cli.auth_commands import auth_list_command
 
     class _Entry:
         id = "cred-1"
@@ -560,8 +560,8 @@ def test_auth_list_shows_exhausted_cooldown(monkeypatch, capsys):
         def peek(self):
             return None
 
-    monkeypatch.setattr("plutus_cli.auth_commands.load_pool", lambda provider: _Pool())
-    monkeypatch.setattr("plutus_cli.auth_commands.time.time", lambda: 1030.0)
+    monkeypatch.setattr("harness.cli.auth_commands.load_pool", lambda provider: _Pool())
+    monkeypatch.setattr("harness.cli.auth_commands.time.time", lambda: 1030.0)
 
     class _Args:
         provider = "openrouter"
@@ -574,7 +574,7 @@ def test_auth_list_shows_exhausted_cooldown(monkeypatch, capsys):
 
 
 def test_auth_list_prefers_explicit_reset_time(monkeypatch, capsys):
-    from plutus_cli.auth_commands import auth_list_command
+    from harness.cli.auth_commands import auth_list_command
 
     class _Entry:
         id = "cred-1"
@@ -595,9 +595,9 @@ def test_auth_list_prefers_explicit_reset_time(monkeypatch, capsys):
         def peek(self):
             return None
 
-    monkeypatch.setattr("plutus_cli.auth_commands.load_pool", lambda provider: _Pool())
+    monkeypatch.setattr("harness.cli.auth_commands.load_pool", lambda provider: _Pool())
     monkeypatch.setattr(
-        "plutus_cli.auth_commands.time.time",
+        "harness.cli.auth_commands.time.time",
         lambda: datetime(2026, 4, 5, 10, 30, tzinfo=timezone.utc).timestamp(),
     )
 
@@ -643,7 +643,7 @@ def test_auth_remove_env_seeded_clears_env_var(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "openrouter"
@@ -692,7 +692,7 @@ def test_auth_remove_env_seeded_does_not_resurrect(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "openrouter"
@@ -701,7 +701,7 @@ def test_auth_remove_env_seeded_does_not_resurrect(tmp_path, monkeypatch):
     auth_remove_command(_Args())
 
     # Now reload the pool — the entry should NOT come back
-    from agent.credential_pool import load_pool
+    from harness.agent.credential_pool import load_pool
     pool = load_pool("openrouter")
     assert not pool.has_credentials()
 
@@ -735,7 +735,7 @@ def test_auth_remove_manual_entry_does_not_touch_env(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     class _Args:
         provider = "openrouter"
@@ -754,7 +754,7 @@ def test_auth_remove_claude_code_suppresses_reseed(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
     monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, {"claude_code"}),
     )
     hermes_home = tmp_path / "hermes"
@@ -776,7 +776,7 @@ def test_auth_remove_claude_code_suppresses_reseed(tmp_path, monkeypatch):
     (hermes_home / "auth.json").write_text(json.dumps(auth_store))
 
     from types import SimpleNamespace
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
     auth_remove_command(SimpleNamespace(provider="anthropic", target="1"))
 
     updated = json.loads((hermes_home / "auth.json").read_text())
@@ -790,7 +790,7 @@ def test_unsuppress_credential_source_clears_marker(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     _write_auth_store(tmp_path, {"version": 1})
 
-    from plutus_cli.auth import suppress_credential_source, unsuppress_credential_source, is_source_suppressed
+    from harness.cli.auth import suppress_credential_source, unsuppress_credential_source, is_source_suppressed
 
     suppress_credential_source("openai-codex", "device_code")
     assert is_source_suppressed("openai-codex", "device_code") is True
@@ -809,7 +809,7 @@ def test_unsuppress_credential_source_returns_false_when_absent(tmp_path, monkey
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     _write_auth_store(tmp_path, {"version": 1})
 
-    from plutus_cli.auth import unsuppress_credential_source
+    from harness.cli.auth import unsuppress_credential_source
 
     assert unsuppress_credential_source("openai-codex", "device_code") is False
     assert unsuppress_credential_source("nonexistent", "whatever") is False
@@ -820,7 +820,7 @@ def test_unsuppress_credential_source_preserves_other_markers(tmp_path, monkeypa
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     _write_auth_store(tmp_path, {"version": 1})
 
-    from plutus_cli.auth import (
+    from harness.cli.auth import (
         suppress_credential_source,
         unsuppress_credential_source,
         is_source_suppressed,
@@ -837,7 +837,7 @@ def test_auth_remove_codex_device_code_suppresses_reseed(tmp_path, monkeypatch):
     """Removing an auto-seeded openai-codex credential must mark the source as suppressed."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, {"device_code"}),
     )
     hermes_home = tmp_path / "hermes"
@@ -868,7 +868,7 @@ def test_auth_remove_codex_device_code_suppresses_reseed(tmp_path, monkeypatch):
     (hermes_home / "auth.json").write_text(json.dumps(auth_store))
 
     from types import SimpleNamespace
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     auth_remove_command(SimpleNamespace(provider="openai-codex", target="1"))
 
@@ -884,7 +884,7 @@ def test_auth_remove_codex_manual_source_suppresses_reseed(tmp_path, monkeypatch
     """Removing a manually-added (`manual:device_code`) openai-codex credential must also suppress."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, set()),
     )
     hermes_home = tmp_path / "hermes"
@@ -915,7 +915,7 @@ def test_auth_remove_codex_manual_source_suppresses_reseed(tmp_path, monkeypatch
     (hermes_home / "auth.json").write_text(json.dumps(auth_store))
 
     from types import SimpleNamespace
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
 
     auth_remove_command(SimpleNamespace(provider="openai-codex", target="1"))
 
@@ -931,7 +931,7 @@ def test_auth_add_codex_clears_suppression_marker(tmp_path, monkeypatch):
     """Re-linking codex via `hermes auth add openai-codex` must clear any suppression marker."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     monkeypatch.setattr(
-        "agent.credential_pool._seed_from_singletons",
+        "harness.agent.credential_pool._seed_from_singletons",
         lambda provider, entries: (False, set()),
     )
     hermes_home = tmp_path / "hermes"
@@ -946,7 +946,7 @@ def test_auth_add_codex_clears_suppression_marker(tmp_path, monkeypatch):
 
     token = _jwt_with_email("codex@example.com")
     monkeypatch.setattr(
-        "plutus_cli.auth._codex_device_code_login",
+        "harness.cli.auth._codex_device_code_login",
         lambda: {
             "tokens": {
                 "access_token": token,
@@ -957,7 +957,7 @@ def test_auth_add_codex_clears_suppression_marker(tmp_path, monkeypatch):
         },
     )
 
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth_commands import auth_add_command
 
     class _Args:
         provider = "openai-codex"
@@ -996,9 +996,9 @@ def test_seed_from_singletons_respects_codex_suppression(tmp_path, monkeypatch):
             "refresh_token": "would-be-reimported",
         }
 
-    monkeypatch.setattr("plutus_cli.auth._import_codex_cli_tokens", _fake_import)
+    monkeypatch.setattr("harness.cli.auth._import_codex_cli_tokens", _fake_import)
 
-    from agent.credential_pool import _seed_from_singletons
+    from harness.agent.credential_pool import _seed_from_singletons
 
     entries = []
     changed, active_sources = _seed_from_singletons("openai-codex", entries)
@@ -1046,7 +1046,7 @@ def test_auth_remove_env_seeded_suppresses_shell_exported_var(tmp_path, monkeypa
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
     auth_remove_command(SimpleNamespace(provider="xai", target="1"))
 
     # Suppression marker written
@@ -1060,7 +1060,7 @@ def test_auth_remove_env_seeded_suppresses_shell_exported_var(tmp_path, monkeypa
 
     # Fresh simulation: shell re-exports, reload pool
     monkeypatch.setenv("XAI_API_KEY", "sk-xai-shell-export")
-    from agent.credential_pool import load_pool
+    from harness.agent.credential_pool import load_pool
     pool = load_pool("xai")
     assert not pool.has_credentials(), "pool must stay empty — env:XAI_API_KEY suppressed"
 
@@ -1098,7 +1098,7 @@ def test_auth_remove_env_seeded_dotenv_only_no_shell_hint(tmp_path, monkeypatch,
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth_commands import auth_remove_command
     auth_remove_command(SimpleNamespace(provider="deepseek", target="1"))
 
     out = capsys.readouterr().out
@@ -1127,8 +1127,8 @@ def test_auth_add_clears_env_suppression_for_provider(tmp_path, monkeypatch):
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth import is_source_suppressed
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth import is_source_suppressed
+    from harness.cli.auth_commands import auth_add_command
 
     assert is_source_suppressed("xai", "env:XAI_API_KEY") is True
     auth_add_command(SimpleNamespace(
@@ -1154,7 +1154,7 @@ def test_seed_from_env_respects_env_suppression(tmp_path, monkeypatch):
         "suppressed_sources": {"xai": ["env:XAI_API_KEY"]},
     }))
 
-    from agent.credential_pool import _seed_from_env
+    from harness.agent.credential_pool import _seed_from_env
 
     entries = []
     changed, active = _seed_from_env("xai", entries)
@@ -1178,7 +1178,7 @@ def test_seed_from_env_respects_openrouter_suppression(tmp_path, monkeypatch):
         "suppressed_sources": {"openrouter": ["env:OPENROUTER_API_KEY"]},
     }))
 
-    from agent.credential_pool import _seed_from_env
+    from harness.agent.credential_pool import _seed_from_env
 
     entries = []
     changed, active = _seed_from_env("openrouter", entries)
@@ -1207,7 +1207,7 @@ def test_seed_from_singletons_respects_nous_suppression(tmp_path, monkeypatch):
         "suppressed_sources": {"nous": ["device_code"]},
     }))
 
-    from agent.credential_pool import _seed_from_singletons
+    from harness.agent.credential_pool import _seed_from_singletons
     entries = []
     changed, active = _seed_from_singletons("nous", entries)
     assert changed is False
@@ -1228,10 +1228,10 @@ def test_seed_from_singletons_respects_copilot_suppression(tmp_path, monkeypatch
     }))
 
     # Stub resolve_copilot_token to return a live token
-    import plutus_cli.copilot_auth as ca
+    import harness.cli.copilot_auth as ca
     monkeypatch.setattr(ca, "resolve_copilot_token", lambda: ("ghp_fake", "gh auth token"))
 
-    from agent.credential_pool import _seed_from_singletons
+    from harness.agent.credential_pool import _seed_from_singletons
     entries = []
     changed, active = _seed_from_singletons("copilot", entries)
     assert changed is False
@@ -1251,12 +1251,12 @@ def test_seed_from_singletons_respects_qwen_suppression(tmp_path, monkeypatch):
         "suppressed_sources": {"qwen-oauth": ["qwen-cli"]},
     }))
 
-    import plutus_cli.auth as ha
+    import harness.cli.auth as ha
     monkeypatch.setattr(ha, "resolve_qwen_runtime_credentials", lambda **kw: {
         "api_key": "tok", "source": "qwen-cli", "base_url": "https://q",
     })
 
-    from agent.credential_pool import _seed_from_singletons
+    from harness.agent.credential_pool import _seed_from_singletons
     entries = []
     changed, active = _seed_from_singletons("qwen-oauth", entries)
     assert changed is False
@@ -1279,13 +1279,13 @@ def test_seed_from_singletons_respects_hermes_pkce_suppression(tmp_path, monkeyp
     }))
 
     # Stub the readers so only hermes_pkce is "available"; claude_code returns None
-    import agent.anthropic_adapter as aa
+    import harness.agent.anthropic_adapter as aa
     monkeypatch.setattr(aa, "read_hermes_oauth_credentials", lambda: {
         "accessToken": "tok", "refreshToken": "r", "expiresAt": 9999999999000,
     })
     monkeypatch.setattr(aa, "read_claude_code_credentials", lambda: None)
 
-    from agent.credential_pool import _seed_from_singletons
+    from harness.agent.credential_pool import _seed_from_singletons
     entries = []
     changed, active = _seed_from_singletons("anthropic", entries)
     # hermes_pkce suppressed, claude_code returns None → nothing should be seeded
@@ -1307,7 +1307,7 @@ def test_seed_custom_pool_respects_config_suppression(tmp_path, monkeypatch):
         ],
     }))
 
-    from agent.credential_pool import _seed_custom_pool, get_custom_provider_pool_key
+    from harness.agent.credential_pool import _seed_custom_pool, get_custom_provider_pool_key
     pool_key = get_custom_provider_pool_key("https://c.example.com")
 
     (hermes_home / "auth.json").write_text(json.dumps({
@@ -1329,7 +1329,7 @@ def test_credential_sources_registry_has_expected_steps():
     Guards against accidentally dropping a step during future refactors.
     If you add a new credential source, add it to the expected set below.
     """
-    from agent.credential_sources import _REGISTRY
+    from harness.agent.credential_sources import _REGISTRY
 
     descriptions = {step.description for step in _REGISTRY}
     expected = {
@@ -1347,7 +1347,7 @@ def test_credential_sources_registry_has_expected_steps():
 
 def test_credential_sources_find_step_returns_none_for_manual():
     """Manual entries have nothing external to clean up — no step registered."""
-    from agent.credential_sources import find_removal_step
+    from harness.agent.credential_sources import find_removal_step
     assert find_removal_step("openrouter", "manual") is None
     assert find_removal_step("xai", "manual") is None
 
@@ -1358,7 +1358,7 @@ def test_credential_sources_find_step_copilot_before_generic_env(tmp_path, monke
     problem (same token seeded as both gh_cli and env:<VAR>); the generic
     env step would only suppress one of the variants.
     """
-    from agent.credential_sources import find_removal_step
+    from harness.agent.credential_sources import find_removal_step
 
     step = find_removal_step("copilot", "env:GH_TOKEN")
     assert step is not None
@@ -1396,8 +1396,8 @@ def test_auth_remove_copilot_suppresses_all_variants(tmp_path, monkeypatch):
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth import is_source_suppressed
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth import is_source_suppressed
+    from harness.cli.auth_commands import auth_remove_command
 
     auth_remove_command(SimpleNamespace(provider="copilot", target="1"))
 
@@ -1428,8 +1428,8 @@ def test_auth_add_clears_all_suppressions_including_non_env(tmp_path, monkeypatc
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth import is_source_suppressed
-    from plutus_cli.auth_commands import auth_add_command
+    from harness.cli.auth import is_source_suppressed
+    from harness.cli.auth_commands import auth_add_command
 
     auth_add_command(SimpleNamespace(
         provider="copilot", auth_type="api_key",
@@ -1469,8 +1469,8 @@ def test_auth_remove_codex_manual_device_code_suppresses_canonical(tmp_path, mon
     )
 
     from types import SimpleNamespace
-    from plutus_cli.auth import is_source_suppressed
-    from plutus_cli.auth_commands import auth_remove_command
+    from harness.cli.auth import is_source_suppressed
+    from harness.cli.auth_commands import auth_remove_command
 
     auth_remove_command(SimpleNamespace(provider="openai-codex", target="1"))
     assert is_source_suppressed("openai-codex", "device_code")

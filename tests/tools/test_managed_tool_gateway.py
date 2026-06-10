@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 from unittest.mock import patch
 
-MODULE_PATH = Path(__file__).resolve().parents[2] / "tools" / "managed_tool_gateway.py"
+MODULE_PATH = Path(__file__).resolve().parents[2] / "harness" / "tools" / "managed_tool_gateway.py"
 MODULE_SPEC = spec_from_file_location("managed_tool_gateway_test_module", MODULE_PATH)
 assert MODULE_SPEC and MODULE_SPEC.loader
 managed_tool_gateway = module_from_spec(MODULE_SPEC)
@@ -92,7 +92,7 @@ def test_read_nous_access_token_refreshes_expiring_cached_token(tmp_path, monkey
         }
     }))
     monkeypatch.setattr(
-        "plutus_cli.auth.resolve_nous_access_token",
+        "harness.cli.auth.resolve_nous_access_token",
         lambda refresh_skew_seconds=120: "fresh-token",
     )
 

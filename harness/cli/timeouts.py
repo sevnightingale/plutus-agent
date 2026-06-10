@@ -19,7 +19,7 @@ def get_provider_request_timeout(
         return None
 
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
     except ImportError:
         return None
 
@@ -48,7 +48,7 @@ def get_provider_stale_timeout(
         return None
 
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
     except ImportError:
         return None
 

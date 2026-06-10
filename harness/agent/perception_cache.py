@@ -77,7 +77,7 @@ def _hermes_home() -> Path:
     """Resolve the active plutus-agent home directory."""
     # Lazy import to avoid circular dep when this module is imported during
     # tools/registry scan.
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return Path(get_hermes_home())
 
 

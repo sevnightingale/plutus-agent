@@ -4,7 +4,7 @@ import json
 import time
 from unittest.mock import patch
 
-from gateway.sticker_cache import (
+from harness.gateway.sticker_cache import (
     _load_cache,
     _save_cache,
     get_cached_description,
@@ -17,26 +17,26 @@ from gateway.sticker_cache import (
 
 class TestLoadSaveCache:
     def test_load_missing_file(self, tmp_path):
-        with patch("gateway.sticker_cache.CACHE_PATH", tmp_path / "nope.json"):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", tmp_path / "nope.json"):
             assert _load_cache() == {}
 
     def test_load_corrupt_file(self, tmp_path):
         bad_file = tmp_path / "bad.json"
         bad_file.write_text("not json{{{")
-        with patch("gateway.sticker_cache.CACHE_PATH", bad_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", bad_file):
             assert _load_cache() == {}
 
     def test_save_and_load_roundtrip(self, tmp_path):
         cache_file = tmp_path / "cache.json"
         data = {"abc123": {"description": "A cat", "emoji": "", "set_name": "", "cached_at": 1.0}}
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             _save_cache(data)
             loaded = _load_cache()
         assert loaded == data
 
     def test_save_creates_parent_dirs(self, tmp_path):
         cache_file = tmp_path / "sub" / "dir" / "cache.json"
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             _save_cache({"key": "value"})
         assert cache_file.exists()
 
@@ -44,7 +44,7 @@ class TestLoadSaveCache:
 class TestCacheSticker:
     def test_cache_and_retrieve(self, tmp_path):
         cache_file = tmp_path / "cache.json"
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             cache_sticker_description("uid_1", "A happy dog", emoji="🐕", set_name="Dogs")
             result = get_cached_description("uid_1")
 
@@ -56,13 +56,13 @@ class TestCacheSticker:
 
     def test_missing_sticker_returns_none(self, tmp_path):
         cache_file = tmp_path / "cache.json"
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             result = get_cached_description("nonexistent")
         assert result is None
 
     def test_overwrite_existing(self, tmp_path):
         cache_file = tmp_path / "cache.json"
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             cache_sticker_description("uid_1", "Old description")
             cache_sticker_description("uid_1", "New description")
             result = get_cached_description("uid_1")
@@ -71,7 +71,7 @@ class TestCacheSticker:
 
     def test_multiple_stickers(self, tmp_path):
         cache_file = tmp_path / "cache.json"
-        with patch("gateway.sticker_cache.CACHE_PATH", cache_file):
+        with patch("harness.gateway.sticker_cache.CACHE_PATH", cache_file):
             cache_sticker_description("uid_1", "Cat")
             cache_sticker_description("uid_2", "Dog")
             r1 = get_cached_description("uid_1")

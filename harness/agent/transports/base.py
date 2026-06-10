@@ -10,7 +10,7 @@ prompt caching, interrupt handling, or retry logic.  Those stay on AIAgent.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 
-from agent.transports.types import NormalizedResponse
+from harness.agent.transports.types import NormalizedResponse
 
 
 class ProviderTransport(ABC):

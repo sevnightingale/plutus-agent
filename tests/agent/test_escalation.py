@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from agent import escalation
+from harness.agent import escalation
 
 
 @pytest.fixture()
@@ -123,7 +123,7 @@ class TestScheduleWake:
             captured.update(kwargs)
             return {"id": "mock-job-id", "name": kwargs.get("name", "")}
 
-        with patch("cron.jobs.create_job", side_effect=fake_create_job):
+        with patch("harness.cron.jobs.create_job", side_effect=fake_create_job):
             job_id = escalation.schedule_escalation_wake()
 
         assert job_id == "mock-job-id"
@@ -147,7 +147,7 @@ class TestScheduleWake:
             captured.update(kwargs)
             return {"id": "j", "name": ""}
 
-        with patch("cron.jobs.create_job", side_effect=fake_create_job):
+        with patch("harness.cron.jobs.create_job", side_effect=fake_create_job):
             escalation.schedule_escalation_wake(
                 delay="30s", model="custom-model", provider="custom-provider",
             )
@@ -162,7 +162,7 @@ class TestScheduleWake:
         def fake_create_job(**kwargs):
             raise RuntimeError("cron system down")
 
-        with patch("cron.jobs.create_job", side_effect=fake_create_job):
+        with patch("harness.cron.jobs.create_job", side_effect=fake_create_job):
             result = escalation.schedule_escalation_wake()
 
         assert result is None

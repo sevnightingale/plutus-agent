@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.environments.local import (
+from harness.tools.environments.local import (
     LocalEnvironment,
     _prepend_shell_init,
     _read_terminal_shell_init_config,
@@ -27,7 +27,7 @@ class TestResolveShellInitFiles:
 
         # Default config: auto_source_bashrc on, no explicit list.
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -44,7 +44,7 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -57,7 +57,7 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -78,7 +78,7 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -90,7 +90,7 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -105,7 +105,7 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], False),
         ):
             resolved = _resolve_shell_init_files()
@@ -121,7 +121,7 @@ class TestResolveShellInitFiles:
 
         # auto_source_bashrc stays True but the explicit list takes precedence.
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([str(custom)], True),
         ):
             resolved = _resolve_shell_init_files()
@@ -137,13 +137,13 @@ class TestResolveShellInitFiles:
         monkeypatch.setenv("CUSTOM_RC_DIR", str(tmp_path / "rc"))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=(["~/rc/custom.sh"], False),
         ):
             resolved_home = _resolve_shell_init_files()
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=(["${CUSTOM_RC_DIR}/custom.sh"], False),
         ):
             resolved_var = _resolve_shell_init_files()
@@ -154,7 +154,7 @@ class TestResolveShellInitFiles:
     def test_missing_explicit_files_are_skipped_silently(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([str(tmp_path / "does-not-exist.sh")], False),
         ):
             resolved = _resolve_shell_init_files()
@@ -199,7 +199,7 @@ class TestSnapshotEndToEnd:
         )
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([str(init_file)], False),
         ):
             env = LocalEnvironment(cwd=str(tmp_path), timeout=15)
@@ -250,7 +250,7 @@ class TestSnapshotEndToEnd:
         monkeypatch.setenv("HOME", str(tmp_path))
 
         with patch(
-            "tools.environments.local._read_terminal_shell_init_config",
+            "harness.tools.environments.local._read_terminal_shell_init_config",
             return_value=([], True),
         ):
             env = LocalEnvironment(cwd=str(tmp_path), timeout=15)

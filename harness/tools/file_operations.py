@@ -9,8 +9,8 @@ The key insight is that all file operations can be expressed as shell commands,
 so we wrap the terminal backend's execute() interface to provide a unified file API.
 
 Usage:
-    from tools.file_operations import ShellFileOperations
-    from tools.terminal_tool import _active_environments
+    from harness.tools.file_operations import ShellFileOperations
+    from harness.tools.terminal_tool import _active_environments
     
     # Get file operations for a terminal environment
     file_ops = ShellFileOperations(terminal_env)
@@ -32,10 +32,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from plutus_constants import get_hermes_home
-from tools.binary_extensions import BINARY_EXTENSIONS
+from harness.constants import get_hermes_home
+from harness.tools.binary_extensions import BINARY_EXTENSIONS
 
-from agent.file_safety import (
+from harness.agent.file_safety import (
     build_write_denied_paths,
     build_write_denied_prefixes,
     get_safe_write_root as _shared_get_safe_write_root,
@@ -765,7 +765,7 @@ class ShellFileOperations(FileOperations):
         content = read_result.stdout
         
         # Import and use fuzzy matching
-        from tools.fuzzy_match import fuzzy_find_and_replace
+        from harness.tools.fuzzy_match import fuzzy_find_and_replace
         
         new_content, match_count, _strategy, error = fuzzy_find_and_replace(
             content, old_string, new_string, replace_all
@@ -774,7 +774,7 @@ class ShellFileOperations(FileOperations):
         if error or match_count == 0:
             err_msg = error or f"Could not find match for old_string in {path}"
             try:
-                from tools.fuzzy_match import format_no_match_hint
+                from harness.tools.fuzzy_match import format_no_match_hint
                 err_msg += format_no_match_hint(err_msg, match_count, old_string, content)
             except Exception:
                 pass
@@ -834,7 +834,7 @@ class ShellFileOperations(FileOperations):
             PatchResult with changes made
         """
         # Import patch parser
-        from tools.patch_parser import parse_v4a_patch, apply_v4a_operations
+        from harness.tools.patch_parser import parse_v4a_patch, apply_v4a_operations
         
         operations, parse_error = parse_v4a_patch(patch_content)
         if parse_error:

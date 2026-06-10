@@ -1,6 +1,6 @@
 import inspect
 
-from gateway.platforms.discord import DiscordAdapter
+from harness.gateway.platforms.discord import DiscordAdapter
 
 
 def test_discord_media_methods_accept_metadata_kwarg():

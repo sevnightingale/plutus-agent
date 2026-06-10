@@ -9,7 +9,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.skills_tool import skill_view
+from harness.tools.skills_tool import skill_view
 
 
 @pytest.fixture()
@@ -30,7 +30,7 @@ def fake_skills(tmp_path):
     # Create a sensitive file outside skills dir (simulating .env)
     (tmp_path / ".env").write_text("SECRET_API_KEY=sk-do-not-leak")
 
-    with patch("tools.skills_tool.SKILLS_DIR", skills_dir):
+    with patch("harness.tools.skills_tool.SKILLS_DIR", skills_dir):
         yield {"skills_dir": skills_dir, "skill_dir": skill_dir, "tmp_path": tmp_path}
 
 

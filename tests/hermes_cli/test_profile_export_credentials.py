@@ -8,7 +8,7 @@ profiles; leaking credentials in the archive is a security issue.
 import tarfile
 from pathlib import Path
 
-from plutus_cli.profiles import export_profile, _DEFAULT_EXPORT_EXCLUDE_ROOT
+from harness.cli.profiles import export_profile, _DEFAULT_EXPORT_EXCLUDE_ROOT
 
 
 class TestCredentialExclusion:
@@ -35,9 +35,9 @@ class TestCredentialExclusion:
         (profile_dir / "memories").mkdir()
         (profile_dir / "memories" / "MEMORY.md").write_text("# Memories\n")
 
-        monkeypatch.setattr("plutus_cli.profiles._get_profiles_root", lambda: profiles_root)
-        monkeypatch.setattr("plutus_cli.profiles.get_profile_dir", lambda n: profile_dir)
-        monkeypatch.setattr("plutus_cli.profiles.validate_profile_name", lambda n: None)
+        monkeypatch.setattr("harness.cli.profiles._get_profiles_root", lambda: profiles_root)
+        monkeypatch.setattr("harness.cli.profiles.get_profile_dir", lambda n: profile_dir)
+        monkeypatch.setattr("harness.cli.profiles.validate_profile_name", lambda n: None)
 
         output = tmp_path / "export.tar.gz"
         result = export_profile("testprofile", str(output))

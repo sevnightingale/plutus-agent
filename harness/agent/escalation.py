@@ -75,7 +75,7 @@ emergencies.
 
 
 def _hermes_home() -> Path:
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return Path(get_hermes_home())
 
 
@@ -169,7 +169,7 @@ def schedule_escalation_wake(
         The created job's id, or None on failure (logged via cron module).
     """
     # Lazy import — cron module pulls a lot.
-    from cron.jobs import create_job
+    from harness.cron.jobs import create_job
     try:
         job = create_job(
             prompt=WAKE_PROMPT_TEMPLATE,

@@ -14,7 +14,7 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

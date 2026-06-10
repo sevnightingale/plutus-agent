@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionEntry, SessionSource, build_session_key
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionEntry, SessionSource, build_session_key
 
 
 def _make_source() -> SessionSource:
@@ -31,7 +31,7 @@ def _make_event(text: str) -> MessageEvent:
 
 
 def _make_runner(session_entry: SessionEntry):
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(
@@ -147,7 +147,7 @@ async def test_agents_command_reports_active_agents_and_processes(monkeypatch):
                 }
             ]
 
-    monkeypatch.setattr("tools.process_registry.process_registry", _FakeRegistry())
+    monkeypatch.setattr("harness.tools.process_registry.process_registry", _FakeRegistry())
 
     result = await runner._handle_message(_make_event("/agents"))
 
@@ -175,7 +175,7 @@ async def test_tasks_alias_routes_to_agents_command(monkeypatch):
         def list_sessions(self):
             return []
 
-    monkeypatch.setattr("tools.process_registry.process_registry", _FakeRegistry())
+    monkeypatch.setattr("harness.tools.process_registry.process_registry", _FakeRegistry())
 
     result = await runner._handle_message(_make_event("/tasks"))
 
@@ -184,7 +184,7 @@ async def test_tasks_alias_routes_to_agents_command(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handle_message_persists_agent_token_counts(monkeypatch):
-    import gateway.run as gateway_run
+    import harness.gateway.run as gateway_run
 
     session_entry = SessionEntry(
         session_key=build_session_key(_make_source()),
@@ -211,7 +211,7 @@ async def test_handle_message_persists_agent_token_counts(monkeypatch):
 
     monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
     monkeypatch.setattr(
-        "agent.model_metadata.get_model_context_length",
+        "harness.agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
     )
 
@@ -226,7 +226,7 @@ async def test_handle_message_persists_agent_token_counts(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handle_message_discards_stale_result_after_session_invalidation(monkeypatch):
-    import gateway.run as gateway_run
+    import harness.gateway.run as gateway_run
 
     session_entry = SessionEntry(
         session_key=build_session_key(_make_source()),
@@ -258,7 +258,7 @@ async def test_handle_message_discards_stale_result_after_session_invalidation(m
 
     monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
     monkeypatch.setattr(
-        "agent.model_metadata.get_model_context_length",
+        "harness.agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
     )
 
@@ -272,7 +272,7 @@ async def test_handle_message_discards_stale_result_after_session_invalidation(m
 
 @pytest.mark.asyncio
 async def test_handle_message_stale_result_keeps_newer_generation_callback(monkeypatch):
-    import gateway.run as gateway_run
+    import harness.gateway.run as gateway_run
 
     class _Adapter:
         def __init__(self):
@@ -328,7 +328,7 @@ async def test_handle_message_stale_result_keeps_newer_generation_callback(monke
 
     monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
     monkeypatch.setattr(
-        "agent.model_metadata.get_model_context_length",
+        "harness.agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100000,
     )
 
@@ -345,9 +345,9 @@ async def test_status_command_bypasses_active_session_guard():
     """When an agent is running, /status must be dispatched immediately via
     base.handle_message — not queued or treated as an interrupt (#5046)."""
     import asyncio
-    from gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType
-    from gateway.session import build_session_key
-    from gateway.config import Platform, PlatformConfig, GatewayConfig
+    from harness.gateway.platforms.base import BasePlatformAdapter, MessageEvent, MessageType
+    from harness.gateway.session import build_session_key
+    from harness.gateway.config import Platform, PlatformConfig, GatewayConfig
 
     source = _make_source()
     session_key = build_session_key(source)

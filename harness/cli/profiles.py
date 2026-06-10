@@ -84,7 +84,7 @@ _DEFAULT_EXPORT_EXCLUDE_ROOT = frozenset({
     "node_modules",         # npm packages
     # Databases & runtime state
     "state.db", "state.db-shm", "state.db-wal",
-    "plutus_state.db",
+    "harness.state.db",
     "response_store.db", "response_store.db-shm", "response_store.db-wal",
     "gateway.pid", "gateway_state.json", "processes.json",
     "auth.json",            # API keys, OAuth tokens, credential pools
@@ -138,7 +138,7 @@ def _get_default_hermes_home() -> Path:
     In Docker/custom deployments where HERMES_HOME is outside ``~/.hermes``
     (e.g. ``/opt/data``), returns HERMES_HOME directly.
     """
-    from plutus_constants import get_default_hermes_root
+    from harness.constants import get_default_hermes_root
     return get_default_hermes_root()
 
 
@@ -301,7 +301,7 @@ def _read_config_model(profile_dir: Path) -> tuple:
 def _check_gateway_running(profile_dir: Path) -> bool:
     """Check if a gateway is running for a given profile directory."""
     try:
-        from gateway.status import get_running_pid
+        from harness.gateway.status import get_running_pid
         return get_running_pid(profile_dir / "gateway.pid", cleanup_stale=False) is not None
     except Exception:
         return False
@@ -413,7 +413,7 @@ def create_profile(
     if clone_from is not None or clone_all or clone_config:
         if clone_from is None:
             # Default: clone from active profile
-            from plutus_constants import get_hermes_home
+            from harness.constants import get_hermes_home
             source_dir = get_hermes_home()
         else:
             validate_profile_name(clone_from)
@@ -455,7 +455,7 @@ def create_profile(
     soul_path = profile_dir / "SOUL.md"
     if not soul_path.exists():
         try:
-            from plutus_cli.default_soul import DEFAULT_SOUL_MD
+            from harness.cli.default_soul import DEFAULT_SOUL_MD
             soul_path.write_text(DEFAULT_SOUL_MD, encoding="utf-8")
         except Exception:
             pass  # best-effort — don't fail profile creation over this
@@ -469,7 +469,7 @@ def seed_profile_skills(profile_dir: Path, quiet: bool = False) -> Optional[dict
     Uses subprocess because sync_skills() caches HERMES_HOME at module level.
     Returns the sync result dict, or None on failure.
     """
-    project_root = Path(__file__).parent.parent.resolve()
+    project_root = Path(__file__).parent.parent.parent.resolve()
     try:
         result = subprocess.run(
             [sys.executable, "-c",
@@ -597,7 +597,7 @@ def _cleanup_gateway_service(name: str, profile_dir: Path) -> None:
     old_home = os.environ.get("HERMES_HOME")
     try:
         os.environ["HERMES_HOME"] = str(profile_dir)
-        from plutus_cli.gateway import get_service_name, get_launchd_plist_path
+        from harness.cli.gateway import get_service_name, get_launchd_plist_path
 
         if _platform.system() == "Linux":
             svc_name = get_service_name()
@@ -720,7 +720,7 @@ def get_active_profile_name() -> str:
     Returns the profile name if HERMES_HOME points into ``~/.plutus-agent/profiles/<name>``.
     Returns ``"custom"`` if HERMES_HOME is set to an unrecognized path.
     """
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     hermes_home = get_hermes_home()
     resolved = hermes_home.resolve()
 

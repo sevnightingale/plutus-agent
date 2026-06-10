@@ -11,8 +11,8 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-from plutus_constants import get_hermes_home
-from tools.tool_backend_helpers import managed_nous_tools_enabled
+from harness.constants import get_hermes_home
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled
 
 _DEFAULT_TOOL_GATEWAY_DOMAIN = "nousresearch.com"
 _DEFAULT_TOOL_GATEWAY_SCHEME = "https"
@@ -89,7 +89,7 @@ def read_nous_access_token() -> Optional[str]:
         return cached_token
 
     try:
-        from plutus_cli.auth import resolve_nous_access_token
+        from harness.cli.auth import resolve_nous_access_token
 
         refreshed_token = resolve_nous_access_token(
             refresh_skew_seconds=_NOUS_ACCESS_TOKEN_REFRESH_SKEW_SECONDS,

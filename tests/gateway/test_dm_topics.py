@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch, mock_open
 
 import pytest
 
-from gateway.config import PlatformConfig
+from harness.gateway.config import PlatformConfig
 
 
 def _ensure_telegram_mock():
@@ -39,7 +39,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 
 
 def _make_adapter(dm_topics_config=None, group_topics_config=None):
@@ -479,7 +479,7 @@ def _make_mock_message(chat_id=111, chat_type="private", text="hello", thread_id
 
 def test_build_message_event_sets_auto_skill():
     """When topic has a skill binding, auto_skill should be set on the event."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter([
         {
@@ -501,7 +501,7 @@ def test_build_message_event_sets_auto_skill():
 
 def test_build_message_event_no_auto_skill_without_binding():
     """Topics without skill binding should have auto_skill=None."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter([
         {
@@ -522,7 +522,7 @@ def test_build_message_event_no_auto_skill_without_binding():
 
 def test_build_message_event_no_auto_skill_without_thread():
     """Regular DM messages (no thread_id) should have auto_skill=None."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter()
     msg = _make_mock_message(chat_id=111, thread_id=None)
@@ -542,7 +542,7 @@ from telegram.constants import ChatType as _ChatType  # noqa: E402
 
 def test_group_topic_skill_binding():
     """Group topic with skill config should set auto_skill on the event."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -565,7 +565,7 @@ def test_group_topic_skill_binding():
 
 def test_group_topic_skill_binding_second_topic():
     """A different thread_id in the same group should resolve its own skill."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -588,7 +588,7 @@ def test_group_topic_skill_binding_second_topic():
 
 def test_group_topic_no_skill_binding():
     """Group topic without a skill key should have auto_skill=None but set chat_topic."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -610,7 +610,7 @@ def test_group_topic_no_skill_binding():
 
 def test_group_topic_unmapped_thread_id():
     """Thread ID not in config should fall through — no skill, no topic name."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -632,7 +632,7 @@ def test_group_topic_unmapped_thread_id():
 
 def test_group_topic_unmapped_chat_id():
     """Chat ID not in group_topics config should fall through silently."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -654,7 +654,7 @@ def test_group_topic_unmapped_chat_id():
 
 def test_group_topic_no_config():
     """No group_topics config at all should be fine — no skill, no topic."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter()  # no group_topics_config
 
@@ -669,7 +669,7 @@ def test_group_topic_no_config():
 
 def test_group_topic_chat_id_int_string_coercion():
     """chat_id as string in config should match integer chat.id via str() coercion."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter(group_topics_config=[
         {
@@ -694,7 +694,7 @@ def test_group_topic_chat_id_int_string_coercion():
 
 def test_build_message_event_dm_from_user_none_falls_back_to_chat_id():
     """When from_user is None in a DM, user_id should fall back to chat.id."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter()
     msg = _make_mock_message(chat_id=12345, user_id=42, user_name="Alice")
@@ -710,7 +710,7 @@ def test_build_message_event_dm_from_user_none_falls_back_to_chat_id():
 
 def test_build_message_event_group_from_user_none_stays_none():
     """When from_user is None in a group, user_id should remain None."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter()
     msg = _make_mock_message(
@@ -728,7 +728,7 @@ def test_build_message_event_group_from_user_none_stays_none():
 
 def test_build_message_event_dm_from_user_present_uses_user():
     """When from_user is present in a DM, it should be used (no fallback)."""
-    from gateway.platforms.base import MessageType
+    from harness.gateway.platforms.base import MessageType
 
     adapter = _make_adapter()
     msg = _make_mock_message(chat_id=12345, user_id=99999, user_name="Bob")

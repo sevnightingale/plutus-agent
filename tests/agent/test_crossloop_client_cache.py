@@ -37,7 +37,7 @@ def _clean_client_cache():
     with patch.dict("sys.modules", {}):
         pass
     # Import and clear
-    import agent.auxiliary_client as ac
+    import harness.agent.auxiliary_client as ac
     ac._client_cache.clear()
     yield
     ac._client_cache.clear()
@@ -48,12 +48,12 @@ class TestCrossLoopCacheIsolation:
 
     def test_same_loop_reuses_client(self):
         """Within a single event loop, the same client should be returned."""
-        from agent.auxiliary_client import _get_cached_client, _client_cache
+        from harness.agent.auxiliary_client import _get_cached_client, _client_cache
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        with patch("agent.auxiliary_client.resolve_provider_client",
+        with patch("harness.agent.auxiliary_client.resolve_provider_client",
                     side_effect=_stub_resolve_provider_client):
             client1, _ = _get_cached_client("custom", "m1", async_mode=True,
                                              base_url="http://localhost:8081/v1")
@@ -67,14 +67,14 @@ class TestCrossLoopCacheIsolation:
 
     def test_different_loops_get_different_clients(self):
         """Different event loops must get separate client instances."""
-        from agent.auxiliary_client import _get_cached_client
+        from harness.agent.auxiliary_client import _get_cached_client
 
         results = {}
 
         def _get_client_on_new_loop(name):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            with patch("agent.auxiliary_client.resolve_provider_client",
+            with patch("harness.agent.auxiliary_client.resolve_provider_client",
                         side_effect=_stub_resolve_provider_client):
                 client, _ = _get_cached_client("custom", "m1", async_mode=True,
                                                  base_url="http://localhost:8081/v1")
@@ -98,14 +98,14 @@ class TestCrossLoopCacheIsolation:
     def test_sync_clients_not_affected(self):
         """Sync clients (async_mode=False) should still be cached globally,
         since httpx.Client (sync) doesn't bind to an event loop."""
-        from agent.auxiliary_client import _get_cached_client
+        from harness.agent.auxiliary_client import _get_cached_client
 
         results = {}
 
         def _get_sync_client(name):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            with patch("agent.auxiliary_client.resolve_provider_client",
+            with patch("harness.agent.auxiliary_client.resolve_provider_client",
                         side_effect=_stub_resolve_provider_client):
                 client, _ = _get_cached_client("custom", "m1", async_mode=False,
                                                  base_url="http://localhost:8081/v1")
@@ -124,13 +124,13 @@ class TestCrossLoopCacheIsolation:
         """Simulate gateway mode: _run_async spawns a thread with asyncio.run(),
         which creates a new loop. The cached client must be created on THAT loop,
         not reused from a different one."""
-        from agent.auxiliary_client import _get_cached_client
+        from harness.agent.auxiliary_client import _get_cached_client
 
         # Simulate: first call on "gateway loop"
         gateway_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(gateway_loop)
 
-        with patch("agent.auxiliary_client.resolve_provider_client",
+        with patch("harness.agent.auxiliary_client.resolve_provider_client",
                     side_effect=_stub_resolve_provider_client):
             gateway_client, _ = _get_cached_client("custom", "m1", async_mode=True,
                                                      base_url="http://localhost:8081/v1")
@@ -139,7 +139,7 @@ class TestCrossLoopCacheIsolation:
         worker_client_id = [None]
         def _worker():
             async def _inner():
-                with patch("agent.auxiliary_client.resolve_provider_client",
+                with patch("harness.agent.auxiliary_client.resolve_provider_client",
                             side_effect=_stub_resolve_provider_client):
                     client, _ = _get_cached_client("custom", "m1", async_mode=True,
                                                      base_url="http://localhost:8081/v1")
@@ -159,12 +159,12 @@ class TestCrossLoopCacheIsolation:
 
     def test_closed_loop_client_discarded(self):
         """A cached client whose loop has closed should be replaced."""
-        from agent.auxiliary_client import _get_cached_client
+        from harness.agent.auxiliary_client import _get_cached_client
 
         loop1 = asyncio.new_event_loop()
         asyncio.set_event_loop(loop1)
 
-        with patch("agent.auxiliary_client.resolve_provider_client",
+        with patch("harness.agent.auxiliary_client.resolve_provider_client",
                     side_effect=_stub_resolve_provider_client):
             client1, _ = _get_cached_client("custom", "m1", async_mode=True,
                                              base_url="http://localhost:8081/v1")
@@ -175,7 +175,7 @@ class TestCrossLoopCacheIsolation:
         loop2 = asyncio.new_event_loop()
         asyncio.set_event_loop(loop2)
 
-        with patch("agent.auxiliary_client.resolve_provider_client",
+        with patch("harness.agent.auxiliary_client.resolve_provider_client",
                     side_effect=_stub_resolve_provider_client):
             client2, _ = _get_cached_client("custom", "m1", async_mode=True,
                                              base_url="http://localhost:8081/v1")

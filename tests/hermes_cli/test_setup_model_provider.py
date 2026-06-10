@@ -7,9 +7,9 @@ that the setup wizard correctly syncs config from disk after the call.
 
 from __future__ import annotations
 
-from plutus_cli.config import load_config, save_config, save_env_value
-from plutus_cli.nous_subscription import NousFeatureState, NousSubscriptionFeatures
-from plutus_cli.setup import _print_setup_summary, setup_model_provider
+from harness.cli.config import load_config, save_config, save_env_value
+from harness.cli.nous_subscription import NousFeatureState, NousSubscriptionFeatures
+from harness.cli.setup import _print_setup_summary, setup_model_provider
 
 
 def _maybe_keep_current_tts(question, choices):
@@ -38,11 +38,11 @@ def _clear_provider_env(monkeypatch):
 
 
 def _stub_tts(monkeypatch):
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", lambda q, c, d=0: (
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", lambda q, c, d=0: (
         _maybe_keep_current_tts(q, c) if _maybe_keep_current_tts(q, c) is not None
         else d
     ))
-    monkeypatch.setattr("plutus_cli.setup.prompt_yes_no", lambda *a, **kw: False)
+    monkeypatch.setattr("harness.cli.setup.prompt_yes_no", lambda *a, **kw: False)
 
 
 def _write_model_config(provider, base_url="", model_name="test-model"):
@@ -78,7 +78,7 @@ def test_setup_keep_current_custom_from_config_does_not_fall_through(tmp_path, m
     def fake_select(*args, **kwargs):
         pass  # user chose "cancel" or "keep current"
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -104,7 +104,7 @@ def test_setup_keep_current_config_provider_uses_provider_specific_model_menu(
     def fake_select(*args, **kwargs):
         pass  # keep current
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -147,10 +147,10 @@ def test_setup_same_provider_rotation_strategy_saved_for_multi_credential_pool(t
         return False
 
     # Patch directly on the module objects to ensure local imports pick them up.
-    import plutus_cli.main as _main_mod
-    import plutus_cli.setup as _setup_mod
-    import agent.credential_pool as _pool_mod
-    import agent.auxiliary_client as _aux_mod
+    import harness.cli.main as _main_mod
+    import harness.cli.setup as _setup_mod
+    import harness.agent.credential_pool as _pool_mod
+    import harness.agent.auxiliary_client as _aux_mod
 
     monkeypatch.setattr(_main_mod, "select_provider_and_model", fake_select)
     # NOTE: _stub_tts overwrites prompt_choice, so set our mock AFTER it.
@@ -215,14 +215,14 @@ def test_setup_same_provider_fallback_can_add_another_credential(tmp_path, monke
             return next(yes_no_answers)
         return False
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
     _stub_tts(monkeypatch)
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("plutus_cli.setup.prompt_yes_no", fake_prompt_yes_no)
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: "")
-    monkeypatch.setattr("agent.credential_pool.load_pool", fake_load_pool)
-    monkeypatch.setattr("plutus_cli.auth_commands.auth_add_command", fake_auth_add_command)
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("harness.cli.setup.prompt_yes_no", fake_prompt_yes_no)
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: "")
+    monkeypatch.setattr("harness.agent.credential_pool.load_pool", fake_load_pool)
+    monkeypatch.setattr("harness.cli.auth_commands.auth_add_command", fake_auth_add_command)
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     setup_model_provider(config)
 
@@ -252,11 +252,11 @@ def test_setup_same_provider_single_credential_keeps_existing_rotation_strategy(
     def fake_select(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
     _stub_tts(monkeypatch)
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: "")
-    monkeypatch.setattr("agent.credential_pool.load_pool", lambda provider: _Pool())
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: "")
+    monkeypatch.setattr("harness.agent.credential_pool.load_pool", lambda provider: _Pool())
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     setup_model_provider(config)
 
@@ -297,13 +297,13 @@ def test_setup_pool_step_shows_manual_vs_auto_detected_counts(tmp_path, monkeypa
             return tts_idx
         return default
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
     _stub_tts(monkeypatch)
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("plutus_cli.setup.prompt_yes_no", lambda *args, **kwargs: False)
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: "")
-    monkeypatch.setattr("agent.credential_pool.load_pool", lambda provider: _Pool())
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("harness.cli.setup.prompt_yes_no", lambda *args, **kwargs: False)
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: "")
+    monkeypatch.setattr("harness.agent.credential_pool.load_pool", lambda provider: _Pool())
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     setup_model_provider(config)
 
@@ -334,11 +334,11 @@ def test_setup_copilot_acp_skips_same_provider_pool_step(tmp_path, monkeypatch):
             raise AssertionError("same-provider pool prompt should not appear for copilot-acp")
         return False
 
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("plutus_cli.setup.prompt_yes_no", fake_prompt_yes_no)
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: "")
-    monkeypatch.setattr("plutus_cli.auth.get_active_provider", lambda: None)
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("harness.cli.setup.prompt_yes_no", fake_prompt_yes_no)
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: "")
+    monkeypatch.setattr("harness.cli.auth.get_active_provider", lambda: None)
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     setup_model_provider(config)
 
@@ -356,7 +356,7 @@ def test_setup_copilot_uses_gh_auth_and_saves_provider(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         _write_model_config("copilot", "https://models.github.ai/inference/v1", "gpt-4o")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -377,7 +377,7 @@ def test_setup_copilot_acp_uses_model_picker_and_saves_provider(tmp_path, monkey
     def fake_select(*args, **kwargs):
         _write_model_config("copilot-acp", "", "claude-sonnet-4")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -404,7 +404,7 @@ def test_setup_switch_custom_to_codex_clears_custom_endpoint_and_updates_config(
     def fake_select(*args, **kwargs):
         _write_model_config("openai-codex", "https://api.openai.com/v1", "gpt-4o")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -430,7 +430,7 @@ def test_setup_switch_preserves_non_model_config(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         _write_model_config("openrouter", model_name="gpt-4o")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -445,7 +445,7 @@ def test_setup_summary_marks_anthropic_auth_as_vision_available(tmp_path, monkey
     _clear_provider_env(monkeypatch)
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-key")
     monkeypatch.setattr("shutil.which", lambda _name: None)
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: ["anthropic"])
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: ["anthropic"])
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out
@@ -458,7 +458,7 @@ def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(tmp_path, m
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     _clear_provider_env(monkeypatch)
     monkeypatch.setattr(
-        "plutus_cli.setup.get_nous_subscription_features",
+        "harness.cli.setup.get_nous_subscription_features",
         lambda config: NousSubscriptionFeatures(
             subscribed=False,
             nous_auth_present=False,
@@ -472,7 +472,7 @@ def test_setup_summary_shows_camofox_when_browser_feature_is_camofox(tmp_path, m
             },
         ),
     )
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out
@@ -485,7 +485,7 @@ def test_setup_summary_does_not_mark_incomplete_browserbase_as_available(tmp_pat
     _clear_provider_env(monkeypatch)
     monkeypatch.setenv("BROWSERBASE_API_KEY", "bb-key")
     monkeypatch.setattr(
-        "plutus_cli.setup.get_nous_subscription_features",
+        "harness.cli.setup.get_nous_subscription_features",
         lambda config: NousSubscriptionFeatures(
             subscribed=False,
             nous_auth_present=False,
@@ -499,7 +499,7 @@ def test_setup_summary_does_not_mark_incomplete_browserbase_as_available(tmp_pat
             },
         ),
     )
-    monkeypatch.setattr("agent.auxiliary_client.get_available_vision_backends", lambda: [])
+    monkeypatch.setattr("harness.agent.auxiliary_client.get_available_vision_backends", lambda: [])
 
     _print_setup_summary(load_config(), tmp_path)
     output = capsys.readouterr().out

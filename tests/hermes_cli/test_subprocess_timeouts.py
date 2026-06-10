@@ -7,10 +7,10 @@ import pytest
 
 # Parameterise over every CLI module that calls subprocess.run
 _CLI_MODULES = [
-    "plutus_cli/doctor.py",
-    "plutus_cli/status.py",
-    "plutus_cli/clipboard.py",
-    "plutus_cli/banner.py",
+    "harness/cli/doctor.py",
+    "harness/cli/status.py",
+    "harness/cli/clipboard.py",
+    "harness/cli/banner.py",
 ]
 
 

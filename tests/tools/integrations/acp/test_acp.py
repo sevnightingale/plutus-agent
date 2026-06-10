@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.integrations.acp import _cli, _env, setup as acp_setup, data_points, operations, identity, accounts, events
-from tools.core import account_registry, identity_registry
+from harness.tools.integrations.acp import _cli, _env, setup as acp_setup, data_points, operations, identity, accounts, events
+from harness.tools.core import account_registry, identity_registry
 
 
 @pytest.fixture
@@ -29,9 +29,9 @@ def temp_home(tmp_path, monkeypatch):
     home = tmp_path / "plutus-agent"
     home.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
-    import importlib, plutus_constants
+    import importlib; import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
-    from agent.lifecycle_db import reset_lifecycle_db_singleton
+    from harness.agent.lifecycle_db import reset_lifecycle_db_singleton
     reset_lifecycle_db_singleton()
     yield home
     reset_lifecycle_db_singleton()

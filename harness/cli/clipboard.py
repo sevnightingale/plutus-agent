@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from plutus_constants import is_wsl as _is_wsl
+from harness.constants import is_wsl as _is_wsl
 
 logger = logging.getLogger(__name__)
 

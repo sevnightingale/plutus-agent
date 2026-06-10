@@ -5,7 +5,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from toolsets import resolve_toolset, get_toolset, validate_toolset
+from harness.toolsets import resolve_toolset, get_toolset, validate_toolset
 
 
 class TestHermesApiServerToolset:
@@ -62,24 +62,24 @@ class TestHermesApiServerToolset:
 
 class TestApiServerPlatformConfig:
     def test_platforms_dict_includes_api_server(self):
-        from plutus_cli.tools_config import PLATFORMS
+        from harness.cli.tools_config import PLATFORMS
         assert "api_server" in PLATFORMS
         assert PLATFORMS["api_server"]["default_toolset"] == "hermes-api-server"
 
 
 class TestApiServerAdapterToolset:
-    @patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", True)
+    @patch("harness.gateway.platforms.api_server.AIOHTTP_AVAILABLE", True)
     def test_create_agent_reads_config_toolsets(self):
         """API server resolves toolsets from config like all other platforms."""
-        from gateway.platforms.api_server import APIServerAdapter
-        from gateway.config import PlatformConfig
+        from harness.gateway.platforms.api_server import APIServerAdapter
+        from harness.gateway.config import PlatformConfig
 
         adapter = APIServerAdapter(PlatformConfig())
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
-             patch("gateway.run._resolve_gateway_model") as mock_model, \
-             patch("gateway.run._load_gateway_config") as mock_config, \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
+             patch("harness.gateway.run._resolve_gateway_model") as mock_model, \
+             patch("harness.gateway.run._load_gateway_config") as mock_config, \
+             patch("harness.run_agent.AIAgent") as mock_agent_cls:
 
             mock_kwargs.return_value = {"api_key": "test-key", "base_url": None,
                                         "provider": None, "api_mode": None,
@@ -98,18 +98,18 @@ class TestApiServerAdapterToolset:
             assert len(toolsets) > 0
             assert call_kwargs.kwargs.get("platform") == "api_server"
 
-    @patch("gateway.platforms.api_server.AIOHTTP_AVAILABLE", True)
+    @patch("harness.gateway.platforms.api_server.AIOHTTP_AVAILABLE", True)
     def test_create_agent_respects_config_override(self):
         """User can override API server toolsets via platform_toolsets in config.yaml."""
-        from gateway.platforms.api_server import APIServerAdapter
-        from gateway.config import PlatformConfig
+        from harness.gateway.platforms.api_server import APIServerAdapter
+        from harness.gateway.config import PlatformConfig
 
         adapter = APIServerAdapter(PlatformConfig())
 
-        with patch("gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
-             patch("gateway.run._resolve_gateway_model") as mock_model, \
-             patch("gateway.run._load_gateway_config") as mock_config, \
-             patch("run_agent.AIAgent") as mock_agent_cls:
+        with patch("harness.gateway.run._resolve_runtime_agent_kwargs") as mock_kwargs, \
+             patch("harness.gateway.run._resolve_gateway_model") as mock_model, \
+             patch("harness.gateway.run._load_gateway_config") as mock_config, \
+             patch("harness.run_agent.AIAgent") as mock_agent_cls:
 
             mock_kwargs.return_value = {"api_key": "test-key", "base_url": None,
                                         "provider": None, "api_mode": None,

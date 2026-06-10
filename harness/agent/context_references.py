@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from agent.model_metadata import estimate_tokens_rough
+from harness.agent.model_metadata import estimate_tokens_rough
 
 _QUOTED_REFERENCE_VALUE = r'(?:`[^`\n]+`|"[^"\n]+"|\'[^\'\n]+\')'
 REFERENCE_PATTERN = re.compile(
@@ -315,7 +315,7 @@ async def _fetch_url_content(
 
 
 async def _default_url_fetcher(url: str) -> str:
-    from tools.web_tools import web_extract_tool
+    from harness.tools.web_tools import web_extract_tool
 
     raw = await web_extract_tool([url], format="markdown", use_llm_processing=True)
     payload = json.loads(raw)
@@ -340,7 +340,7 @@ def _resolve_path(cwd: Path, target: str, *, allowed_root: Path | None = None) -
 
 
 def _ensure_reference_path_allowed(path: Path) -> None:
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     home = Path(os.path.expanduser("~")).resolve()
     hermes_home = get_hermes_home().resolve()
 

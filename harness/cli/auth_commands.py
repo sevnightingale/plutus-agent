@@ -9,7 +9,7 @@ import time
 from types import SimpleNamespace
 import uuid
 
-from agent.credential_pool import (
+from harness.agent.credential_pool import (
     AUTH_TYPE_API_KEY,
     AUTH_TYPE_OAUTH,
     CUSTOM_POOL_PREFIX,
@@ -27,9 +27,9 @@ from agent.credential_pool import (
     list_custom_pool_providers,
     load_pool,
 )
-import plutus_cli.auth as auth_mod
-from plutus_cli.auth import PROVIDER_REGISTRY
-from plutus_constants import OPENROUTER_BASE_URL
+import harness.cli.auth as auth_mod
+from harness.cli.auth import PROVIDER_REGISTRY
+from harness.constants import OPENROUTER_BASE_URL
 
 
 # Providers that support OAuth login in addition to API keys.
@@ -39,7 +39,7 @@ _OAUTH_CAPABLE_PROVIDERS = {"anthropic", "nous", "openai-codex", "qwen-oauth", "
 def _get_custom_provider_names() -> list:
     """Return list of (display_name, pool_key, provider_key) tuples."""
     try:
-        from plutus_cli.config import get_compatible_custom_providers, load_config
+        from harness.cli.config import get_compatible_custom_providers, load_config
 
         config = load_config()
     except Exception:
@@ -88,7 +88,7 @@ def _provider_base_url(provider: str) -> str:
     if provider == "openrouter":
         return OPENROUTER_BASE_URL
     if provider.startswith(CUSTOM_POOL_PREFIX):
-        from agent.credential_pool import _get_custom_provider_config
+        from harness.agent.credential_pool import _get_custom_provider_config
 
         cp_config = _get_custom_provider_config(provider)
         if cp_config:
@@ -159,7 +159,7 @@ def auth_add_command(args) -> None:
     # Matches the Codex device_code re-link pattern that predates this.
     if not provider.startswith(CUSTOM_POOL_PREFIX):
         try:
-            from plutus_cli.auth import (
+            from harness.cli.auth import (
                 _load_auth_store,
                 unsuppress_credential_source,
             )
@@ -197,7 +197,7 @@ def auth_add_command(args) -> None:
         return
 
     if provider == "anthropic":
-        from agent import anthropic_adapter as anthropic_mod
+        from harness.agent import anthropic_adapter as anthropic_mod
 
         creds = anthropic_mod.run_hermes_oauth_login_pure()
         if not creds:
@@ -271,7 +271,7 @@ def auth_add_command(args) -> None:
         return
 
     if provider == "google-gemini-cli":
-        from agent.google_oauth import run_gemini_oauth_login_pure
+        from harness.agent.google_oauth import run_gemini_oauth_login_pure
 
         creds = run_gemini_oauth_login_pure()
         label = (getattr(args, "label", None) or "").strip() or (
@@ -361,8 +361,8 @@ def auth_remove_command(args) -> None:
     # handles its source-specific cleanup and we centralise suppression +
     # user-facing output here so every source behaves identically from
     # the user's perspective.
-    from agent.credential_sources import find_removal_step
-    from plutus_cli.auth import suppress_credential_source
+    from harness.agent.credential_sources import find_removal_step
+    from harness.cli.auth import suppress_credential_source
 
     step = find_removal_step(provider, removed.source)
     if step is None:
@@ -396,7 +396,7 @@ def _interactive_auth() -> None:
 
     # Show AWS Bedrock credential status (not in the pool — uses boto3 chain)
     try:
-        from agent.bedrock_adapter import has_aws_credentials, resolve_aws_auth_env_var, resolve_bedrock_region
+        from harness.agent.bedrock_adapter import has_aws_credentials, resolve_aws_auth_env_var, resolve_bedrock_region
         if has_aws_credentials():
             auth_source = resolve_aws_auth_env_var() or "unknown"
             region = resolve_bedrock_region()
@@ -558,7 +558,7 @@ def _interactive_strategy() -> None:
         print("Invalid choice.")
         return
 
-    from plutus_cli.config import load_config, save_config
+    from harness.cli.config import load_config, save_config
     cfg = load_config()
     pool_strategies = cfg.get("credential_pool_strategies") or {}
     if not isinstance(pool_strategies, dict):

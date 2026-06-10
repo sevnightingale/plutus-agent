@@ -14,7 +14,7 @@ the current shell. No subshell fork, no wait.
 
 import pytest
 
-from tools.terminal_tool import _rewrite_compound_background as rewrite
+from harness.tools.terminal_tool import _rewrite_compound_background as rewrite
 
 
 class TestRewrites:

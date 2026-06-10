@@ -25,15 +25,15 @@ def _isolate_config(tmp_path, monkeypatch):
     """Redirect all config I/O to a temp directory."""
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setattr(
-        "plutus_cli.config.get_hermes_home", lambda: tmp_path
+        "harness.cli.config.get_hermes_home", lambda: tmp_path
     )
     config_path = tmp_path / "config.yaml"
     env_path = tmp_path / ".env"
     monkeypatch.setattr(
-        "plutus_cli.config.get_config_path", lambda: config_path
+        "harness.cli.config.get_config_path", lambda: config_path
     )
     monkeypatch.setattr(
-        "plutus_cli.config.get_env_path", lambda: env_path
+        "harness.cli.config.get_env_path", lambda: env_path
     )
     return tmp_path
 
@@ -78,7 +78,7 @@ class FakeTool:
 
 class TestMcpList:
     def test_list_empty_config(self, tmp_path, capsys):
-        from plutus_cli.mcp_config import cmd_mcp_list
+        from harness.cli.mcp_config import cmd_mcp_list
 
         cmd_mcp_list()
         out = capsys.readouterr().out
@@ -97,7 +97,7 @@ class TestMcpList:
                 "enabled": False,
             },
         })
-        from plutus_cli.mcp_config import cmd_mcp_list
+        from harness.cli.mcp_config import cmd_mcp_list
 
         cmd_mcp_list()
         out = capsys.readouterr().out
@@ -111,7 +111,7 @@ class TestMcpList:
         _seed_config(tmp_path, {
             "myserver": {"url": "https://example.com/mcp"},
         })
-        from plutus_cli.mcp_config import cmd_mcp_list
+        from harness.cli.mcp_config import cmd_mcp_list
 
         cmd_mcp_list()
         out = capsys.readouterr().out
@@ -129,7 +129,7 @@ class TestMcpRemove:
             "myserver": {"url": "https://example.com/mcp"},
         })
         monkeypatch.setattr("builtins.input", lambda _: "y")
-        from plutus_cli.mcp_config import cmd_mcp_remove
+        from harness.cli.mcp_config import cmd_mcp_remove
 
         cmd_mcp_remove(_make_args(name="myserver"))
 
@@ -137,14 +137,14 @@ class TestMcpRemove:
         assert "Removed" in out
 
         # Verify config updated
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         config = load_config()
         assert "myserver" not in config.get("mcp_servers", {})
 
     def test_remove_nonexistent(self, tmp_path, capsys):
         _seed_config(tmp_path, {})
-        from plutus_cli.mcp_config import cmd_mcp_remove
+        from harness.cli.mcp_config import cmd_mcp_remove
 
         cmd_mcp_remove(_make_args(name="ghost"))
         out = capsys.readouterr().out
@@ -157,7 +157,7 @@ class TestMcpRemove:
         monkeypatch.setattr("builtins.input", lambda _: "y")
         # Also patch get_hermes_home in the mcp_config module namespace
         monkeypatch.setattr(
-            "plutus_cli.mcp_config.get_hermes_home", lambda: tmp_path
+            "harness.cli.mcp_config.get_hermes_home", lambda: tmp_path
         )
 
         # Create a fake token file
@@ -166,7 +166,7 @@ class TestMcpRemove:
         token_file = token_dir / "oauth-srv.json"
         token_file.write_text("{}")
 
-        from plutus_cli.mcp_config import cmd_mcp_remove
+        from harness.cli.mcp_config import cmd_mcp_remove
 
         cmd_mcp_remove(_make_args(name="oauth-srv"))
         assert not token_file.exists()
@@ -179,7 +179,7 @@ class TestMcpRemove:
 class TestMcpAdd:
     def test_add_no_transport(self, capsys):
         """Must specify --url or --command."""
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(name="bad"))
         out = capsys.readouterr().out
@@ -196,13 +196,13 @@ class TestMcpAdd:
             return [(t.name, t.description) for t in fake_tools]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
         # No auth, accept all tools
         inputs = iter(["n", ""])  # no auth needed, enable all
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(name="ink", url="https://mcp.ml.ink/mcp"))
         out = capsys.readouterr().out
@@ -210,7 +210,7 @@ class TestMcpAdd:
         assert "2/2 tools" in out
 
         # Verify config written
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         config = load_config()
         assert "ink" in config.get("mcp_servers", {})
@@ -224,12 +224,12 @@ class TestMcpAdd:
             return [(t.name, t.description) for t in fake_tools]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
         inputs = iter([""])  # accept all tools
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(
             name="github",
@@ -239,7 +239,7 @@ class TestMcpAdd:
         out = capsys.readouterr().out
         assert "Saved" in out
 
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         config = load_config()
         srv = config["mcp_servers"]["github"]
@@ -255,18 +255,18 @@ class TestMcpAdd:
             raise ConnectionError("Connection refused")
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe_fail
+            "harness.cli.mcp_config._probe_single_server", mock_probe_fail
         )
         inputs = iter(["n", "y"])  # no auth, yes save disabled
         monkeypatch.setattr("builtins.input", lambda _: next(inputs))
 
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(name="broken", url="https://bad.host/mcp"))
         out = capsys.readouterr().out
         assert "disabled" in out
 
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         config = load_config()
         assert config["mcp_servers"]["broken"]["enabled"] is False
@@ -283,11 +283,11 @@ class TestMcpAdd:
             return [(t.name, t.description) for t in fake_tools]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
         monkeypatch.setattr("builtins.input", lambda _: "")
 
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(
             name="github",
@@ -298,7 +298,7 @@ class TestMcpAdd:
         out = capsys.readouterr().out
         assert "Saved" in out
 
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         config = load_config()
         srv = config["mcp_servers"]["github"]
@@ -309,7 +309,7 @@ class TestMcpAdd:
 
     def test_add_stdio_server_rejects_invalid_env_name(self, capsys):
         """Invalid environment variable names are rejected up front."""
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(
             name="github",
@@ -322,7 +322,7 @@ class TestMcpAdd:
 
     def test_add_http_server_rejects_env_flag(self, capsys):
         """The --env flag is only valid for stdio transports."""
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(
             name="ink",
@@ -335,7 +335,7 @@ class TestMcpAdd:
     def test_add_preset_fills_transport(self, tmp_path, capsys, monkeypatch):
         """A preset fills in command/args when no explicit transport given."""
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._MCP_PRESETS",
+            "harness.cli.mcp_config._MCP_PRESETS",
             {"testmcp": {"command": "npx", "args": ["-y", "test-mcp-server"], "display_name": "Test MCP"}},
         )
         fake_tools = [FakeTool("do_thing", "Does a thing")]
@@ -348,12 +348,12 @@ class TestMcpAdd:
             return [(t.name, t.description) for t in fake_tools]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
         monkeypatch.setattr("builtins.input", lambda _: "")
 
-        from plutus_cli.mcp_config import cmd_mcp_add
-        from plutus_cli.config import read_raw_config
+        from harness.cli.mcp_config import cmd_mcp_add
+        from harness.cli.config import read_raw_config
 
         cmd_mcp_add(_make_args(name="myserver", preset="testmcp"))
         out = capsys.readouterr().out
@@ -368,7 +368,7 @@ class TestMcpAdd:
     def test_preset_does_not_override_explicit_command(self, tmp_path, capsys, monkeypatch):
         """Explicit transports win over presets."""
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._MCP_PRESETS",
+            "harness.cli.mcp_config._MCP_PRESETS",
             {"testmcp": {"command": "npx", "args": ["-y", "test-mcp-server"], "display_name": "Test MCP"}},
         )
         fake_tools = [FakeTool("search", "Search repos")]
@@ -380,12 +380,12 @@ class TestMcpAdd:
             return [(t.name, t.description) for t in fake_tools]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
         monkeypatch.setattr("builtins.input", lambda _: "")
 
-        from plutus_cli.mcp_config import cmd_mcp_add
-        from plutus_cli.config import read_raw_config
+        from harness.cli.mcp_config import cmd_mcp_add
+        from harness.cli.config import read_raw_config
 
         cmd_mcp_add(_make_args(
             name="custom",
@@ -404,7 +404,7 @@ class TestMcpAdd:
 
     def test_unknown_preset_rejected(self, capsys):
         """An unknown preset name is rejected with a clear error."""
-        from plutus_cli.mcp_config import cmd_mcp_add
+        from harness.cli.mcp_config import cmd_mcp_add
 
         cmd_mcp_add(_make_args(name="foo", preset="nonexistent"))
         out = capsys.readouterr().out
@@ -418,7 +418,7 @@ class TestMcpAdd:
 class TestMcpTest:
     def test_test_not_found(self, tmp_path, capsys):
         _seed_config(tmp_path, {})
-        from plutus_cli.mcp_config import cmd_mcp_test
+        from harness.cli.mcp_config import cmd_mcp_test
 
         cmd_mcp_test(_make_args(name="ghost"))
         out = capsys.readouterr().out
@@ -433,9 +433,9 @@ class TestMcpTest:
             return [("create_service", "Deploy"), ("list_services", "List all")]
 
         monkeypatch.setattr(
-            "plutus_cli.mcp_config._probe_single_server", mock_probe
+            "harness.cli.mcp_config._probe_single_server", mock_probe
         )
-        from plutus_cli.mcp_config import cmd_mcp_test
+        from harness.cli.mcp_config import cmd_mcp_test
 
         cmd_mcp_test(_make_args(name="ink"))
         out = capsys.readouterr().out
@@ -450,21 +450,21 @@ class TestMcpTest:
 class TestEnvVarInterpolation:
     def test_interpolate_simple(self, monkeypatch):
         monkeypatch.setenv("MY_KEY", "secret123")
-        from tools.mcp_tool import _interpolate_env_vars
+        from harness.tools.mcp_tool import _interpolate_env_vars
 
         result = _interpolate_env_vars("Bearer ${MY_KEY}")
         assert result == "Bearer secret123"
 
     def test_interpolate_missing_var(self, monkeypatch):
         monkeypatch.delenv("MISSING_VAR", raising=False)
-        from tools.mcp_tool import _interpolate_env_vars
+        from harness.tools.mcp_tool import _interpolate_env_vars
 
         result = _interpolate_env_vars("Bearer ${MISSING_VAR}")
         assert result == "Bearer ${MISSING_VAR}"
 
     def test_interpolate_nested_dict(self, monkeypatch):
         monkeypatch.setenv("API_KEY", "abc")
-        from tools.mcp_tool import _interpolate_env_vars
+        from harness.tools.mcp_tool import _interpolate_env_vars
 
         result = _interpolate_env_vars({
             "url": "https://example.com",
@@ -475,13 +475,13 @@ class TestEnvVarInterpolation:
 
     def test_interpolate_list(self, monkeypatch):
         monkeypatch.setenv("ARG1", "hello")
-        from tools.mcp_tool import _interpolate_env_vars
+        from harness.tools.mcp_tool import _interpolate_env_vars
 
         result = _interpolate_env_vars(["${ARG1}", "static"])
         assert result == ["hello", "static"]
 
     def test_interpolate_non_string(self):
-        from tools.mcp_tool import _interpolate_env_vars
+        from harness.tools.mcp_tool import _interpolate_env_vars
 
         assert _interpolate_env_vars(42) == 42
         assert _interpolate_env_vars(True) is True
@@ -494,7 +494,7 @@ class TestEnvVarInterpolation:
 
 class TestConfigHelpers:
     def test_save_and_load_mcp_server(self, tmp_path):
-        from plutus_cli.mcp_config import _save_mcp_server, _get_mcp_servers
+        from harness.cli.mcp_config import _save_mcp_server, _get_mcp_servers
 
         _save_mcp_server("mysvr", {"url": "https://example.com/mcp"})
         servers = _get_mcp_servers()
@@ -502,7 +502,7 @@ class TestConfigHelpers:
         assert servers["mysvr"]["url"] == "https://example.com/mcp"
 
     def test_remove_mcp_server(self, tmp_path):
-        from plutus_cli.mcp_config import (
+        from harness.cli.mcp_config import (
             _save_mcp_server,
             _remove_mcp_server,
             _get_mcp_servers,
@@ -516,12 +516,12 @@ class TestConfigHelpers:
         assert "s2" in _get_mcp_servers()
 
     def test_remove_nonexistent(self, tmp_path):
-        from plutus_cli.mcp_config import _remove_mcp_server
+        from harness.cli.mcp_config import _remove_mcp_server
 
         assert _remove_mcp_server("ghost") is False
 
     def test_env_key_for_server(self):
-        from plutus_cli.mcp_config import _env_key_for_server
+        from harness.cli.mcp_config import _env_key_for_server
 
         assert _env_key_for_server("ink") == "MCP_INK_API_KEY"
         assert _env_key_for_server("my-server") == "MCP_MY_SERVER_API_KEY"
@@ -533,7 +533,7 @@ class TestConfigHelpers:
 
 class TestDispatcher:
     def test_no_action_shows_list(self, tmp_path, capsys):
-        from plutus_cli.mcp_config import mcp_command
+        from harness.cli.mcp_config import mcp_command
 
         _seed_config(tmp_path, {})
         mcp_command(_make_args(mcp_action=None))
@@ -555,11 +555,11 @@ class TestMcpRemoveEvictsManager:
         })
         monkeypatch.setattr("builtins.input", lambda _: "y")
         monkeypatch.setattr(
-            "plutus_cli.mcp_config.get_hermes_home", lambda: tmp_path
+            "harness.cli.mcp_config.get_hermes_home", lambda: tmp_path
         )
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
 
-        from tools.mcp_oauth_manager import get_manager, reset_manager_for_tests
+        from harness.tools.mcp_oauth_manager import get_manager, reset_manager_for_tests
         reset_manager_for_tests()
 
         mgr = get_manager()
@@ -568,7 +568,7 @@ class TestMcpRemoveEvictsManager:
         )
         assert "oauth-srv" in mgr._entries
 
-        from plutus_cli.mcp_config import cmd_mcp_remove
+        from harness.cli.mcp_config import cmd_mcp_remove
         cmd_mcp_remove(_make_args(name="oauth-srv"))
 
         assert "oauth-srv" not in mgr._entries
@@ -577,7 +577,7 @@ class TestMcpRemoveEvictsManager:
 class TestMcpLogin:
     def test_login_rejects_unknown_server(self, tmp_path, capsys):
         _seed_config(tmp_path, {})
-        from plutus_cli.mcp_config import cmd_mcp_login
+        from harness.cli.mcp_config import cmd_mcp_login
         cmd_mcp_login(_make_args(name="ghost"))
         out = capsys.readouterr().out
         assert "not found" in out
@@ -586,7 +586,7 @@ class TestMcpLogin:
         _seed_config(tmp_path, {
             "srv": {"url": "https://example.com/mcp", "auth": "header"},
         })
-        from plutus_cli.mcp_config import cmd_mcp_login
+        from harness.cli.mcp_config import cmd_mcp_login
         cmd_mcp_login(_make_args(name="srv"))
         out = capsys.readouterr().out
         assert "not configured for OAuth" in out
@@ -595,7 +595,7 @@ class TestMcpLogin:
         _seed_config(tmp_path, {
             "srv": {"command": "npx", "args": ["some-server"]},
         })
-        from plutus_cli.mcp_config import cmd_mcp_login
+        from harness.cli.mcp_config import cmd_mcp_login
         cmd_mcp_login(_make_args(name="srv"))
         out = capsys.readouterr().out
         assert "no URL" in out or "not an OAuth" in out

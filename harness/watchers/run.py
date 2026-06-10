@@ -52,10 +52,10 @@ def main() -> int:
 
     # Import all registered tools (side effect: integration packages load,
     # @register_alert decorators populate alert_registry).
-    from tools.registry import discover_builtin_tools
+    from harness.tools.registry import discover_builtin_tools
     discover_builtin_tools()
 
-    from tools.core.alert_registry import list_all
+    from harness.tools.core.alert_registry import list_all
     from .poller import poll_once
 
     alerts = list_all()

@@ -10,8 +10,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from tools.environments.local import _HERMES_PROVIDER_ENV_FORCE_PREFIX
-from tools.process_registry import (
+from harness.tools.environments.local import _HERMES_PROVIDER_ENV_FORCE_PREFIX
+from harness.tools.process_registry import (
     ProcessRegistry,
     ProcessSession,
     MAX_OUTPUT_CHARS,
@@ -319,7 +319,7 @@ class TestSpawnEnvSanitization:
             "TELEGRAM_BOT_TOKEN": "bot-secret",
             "FIRECRAWL_API_KEY": "fc-secret",
         }, clear=True), \
-            patch("tools.process_registry._find_shell", return_value="/bin/bash"), \
+            patch("harness.tools.process_registry._find_shell", return_value="/bin/bash"), \
             patch("subprocess.Popen", side_effect=fake_popen), \
             patch("threading.Thread", return_value=fake_thread), \
             patch.object(registry, "_write_checkpoint"):
@@ -355,7 +355,7 @@ class TestSpawnEnvSanitization:
         env = FakeEnv()
         fake_thread = MagicMock()
 
-        with patch("tools.process_registry.threading.Thread", return_value=fake_thread), \
+        with patch("harness.tools.process_registry.threading.Thread", return_value=fake_thread), \
             patch.object(registry, "_write_checkpoint"):
             session = registry.spawn_via_env(env, "echo hello")
 
@@ -387,7 +387,7 @@ class TestSpawnEnvSanitization:
 
         env = FakeEnv()
 
-        with patch("tools.process_registry.time.sleep", return_value=None), \
+        with patch("harness.tools.process_registry.time.sleep", return_value=None), \
             patch.object(registry, "_move_to_finished"):
             registry._env_poller_loop(
                 session,
@@ -408,7 +408,7 @@ class TestSpawnEnvSanitization:
 
 class TestCheckpoint:
     def test_write_checkpoint(self, registry, tmp_path):
-        with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
             s = _make_session()
             registry._running[s.id] = s
             registry._write_checkpoint()
@@ -418,7 +418,7 @@ class TestCheckpoint:
             assert data[0]["session_id"] == s.id
 
     def test_recover_no_file(self, registry, tmp_path):
-        with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "missing.json"):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", tmp_path / "missing.json"):
             assert registry.recover_from_checkpoint() == 0
 
     def test_recover_dead_pid(self, registry, tmp_path):
@@ -429,12 +429,12 @@ class TestCheckpoint:
             "pid": 999999999,  # almost certainly not running
             "task_id": "t1",
         }]))
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 0
 
     def test_write_checkpoint_includes_watcher_metadata(self, registry, tmp_path):
-        with patch("tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", tmp_path / "procs.json"):
             s = _make_session()
             s.watcher_platform = "telegram"
             s.watcher_chat_id = "999"
@@ -469,7 +469,7 @@ class TestCheckpoint:
             "watcher_thread_id": "42",
             "watcher_interval": 60,
         }]))
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
             assert len(registry.pending_watchers) == 1
@@ -491,7 +491,7 @@ class TestCheckpoint:
             "task_id": "t1",
             "watcher_interval": 0,
         }]))
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
             assert len(registry.pending_watchers) == 0
@@ -506,7 +506,7 @@ class TestCheckpoint:
             "session_key": "sk1",
         }]))
 
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 1
             assert registry.get("proc_live") is not None
@@ -528,7 +528,7 @@ class TestCheckpoint:
         }]
         checkpoint.write_text(json.dumps(original))
 
-        with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+        with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
             recovered = registry.recover_from_checkpoint()
             assert recovered == 0
             assert registry.get("proc_remote") is None
@@ -548,7 +548,7 @@ class TestCheckpoint:
         }]))
 
         try:
-            with patch("tools.process_registry.CHECKPOINT_PATH", checkpoint):
+            with patch("harness.tools.process_registry.CHECKPOINT_PATH", checkpoint):
                 recovered = registry.recover_from_checkpoint()
                 assert recovered == 1
 
@@ -606,7 +606,7 @@ class TestKillProcess:
             calls.append((pid, sig))
 
         try:
-            with patch("tools.process_registry.os.kill", side_effect=fake_kill):
+            with patch("harness.tools.process_registry.os.kill", side_effect=fake_kill):
                 result = registry.kill_process(s.id)
 
             assert result["status"] == "killed"
@@ -622,16 +622,16 @@ class TestKillProcess:
 
 class TestProcessToolHandler:
     def test_list_action(self):
-        from tools.process_registry import _handle_process
+        from harness.tools.process_registry import _handle_process
         result = json.loads(_handle_process({"action": "list"}))
         assert "processes" in result
 
     def test_poll_missing_session_id(self):
-        from tools.process_registry import _handle_process
+        from harness.tools.process_registry import _handle_process
         result = json.loads(_handle_process({"action": "poll"}))
         assert "error" in result
 
     def test_unknown_action(self):
-        from tools.process_registry import _handle_process
+        from harness.tools.process_registry import _handle_process
         result = json.loads(_handle_process({"action": "unknown_action"}))
         assert "error" in result

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from agent import active_thesis_monitors as atm
+from harness.agent import active_thesis_monitors as atm
 
 
 @pytest.fixture()

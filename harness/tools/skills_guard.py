@@ -14,7 +14,7 @@ Trust levels:
   - community: Everything else. Any findings = blocked unless --force.
 
 Usage:
-    from tools.skills_guard import scan_skill, should_allow_install, format_scan_report
+    from harness.tools.skills_guard import scan_skill, should_allow_install, format_scan_report
 
     result = scan_skill(Path("skills/.hub/quarantine/some-skill"), source="community")
     allowed, reason = should_allow_install(result)

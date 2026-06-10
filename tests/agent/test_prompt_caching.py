@@ -3,7 +3,7 @@
 import copy
 import pytest
 
-from agent.prompt_caching import (
+from harness.agent.prompt_caching import (
     _apply_cache_marker,
     apply_anthropic_cache_control,
 )

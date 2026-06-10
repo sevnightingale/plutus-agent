@@ -6,7 +6,7 @@ vision_tools, and image_generation_tool.
 
 Usage in a tool module:
 
-    from tools.debug_helpers import DebugSession
+    from harness.tools.debug_helpers import DebugSession
 
     _debug = DebugSession("web_tools", env_var="WEB_TOOLS_DEBUG")
 
@@ -28,7 +28,7 @@ import os
 import uuid
 from typing import Any, Dict
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

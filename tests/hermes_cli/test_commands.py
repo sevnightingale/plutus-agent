@@ -3,7 +3,7 @@
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
-from plutus_cli.commands import (
+from harness.cli.commands import (
     COMMAND_REGISTRY,
     COMMANDS,
     COMMANDS_BY_CATEGORY,
@@ -691,7 +691,7 @@ class TestTelegramMenuCommands:
     def test_includes_plugin_commands_via_lazy_discovery(self, tmp_path, monkeypatch):
         """Telegram menu generation should discover plugin slash commands on first access."""
         from unittest.mock import patch
-        import plutus_cli.plugins as plugins_mod
+        import harness.cli.plugins as plugins_mod
 
         plugin_dir = tmp_path / "plugins" / "cmd-plugin"
         plugin_dir.mkdir(parents=True, exist_ok=True)
@@ -745,8 +745,8 @@ class TestTelegramMenuCommands:
             },
         }
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             (tmp_path / "skills").mkdir(exist_ok=True)
             menu, hidden = telegram_menu_commands(max_commands=100)
@@ -778,8 +778,8 @@ class TestTelegramMenuCommands:
             },
         }
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             (tmp_path / "skills").mkdir(exist_ok=True)
             menu, _ = telegram_menu_commands(max_commands=100)
@@ -811,8 +811,8 @@ class TestTelegramMenuCommands:
             },
         }
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             (tmp_path / "skills").mkdir(exist_ok=True)
             menu, _ = telegram_menu_commands(max_commands=100)
@@ -867,8 +867,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, hidden = discord_skill_commands(
                 max_slots=50, reserved_names=set(),
@@ -899,8 +899,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, _ = discord_skill_commands(
                 max_slots=50, reserved_names=set(),
@@ -925,8 +925,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, hidden = discord_skill_commands(
                 max_slots=5, reserved_names=set(),
@@ -965,8 +965,8 @@ class TestDiscordSkillCommands:
         }
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, _ = discord_skill_commands(
                 max_slots=50, reserved_names=set(),
@@ -992,8 +992,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, _ = discord_skill_commands(
                 max_slots=50, reserved_names={"status"},
@@ -1019,8 +1019,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, _ = discord_skill_commands(
                 max_slots=50, reserved_names=set(),
@@ -1046,8 +1046,8 @@ class TestDiscordSkillCommands:
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         (tmp_path / "skills").mkdir(exist_ok=True)
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             entries, _ = discord_skill_commands(
                 max_slots=50, reserved_names=set(),
@@ -1063,7 +1063,7 @@ class TestDiscordSkillCommands:
 # Discord skill commands grouped by category
 # ---------------------------------------------------------------------------
 
-from plutus_cli.commands import discord_skill_commands_by_category  # noqa: E402
+from harness.cli.commands import discord_skill_commands_by_category  # noqa: E402
 
 
 class TestDiscordSkillCommandsByCategory:
@@ -1102,8 +1102,8 @@ class TestDiscordSkillCommandsByCategory:
         }
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             categories, uncategorized, hidden = discord_skill_commands_by_category(
                 reserved_names=set(),
@@ -1133,8 +1133,8 @@ class TestDiscordSkillCommandsByCategory:
         }
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             categories, uncategorized, hidden = discord_skill_commands_by_category(
                 reserved_names=set(),
@@ -1161,8 +1161,8 @@ class TestDiscordSkillCommandsByCategory:
         }
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             categories, uncategorized, hidden = discord_skill_commands_by_category(
                 reserved_names=set(),
@@ -1195,8 +1195,8 @@ class TestDiscordSkillCommandsByCategory:
         }
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         with (
-            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
-            patch("tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
+            patch("harness.agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path / "skills"),
         ):
             categories, uncategorized, hidden = discord_skill_commands_by_category(
                 reserved_names=set(),
@@ -1221,7 +1221,7 @@ class TestPluginCommandEnumeration:
 
     def _patch_plugin_commands(self, monkeypatch, commands):
         """Monkeypatch plutus_cli.plugins.get_plugin_commands() to a fixed dict."""
-        from plutus_cli import plugins as _plugins_mod
+        from harness.cli import plugins as _plugins_mod
 
         monkeypatch.setattr(
             _plugins_mod, "get_plugin_commands", lambda: dict(commands)
@@ -1283,7 +1283,7 @@ class TestPluginCommandEnumeration:
 
     def test_is_gateway_known_command_recognizes_plugin_commands(self, monkeypatch):
         """is_gateway_known_command() must return True for plugin commands."""
-        from plutus_cli.commands import is_gateway_known_command
+        from harness.cli.commands import is_gateway_known_command
 
         self._patch_plugin_commands(monkeypatch, {
             "metricas": {
@@ -1298,8 +1298,8 @@ class TestPluginCommandEnumeration:
 
     def test_is_gateway_known_command_still_recognizes_builtins(self, monkeypatch):
         """Built-in commands must remain known even when plugin discovery fails."""
-        from plutus_cli import plugins as _plugins_mod
-        from plutus_cli.commands import is_gateway_known_command
+        from harness.cli import plugins as _plugins_mod
+        from harness.cli.commands import is_gateway_known_command
 
         def _boom():
             raise RuntimeError("plugin system down")
@@ -1312,7 +1312,7 @@ class TestPluginCommandEnumeration:
 
     def test_plugin_enumerator_handles_missing_plugin_manager(self, monkeypatch):
         """Enumerators must never raise when plugin discovery raises."""
-        from plutus_cli import plugins as _plugins_mod
+        from harness.cli import plugins as _plugins_mod
 
         def _boom():
             raise RuntimeError("plugin system down")

@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig, GatewayConfig, Platform, _apply_env_overrides
+from harness.gateway.config import PlatformConfig, GatewayConfig, Platform, _apply_env_overrides
 
 
 def _ensure_discord_mock():
@@ -53,7 +53,7 @@ def _ensure_discord_mock():
 
 _ensure_discord_mock()
 
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
 
 @pytest.fixture()

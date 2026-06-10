@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.tts_tool import (
+from harness.tools.tts_tool import (
     ELEVENLABS_MODEL_MAX_TEXT_LENGTH,
     FALLBACK_MAX_TEXT_LENGTH,
     PROVIDER_MAX_TEXT_LENGTH,
@@ -124,7 +124,7 @@ class TestTextToSpeechToolTruncation:
 
     def test_openai_truncates_at_4096_not_4000(self, tmp_path, monkeypatch, caplog):
         import logging
-        caplog.set_level(logging.WARNING, logger="tools.tts_tool")
+        caplog.set_level(logging.WARNING, logger="harness.tools.tts_tool")
 
         # 5000 chars -- over OpenAI's 4096 limit but under xAI's 15k
         text = "A" * 5000
@@ -136,11 +136,11 @@ class TestTextToSpeechToolTruncation:
                 f.write(b"\x00")
             return out
 
-        monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
+        monkeypatch.setattr("harness.tools.tts_tool._generate_openai_tts", fake_openai)
+        monkeypatch.setattr("harness.tools.tts_tool._load_tts_config",
                             lambda: {"provider": "openai"})
 
-        from tools.tts_tool import text_to_speech_tool
+        from harness.tools.tts_tool import text_to_speech_tool
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -161,11 +161,11 @@ class TestTextToSpeechToolTruncation:
                 f.write(b"\x00")
             return out
 
-        monkeypatch.setattr("tools.tts_tool._generate_xai_tts", fake_xai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
+        monkeypatch.setattr("harness.tools.tts_tool._generate_xai_tts", fake_xai)
+        monkeypatch.setattr("harness.tools.tts_tool._load_tts_config",
                             lambda: {"provider": "xai"})
 
-        from tools.tts_tool import text_to_speech_tool
+        from harness.tools.tts_tool import text_to_speech_tool
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 
@@ -184,12 +184,12 @@ class TestTextToSpeechToolTruncation:
                 f.write(b"\x00")
             return out
 
-        monkeypatch.setattr("tools.tts_tool._generate_openai_tts", fake_openai)
-        monkeypatch.setattr("tools.tts_tool._load_tts_config",
+        monkeypatch.setattr("harness.tools.tts_tool._generate_openai_tts", fake_openai)
+        monkeypatch.setattr("harness.tools.tts_tool._load_tts_config",
                             lambda: {"provider": "openai",
                                      "openai": {"max_text_length": 100}})
 
-        from tools.tts_tool import text_to_speech_tool
+        from harness.tools.tts_tool import text_to_speech_tool
         out = str(tmp_path / "out.mp3")
         result = json.loads(text_to_speech_tool(text=text, output_path=out))
 

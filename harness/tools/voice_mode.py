@@ -49,7 +49,7 @@ def _audio_available() -> bool:
         return False
 
 
-from plutus_constants import is_termux as _is_termux_environment
+from harness.constants import is_termux as _is_termux_environment
 
 
 def _voice_capture_install_hint() -> str:
@@ -103,7 +103,7 @@ def detect_audio_environment() -> dict:
         warnings.append("Running over SSH -- no audio devices available")
 
     # Docker/Podman container detection
-    from plutus_constants import is_container
+    from harness.constants import is_container
     if is_container():
         warnings.append("Running inside Docker container -- no audio devices")
 
@@ -799,7 +799,7 @@ def transcribe_recording(wav_path: str, model: Optional[str] = None) -> Dict[str
     Returns:
         Dict with ``success``, ``transcript``, and optionally ``error``.
     """
-    from tools.transcription_tools import transcribe_audio
+    from harness.tools.transcription_tools import transcribe_audio
 
     result = transcribe_audio(wav_path, model=model)
 
@@ -929,7 +929,7 @@ def check_voice_requirements() -> Dict[str, Any]:
         ``missing_packages``, and ``details``.
     """
     # Determine STT provider availability
-    from tools.transcription_tools import _get_provider, _load_stt_config, is_stt_enabled
+    from harness.tools.transcription_tools import _get_provider, _load_stt_config, is_stt_enabled
     stt_config = _load_stt_config()
     stt_enabled = is_stt_enabled(stt_config)
     stt_provider = _get_provider(stt_config)

@@ -1,6 +1,6 @@
 """Tests for agent-settings copy in the interactive setup wizard."""
 
-from plutus_cli.setup import setup_agent_settings
+from harness.cli.setup import setup_agent_settings
 
 
 def test_setup_agent_settings_uses_displayed_max_iterations_value(tmp_path, monkeypatch, capsys):
@@ -16,11 +16,11 @@ def test_setup_agent_settings_uses_displayed_max_iterations_value(tmp_path, monk
 
     prompt_answers = iter(["60", "all", "0.5"])
 
-    monkeypatch.setattr("plutus_cli.setup.get_env_value", lambda key: "60" if key == "HERMES_MAX_ITERATIONS" else "")
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: next(prompt_answers))
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", lambda *args, **kwargs: 4)
-    monkeypatch.setattr("plutus_cli.setup.save_env_value", lambda *args, **kwargs: None)
-    monkeypatch.setattr("plutus_cli.setup.save_config", lambda *args, **kwargs: None)
+    monkeypatch.setattr("harness.cli.setup.get_env_value", lambda key: "60" if key == "HERMES_MAX_ITERATIONS" else "")
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: next(prompt_answers))
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", lambda *args, **kwargs: 4)
+    monkeypatch.setattr("harness.cli.setup.save_env_value", lambda *args, **kwargs: None)
+    monkeypatch.setattr("harness.cli.setup.save_config", lambda *args, **kwargs: None)
 
     setup_agent_settings(config)
 

@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform, StreamingConfig
-from gateway.platforms.base import resolve_proxy_url
-from gateway.run import GatewayRunner
-from gateway.session import SessionSource
+from harness.gateway.config import Platform, StreamingConfig
+from harness.gateway.platforms.base import resolve_proxy_url
+from harness.gateway.run import GatewayRunner
+from harness.gateway.session import SessionSource
 
 
 def _make_runner(proxy_url=None):
@@ -100,7 +100,7 @@ class TestGetProxyUrl:
     def test_returns_none_when_not_configured(self, monkeypatch):
         monkeypatch.delenv("GATEWAY_PROXY_URL", raising=False)
         runner = _make_runner()
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             assert runner._get_proxy_url() is None
 
     def test_reads_from_env_var(self, monkeypatch):
@@ -117,20 +117,20 @@ class TestGetProxyUrl:
         monkeypatch.delenv("GATEWAY_PROXY_URL", raising=False)
         runner = _make_runner()
         cfg = {"gateway": {"proxy_url": "http://10.0.0.1:8642"}}
-        with patch("gateway.run._load_gateway_config", return_value=cfg):
+        with patch("harness.gateway.run._load_gateway_config", return_value=cfg):
             assert runner._get_proxy_url() == "http://10.0.0.1:8642"
 
     def test_env_var_overrides_config(self, monkeypatch):
         monkeypatch.setenv("GATEWAY_PROXY_URL", "http://env-host:8642")
         runner = _make_runner()
         cfg = {"gateway": {"proxy_url": "http://config-host:8642"}}
-        with patch("gateway.run._load_gateway_config", return_value=cfg):
+        with patch("harness.gateway.run._load_gateway_config", return_value=cfg):
             assert runner._get_proxy_url() == "http://env-host:8642"
 
     def test_empty_string_treated_as_unset(self, monkeypatch):
         monkeypatch.setenv("GATEWAY_PROXY_URL", "  ")
         runner = _make_runner()
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             assert runner._get_proxy_url() is None
 
 
@@ -185,7 +185,7 @@ class TestRunAgentProxyDispatch:
 
         runner._run_agent_via_proxy = AsyncMock()
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             try:
                 await runner._run_agent(
                     message="hi",
@@ -220,7 +220,7 @@ class TestRunAgentViaProxy:
         )
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     result = await runner._run_agent_via_proxy(
@@ -266,7 +266,7 @@ class TestRunAgentViaProxy:
         resp = _FakeSSEResponse(status=401, error_text="Unauthorized: invalid API key")
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     result = await runner._run_agent_via_proxy(
@@ -297,7 +297,7 @@ class TestRunAgentViaProxy:
             async def __aexit__(self, *args):
                 pass
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with patch("aiohttp.ClientSession", return_value=_ErrorSession()):
                 with patch("aiohttp.ClientTimeout"):
                     result = await runner._run_agent_via_proxy(
@@ -330,7 +330,7 @@ class TestRunAgentViaProxy:
             {"role": "assistant", "content": "Found results."},
         ]
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     await runner._run_agent_via_proxy(
@@ -361,7 +361,7 @@ class TestRunAgentViaProxy:
         )
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     result = await runner._run_agent_via_proxy(
@@ -400,7 +400,7 @@ class TestRunAgentViaProxy:
         )
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     result = await runner._run_agent_via_proxy(
@@ -430,7 +430,7 @@ class TestRunAgentViaProxy:
         )
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     await runner._run_agent_via_proxy(
@@ -456,7 +456,7 @@ class TestRunAgentViaProxy:
         )
         session = _FakeSession(resp)
 
-        with patch("gateway.run._load_gateway_config", return_value={}):
+        with patch("harness.gateway.run._load_gateway_config", return_value={}):
             with _patch_aiohttp(session):
                 with patch("aiohttp.ClientTimeout"):
                     await runner._run_agent_via_proxy(
@@ -478,14 +478,14 @@ class TestEnvVarRegistration:
     """Verify GATEWAY_PROXY_URL and GATEWAY_PROXY_KEY are registered."""
 
     def test_proxy_url_in_optional_env_vars(self):
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert "GATEWAY_PROXY_URL" in OPTIONAL_ENV_VARS
         info = OPTIONAL_ENV_VARS["GATEWAY_PROXY_URL"]
         assert info["category"] == "messaging"
         assert info["password"] is False
 
     def test_proxy_key_in_optional_env_vars(self):
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
         assert "GATEWAY_PROXY_KEY" in OPTIONAL_ENV_VARS
         info = OPTIONAL_ENV_VARS["GATEWAY_PROXY_KEY"]
         assert info["category"] == "messaging"

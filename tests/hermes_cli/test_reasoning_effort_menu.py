@@ -2,7 +2,7 @@ import sys
 import types
 
 
-from plutus_cli.main import _prompt_reasoning_effort_selection
+from harness.cli.main import _prompt_reasoning_effort_selection
 
 
 class _FakeTerminalMenu:

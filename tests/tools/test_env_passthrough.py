@@ -4,8 +4,8 @@ import os
 import pytest
 import yaml
 
-import tools.env_passthrough as _ep_mod
-from tools.env_passthrough import (
+import harness.tools.env_passthrough as _ep_mod
+from harness.tools.env_passthrough import (
     clear_env_passthrough,
     get_all_passthrough,
     is_env_passthrough,
@@ -163,7 +163,7 @@ class TestTerminalIntegration:
     """Verify that the passthrough is checked in terminal's env sanitizers."""
 
     def test_blocklisted_var_blocked_by_default(self):
-        from tools.environments.local import _sanitize_subprocess_env, _HERMES_PROVIDER_ENV_BLOCKLIST
+        from harness.tools.environments.local import _sanitize_subprocess_env, _HERMES_PROVIDER_ENV_BLOCKLIST
 
         # Pick a var we know is in the blocklist
         blocked_var = next(iter(_HERMES_PROVIDER_ENV_BLOCKLIST))
@@ -177,7 +177,7 @@ class TestTerminalIntegration:
         Hermes provider credentials — that was the bypass where a skill
         could declare ANTHROPIC_TOKEN / OPENAI_API_KEY as passthrough and
         defeat the execute_code sandbox scrubbing."""
-        from tools.environments.local import (
+        from harness.tools.environments.local import (
             _sanitize_subprocess_env,
             _HERMES_PROVIDER_ENV_BLOCKLIST,
         )
@@ -199,7 +199,7 @@ class TestTerminalIntegration:
         """_make_run_env must NOT expose a blocklisted var to subprocess env
         even after a skill attempts to register it via passthrough."""
         import os
-        from tools.environments.local import (
+        from harness.tools.environments.local import (
             _make_run_env,
             _HERMES_PROVIDER_ENV_BLOCKLIST,
         )

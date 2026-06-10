@@ -4,7 +4,7 @@ import json
 import os
 from types import SimpleNamespace
 
-from gateway import status
+from harness.gateway import status
 
 
 class TestGatewayPidState:
@@ -57,7 +57,7 @@ class TestGatewayPidState:
         pid_path.write_text(json.dumps({
             "pid": os.getpid(),
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
 
@@ -102,7 +102,7 @@ class TestGatewayPidState:
         pid_path.write_text(json.dumps({
             "pid": os.getpid(),
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
 
@@ -114,7 +114,7 @@ class TestGatewayPidState:
         lock_path.write_text(json.dumps({
             "pid": os.getpid(),
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
         monkeypatch.setattr(status, "is_gateway_runtime_lock_active", lambda lock_path=None: True)
@@ -139,7 +139,7 @@ class TestGatewayPidState:
         pid_path.write_text(json.dumps({
             "pid": os.getpid(),
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
 
@@ -169,13 +169,13 @@ class TestGatewayPidState:
         pid_path.write_text(json.dumps({
             "pid": dead_foreign_pid,
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
         lock_path.write_text(json.dumps({
             "pid": dead_foreign_pid,
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
 
@@ -190,7 +190,7 @@ class TestGatewayPidState:
         pid_path.write_text(json.dumps({
             "pid": 99999,
             "kind": "hermes-gateway",
-            "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+            "argv": ["python", "-m", "harness.cli.main", "gateway"],
             "start_time": 123,
         }))
 
@@ -202,7 +202,7 @@ class TestGatewayPidState:
             lambda: {
                 "pid": os.getpid(),
                 "kind": "hermes-gateway",
-                "argv": ["python", "-m", "plutus_cli.main", "gateway"],
+                "argv": ["python", "-m", "harness.cli.main", "gateway"],
                 "start_time": 123,
             },
         )

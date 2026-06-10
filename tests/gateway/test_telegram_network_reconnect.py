@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig
+from harness.gateway.config import PlatformConfig
 
 
 def _ensure_telegram_mock():
@@ -33,7 +33,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +41,7 @@ def _no_auto_discovery(monkeypatch):
     """Disable DoH auto-discovery so connect() uses the plain builder chain."""
     async def _noop():
         return []
-    monkeypatch.setattr("gateway.platforms.telegram.discover_fallback_ips", _noop)
+    monkeypatch.setattr("harness.gateway.platforms.telegram.discover_fallback_ips", _noop)
 
 
 def _make_adapter() -> TelegramAdapter:

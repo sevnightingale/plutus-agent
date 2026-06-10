@@ -15,12 +15,12 @@ import re
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Optional, Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-from plutus_time import now as _hermes_now
+from harness.clock import now as _hermes_now
 
 try:
     from croniter import croniter

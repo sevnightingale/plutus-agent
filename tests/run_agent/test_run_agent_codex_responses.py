@@ -9,7 +9,7 @@ sys.modules.setdefault("fire", types.SimpleNamespace(Fire=lambda *a, **k: None))
 sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
 sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
-import run_agent
+import harness.run_agent as run_agent
 
 
 @pytest.fixture(autouse=True)
@@ -595,7 +595,7 @@ def test_try_refresh_codex_client_credentials_rebuilds_client(monkeypatch):
         return _RebuiltClient()
 
     monkeypatch.setattr(
-        "plutus_cli.auth.resolve_codex_runtime_credentials",
+        "harness.cli.auth.resolve_codex_runtime_credentials",
         lambda force_refresh=True: {
             "api_key": "new-codex-token",
             "base_url": "https://chatgpt.com/backend-api/codex",
@@ -640,7 +640,7 @@ def test_run_conversation_codex_tool_round_trip(monkeypatch):
 
 def test_chat_messages_to_responses_input_uses_call_id_for_function_call(monkeypatch):
     agent = _build_agent(monkeypatch)
-    from agent.codex_responses_adapter import _chat_messages_to_responses_input
+    from harness.agent.codex_responses_adapter import _chat_messages_to_responses_input
     items = _chat_messages_to_responses_input(
         [
             {"role": "user", "content": "Run terminal"},
@@ -669,7 +669,7 @@ def test_chat_messages_to_responses_input_uses_call_id_for_function_call(monkeyp
 
 def test_chat_messages_to_responses_input_accepts_call_pipe_fc_ids(monkeypatch):
     agent = _build_agent(monkeypatch)
-    from agent.codex_responses_adapter import _chat_messages_to_responses_input
+    from harness.agent.codex_responses_adapter import _chat_messages_to_responses_input
     items = _chat_messages_to_responses_input(
         [
             {"role": "user", "content": "Run terminal"},
@@ -698,7 +698,7 @@ def test_chat_messages_to_responses_input_accepts_call_pipe_fc_ids(monkeypatch):
 
 def test_preflight_codex_api_kwargs_strips_optional_function_call_id(monkeypatch):
     agent = _build_agent(monkeypatch)
-    from agent.codex_responses_adapter import _preflight_codex_api_kwargs
+    from harness.agent.codex_responses_adapter import _preflight_codex_api_kwargs
     preflight = _preflight_codex_api_kwargs(
         {
             "model": "gpt-5-codex",
@@ -727,7 +727,7 @@ def test_preflight_codex_api_kwargs_rejects_function_call_output_without_call_id
     agent = _build_agent(monkeypatch)
 
     with pytest.raises(ValueError, match="function_call_output is missing call_id"):
-        from agent.codex_responses_adapter import _preflight_codex_api_kwargs
+        from harness.agent.codex_responses_adapter import _preflight_codex_api_kwargs
         _preflight_codex_api_kwargs(
             {
                 "model": "gpt-5-codex",
@@ -745,7 +745,7 @@ def test_preflight_codex_api_kwargs_rejects_unsupported_request_fields(monkeypat
     kwargs["some_unknown_field"] = "value"
 
     with pytest.raises(ValueError, match="unsupported field"):
-        from agent.codex_responses_adapter import _preflight_codex_api_kwargs
+        from harness.agent.codex_responses_adapter import _preflight_codex_api_kwargs
         _preflight_codex_api_kwargs(kwargs)
 
 
@@ -757,7 +757,7 @@ def test_preflight_codex_api_kwargs_allows_reasoning_and_temperature(monkeypatch
     kwargs["temperature"] = 0.7
     kwargs["max_output_tokens"] = 4096
 
-    from agent.codex_responses_adapter import _preflight_codex_api_kwargs
+    from harness.agent.codex_responses_adapter import _preflight_codex_api_kwargs
     result = _preflight_codex_api_kwargs(kwargs)
     assert result["reasoning"] == {"effort": "high", "summary": "auto"}
     assert result["include"] == ["reasoning.encrypted_content"]
@@ -770,7 +770,7 @@ def test_preflight_codex_api_kwargs_allows_service_tier(monkeypatch):
     kwargs = _codex_request_kwargs()
     kwargs["service_tier"] = "priority"
 
-    from agent.codex_responses_adapter import _preflight_codex_api_kwargs
+    from harness.agent.codex_responses_adapter import _preflight_codex_api_kwargs
     result = _preflight_codex_api_kwargs(kwargs)
     assert result["service_tier"] == "priority"
 
@@ -848,7 +848,7 @@ def test_run_conversation_codex_continues_after_incomplete_interim_message(monke
 
 def test_normalize_codex_response_marks_commentary_only_message_as_incomplete(monkeypatch):
     agent = _build_agent(monkeypatch)
-    from agent.codex_responses_adapter import _normalize_codex_response
+    from harness.agent.codex_responses_adapter import _normalize_codex_response
     assistant_message, finish_reason = _normalize_codex_response(
         _codex_commentary_message_response("I'll inspect the repository first.")
     )
@@ -1076,7 +1076,7 @@ def test_normalize_codex_response_marks_reasoning_only_as_incomplete(monkeypatch
     sends them into the empty-content retry loop (3 retries then failure).
     """
     agent = _build_agent(monkeypatch)
-    from agent.codex_responses_adapter import _normalize_codex_response
+    from harness.agent.codex_responses_adapter import _normalize_codex_response
     assistant_message, finish_reason = _normalize_codex_response(
         _codex_reasoning_only_response()
     )
@@ -1110,7 +1110,7 @@ def test_normalize_codex_response_reasoning_with_content_is_stop(monkeypatch):
         status="completed",
         model="gpt-5-codex",
     )
-    from agent.codex_responses_adapter import _normalize_codex_response
+    from harness.agent.codex_responses_adapter import _normalize_codex_response
     assistant_message, finish_reason = _normalize_codex_response(response)
 
     assert finish_reason == "stop"
@@ -1196,7 +1196,7 @@ def test_chat_messages_to_responses_input_reasoning_only_has_following_item(monk
             ],
         },
     ]
-    from agent.codex_responses_adapter import _chat_messages_to_responses_input
+    from harness.agent.codex_responses_adapter import _chat_messages_to_responses_input
     items = _chat_messages_to_responses_input(messages)
 
     # Find the reasoning item
@@ -1284,7 +1284,7 @@ def test_chat_messages_to_responses_input_deduplicates_reasoning_ids(monkeypatch
             ],
         },
     ]
-    from agent.codex_responses_adapter import _chat_messages_to_responses_input
+    from harness.agent.codex_responses_adapter import _chat_messages_to_responses_input
     items = _chat_messages_to_responses_input(messages)
 
     reasoning_items = [it for it in items if it.get("type") == "reasoning"]
@@ -1311,7 +1311,7 @@ def test_preflight_codex_input_deduplicates_reasoning_ids(monkeypatch):
         {"type": "reasoning", "id": "rs_zzz", "encrypted_content": "enc_b"},
         {"role": "assistant", "content": "done"},
     ]
-    from agent.codex_responses_adapter import _preflight_codex_input_items
+    from harness.agent.codex_responses_adapter import _preflight_codex_input_items
     normalized = _preflight_codex_input_items(raw_input)
 
     reasoning_items = [it for it in normalized if it.get("type") == "reasoning"]

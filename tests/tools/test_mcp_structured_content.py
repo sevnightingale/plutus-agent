@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tools import mcp_tool
+from harness.tools import mcp_tool
 
 
 class _FakeContentBlock:
@@ -46,7 +46,7 @@ def _patch_mcp_server():
     fake_session = MagicMock()
     fake_server = SimpleNamespace(session=fake_session)
     with patch.dict(mcp_tool._servers, {"test-server": fake_server}), \
-         patch("tools.mcp_tool._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop):
+         patch("harness.tools.mcp_tool._run_on_mcp_loop", side_effect=_fake_run_on_mcp_loop):
         yield fake_session
 
 

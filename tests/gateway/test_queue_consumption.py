@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.run import _dequeue_pending_event
-from gateway.platforms.base import (
+from harness.gateway.run import _dequeue_pending_event
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
@@ -35,7 +35,7 @@ class _StubAdapter(BasePlatformAdapter):
         self._mark_disconnected()
 
     async def send(self, chat_id, content, reply_to=None, metadata=None):
-        from gateway.platforms.base import SendResult
+        from harness.gateway.platforms.base import SendResult
         return SendResult(success=True, message_id="msg-1")
 
     async def get_chat_info(self, chat_id):

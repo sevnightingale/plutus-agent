@@ -2,9 +2,9 @@
 
 import importlib
 
-from model_tools import get_tool_definitions
+from harness.model_tools import get_tool_definitions
 
-terminal_tool_module = importlib.import_module("tools.terminal_tool")
+terminal_tool_module = importlib.import_module("harness.tools.terminal_tool")
 
 
 class TestTerminalRequirements:
@@ -28,7 +28,7 @@ class TestTerminalRequirements:
         assert {"read_file", "write_file", "patch", "search_files"}.issubset(names)
 
     def test_terminal_and_execute_code_tools_resolve_for_managed_modal(self, monkeypatch, tmp_path):
-        monkeypatch.setattr("tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
+        monkeypatch.setattr("harness.tools.tool_backend_helpers.managed_nous_tools_enabled", lambda: True)
         monkeypatch.setattr(terminal_tool_module, "managed_nous_tools_enabled", lambda: True)
         monkeypatch.setenv("HOME", str(tmp_path))
         monkeypatch.setenv("USERPROFILE", str(tmp_path))

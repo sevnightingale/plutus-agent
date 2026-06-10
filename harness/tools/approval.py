@@ -51,7 +51,7 @@ def get_current_session_key(default: str = "default") -> str:
     session_key = _approval_session_key.get()
     if session_key:
         return session_key
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     return get_session_env("HERMES_SESSION_KEY", default)
 
 # Sensitive write targets that should trigger approval even when referenced
@@ -180,7 +180,7 @@ def _normalize_command_for_detection(command: str) -> str:
     null bytes, and normalizes Unicode fullwidth characters so that
     obfuscation techniques cannot bypass the pattern-based detection.
     """
-    from tools.ansi_strip import strip_ansi
+    from harness.tools.ansi_strip import strip_ansi
 
     # Strip all ANSI escape sequences (CSI, OSC, DCS, 8-bit C1, etc.)
     command = strip_ansi(command)
@@ -388,7 +388,7 @@ def load_permanent_allowlist() -> set:
     patterns added via 'always' in a previous session.
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         patterns = set(config.get("command_allowlist", []) or [])
         if patterns:
@@ -402,7 +402,7 @@ def load_permanent_allowlist() -> set:
 def save_permanent_allowlist(patterns: set):
     """Save permanently allowed command patterns to config."""
     try:
-        from plutus_cli.config import load_config, save_config
+        from harness.cli.config import load_config, save_config
         config = load_config()
         config["command_allowlist"] = list(patterns)
         save_config(config)
@@ -517,7 +517,7 @@ def _normalize_approval_mode(mode) -> str:
 def _get_approval_config() -> dict:
     """Read the approvals config block. Returns a dict with 'mode', 'timeout', etc."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         return config.get("approvals", {}) or {}
     except Exception as e:
@@ -542,7 +542,7 @@ def _get_approval_timeout() -> int:
 def _get_cron_approval_mode() -> str:
     """Read the cron approval mode from config. Returns 'deny' or 'approve'."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         mode = str(config.get("approvals", {}).get("cron_mode", "deny")).lower().strip()
         if mode in ("approve", "off", "allow", "yes"):
@@ -574,7 +574,7 @@ def _is_unattended_origin_turn() -> bool:
     """
     # 1. Unified-session marker (per-turn, authoritative)
     try:
-        from gateway.session_context import get_synthetic_kind
+        from harness.gateway.session_context import get_synthetic_kind
         if get_synthetic_kind():
             return True
     except Exception:
@@ -607,7 +607,7 @@ def _smart_approve(command: str, description: str) -> str:
     (openai/codex#13860).
     """
     try:
-        from agent.auxiliary_client import call_llm
+        from harness.agent.auxiliary_client import call_llm
 
         prompt = f"""You are a security reviewer for an AI coding agent. A terminal command was flagged by pattern matching as potentially dangerous.
 
@@ -824,7 +824,7 @@ def check_all_command_guards(command: str, env_type: str,
     # Only catch ImportError (module not installed).
     tirith_result = {"action": "allow", "findings": [], "summary": ""}
     try:
-        from tools.tirith_security import check_command_security
+        from harness.tools.tirith_security import check_command_security
         tirith_result = check_command_security(command)
     except ImportError:
         pass  # tirith module not installed — allow
@@ -949,7 +949,7 @@ def check_all_command_guards(command: str, env_type: str,
                 timeout = 300
 
             try:
-                from tools.environments.base import touch_activity_if_due
+                from harness.tools.environments.base import touch_activity_if_due
             except Exception:  # pragma: no cover
                 touch_activity_if_due = None
 

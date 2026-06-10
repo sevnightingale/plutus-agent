@@ -21,14 +21,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import (
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
 )
-from gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
-from gateway.session import SessionSource, build_session_key
+from harness.gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
+from harness.gateway.session import SessionSource, build_session_key
 
 
 # ---------------------------------------------------------------------------

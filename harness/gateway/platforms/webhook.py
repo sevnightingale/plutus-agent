@@ -44,8 +44,8 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
     web = None  # type: ignore[assignment]
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import (
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
@@ -261,7 +261,7 @@ class WebhookAdapter(BasePlatformAdapter):
 
     def _reload_dynamic_routes(self) -> None:
         """Reload agent-created subscriptions from disk if the file changed."""
-        from plutus_constants import get_hermes_home
+        from harness.constants import get_hermes_home
         hermes_home = get_hermes_home()
         subs_path = hermes_home / _DYNAMIC_ROUTES_FILENAME
         if not subs_path.exists():
@@ -389,7 +389,7 @@ class WebhookAdapter(BasePlatformAdapter):
         skills = route_config.get("skills", [])
         if skills:
             try:
-                from agent.skill_commands import (
+                from harness.agent.skill_commands import (
                     build_skill_invocation_message,
                     get_skill_commands,
                 )

@@ -15,9 +15,9 @@ from urllib.parse import urlparse
 import requests
 import yaml
 
-from utils import base_url_host_matches, base_url_hostname
+from harness.utils import base_url_host_matches, base_url_hostname
 
-from plutus_constants import OPENROUTER_MODELS_URL
+from harness.constants import OPENROUTER_MODELS_URL
 
 logger = logging.getLogger(__name__)
 
@@ -668,7 +668,7 @@ def fetch_endpoint_model_metadata(
 
 def _get_context_cache_path() -> Path:
     """Return path to the persistent context length cache file."""
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return get_hermes_home() / "context_length_cache.yaml"
 
 
@@ -1128,7 +1128,7 @@ def get_model_context_length(
         and base_url_host_matches(base_url, "amazonaws.com")
     ):
         try:
-            from agent.bedrock_adapter import get_bedrock_context_length
+            from harness.agent.bedrock_adapter import get_bedrock_context_length
             return get_bedrock_context_length(model)
         except ImportError:
             pass  # boto3 not installed — fall through to generic resolution
@@ -1150,7 +1150,7 @@ def get_model_context_length(
         if ctx:
             return ctx
     if effective_provider:
-        from agent.models_dev import lookup_models_dev_context
+        from harness.agent.models_dev import lookup_models_dev_context
         ctx = lookup_models_dev_context(effective_provider, model)
         if ctx:
             return ctx

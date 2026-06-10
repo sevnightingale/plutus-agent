@@ -23,7 +23,7 @@ import pytest
 
 class TestReadTrackerCaps:
     def setup_method(self):
-        from tools import file_tools
+        from harness.tools import file_tools
 
         # Clean slate per test.
         with file_tools._read_tracker_lock:
@@ -31,7 +31,7 @@ class TestReadTrackerCaps:
 
     def test_read_history_capped(self, monkeypatch):
         """read_history set is bounded by _READ_HISTORY_CAP."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         monkeypatch.setattr(ft, "_READ_HISTORY_CAP", 10)
         task_data = {
@@ -46,7 +46,7 @@ class TestReadTrackerCaps:
 
     def test_dedup_capped_oldest_first(self, monkeypatch):
         """dedup dict is bounded; oldest entries evicted first."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         monkeypatch.setattr(ft, "_DEDUP_CAP", 5)
         task_data = {
@@ -65,7 +65,7 @@ class TestReadTrackerCaps:
 
     def test_read_timestamps_capped_oldest_first(self, monkeypatch):
         """read_timestamps dict is bounded; oldest entries evicted first."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         monkeypatch.setattr(ft, "_READ_TIMESTAMPS_CAP", 3)
         task_data = {
@@ -81,7 +81,7 @@ class TestReadTrackerCaps:
 
     def test_cap_is_idempotent_under_cap(self, monkeypatch):
         """When containers are under cap, _cap_read_tracker_data is a no-op."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         monkeypatch.setattr(ft, "_READ_HISTORY_CAP", 100)
         monkeypatch.setattr(ft, "_DEDUP_CAP", 100)
@@ -103,7 +103,7 @@ class TestReadTrackerCaps:
 
     def test_cap_handles_missing_containers(self):
         """Missing sub-keys don't cause AttributeError."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         ft._cap_read_tracker_data({})  # no containers at all
         ft._cap_read_tracker_data({"read_history": None})
@@ -111,7 +111,7 @@ class TestReadTrackerCaps:
 
     def test_live_cap_applied_after_read_add(self, tmp_path, monkeypatch):
         """Live read_file path enforces caps."""
-        from tools import file_tools as ft
+        from harness.tools import file_tools as ft
 
         monkeypatch.setattr(ft, "_READ_HISTORY_CAP", 3)
         monkeypatch.setattr(ft, "_DEDUP_CAP", 3)
@@ -134,7 +134,7 @@ class TestCompletionConsumedPrune:
     def test_prune_drops_completion_entry_with_expired_session(self):
         """When a finished session is pruned, _completion_consumed is
         cleared for the same session_id."""
-        from tools.process_registry import ProcessRegistry, FINISHED_TTL_SECONDS
+        from harness.tools.process_registry import ProcessRegistry, FINISHED_TTL_SECONDS
         import time
 
         reg = ProcessRegistry()
@@ -156,7 +156,7 @@ class TestCompletionConsumedPrune:
 
     def test_prune_drops_completion_entry_for_lru_evicted(self):
         """Same contract for the LRU path (over MAX_PROCESSES)."""
-        from tools import process_registry as pr
+        from harness.tools import process_registry as pr
         import time
 
         reg = pr.ProcessRegistry()
@@ -187,7 +187,7 @@ class TestCompletionConsumedPrune:
     def test_prune_clears_dangling_completion_entries(self):
         """Stale entries in _completion_consumed without a backing session
         record are cleared out (belt-and-suspenders invariant)."""
-        from tools.process_registry import ProcessRegistry
+        from harness.tools.process_registry import ProcessRegistry
 
         reg = ProcessRegistry()
         # Add a dangling entry that was never in _running or _finished.

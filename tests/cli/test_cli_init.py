@@ -46,7 +46,7 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
     }
     with patch.dict(sys.modules, prompt_toolkit_stubs), \
          patch.dict("os.environ", clean_env, clear=False):
-        import cli as _cli_mod
+        import harness.repl as _cli_mod
         _cli_mod = importlib.reload(_cli_mod)
         with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), \
              patch.dict(_cli_mod.__dict__, {"CLI_CONFIG": _clean_config}):
@@ -266,7 +266,7 @@ class TestRootLevelProviderOverride:
             },
         }))
 
-        import cli
+        import harness.repl as cli
         monkeypatch.setattr(cli, "_hermes_home", hermes_home)
         cfg = cli.load_cli_config()
 
@@ -289,7 +289,7 @@ class TestRootLevelProviderOverride:
             },
         }))
 
-        import cli
+        import harness.repl as cli
         monkeypatch.setattr(cli, "_hermes_home", hermes_home)
         cfg = cli.load_cli_config()
 
@@ -298,7 +298,7 @@ class TestRootLevelProviderOverride:
 
     def test_normalize_root_model_keys_moves_to_model(self):
         """_normalize_root_model_keys migrates root keys into model section."""
-        from plutus_cli.config import _normalize_root_model_keys
+        from harness.cli.config import _normalize_root_model_keys
 
         config = {
             "provider": "opencode-go",
@@ -317,7 +317,7 @@ class TestRootLevelProviderOverride:
 
     def test_normalize_root_model_keys_does_not_override_existing(self):
         """Existing model.provider is never overridden by root-level key."""
-        from plutus_cli.config import _normalize_root_model_keys
+        from harness.cli.config import _normalize_root_model_keys
 
         config = {
             "provider": "stale-provider",

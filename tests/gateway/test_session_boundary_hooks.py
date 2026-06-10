@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionEntry, SessionSource, build_session_key
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionEntry, SessionSource, build_session_key
 
 
 def _make_source() -> SessionSource:
@@ -25,7 +25,7 @@ def _make_event(text: str) -> MessageEvent:
 
 
 def _make_runner():
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(
@@ -74,7 +74,7 @@ def _make_runner():
 
 
 @pytest.mark.asyncio
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 async def test_reset_fires_finalize_hook(mock_invoke_hook):
     """/new must fire on_session_finalize with the OLD session id."""
     runner = _make_runner()
@@ -87,7 +87,7 @@ async def test_reset_fires_finalize_hook(mock_invoke_hook):
 
 
 @pytest.mark.asyncio
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 async def test_reset_fires_reset_hook(mock_invoke_hook):
     """/new must fire on_session_reset with the NEW session id."""
     runner = _make_runner()
@@ -100,7 +100,7 @@ async def test_reset_fires_reset_hook(mock_invoke_hook):
 
 
 @pytest.mark.asyncio
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 async def test_finalize_before_reset(mock_invoke_hook):
     """on_session_finalize must fire before on_session_reset."""
     runner = _make_runner()
@@ -114,10 +114,10 @@ async def test_finalize_before_reset(mock_invoke_hook):
 
 
 @pytest.mark.asyncio
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 async def test_shutdown_fires_finalize_for_active_agents(mock_invoke_hook):
     """Gateway stop() must fire on_session_finalize for each active agent."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner._running = True
@@ -144,8 +144,8 @@ async def test_shutdown_fires_finalize_for_active_agents(mock_invoke_hook):
     agent2.session_id = "sess-b"
     runner._running_agents = {"key-a": agent1, "key-b": agent2}
 
-    with patch("gateway.status.remove_pid_file"), \
-         patch("gateway.status.write_runtime_status"):
+    with patch("harness.gateway.status.remove_pid_file"), \
+         patch("harness.gateway.status.write_runtime_status"):
         await runner.stop()
 
     finalize_calls = [
@@ -157,7 +157,7 @@ async def test_shutdown_fires_finalize_for_active_agents(mock_invoke_hook):
 
 
 @pytest.mark.asyncio
-@patch("plutus_cli.plugins.invoke_hook", side_effect=Exception("boom"))
+@patch("harness.cli.plugins.invoke_hook", side_effect=Exception("boom"))
 async def test_hook_error_does_not_break_reset(mock_invoke_hook):
     """Plugin hook errors must not prevent /new from completing."""
     runner = _make_runner()

@@ -38,9 +38,9 @@ from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
-from agent import google_oauth
-from agent.gemini_schema import sanitize_gemini_tool_parameters
-from agent.google_code_assist import (
+from harness.agent import google_oauth
+from harness.agent.gemini_schema import sanitize_gemini_tool_parameters
+from harness.agent.google_code_assist import (
     CODE_ASSIST_ENDPOINT,
     FREE_TIER_ID,
     CodeAssistError,

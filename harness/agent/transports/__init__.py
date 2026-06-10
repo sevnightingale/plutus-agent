@@ -1,12 +1,12 @@
 """Transport layer types and registry for provider response normalization.
 
 Usage:
-    from agent.transports import get_transport
+    from harness.agent.transports import get_transport
     transport = get_transport("anthropic_messages")
     result = transport.normalize_response(raw_response)
 """
 
-from agent.transports.types import NormalizedResponse, ToolCall, Usage, build_tool_call, map_finish_reason  # noqa: F401
+from harness.agent.transports.types import NormalizedResponse, ToolCall, Usage, build_tool_call, map_finish_reason  # noqa: F401
 
 _REGISTRY: dict = {}
 
@@ -34,18 +34,18 @@ def get_transport(api_mode: str):
 def _discover_transports() -> None:
     """Import all transport modules to trigger auto-registration."""
     try:
-        import agent.transports.anthropic  # noqa: F401
+        import harness.agent.transports.anthropic  # noqa: F401
     except ImportError:
         pass
     try:
-        import agent.transports.codex  # noqa: F401
+        import harness.agent.transports.codex  # noqa: F401
     except ImportError:
         pass
     try:
-        import agent.transports.chat_completions  # noqa: F401
+        import harness.agent.transports.chat_completions  # noqa: F401
     except ImportError:
         pass
     try:
-        import agent.transports.bedrock  # noqa: F401
+        import harness.agent.transports.bedrock  # noqa: F401
     except ImportError:
         pass

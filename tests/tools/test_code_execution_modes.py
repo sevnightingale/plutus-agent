@@ -30,7 +30,7 @@ def _force_local_terminal(monkeypatch):
     monkeypatch.setenv("TERMINAL_ENV", "local")
 
 
-from tools.code_execution_tool import (
+from harness.tools.code_execution_tool import (
     SANDBOX_ALLOWED_TOOLS,
     DEFAULT_EXECUTION_MODE,
     EXECUTION_MODES,
@@ -46,7 +46,7 @@ from tools.code_execution_tool import (
 @contextmanager
 def _mock_mode(mode):
     """Context manager that pins code_execution.mode to the given value."""
-    with patch("tools.code_execution_tool._load_config",
+    with patch("harness.tools.code_execution_tool._load_config",
                return_value={"mode": mode}):
         yield
 
@@ -71,36 +71,36 @@ class TestGetExecutionMode(unittest.TestCase):
         self.assertEqual(DEFAULT_EXECUTION_MODE, "project")
 
     def test_config_project(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": "project"}):
             self.assertEqual(_get_execution_mode(), "project")
 
     def test_config_strict(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": "strict"}):
             self.assertEqual(_get_execution_mode(), "strict")
 
     def test_config_case_insensitive(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": "STRICT"}):
             self.assertEqual(_get_execution_mode(), "strict")
 
     def test_config_strips_whitespace(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": "  project  "}):
             self.assertEqual(_get_execution_mode(), "project")
 
     def test_empty_config_falls_back_to_default(self):
-        with patch("tools.code_execution_tool._load_config", return_value={}):
+        with patch("harness.tools.code_execution_tool._load_config", return_value={}):
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
 
     def test_bogus_config_falls_back_to_default(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": "banana"}):
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
 
     def test_none_config_falls_back_to_default(self):
-        with patch("tools.code_execution_tool._load_config",
+        with patch("harness.tools.code_execution_tool._load_config",
                    return_value={"mode": None}):
             # str(None).lower() = "none" → not in EXECUTION_MODES → default
             self.assertEqual(_get_execution_mode(), DEFAULT_EXECUTION_MODE)
@@ -265,7 +265,7 @@ class TestExecuteCodeModeIntegration(unittest.TestCase):
         env_overrides = extra_env or {}
         with _mock_mode(mode):
             with patch.dict(os.environ, env_overrides):
-                with patch("model_tools.handle_function_call",
+                with patch("harness.model_tools.handle_function_call",
                            side_effect=_mock_handle_function_call):
                     raw = execute_code(
                         code=code,
@@ -356,7 +356,7 @@ class TestSecurityInvariantsAcrossModes(unittest.TestCase):
 
     def _run(self, code, mode):
         with _mock_mode(mode):
-            with patch("model_tools.handle_function_call",
+            with patch("harness.model_tools.handle_function_call",
                        side_effect=_mock_handle_function_call):
                 raw = execute_code(
                     code=code,

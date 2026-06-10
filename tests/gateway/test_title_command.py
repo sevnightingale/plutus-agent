@@ -9,9 +9,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 def _make_event(text="/title", platform=Platform.TELEGRAM,
@@ -28,7 +28,7 @@ def _make_event(text="/title", platform=Platform.TELEGRAM,
 
 def _make_runner(session_db=None):
     """Create a bare GatewayRunner with a mock session_store and optional session_db."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -56,7 +56,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_set_title(self, tmp_path):
         """Setting a title returns confirmation."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -73,7 +73,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_show_title_when_set(self, tmp_path):
         """Showing title when one is set returns the title."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
         db.set_session_title("test_session_123", "Existing Title")
@@ -88,7 +88,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_show_title_when_not_set(self, tmp_path):
         """Showing title when none is set returns usage hint."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -102,7 +102,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_title_conflict(self, tmp_path):
         """Setting a title already used by another session returns error."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("other_session", "telegram")
         db.set_session_title("other_session", "Taken Title")
@@ -126,7 +126,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_title_too_long(self, tmp_path):
         """Setting a title that exceeds max length returns error."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -141,7 +141,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_title_control_chars_sanitized(self, tmp_path):
         """Control characters are stripped and sanitized title is stored."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -155,7 +155,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_title_only_control_chars(self, tmp_path):
         """Title with only control chars returns empty error."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("test_session_123", "telegram")
 
@@ -168,7 +168,7 @@ class TestHandleTitleCommand:
     @pytest.mark.asyncio
     async def test_works_across_platforms(self, tmp_path):
         """The /title command works for Discord, Slack, and WhatsApp too."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         for platform in [Platform.DISCORD, Platform.TELEGRAM]:
             db = SessionDB(db_path=tmp_path / f"state_{platform.value}.db")
             db.create_session("test_session_123", platform.value)
@@ -195,14 +195,14 @@ class TestTitleInHelp:
         runner = _make_runner()
         event = _make_event(text="/help")
         # Need hooks for help command
-        from gateway.hooks import HookRegistry
+        from harness.gateway.hooks import HookRegistry
         runner.hooks = HookRegistry()
         result = await runner._handle_help_command(event)
         assert "/title" in result
 
     def test_title_is_known_command(self):
         """The /title command is in the _known_commands set."""
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         import inspect
         source = inspect.getsource(GatewayRunner._handle_message)
         assert '"title"' in source

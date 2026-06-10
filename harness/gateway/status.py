@@ -19,7 +19,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Any, Optional
 
 if sys.platform == "win32":
@@ -138,11 +138,11 @@ def _looks_like_gateway_process(pid: int) -> bool:
         return False
 
     patterns = (
-        "plutus_cli.main gateway",
-        "plutus_cli/main.py gateway",
+        "harness.cli.main gateway",
+        "harness/cli/main.py gateway",
         "hermes gateway",
         "hermes-gateway",
-        "gateway/run.py",
+        "harness/gateway/run.py",
     )
     return any(pattern in cmdline for pattern in patterns)
 
@@ -158,10 +158,10 @@ def _record_looks_like_gateway(record: dict[str, Any]) -> bool:
 
     cmdline = " ".join(str(part) for part in argv)
     patterns = (
-        "plutus_cli.main gateway",
-        "plutus_cli/main.py gateway",
+        "harness.cli.main gateway",
+        "harness/cli/main.py gateway",
         "hermes gateway",
-        "gateway/run.py",
+        "harness/gateway/run.py",
     )
     return any(pattern in cmdline for pattern in patterns)
 

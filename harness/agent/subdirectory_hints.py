@@ -19,7 +19,7 @@ import shlex
 from pathlib import Path
 from typing import Dict, Any, Optional, Set
 
-from agent.prompt_builder import _scan_context_content
+from harness.agent.prompt_builder import _scan_context_content
 
 logger = logging.getLogger(__name__)
 
@@ -169,7 +169,7 @@ class SubdirectoryHintTracker:
         # Respect HERMES_READ_SAFE_ROOT — don't walk into other projects'
         # CLAUDE.md / AGENTS.md when the agent's territory is constrained.
         try:
-            from agent.file_safety import get_safe_read_roots
+            from harness.agent.file_safety import get_safe_read_roots
             safe_roots = get_safe_read_roots()
             if safe_roots:
                 resolved = str(path.resolve())

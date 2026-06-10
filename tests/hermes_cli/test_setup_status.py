@@ -14,7 +14,7 @@ def test_setup_status_runs_without_crash(capsys, monkeypatch):
     monkeypatch.delenv("HL_API_WALLET_KEY", raising=False)
     monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
 
-    from plutus_cli.setup_status import setup_status_command
+    from harness.cli.setup_status import setup_status_command
     rc = setup_status_command(None)
     assert rc == 0
 
@@ -29,7 +29,7 @@ def test_setup_status_ready_when_keys_present(capsys, monkeypatch):
     monkeypatch.setenv("HL_API_WALLET_KEY", "0xfake")
     monkeypatch.setenv("HL_PUBLIC_ADDRESS", "0xfeedface")
 
-    from plutus_cli.setup_status import setup_status_command
+    from harness.cli.setup_status import setup_status_command
     setup_status_command(None)
     out = capsys.readouterr().out
     assert "Live trading READY" in out
@@ -37,7 +37,7 @@ def test_setup_status_ready_when_keys_present(capsys, monkeypatch):
 
 def test_individual_check_helpers_return_tuples():
     """The internal _check_* helpers all return (ok_bool_or_None, detail_str)."""
-    from plutus_cli import setup_status as ss
+    from harness.cli import setup_status as ss
 
     helpers = [
         ss._check_acp_installed,

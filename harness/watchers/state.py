@@ -21,7 +21,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

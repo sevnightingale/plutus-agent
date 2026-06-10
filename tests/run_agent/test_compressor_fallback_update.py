@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from run_agent import AIAgent
-from agent.context_compressor import ContextCompressor
+from harness.run_agent import AIAgent
+from harness.agent.context_compressor import ContextCompressor
 
 
 def _make_agent_with_compressor() -> AIAgent:
@@ -42,8 +42,8 @@ def _make_agent_with_compressor() -> AIAgent:
     return agent
 
 
-@patch("agent.auxiliary_client.resolve_provider_client")
-@patch("agent.model_metadata.get_model_context_length", return_value=128_000)
+@patch("harness.agent.auxiliary_client.resolve_provider_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=128_000)
 def test_compressor_updated_on_fallback(mock_ctx_len, mock_resolve):
     """After fallback activation, the compressor must reflect the fallback model."""
     agent = _make_agent_with_compressor()
@@ -72,8 +72,8 @@ def test_compressor_updated_on_fallback(mock_ctx_len, mock_resolve):
     assert c.threshold_tokens == int(128_000 * c.threshold_percent)
 
 
-@patch("agent.auxiliary_client.resolve_provider_client")
-@patch("agent.model_metadata.get_model_context_length", return_value=128_000)
+@patch("harness.agent.auxiliary_client.resolve_provider_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=128_000)
 def test_compressor_not_present_does_not_crash(mock_ctx_len, mock_resolve):
     """If the agent has no compressor, fallback should still succeed."""
     agent = _make_agent_with_compressor()

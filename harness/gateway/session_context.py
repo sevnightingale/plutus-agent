@@ -32,7 +32,7 @@ needs to replace the import + call site:
     platform = os.getenv("HERMES_SESSION_PLATFORM", "")
 
     # after
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     platform = get_session_env("HERMES_SESSION_PLATFORM", "")
 """
 

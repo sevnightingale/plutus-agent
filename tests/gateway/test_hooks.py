@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from gateway.hooks import HookRegistry
+from harness.gateway.hooks import HookRegistry
 
 
 def _create_hook(hooks_dir, hook_name, events, handler_code):
@@ -40,7 +40,7 @@ class TestDiscoverAndLoad:
                       "def handle(event_type, context):\n    pass\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 1
@@ -53,7 +53,7 @@ class TestDiscoverAndLoad:
         (hook_dir / "handler.py").write_text("def handle(e, c): pass\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
@@ -64,7 +64,7 @@ class TestDiscoverAndLoad:
         (hook_dir / "HOOK.yaml").write_text("name: bad\nevents: ['agent:start']\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
@@ -76,7 +76,7 @@ class TestDiscoverAndLoad:
         (hook_dir / "handler.py").write_text("def handle(e, c): pass\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
@@ -88,14 +88,14 @@ class TestDiscoverAndLoad:
         (hook_dir / "handler.py").write_text("def something_else(): pass\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
 
     def test_nonexistent_hooks_dir(self, tmp_path):
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path / "nonexistent"), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path / "nonexistent"), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 0
@@ -107,7 +107,7 @@ class TestDiscoverAndLoad:
                       "def handle(e, c): pass\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path), _patch_no_builtins(reg):
             reg.discover_and_load()
 
         assert len(reg.loaded_hooks) == 2
@@ -124,7 +124,7 @@ class TestEmit:
                       "    results.append(event_type)\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path):
             reg.discover_and_load()
 
         # Inject our results list into the handler's module globals
@@ -151,7 +151,7 @@ class TestEmit:
         )
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path):
             reg.discover_and_load()
 
         handler_fn = reg._handlers["agent:end"][0]
@@ -170,7 +170,7 @@ class TestEmit:
                       "    results.append(event_type)\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path):
             reg.discover_and_load()
 
         handler_fn = reg._handlers["command:*"][0]
@@ -194,7 +194,7 @@ class TestEmit:
                       "    raise ValueError('boom')\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path):
             reg.discover_and_load()
 
         assert len(reg._handlers.get("agent:start", [])) == 1
@@ -212,7 +212,7 @@ class TestEmit:
                       "    captured.append(context)\n")
 
         reg = HookRegistry()
-        with patch("gateway.hooks.HOOKS_DIR", tmp_path):
+        with patch("harness.gateway.hooks.HOOKS_DIR", tmp_path):
             reg.discover_and_load()
 
         handler_fn = reg._handlers["agent:start"][0]

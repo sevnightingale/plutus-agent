@@ -26,7 +26,7 @@ import logging
 import os
 import shutil
 from pathlib import Path
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ def _get_bundled_dir() -> Path:
     env_override = os.getenv("HERMES_BUNDLED_SKILLS")
     if env_override:
         return Path(env_override)
-    return Path(__file__).parent.parent / "skills"
+    return Path(__file__).parent.parent.parent / "skills"
 
 
 def _read_manifest() -> Dict[str, str]:

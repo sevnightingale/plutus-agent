@@ -9,7 +9,7 @@ requests went through the Responses API and failed with
 
 from unittest.mock import patch
 
-from plutus_cli.model_switch import switch_model
+from harness.cli.model_switch import switch_model
 
 
 _MOCK_VALIDATION = {
@@ -29,10 +29,10 @@ def _run_copilot_switch(
 ):
     """Run switch_model with Copilot mocks and return the result."""
     with (
-        patch("plutus_cli.model_switch.resolve_alias", return_value=None),
-        patch("plutus_cli.model_switch.list_provider_models", return_value=[]),
+        patch("harness.cli.model_switch.resolve_alias", return_value=None),
+        patch("harness.cli.model_switch.list_provider_models", return_value=[]),
         patch(
-            "plutus_cli.runtime_provider.resolve_runtime_provider",
+            "harness.cli.runtime_provider.resolve_runtime_provider",
             return_value={
                 "api_key": "ghu_test_token",
                 "base_url": "https://api.githubcopilot.com",
@@ -40,12 +40,12 @@ def _run_copilot_switch(
             },
         ),
         patch(
-            "plutus_cli.models.validate_requested_model",
+            "harness.cli.models.validate_requested_model",
             return_value=_MOCK_VALIDATION,
         ),
-        patch("plutus_cli.model_switch.get_model_info", return_value=None),
-        patch("plutus_cli.model_switch.get_model_capabilities", return_value=None),
-        patch("plutus_cli.models.detect_provider_for_model", return_value=None),
+        patch("harness.cli.model_switch.get_model_info", return_value=None),
+        patch("harness.cli.model_switch.get_model_capabilities", return_value=None),
+        patch("harness.cli.models.detect_provider_for_model", return_value=None),
     ):
         return switch_model(
             raw_input=raw_input,

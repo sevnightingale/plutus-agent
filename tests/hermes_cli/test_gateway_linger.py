@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-import plutus_cli.gateway as gateway
+import harness.cli.gateway as gateway
 
 
 class TestEnsureLingerEnabled:

@@ -17,7 +17,7 @@ import json
 import urllib.request
 from typing import Any, Dict
 
-from tools.core.data_point_registry import register_data_point
+from harness.tools.core.data_point_registry import register_data_point
 
 API = "https://api.blocknative.com/gasprices/blockprices"
 

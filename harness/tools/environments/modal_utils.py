@@ -20,8 +20,8 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
-from tools.environments.base import BaseEnvironment
-from tools.interrupt import is_interrupted
+from harness.tools.environments.base import BaseEnvironment
+from harness.tools.interrupt import is_interrupted
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ class BaseModalExecutionEnvironment(BaseEnvironment):
 
             # Periodic activity touch so the gateway knows we're alive
             try:
-                from tools.environments.base import touch_activity_if_due
+                from harness.tools.environments.base import touch_activity_if_due
                 touch_activity_if_due(_activity_state, "modal command running")
             except Exception:
                 pass

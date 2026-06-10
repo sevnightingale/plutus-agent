@@ -2,7 +2,7 @@
 
 import pytest
 
-from plutus_cli.config import validate_config_structure, ConfigIssue
+from harness.cli.config import validate_config_structure, ConfigIssue
 
 
 class TestCustomProvidersValidation:

@@ -22,7 +22,7 @@ import threading
 
 logger = logging.getLogger("hooks.boot-md")
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 HERMES_HOME = get_hermes_home()
 BOOT_FILE = HERMES_HOME / "BOOT.md"
 
@@ -45,7 +45,7 @@ def _build_boot_prompt(content: str) -> str:
 def _run_boot_agent(content: str) -> None:
     """Spawn a one-shot agent session to execute the boot instructions."""
     try:
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
 
         prompt = _build_boot_prompt(content)
         agent = AIAgent(

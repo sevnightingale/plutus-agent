@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from plutus_cli.plugins import VALID_HOOKS, PluginManager
+from harness.cli.plugins import VALID_HOOKS, PluginManager
 import os
 import shutil
 import tempfile
-from cli import HermesCLI
+from harness.repl import HermesCLI
 
 
 def test_session_hooks_in_valid_hooks():
@@ -13,7 +13,7 @@ def test_session_hooks_in_valid_hooks():
     assert "on_session_reset" in VALID_HOOKS
 
 
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 def test_session_finalize_on_reset(mock_invoke_hook):
     """Verify on_session_finalize fires when /new or /reset is used."""
     cli = HermesCLI()
@@ -33,10 +33,10 @@ def test_session_finalize_on_reset(mock_invoke_hook):
     )
 
 
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 def test_session_finalize_on_cleanup(mock_invoke_hook):
     """Verify on_session_finalize fires during CLI exit cleanup."""
-    import cli as cli_mod
+    import harness.repl as cli_mod
 
     mock_agent = MagicMock()
     mock_agent.session_id = "cleanup-session-id"
@@ -50,7 +50,7 @@ def test_session_finalize_on_cleanup(mock_invoke_hook):
     )
 
 
-@patch("plutus_cli.plugins.invoke_hook")
+@patch("harness.cli.plugins.invoke_hook")
 def test_hook_errors_are_caught(mock_invoke_hook):
     """Verify hook exceptions are caught and don't crash the agent."""
     mgr = PluginManager()

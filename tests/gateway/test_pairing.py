@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-from gateway.pairing import (
+from harness.gateway.pairing import (
     PairingStore,
     ALPHABET,
     CODE_LENGTH,
@@ -21,7 +21,7 @@ from gateway.pairing import (
 
 def _make_store(tmp_path):
     """Create a PairingStore with PAIRING_DIR pointed to tmp_path."""
-    with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+    with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
         return PairingStore()
 
 
@@ -51,7 +51,7 @@ class TestSecureWrite:
 
 class TestCodeGeneration:
     def test_code_format(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
         assert isinstance(code, str) and len(code) == CODE_LENGTH
@@ -60,7 +60,7 @@ class TestCodeGeneration:
 
     def test_code_uniqueness(self, tmp_path):
         """Multiple codes for different users should be distinct."""
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             codes = set()
             for i in range(3):
@@ -70,7 +70,7 @@ class TestCodeGeneration:
         assert len(codes) == 3
 
     def test_stores_pending_entry(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             pending = store.list_pending("telegram")
@@ -87,7 +87,7 @@ class TestCodeGeneration:
 
 class TestRateLimiting:
     def test_same_user_rate_limited(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code1 = store.generate_code("telegram", "user1")
             code2 = store.generate_code("telegram", "user1")
@@ -95,7 +95,7 @@ class TestRateLimiting:
         assert code2 is None  # rate limited
 
     def test_different_users_not_rate_limited(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code1 = store.generate_code("telegram", "user1")
             code2 = store.generate_code("telegram", "user2")
@@ -103,7 +103,7 @@ class TestRateLimiting:
         assert isinstance(code2, str) and len(code2) == CODE_LENGTH
 
     def test_rate_limit_expires(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code1 = store.generate_code("telegram", "user1")
             assert isinstance(code1, str) and len(code1) == CODE_LENGTH
@@ -125,7 +125,7 @@ class TestRateLimiting:
 
 class TestMaxPending:
     def test_max_pending_per_platform(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             codes = []
             for i in range(MAX_PENDING_PER_PLATFORM + 1):
@@ -138,7 +138,7 @@ class TestMaxPending:
         assert codes[MAX_PENDING_PER_PLATFORM] is None
 
     def test_different_platforms_independent(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             for i in range(MAX_PENDING_PER_PLATFORM):
                 store.generate_code("telegram", f"user{i}")
@@ -154,7 +154,7 @@ class TestMaxPending:
 
 class TestApprovalFlow:
     def test_approve_valid_code(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             result = store.approve_code("telegram", code)
@@ -166,19 +166,19 @@ class TestApprovalFlow:
         assert result["user_name"] == "Alice"
 
     def test_approved_user_is_approved(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             store.approve_code("telegram", code)
             assert store.is_approved("telegram", "user1") is True
 
     def test_unapproved_user_not_approved(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             assert store.is_approved("telegram", "nonexistent") is False
 
     def test_approve_removes_from_pending(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1")
             store.approve_code("telegram", code)
@@ -186,7 +186,7 @@ class TestApprovalFlow:
         assert len(pending) == 0
 
     def test_approve_case_insensitive(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             result = store.approve_code("telegram", code.lower())
@@ -195,7 +195,7 @@ class TestApprovalFlow:
         assert result["user_name"] == "Alice"
 
     def test_approve_strips_whitespace(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             result = store.approve_code("telegram", f"  {code}  ")
@@ -204,7 +204,7 @@ class TestApprovalFlow:
         assert result["user_name"] == "Alice"
 
     def test_invalid_code_returns_none(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             result = store.approve_code("telegram", "INVALIDCODE")
         assert result is None
@@ -217,7 +217,7 @@ class TestApprovalFlow:
 
 class TestLockout:
     def test_lockout_after_max_failures(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             # Generate a valid code so platform has data
             store.generate_code("telegram", "user1")
@@ -230,7 +230,7 @@ class TestLockout:
             assert store._is_locked_out("telegram") is True
 
     def test_lockout_blocks_code_generation(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             for _ in range(MAX_FAILED_ATTEMPTS):
                 store.approve_code("telegram", "WRONG")
@@ -239,7 +239,7 @@ class TestLockout:
         assert code is None
 
     def test_lockout_expires(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             for _ in range(MAX_FAILED_ATTEMPTS):
                 store.approve_code("telegram", "WRONG")
@@ -260,7 +260,7 @@ class TestLockout:
 
 class TestCodeExpiry:
     def test_expired_codes_cleaned_up(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1")
 
@@ -274,7 +274,7 @@ class TestCodeExpiry:
         assert len(remaining) == 0
 
     def test_expired_code_cannot_be_approved(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1")
 
@@ -294,7 +294,7 @@ class TestCodeExpiry:
 
 class TestRevoke:
     def test_revoke_approved_user(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             store.approve_code("telegram", code)
@@ -302,11 +302,11 @@ class TestRevoke:
 
             revoked = store.revoke("telegram", "user1")
         assert revoked is True
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             assert store.is_approved("telegram", "user1") is False
 
     def test_revoke_nonexistent_returns_false(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             assert store.revoke("telegram", "nobody") is False
 
@@ -318,7 +318,7 @@ class TestRevoke:
 
 class TestListAndClear:
     def test_list_approved(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             code = store.generate_code("telegram", "user1", "Alice")
             store.approve_code("telegram", code)
@@ -328,7 +328,7 @@ class TestListAndClear:
         assert approved[0]["platform"] == "telegram"
 
     def test_list_approved_all_platforms(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             c1 = store.generate_code("telegram", "user1")
             store.approve_code("telegram", c1)
@@ -338,7 +338,7 @@ class TestListAndClear:
         assert len(approved) == 2
 
     def test_clear_pending(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             store.generate_code("telegram", "user1")
             store.generate_code("telegram", "user2")
@@ -348,7 +348,7 @@ class TestListAndClear:
         assert len(remaining) == 0
 
     def test_clear_pending_all_platforms(self, tmp_path):
-        with patch("gateway.pairing.PAIRING_DIR", tmp_path):
+        with patch("harness.gateway.pairing.PAIRING_DIR", tmp_path):
             store = PairingStore()
             store.generate_code("telegram", "user1")
             store.generate_code("discord", "user2")

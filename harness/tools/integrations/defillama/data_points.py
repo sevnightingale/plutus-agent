@@ -10,7 +10,7 @@ import json
 import urllib.request
 from typing import Any, Dict, List
 
-from tools.core.data_point_registry import register_data_point
+from harness.tools.core.data_point_registry import register_data_point
 
 BASE_URL = "https://api.llama.fi"
 

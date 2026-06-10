@@ -19,8 +19,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from agent.lifecycle_db import SCHEMA_VERSION, LifecycleDB
-from plutus_constants import get_hermes_home
+from harness.agent.lifecycle_db import SCHEMA_VERSION, LifecycleDB
+from harness.constants import get_hermes_home
 
 
 # Tables in the canonical print order — base tables first, then virtual tables.

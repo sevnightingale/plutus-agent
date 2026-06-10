@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from agent.auxiliary_client import _validate_base_url, _validate_proxy_env_urls
+from harness.agent.auxiliary_client import _validate_base_url, _validate_proxy_env_urls
 
 
 # -- proxy env validation ------------------------------------------------

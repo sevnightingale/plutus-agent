@@ -2,7 +2,7 @@
 
 import pytest
 
-from gateway.platforms.telegram import TelegramAdapter
+from harness.gateway.platforms.telegram import TelegramAdapter
 
 merge = TelegramAdapter._merge_caption
 

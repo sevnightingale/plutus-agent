@@ -23,7 +23,7 @@ class TestTavilyRequest:
         """No TAVILY_API_KEY → ValueError with guidance."""
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TAVILY_API_KEY", None)
-            from tools.web_tools import _tavily_request
+            from harness.tools.web_tools import _tavily_request
             with pytest.raises(ValueError, match="TAVILY_API_KEY"):
                 _tavily_request("search", {"query": "test"})
 
@@ -34,8 +34,8 @@ class TestTavilyRequest:
         mock_response.raise_for_status = MagicMock()
 
         with patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test-key"}):
-            with patch("tools.web_tools.httpx.post", return_value=mock_response) as mock_post:
-                from tools.web_tools import _tavily_request
+            with patch("harness.tools.web_tools.httpx.post", return_value=mock_response) as mock_post:
+                from harness.tools.web_tools import _tavily_request
                 result = _tavily_request("search", {"query": "hello"})
 
                 mock_post.assert_called_once()
@@ -54,8 +54,8 @@ class TestTavilyRequest:
         )
 
         with patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-bad-key"}):
-            with patch("tools.web_tools.httpx.post", return_value=mock_response):
-                from tools.web_tools import _tavily_request
+            with patch("harness.tools.web_tools.httpx.post", return_value=mock_response):
+                from harness.tools.web_tools import _tavily_request
                 with pytest.raises(_httpx.HTTPStatusError):
                     _tavily_request("search", {"query": "test"})
 
@@ -66,7 +66,7 @@ class TestNormalizeTavilySearchResults:
     """Test search result normalization."""
 
     def test_basic_normalization(self):
-        from tools.web_tools import _normalize_tavily_search_results
+        from harness.tools.web_tools import _normalize_tavily_search_results
         raw = {
             "results": [
                 {"title": "Python Docs", "url": "https://docs.python.org", "content": "Official docs", "score": 0.9},
@@ -84,13 +84,13 @@ class TestNormalizeTavilySearchResults:
         assert web[1]["position"] == 2
 
     def test_empty_results(self):
-        from tools.web_tools import _normalize_tavily_search_results
+        from harness.tools.web_tools import _normalize_tavily_search_results
         result = _normalize_tavily_search_results({"results": []})
         assert result["success"] is True
         assert result["data"]["web"] == []
 
     def test_missing_fields(self):
-        from tools.web_tools import _normalize_tavily_search_results
+        from harness.tools.web_tools import _normalize_tavily_search_results
         result = _normalize_tavily_search_results({"results": [{}]})
         web = result["data"]["web"]
         assert web[0]["title"] == ""
@@ -104,7 +104,7 @@ class TestNormalizeTavilyDocuments:
     """Test extract/crawl document normalization."""
 
     def test_basic_document(self):
-        from tools.web_tools import _normalize_tavily_documents
+        from harness.tools.web_tools import _normalize_tavily_documents
         raw = {
             "results": [{
                 "url": "https://example.com",
@@ -121,13 +121,13 @@ class TestNormalizeTavilyDocuments:
         assert docs[0]["metadata"]["sourceURL"] == "https://example.com"
 
     def test_falls_back_to_content_when_no_raw_content(self):
-        from tools.web_tools import _normalize_tavily_documents
+        from harness.tools.web_tools import _normalize_tavily_documents
         raw = {"results": [{"url": "https://example.com", "content": "Snippet"}]}
         docs = _normalize_tavily_documents(raw)
         assert docs[0]["content"] == "Snippet"
 
     def test_failed_results_included(self):
-        from tools.web_tools import _normalize_tavily_documents
+        from harness.tools.web_tools import _normalize_tavily_documents
         raw = {
             "results": [],
             "failed_results": [
@@ -141,7 +141,7 @@ class TestNormalizeTavilyDocuments:
         assert docs[0]["content"] == ""
 
     def test_failed_urls_included(self):
-        from tools.web_tools import _normalize_tavily_documents
+        from harness.tools.web_tools import _normalize_tavily_documents
         raw = {
             "results": [],
             "failed_urls": ["https://bad.com"],
@@ -152,7 +152,7 @@ class TestNormalizeTavilyDocuments:
         assert docs[0]["error"] == "extraction failed"
 
     def test_fallback_url(self):
-        from tools.web_tools import _normalize_tavily_documents
+        from harness.tools.web_tools import _normalize_tavily_documents
         raw = {"results": [{"content": "data"}]}
         docs = _normalize_tavily_documents(raw, fallback_url="https://fallback.com")
         assert docs[0]["url"] == "https://fallback.com"
@@ -170,11 +170,11 @@ class TestWebSearchTavily:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("tools.web_tools._get_backend", return_value="tavily"), \
+        with patch("harness.tools.web_tools._get_backend", return_value="tavily"), \
              patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}), \
-             patch("tools.web_tools.httpx.post", return_value=mock_response), \
-             patch("tools.interrupt.is_interrupted", return_value=False):
-            from tools.web_tools import web_search_tool
+             patch("harness.tools.web_tools.httpx.post", return_value=mock_response), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False):
+            from harness.tools.web_tools import web_search_tool
             result = json.loads(web_search_tool("test query", limit=3))
             assert result["success"] is True
             assert len(result["data"]["web"]) == 1
@@ -193,11 +193,11 @@ class TestWebExtractTavily:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("tools.web_tools._get_backend", return_value="tavily"), \
+        with patch("harness.tools.web_tools._get_backend", return_value="tavily"), \
              patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}), \
-             patch("tools.web_tools.httpx.post", return_value=mock_response), \
-             patch("tools.web_tools.process_content_with_llm", return_value=None):
-            from tools.web_tools import web_extract_tool
+             patch("harness.tools.web_tools.httpx.post", return_value=mock_response), \
+             patch("harness.tools.web_tools.process_content_with_llm", return_value=None):
+            from harness.tools.web_tools import web_extract_tool
             result = json.loads(asyncio.get_event_loop().run_until_complete(
                 web_extract_tool(["https://example.com"], use_llm_processing=False)
             ))
@@ -221,13 +221,13 @@ class TestWebCrawlTavily:
         }
         mock_response.raise_for_status = MagicMock()
 
-        with patch("tools.web_tools._get_backend", return_value="tavily"), \
+        with patch("harness.tools.web_tools._get_backend", return_value="tavily"), \
              patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}), \
-             patch("tools.web_tools.httpx.post", return_value=mock_response), \
-             patch("tools.web_tools.check_website_access", return_value=None), \
-             patch("tools.web_tools.is_safe_url", return_value=True), \
-             patch("tools.interrupt.is_interrupted", return_value=False):
-            from tools.web_tools import web_crawl_tool
+             patch("harness.tools.web_tools.httpx.post", return_value=mock_response), \
+             patch("harness.tools.web_tools.check_website_access", return_value=None), \
+             patch("harness.tools.web_tools.is_safe_url", return_value=True), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False):
+            from harness.tools.web_tools import web_crawl_tool
             result = json.loads(asyncio.get_event_loop().run_until_complete(
                 web_crawl_tool("https://example.com", use_llm_processing=False)
             ))
@@ -241,13 +241,13 @@ class TestWebCrawlTavily:
         mock_response.json.return_value = {"results": []}
         mock_response.raise_for_status = MagicMock()
 
-        with patch("tools.web_tools._get_backend", return_value="tavily"), \
+        with patch("harness.tools.web_tools._get_backend", return_value="tavily"), \
              patch.dict(os.environ, {"TAVILY_API_KEY": "tvly-test"}), \
-             patch("tools.web_tools.httpx.post", return_value=mock_response) as mock_post, \
-             patch("tools.web_tools.check_website_access", return_value=None), \
-             patch("tools.web_tools.is_safe_url", return_value=True), \
-             patch("tools.interrupt.is_interrupted", return_value=False):
-            from tools.web_tools import web_crawl_tool
+             patch("harness.tools.web_tools.httpx.post", return_value=mock_response) as mock_post, \
+             patch("harness.tools.web_tools.check_website_access", return_value=None), \
+             patch("harness.tools.web_tools.is_safe_url", return_value=True), \
+             patch("harness.tools.interrupt.is_interrupted", return_value=False):
+            from harness.tools.web_tools import web_crawl_tool
             asyncio.get_event_loop().run_until_complete(
                 web_crawl_tool("https://example.com", instructions="Find docs", use_llm_processing=False)
             )

@@ -24,7 +24,7 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from agent.lifecycle_db import get_lifecycle_db
+from harness.agent.lifecycle_db import get_lifecycle_db
 
 from ._client import get_info, interval_to_ms
 

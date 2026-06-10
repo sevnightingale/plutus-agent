@@ -14,7 +14,7 @@ sys.modules.setdefault("fire", types.SimpleNamespace(Fire=lambda *a, **k: None))
 sys.modules.setdefault("firecrawl", types.SimpleNamespace(Firecrawl=object))
 sys.modules.setdefault("fal_client", types.SimpleNamespace())
 
-import run_agent
+import harness.run_agent as run_agent
 
 
 def _patch_bootstrap(monkeypatch):
@@ -40,10 +40,10 @@ class _FakeOpenAIClient:
 def _make_agent(monkeypatch, api_mode, provider, response_fn):
     _patch_bootstrap(monkeypatch)
     if api_mode == "anthropic_messages":
-        monkeypatch.setattr("agent.anthropic_adapter.build_anthropic_client", lambda k, b=None, **kwargs: _FakeAnthropicClient())
+        monkeypatch.setattr("harness.agent.anthropic_adapter.build_anthropic_client", lambda k, b=None, **kwargs: _FakeAnthropicClient())
     if provider == "openai-codex":
         monkeypatch.setattr(
-            "agent.auxiliary_client.resolve_provider_client",
+            "harness.agent.auxiliary_client.resolve_provider_client",
             lambda *a, **kw: (_FakeOpenAIClient(), "test-model"),
         )
 

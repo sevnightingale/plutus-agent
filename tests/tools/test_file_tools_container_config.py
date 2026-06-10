@@ -1,7 +1,7 @@
 """Tests for docker container_config key propagation in file_tools."""
 
 from unittest.mock import patch, MagicMock
-import tools.file_tools as file_tools
+import harness.tools.file_tools as file_tools
 
 
 def _make_env_config(**overrides):
@@ -35,7 +35,7 @@ class TestFileToolsContainerConfig:
             captured.update(kwargs)
             return mock_env
 
-        with patch("tools.terminal_tool._get_env_config", return_value=env_config),              patch("tools.terminal_tool._task_env_overrides", {}),              patch("tools.terminal_tool._active_environments", {}),              patch("tools.terminal_tool._creation_locks", {}),              patch("tools.terminal_tool._creation_locks_lock", __import__("threading").Lock()),              patch("tools.terminal_tool._create_environment", side_effect=fake_create_env),              patch("tools.terminal_tool._start_cleanup_thread"),              patch("tools.terminal_tool._check_disk_usage_warning"),              patch("tools.file_tools._file_ops_cache", {}),              patch("tools.file_tools._file_ops_lock", __import__("threading").Lock()):
+        with patch("harness.tools.terminal_tool._get_env_config", return_value=env_config),              patch("harness.tools.terminal_tool._task_env_overrides", {}),              patch("harness.tools.terminal_tool._active_environments", {}),              patch("harness.tools.terminal_tool._creation_locks", {}),              patch("harness.tools.terminal_tool._creation_locks_lock", __import__("threading").Lock()),              patch("harness.tools.terminal_tool._create_environment", side_effect=fake_create_env),              patch("harness.tools.terminal_tool._start_cleanup_thread"),              patch("harness.tools.terminal_tool._check_disk_usage_warning"),              patch("harness.tools.file_tools._file_ops_cache", {}),              patch("harness.tools.file_tools._file_ops_lock", __import__("threading").Lock()):
             file_tools._get_file_ops(task_id)
 
         return captured.get("container_config", {})

@@ -23,8 +23,8 @@ class TestEdgeTtsSpeed:
         mock_edge = MagicMock()
         mock_edge.Communicate = MagicMock(return_value=mock_comm)
 
-        with patch("tools.tts_tool._import_edge_tts", return_value=mock_edge):
-            from tools.tts_tool import _generate_edge_tts
+        with patch("harness.tools.tts_tool._import_edge_tts", return_value=mock_edge):
+            from harness.tools.tts_tool import _generate_edge_tts
             asyncio.run(_generate_edge_tts("Hello", str(tmp_path / "out.mp3"), tts_config))
         return mock_edge.Communicate
 
@@ -71,10 +71,10 @@ class TestOpenaiTtsSpeed:
         mock_client.audio.speech.create.return_value = mock_response
         mock_cls = MagicMock(return_value=mock_client)
 
-        with patch("tools.tts_tool._import_openai_client", return_value=mock_cls), \
-             patch("tools.tts_tool._resolve_openai_audio_client_config",
+        with patch("harness.tools.tts_tool._import_openai_client", return_value=mock_cls), \
+             patch("harness.tools.tts_tool._resolve_openai_audio_client_config",
                    return_value=("test-key", None)):
-            from tools.tts_tool import _generate_openai_tts
+            from harness.tools.tts_tool import _generate_openai_tts
             _generate_openai_tts("Hello", str(tmp_path / "out.mp3"), tts_config)
         return mock_client.audio.speech.create
 
@@ -126,7 +126,7 @@ class TestMinimaxTtsSpeed:
 
         # requests is imported locally inside _generate_minimax_tts
         with patch("requests.post", return_value=mock_response) as mock_post:
-            from tools.tts_tool import _generate_minimax_tts
+            from harness.tools.tts_tool import _generate_minimax_tts
             _generate_minimax_tts("Hello", str(tmp_path / "out.mp3"), tts_config)
         return mock_post
 

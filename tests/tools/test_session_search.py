@@ -5,7 +5,7 @@ import json
 import time
 import pytest
 
-from tools.session_search_tool import (
+from harness.tools.session_search_tool import (
     _format_timestamp,
     _format_conversation,
     _truncate_around_matches,
@@ -189,17 +189,17 @@ class TestSessionSearchConcurrency:
 
     def test_reads_and_clamps_configured_value(self, monkeypatch):
         monkeypatch.setattr(
-            "plutus_cli.config.load_config",
+            "harness.cli.config.load_config",
             lambda: {"auxiliary": {"session_search": {"max_concurrency": 9}}},
         )
         assert _get_session_search_max_concurrency() == 5
 
     def test_session_search_respects_configured_concurrency_limit(self, monkeypatch):
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         monkeypatch.setattr(
-            "plutus_cli.config.load_config",
+            "harness.cli.config.load_config",
             lambda: {"auxiliary": {"session_search": {"max_concurrency": 1}}},
         )
 
@@ -213,8 +213,8 @@ class TestSessionSearchConcurrency:
             active["value"] -= 1
             return "summary"
 
-        monkeypatch.setattr("tools.session_search_tool._summarize_session", fake_summarize)
-        monkeypatch.setattr("model_tools._run_async", lambda coro: asyncio.run(coro))
+        monkeypatch.setattr("harness.tools.session_search_tool._summarize_session", fake_summarize)
+        monkeypatch.setattr("harness.model_tools._run_async", lambda coro: asyncio.run(coro))
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = [
@@ -246,19 +246,19 @@ class TestSessionSearchConcurrency:
 
 class TestSessionSearch:
     def test_no_db_returns_error(self):
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
         result = json.loads(session_search(query="test"))
         assert result["success"] is False
         assert "not available" in result["error"].lower()
 
     def test_empty_query_returns_error(self):
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
         mock_db = object()
         result = json.loads(session_search(query="", db=mock_db))
         assert result["success"] is False
 
     def test_whitespace_query_returns_error(self):
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
         mock_db = object()
         result = json.loads(session_search(query="   ", db=mock_db))
         assert result["success"] is False
@@ -266,7 +266,7 @@ class TestSessionSearch:
     def test_current_session_excluded(self):
         """session_search should never return the current session."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         current_sid = "20260304_120000_abc123"
@@ -288,7 +288,7 @@ class TestSessionSearch:
     def test_current_session_excluded_keeps_others(self):
         """Other sessions should still be returned when current is excluded."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         current_sid = "20260304_120000_abc123"
@@ -308,7 +308,7 @@ class TestSessionSearch:
 
         # Mock async_call_llm to raise RuntimeError → summarizer returns None
         from unittest.mock import AsyncMock, patch as _patch
-        with _patch("tools.session_search_tool.async_call_llm",
+        with _patch("harness.tools.session_search_tool.async_call_llm",
                      new_callable=AsyncMock,
                      side_effect=RuntimeError("no provider")):
             result = json.loads(session_search(
@@ -323,7 +323,7 @@ class TestSessionSearch:
     def test_current_child_session_excludes_parent_lineage(self):
         """Compression/delegation parents should be excluded for the active child session."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = [
@@ -352,7 +352,7 @@ class TestSessionSearch:
     def test_limit_none_coerced_to_default(self):
         """Model sends limit=null → should fall back to 3, not TypeError."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = []
@@ -365,7 +365,7 @@ class TestSessionSearch:
     def test_limit_type_object_coerced_to_default(self):
         """Model sends limit as a type object → should fall back to 3, not TypeError."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = []
@@ -378,7 +378,7 @@ class TestSessionSearch:
     def test_limit_string_coerced(self):
         """Model sends limit as string '2' → should coerce to int."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = []
@@ -391,7 +391,7 @@ class TestSessionSearch:
     def test_limit_clamped_to_range(self):
         """Negative or zero limit should be clamped to 1."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = []
@@ -409,7 +409,7 @@ class TestSessionSearch:
     def test_current_root_session_excludes_child_lineage(self):
         """Delegation child hits should be excluded when they resolve to the current root session."""
         from unittest.mock import MagicMock
-        from tools.session_search_tool import session_search
+        from harness.tools.session_search_tool import session_search
 
         mock_db = MagicMock()
         mock_db.search_messages.return_value = [

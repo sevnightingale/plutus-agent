@@ -28,10 +28,10 @@ def _ensure_discord_mock():
     sys.modules.setdefault("discord.ext.commands", commands_mod)
 
 
-import gateway.run as gateway_run
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+import harness.gateway.run as gateway_run
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 class _CapturingAgent:
@@ -53,12 +53,12 @@ class _CapturingAgent:
 def _install_fake_agent(monkeypatch):
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = _CapturingAgent
-    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
 
 def _make_adapter():
     _ensure_discord_mock()
-    from gateway.platforms.discord import DiscordAdapter
+    from harness.gateway.platforms.discord import DiscordAdapter
 
     adapter = object.__new__(DiscordAdapter)
     adapter.config = MagicMock()
@@ -231,7 +231,7 @@ async def test_run_agent_appends_channel_prompt_to_ephemeral_system_prompt(monke
         },
     )
 
-    import plutus_cli.tools_config as tools_config
+    import harness.cli.tools_config as tools_config
 
     monkeypatch.setattr(tools_config, "_get_platform_tools", lambda user_config, platform_key: {"core"})
 

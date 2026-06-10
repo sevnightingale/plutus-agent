@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from run_agent import AIAgent
+from harness.run_agent import AIAgent
 
 
 def _make_agent(

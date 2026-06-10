@@ -8,8 +8,8 @@ import sys
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-from plutus_state import SessionDB
-from tools.todo_tool import TodoStore
+from harness.state import SessionDB
+from harness.tools.todo_tool import TodoStore
 
 
 class _FakeCompressor:
@@ -111,7 +111,7 @@ def _make_cli(env_overrides=None, config_overrides=None, **kwargs):
     with patch.dict(sys.modules, prompt_toolkit_stubs), patch.dict(
         "os.environ", clean_env, clear=False
     ):
-        import cli as _cli_mod
+        import harness.repl as _cli_mod
 
         _cli_mod = importlib.reload(_cli_mod)
         with patch.object(_cli_mod, "get_tool_definitions", return_value=[]), patch.dict(

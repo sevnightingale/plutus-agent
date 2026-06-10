@@ -41,7 +41,7 @@ class TestSaveModelChoiceAlwaysDict:
     def test_string_model_becomes_dict(self, config_home):
         """When config.model is a plain string, _save_model_choice must
         convert it to a dict so provider can be set afterwards."""
-        from plutus_cli.auth import _save_model_choice
+        from harness.cli.auth import _save_model_choice
 
         _save_model_choice("kimi-k2.5")
 
@@ -59,7 +59,7 @@ class TestSaveModelChoiceAlwaysDict:
         (config_home / "config.yaml").write_text(
             "model:\n  default: old-model\n  provider: openrouter\n"
         )
-        from plutus_cli.auth import _save_model_choice
+        from harness.cli.auth import _save_model_choice
 
         _save_model_choice("new-model")
 
@@ -74,7 +74,7 @@ class TestProviderPersistsAfterModelSave:
     def test_api_key_provider_saved_when_model_was_string(self, config_home, monkeypatch):
         """_model_flow_api_key_provider must persist the provider even when
         config.model started as a plain string."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         pconfig = PROVIDER_REGISTRY.get("kimi-coding")
         if not pconfig:
@@ -83,13 +83,13 @@ class TestProviderPersistsAfterModelSave:
         # Simulate: user has a Kimi API key, model was a string
         monkeypatch.setenv("KIMI_API_KEY", "sk-kimi-test-key")
 
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config
 
         # Mock the model selection prompt to return "kimi-k2.5"
         # Also mock input() for the base URL prompt and builtins.input
-        with patch("plutus_cli.auth._prompt_model_selection", return_value="kimi-k2.5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.auth._prompt_model_selection", return_value="kimi-k2.5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value=""):
             _model_flow_api_key_provider(load_config(), "kimi-coding", "old-model")
 
@@ -104,11 +104,11 @@ class TestProviderPersistsAfterModelSave:
 
     def test_copilot_provider_saved_when_selected(self, config_home):
         """_model_flow_copilot should persist provider/base_url/model together."""
-        from plutus_cli.main import _model_flow_copilot
-        from plutus_cli.config import load_config
+        from harness.cli.main import _model_flow_copilot
+        from harness.cli.config import load_config
 
         with patch(
-            "plutus_cli.auth.resolve_api_key_provider_credentials",
+            "harness.cli.auth.resolve_api_key_provider_credentials",
             return_value={
                 "provider": "copilot",
                 "api_key": "gh-cli-token",
@@ -116,7 +116,7 @@ class TestProviderPersistsAfterModelSave:
                 "source": "gh auth token",
             },
         ), patch(
-            "plutus_cli.models.fetch_github_model_catalog",
+            "harness.cli.models.fetch_github_model_catalog",
             return_value=[
                 {
                     "id": "gpt-4.1",
@@ -130,13 +130,13 @@ class TestProviderPersistsAfterModelSave:
                 },
             ],
         ), patch(
-            "plutus_cli.auth._prompt_model_selection",
+            "harness.cli.auth._prompt_model_selection",
             return_value="gpt-5.4",
         ), patch(
-            "plutus_cli.main._prompt_reasoning_effort_selection",
+            "harness.cli.main._prompt_reasoning_effort_selection",
             return_value="high",
         ), patch(
-            "plutus_cli.auth.deactivate_provider",
+            "harness.cli.auth.deactivate_provider",
         ):
             _model_flow_copilot(load_config(), "old-model")
 
@@ -153,18 +153,18 @@ class TestProviderPersistsAfterModelSave:
 
     def test_copilot_acp_provider_saved_when_selected(self, config_home):
         """_model_flow_copilot_acp should persist provider/base_url/model together."""
-        from plutus_cli.main import _model_flow_copilot_acp
-        from plutus_cli.config import load_config
+        from harness.cli.main import _model_flow_copilot_acp
+        from harness.cli.config import load_config
 
         with patch(
-            "plutus_cli.auth.get_external_process_provider_status",
+            "harness.cli.auth.get_external_process_provider_status",
             return_value={
                 "resolved_command": "/usr/local/bin/copilot",
                 "command": "copilot",
                 "base_url": "acp://copilot",
             },
         ), patch(
-            "plutus_cli.auth.resolve_external_process_provider_credentials",
+            "harness.cli.auth.resolve_external_process_provider_credentials",
             return_value={
                 "provider": "copilot-acp",
                 "api_key": "copilot-acp",
@@ -174,7 +174,7 @@ class TestProviderPersistsAfterModelSave:
                 "source": "process",
             },
         ), patch(
-            "plutus_cli.auth.resolve_api_key_provider_credentials",
+            "harness.cli.auth.resolve_api_key_provider_credentials",
             return_value={
                 "provider": "copilot",
                 "api_key": "gh-cli-token",
@@ -182,7 +182,7 @@ class TestProviderPersistsAfterModelSave:
                 "source": "gh auth token",
             },
         ), patch(
-            "plutus_cli.models.fetch_github_model_catalog",
+            "harness.cli.models.fetch_github_model_catalog",
             return_value=[
                 {
                     "id": "gpt-4.1",
@@ -196,10 +196,10 @@ class TestProviderPersistsAfterModelSave:
                 },
             ],
         ), patch(
-            "plutus_cli.auth._prompt_model_selection",
+            "harness.cli.auth._prompt_model_selection",
             return_value="gpt-5.4",
         ), patch(
-            "plutus_cli.auth.deactivate_provider",
+            "harness.cli.auth.deactivate_provider",
         ):
             _model_flow_copilot_acp(load_config(), "old-model")
 
@@ -214,14 +214,14 @@ class TestProviderPersistsAfterModelSave:
         assert model.get("api_mode") == "chat_completions"
 
     def test_opencode_go_models_are_selectable_and_persist_normalized(self, config_home, monkeypatch):
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config
 
         monkeypatch.setenv("OPENCODE_GO_API_KEY", "test-key")
 
-        with patch("plutus_cli.models.fetch_api_models", return_value=["opencode-go/kimi-k2.5", "opencode-go/minimax-m2.7"]), \
-             patch("plutus_cli.auth._prompt_model_selection", return_value="kimi-k2.5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.models.fetch_api_models", return_value=["opencode-go/kimi-k2.5", "opencode-go/minimax-m2.7"]), \
+             patch("harness.cli.auth._prompt_model_selection", return_value="kimi-k2.5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value=""):
             _model_flow_api_key_provider(load_config(), "opencode-go", "opencode-go/kimi-k2.5")
 
@@ -234,8 +234,8 @@ class TestProviderPersistsAfterModelSave:
         assert model.get("api_mode") == "chat_completions"
 
     def test_opencode_go_same_provider_switch_recomputes_api_mode(self, config_home, monkeypatch):
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config
 
         monkeypatch.setenv("OPENCODE_GO_API_KEY", "test-key")
         (config_home / "config.yaml").write_text(
@@ -246,9 +246,9 @@ class TestProviderPersistsAfterModelSave:
             "  api_mode: chat_completions\n"
         )
 
-        with patch("plutus_cli.models.fetch_api_models", return_value=["opencode-go/kimi-k2.5", "opencode-go/minimax-m2.5"]), \
-             patch("plutus_cli.auth._prompt_model_selection", return_value="minimax-m2.5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.models.fetch_api_models", return_value=["opencode-go/kimi-k2.5", "opencode-go/minimax-m2.5"]), \
+             patch("harness.cli.auth._prompt_model_selection", return_value="minimax-m2.5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value=""):
             _model_flow_api_key_provider(load_config(), "opencode-go", "kimi-k2.5")
 
@@ -266,7 +266,7 @@ class TestBaseUrlValidation:
 
     def test_invalid_base_url_rejected(self, config_home, monkeypatch, capsys):
         """Typing a non-URL string should not be saved as the base URL."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         pconfig = PROVIDER_REGISTRY.get("zai")
         if not pconfig:
@@ -274,12 +274,12 @@ class TestBaseUrlValidation:
 
         monkeypatch.setenv("GLM_API_KEY", "test-key")
 
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config, get_env_value
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config, get_env_value
 
         # User types a shell command instead of a URL at the base URL prompt
-        with patch("plutus_cli.auth._prompt_model_selection", return_value="glm-5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.auth._prompt_model_selection", return_value="glm-5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value="nano ~/.plutus-agent/.env"):
             _model_flow_api_key_provider(load_config(), "zai", "old-model")
 
@@ -292,7 +292,7 @@ class TestBaseUrlValidation:
 
     def test_valid_base_url_accepted(self, config_home, monkeypatch):
         """A proper URL should be saved normally."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         pconfig = PROVIDER_REGISTRY.get("zai")
         if not pconfig:
@@ -300,11 +300,11 @@ class TestBaseUrlValidation:
 
         monkeypatch.setenv("GLM_API_KEY", "test-key")
 
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config, get_env_value
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config, get_env_value
 
-        with patch("plutus_cli.auth._prompt_model_selection", return_value="glm-5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.auth._prompt_model_selection", return_value="glm-5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value="https://custom.z.ai/api/paas/v4"):
             _model_flow_api_key_provider(load_config(), "zai", "old-model")
 
@@ -313,7 +313,7 @@ class TestBaseUrlValidation:
 
     def test_empty_base_url_keeps_default(self, config_home, monkeypatch):
         """Pressing Enter (empty) should not change the base URL."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         pconfig = PROVIDER_REGISTRY.get("zai")
         if not pconfig:
@@ -322,11 +322,11 @@ class TestBaseUrlValidation:
         monkeypatch.setenv("GLM_API_KEY", "test-key")
         monkeypatch.delenv("GLM_BASE_URL", raising=False)
 
-        from plutus_cli.main import _model_flow_api_key_provider
-        from plutus_cli.config import load_config, get_env_value
+        from harness.cli.main import _model_flow_api_key_provider
+        from harness.cli.config import load_config, get_env_value
 
-        with patch("plutus_cli.auth._prompt_model_selection", return_value="glm-5"), \
-             patch("plutus_cli.auth.deactivate_provider"), \
+        with patch("harness.cli.auth._prompt_model_selection", return_value="glm-5"), \
+             patch("harness.cli.auth.deactivate_provider"), \
              patch("builtins.input", return_value=""):
             _model_flow_api_key_provider(load_config(), "zai", "old-model")
 
@@ -334,22 +334,22 @@ class TestBaseUrlValidation:
         assert saved == "", "Empty input should not save a base URL"
 
     def test_stepfun_provider_saved_with_selected_region(self, config_home, monkeypatch):
-        from plutus_cli.main import _model_flow_stepfun
-        from plutus_cli.config import load_config, get_env_value
+        from harness.cli.main import _model_flow_stepfun
+        from harness.cli.config import load_config, get_env_value
 
         monkeypatch.setenv("STEPFUN_API_KEY", "stepfun-test-key")
 
         with patch(
-            "plutus_cli.main._prompt_provider_choice",
+            "harness.cli.main._prompt_provider_choice",
             return_value=1,
         ), patch(
-            "plutus_cli.models.fetch_api_models",
+            "harness.cli.models.fetch_api_models",
             return_value=["step-3.5-flash", "step-3-agent-lite"],
         ), patch(
-            "plutus_cli.auth._prompt_model_selection",
+            "harness.cli.auth._prompt_model_selection",
             return_value="step-3-agent-lite",
         ), patch(
-            "plutus_cli.auth.deactivate_provider",
+            "harness.cli.auth.deactivate_provider",
         ):
             _model_flow_stepfun(load_config(), "old-model")
 

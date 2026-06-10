@@ -35,7 +35,7 @@ def temp_voice_dir(tmp_path, monkeypatch):
     """Redirect _TEMP_DIR to a temporary path."""
     voice_dir = tmp_path / "hermes_voice"
     voice_dir.mkdir()
-    monkeypatch.setattr("tools.voice_mode._TEMP_DIR", str(voice_dir))
+    monkeypatch.setattr("harness.tools.voice_mode._TEMP_DIR", str(voice_dir))
     return voice_dir
 
 
@@ -51,8 +51,8 @@ def mock_sd(monkeypatch):
     def _fake_import_audio():
         return mock, real_np
 
-    monkeypatch.setattr("tools.voice_mode._import_audio", _fake_import_audio)
-    monkeypatch.setattr("tools.voice_mode._audio_available", lambda: True)
+    monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fake_import_audio)
+    monkeypatch.setattr("harness.tools.voice_mode._audio_available", lambda: True)
     return mock
 
 
@@ -66,10 +66,10 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (MagicMock(), MagicMock()))
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
         assert result["available"] is True
         assert result["warnings"] == []
@@ -77,10 +77,10 @@ class TestDetectAudioEnvironment:
     def test_ssh_blocks_voice(self, monkeypatch):
         """SSH environment should block voice mode."""
         monkeypatch.setenv("SSH_CLIENT", "1.2.3.4 54321 22")
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (MagicMock(), MagicMock()))
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
         assert result["available"] is False
         assert any("SSH" in w for w in result["warnings"])
@@ -91,7 +91,7 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
         monkeypatch.delenv("PULSE_SERVER", raising=False)
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (MagicMock(), MagicMock()))
 
         proc_version = tmp_path / "proc_version"
@@ -104,7 +104,7 @@ class TestDetectAudioEnvironment:
             return _real_open(f, *a, **kw)
 
         with patch("builtins.open", side_effect=_fake_open):
-            from tools.voice_mode import detect_audio_environment
+            from harness.tools.voice_mode import detect_audio_environment
             result = detect_audio_environment()
 
         assert result["available"] is False
@@ -117,7 +117,7 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
         monkeypatch.setenv("PULSE_SERVER", "unix:/mnt/wslg/PulseServer")
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (MagicMock(), MagicMock()))
 
         proc_version = tmp_path / "proc_version"
@@ -130,7 +130,7 @@ class TestDetectAudioEnvironment:
             return _real_open(f, *a, **kw)
 
         with patch("builtins.open", side_effect=_fake_open):
-            from tools.voice_mode import detect_audio_environment
+            from harness.tools.voice_mode import detect_audio_environment
             result = detect_audio_environment()
 
         assert result["available"] is True
@@ -146,7 +146,7 @@ class TestDetectAudioEnvironment:
 
         mock_sd = MagicMock()
         mock_sd.query_devices.side_effect = Exception("device query failed")
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (mock_sd, MagicMock()))
 
         proc_version = tmp_path / "proc_version"
@@ -159,7 +159,7 @@ class TestDetectAudioEnvironment:
             return _real_open(f, *a, **kw)
 
         with patch("builtins.open", side_effect=_fake_open):
-            from tools.voice_mode import detect_audio_environment
+            from harness.tools.voice_mode import detect_audio_environment
             result = detect_audio_environment()
 
         assert result["available"] is True
@@ -174,10 +174,10 @@ class TestDetectAudioEnvironment:
 
         mock_sd = MagicMock()
         mock_sd.query_devices.side_effect = Exception("device query failed")
-        monkeypatch.setattr("tools.voice_mode._import_audio",
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio",
                             lambda: (mock_sd, MagicMock()))
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
 
         assert result["available"] is False
@@ -189,10 +189,10 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
-        monkeypatch.setattr("tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: None)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: None)
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
 
         assert result["available"] is False
@@ -205,11 +205,11 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: False)
-        monkeypatch.setattr("tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: False)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
 
         assert result["available"] is False
@@ -222,11 +222,11 @@ class TestDetectAudioEnvironment:
         monkeypatch.delenv("SSH_CLIENT", raising=False)
         monkeypatch.delenv("SSH_TTY", raising=False)
         monkeypatch.delenv("SSH_CONNECTION", raising=False)
-        monkeypatch.setattr("tools.voice_mode.shutil.which", lambda cmd: "/data/data/com.termux/files/usr/bin/termux-microphone-record" if cmd == "termux-microphone-record" else None)
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
+        monkeypatch.setattr("harness.tools.voice_mode.shutil.which", lambda cmd: "/data/data/com.termux/files/usr/bin/termux-microphone-record" if cmd == "termux-microphone-record" else None)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", lambda: (_ for _ in ()).throw(ImportError("no audio libs")))
 
-        from tools.voice_mode import detect_audio_environment
+        from harness.tools.voice_mode import detect_audio_environment
         result = detect_audio_environment()
 
         assert result["available"] is True
@@ -240,13 +240,13 @@ class TestDetectAudioEnvironment:
 
 class TestCheckVoiceRequirements:
     def test_termux_api_capture_counts_as_audio_available(self, monkeypatch):
-        monkeypatch.setattr("tools.voice_mode._audio_available", lambda: False)
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.detect_audio_environment", lambda: {"available": True, "warnings": [], "notices": ["Termux:API microphone recording available"]})
-        monkeypatch.setattr("tools.transcription_tools._get_provider", lambda cfg: "openai")
+        monkeypatch.setattr("harness.tools.voice_mode._audio_available", lambda: False)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode.detect_audio_environment", lambda: {"available": True, "warnings": [], "notices": ["Termux:API microphone recording available"]})
+        monkeypatch.setattr("harness.tools.transcription_tools._get_provider", lambda cfg: "openai")
 
-        from tools.voice_mode import check_voice_requirements
+        from harness.tools.voice_mode import check_voice_requirements
         result = check_voice_requirements()
 
         assert result["available"] is True
@@ -255,12 +255,12 @@ class TestCheckVoiceRequirements:
         assert "Termux:API microphone" in result["details"]
 
     def test_all_requirements_met(self, monkeypatch):
-        monkeypatch.setattr("tools.voice_mode._audio_available", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.detect_audio_environment",
+        monkeypatch.setattr("harness.tools.voice_mode._audio_available", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode.detect_audio_environment",
                             lambda: {"available": True, "warnings": []})
-        monkeypatch.setattr("tools.transcription_tools._get_provider", lambda cfg: "openai")
+        monkeypatch.setattr("harness.tools.transcription_tools._get_provider", lambda cfg: "openai")
 
-        from tools.voice_mode import check_voice_requirements
+        from harness.tools.voice_mode import check_voice_requirements
 
         result = check_voice_requirements()
         assert result["available"] is True
@@ -269,12 +269,12 @@ class TestCheckVoiceRequirements:
         assert result["missing_packages"] == []
 
     def test_missing_audio_packages(self, monkeypatch):
-        monkeypatch.setattr("tools.voice_mode._audio_available", lambda: False)
-        monkeypatch.setattr("tools.voice_mode.detect_audio_environment",
+        monkeypatch.setattr("harness.tools.voice_mode._audio_available", lambda: False)
+        monkeypatch.setattr("harness.tools.voice_mode.detect_audio_environment",
                             lambda: {"available": False, "warnings": ["Audio libraries not installed"]})
         monkeypatch.setenv("VOICE_TOOLS_OPENAI_KEY", "sk-test-key")
 
-        from tools.voice_mode import check_voice_requirements
+        from harness.tools.voice_mode import check_voice_requirements
 
         result = check_voice_requirements()
         assert result["available"] is False
@@ -283,12 +283,12 @@ class TestCheckVoiceRequirements:
         assert "numpy" in result["missing_packages"]
 
     def test_missing_stt_provider(self, monkeypatch):
-        monkeypatch.setattr("tools.voice_mode._audio_available", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.detect_audio_environment",
+        monkeypatch.setattr("harness.tools.voice_mode._audio_available", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode.detect_audio_environment",
                             lambda: {"available": True, "warnings": []})
-        monkeypatch.setattr("tools.transcription_tools._get_provider", lambda cfg: "none")
+        monkeypatch.setattr("harness.tools.transcription_tools._get_provider", lambda cfg: "none")
 
-        from tools.voice_mode import check_voice_requirements
+        from harness.tools.voice_mode import check_voice_requirements
 
         result = check_voice_requirements()
         assert result["available"] is False
@@ -304,10 +304,10 @@ class TestCreateAudioRecorder:
     def test_termux_uses_termux_audio_recorder_when_api_present(self, monkeypatch):
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: True)
 
-        from tools.voice_mode import create_audio_recorder, TermuxAudioRecorder
+        from harness.tools.voice_mode import create_audio_recorder, TermuxAudioRecorder
         recorder = create_audio_recorder()
 
         assert isinstance(recorder, TermuxAudioRecorder)
@@ -316,10 +316,10 @@ class TestCreateAudioRecorder:
     def test_termux_without_android_app_falls_back_to_audio_recorder(self, monkeypatch):
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: False)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: False)
 
-        from tools.voice_mode import create_audio_recorder, AudioRecorder
+        from harness.tools.voice_mode import create_audio_recorder, AudioRecorder
         recorder = create_audio_recorder()
 
         assert isinstance(recorder, AudioRecorder)
@@ -338,12 +338,12 @@ class TestTermuxAudioRecorder:
 
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
-        monkeypatch.setattr("tools.voice_mode.subprocess.run", fake_run)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
+        monkeypatch.setattr("harness.tools.voice_mode.subprocess.run", fake_run)
 
-        from tools.voice_mode import TermuxAudioRecorder
+        from harness.tools.voice_mode import TermuxAudioRecorder
         recorder = TermuxAudioRecorder()
         recorder.start()
         recorder._start_time = time.monotonic() - 1.0
@@ -363,12 +363,12 @@ class TestTermuxAudioRecorder:
 
         monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
         monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
-        monkeypatch.setattr("tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
-        monkeypatch.setattr("tools.voice_mode._termux_api_app_installed", lambda: True)
-        monkeypatch.setattr("tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
-        monkeypatch.setattr("tools.voice_mode.subprocess.run", fake_run)
+        monkeypatch.setattr("harness.tools.voice_mode._termux_microphone_command", lambda: "/data/data/com.termux/files/usr/bin/termux-microphone-record")
+        monkeypatch.setattr("harness.tools.voice_mode._termux_api_app_installed", lambda: True)
+        monkeypatch.setattr("harness.tools.voice_mode.time.strftime", lambda fmt: "20260409_120000")
+        monkeypatch.setattr("harness.tools.voice_mode.subprocess.run", fake_run)
 
-        from tools.voice_mode import TermuxAudioRecorder
+        from harness.tools.voice_mode import TermuxAudioRecorder
         recorder = TermuxAudioRecorder()
         recorder.start()
         recorder.cancel()
@@ -381,9 +381,9 @@ class TestAudioRecorder:
     def test_start_raises_without_audio_libs(self, monkeypatch):
         def _fail_import():
             raise ImportError("no sounddevice")
-        monkeypatch.setattr("tools.voice_mode._import_audio", _fail_import)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fail_import)
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         with pytest.raises(RuntimeError, match="sounddevice and numpy"):
@@ -393,7 +393,7 @@ class TestAudioRecorder:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -406,7 +406,7 @@ class TestAudioRecorder:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -417,7 +417,7 @@ class TestAudioRecorder:
 
 class TestAudioRecorderStop:
     def test_stop_returns_none_when_not_recording(self):
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         assert recorder.stop() is None
@@ -428,7 +428,7 @@ class TestAudioRecorderStop:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder, SAMPLE_RATE
+        from harness.tools.voice_mode import AudioRecorder, SAMPLE_RATE
 
         recorder = AudioRecorder()
         recorder.start()
@@ -457,7 +457,7 @@ class TestAudioRecorderStop:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -475,7 +475,7 @@ class TestAudioRecorderStop:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder, SAMPLE_RATE
+        from harness.tools.voice_mode import AudioRecorder, SAMPLE_RATE
 
         recorder = AudioRecorder()
         recorder.start()
@@ -494,7 +494,7 @@ class TestAudioRecorderCancel:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -509,7 +509,7 @@ class TestAudioRecorderCancel:
         mock_stream.close.assert_not_called()
 
     def test_cancel_when_not_recording_is_safe(self):
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.cancel()  # should not raise
@@ -518,7 +518,7 @@ class TestAudioRecorderCancel:
 
 class TestAudioRecorderProperties:
     def test_elapsed_seconds_when_not_recording(self):
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         assert recorder.elapsed_seconds == 0.0
@@ -527,7 +527,7 @@ class TestAudioRecorderProperties:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -551,8 +551,8 @@ class TestTranscribeRecording:
             "transcript": "hello world",
         })
 
-        with patch("tools.transcription_tools.transcribe_audio", mock_transcribe):
-            from tools.voice_mode import transcribe_recording
+        with patch("harness.tools.transcription_tools.transcribe_audio", mock_transcribe):
+            from harness.tools.voice_mode import transcribe_recording
             result = transcribe_recording("/tmp/test.wav", model="whisper-1")
 
         assert result["success"] is True
@@ -565,8 +565,8 @@ class TestTranscribeRecording:
             "transcript": "Thank you.",
         })
 
-        with patch("tools.transcription_tools.transcribe_audio", mock_transcribe):
-            from tools.voice_mode import transcribe_recording
+        with patch("harness.tools.transcription_tools.transcribe_audio", mock_transcribe):
+            from harness.tools.voice_mode import transcribe_recording
             result = transcribe_recording("/tmp/test.wav")
 
         assert result["success"] is True
@@ -579,8 +579,8 @@ class TestTranscribeRecording:
             "transcript": "Thank you for helping me with this code.",
         })
 
-        with patch("tools.transcription_tools.transcribe_audio", mock_transcribe):
-            from tools.voice_mode import transcribe_recording
+        with patch("harness.tools.transcription_tools.transcribe_audio", mock_transcribe):
+            from harness.tools.voice_mode import transcribe_recording
             result = transcribe_recording("/tmp/test.wav")
 
         assert result["transcript"] == "Thank you for helping me with this code."
@@ -589,7 +589,7 @@ class TestTranscribeRecording:
 
 class TestWhisperHallucinationFilter:
     def test_known_hallucinations(self):
-        from tools.voice_mode import is_whisper_hallucination
+        from harness.tools.voice_mode import is_whisper_hallucination
 
         assert is_whisper_hallucination("Thank you.") is True
         assert is_whisper_hallucination("thank you") is True
@@ -599,7 +599,7 @@ class TestWhisperHallucinationFilter:
         assert is_whisper_hallucination("you") is True
 
     def test_real_speech_not_filtered(self):
-        from tools.voice_mode import is_whisper_hallucination
+        from harness.tools.voice_mode import is_whisper_hallucination
 
         assert is_whisper_hallucination("Hello, how are you?") is False
         assert is_whisper_hallucination("Thank you for your help with the project.") is False
@@ -623,9 +623,9 @@ class TestPlayAudioFile:
         def _fake_import():
             return mock_sd_obj, np
 
-        monkeypatch.setattr("tools.voice_mode._import_audio", _fake_import)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fake_import)
 
-        from tools.voice_mode import play_audio_file
+        from harness.tools.voice_mode import play_audio_file
 
         result = play_audio_file(sample_wav)
 
@@ -636,16 +636,16 @@ class TestPlayAudioFile:
     def test_returns_false_when_no_player(self, monkeypatch, sample_wav):
         def _fail_import():
             raise ImportError("no sounddevice")
-        monkeypatch.setattr("tools.voice_mode._import_audio", _fail_import)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fail_import)
         monkeypatch.setattr("shutil.which", lambda _: None)
 
-        from tools.voice_mode import play_audio_file
+        from harness.tools.voice_mode import play_audio_file
 
         result = play_audio_file(sample_wav)
         assert result is False
 
     def test_returns_false_for_missing_file(self):
-        from tools.voice_mode import play_audio_file
+        from harness.tools.voice_mode import play_audio_file
 
         result = play_audio_file("/nonexistent/file.wav")
         assert result is False
@@ -664,7 +664,7 @@ class TestCleanupTempRecordings:
         old_mtime = time.time() - 7200
         os.utime(str(old_file), (old_mtime, old_mtime))
 
-        from tools.voice_mode import cleanup_temp_recordings
+        from harness.tools.voice_mode import cleanup_temp_recordings
 
         deleted = cleanup_temp_recordings(max_age_seconds=3600)
         assert deleted == 1
@@ -675,16 +675,16 @@ class TestCleanupTempRecordings:
         recent_file = temp_voice_dir / "recording_20260303_120000.wav"
         recent_file.write_bytes(b"\x00" * 100)
 
-        from tools.voice_mode import cleanup_temp_recordings
+        from harness.tools.voice_mode import cleanup_temp_recordings
 
         deleted = cleanup_temp_recordings(max_age_seconds=3600)
         assert deleted == 0
         assert recent_file.exists()
 
     def test_nonexistent_dir_returns_zero(self, monkeypatch):
-        monkeypatch.setattr("tools.voice_mode._TEMP_DIR", "/nonexistent/dir")
+        monkeypatch.setattr("harness.tools.voice_mode._TEMP_DIR", "/nonexistent/dir")
 
-        from tools.voice_mode import cleanup_temp_recordings
+        from harness.tools.voice_mode import cleanup_temp_recordings
 
         assert cleanup_temp_recordings() == 0
 
@@ -695,7 +695,7 @@ class TestCleanupTempRecordings:
         old_mtime = time.time() - 7200
         os.utime(str(other_file), (old_mtime, old_mtime))
 
-        from tools.voice_mode import cleanup_temp_recordings
+        from harness.tools.voice_mode import cleanup_temp_recordings
 
         deleted = cleanup_temp_recordings(max_age_seconds=3600)
         assert deleted == 0
@@ -710,7 +710,7 @@ class TestPlayBeep:
     def test_beep_calls_sounddevice_play(self, mock_sd):
         np = pytest.importorskip("numpy")
 
-        from tools.voice_mode import play_beep
+        from harness.tools.voice_mode import play_beep
 
         # play_beep uses polling (get_stream) + sd.stop() instead of sd.wait()
         mock_stream = MagicMock()
@@ -729,7 +729,7 @@ class TestPlayBeep:
     def test_beep_double_produces_longer_audio(self, mock_sd):
         np = pytest.importorskip("numpy")
 
-        from tools.voice_mode import play_beep
+        from harness.tools.voice_mode import play_beep
 
         play_beep(frequency=660, duration=0.1, count=2)
 
@@ -741,9 +741,9 @@ class TestPlayBeep:
     def test_beep_noop_without_audio(self, monkeypatch):
         def _fail_import():
             raise ImportError("no sounddevice")
-        monkeypatch.setattr("tools.voice_mode._import_audio", _fail_import)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fail_import)
 
-        from tools.voice_mode import play_beep
+        from harness.tools.voice_mode import play_beep
 
         # Should not raise
         play_beep()
@@ -751,7 +751,7 @@ class TestPlayBeep:
     def test_beep_handles_playback_error(self, mock_sd):
         mock_sd.play.side_effect = Exception("device error")
 
-        from tools.voice_mode import play_beep
+        from harness.tools.voice_mode import play_beep
 
         # Should not raise
         play_beep()
@@ -769,7 +769,7 @@ class TestSilenceDetection:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder, SAMPLE_RATE
+        from harness.tools.voice_mode import AudioRecorder, SAMPLE_RATE
 
         recorder = AudioRecorder()
         # Use very short durations for testing
@@ -815,7 +815,7 @@ class TestSilenceDetection:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder._silence_duration = 0.02
@@ -845,7 +845,7 @@ class TestSilenceDetection:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder._silence_duration = 0.05
@@ -884,7 +884,7 @@ class TestSilenceDetection:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()  # no on_silence_stop
@@ -912,8 +912,8 @@ class TestPlaybackInterrupt:
     """Verify that TTS playback can be interrupted."""
 
     def test_stop_playback_terminates_process(self):
-        from tools.voice_mode import stop_playback, _playback_lock
-        import tools.voice_mode as vm
+        from harness.tools.voice_mode import stop_playback, _playback_lock
+        import harness.tools.voice_mode as vm
 
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None  # process is running
@@ -929,7 +929,7 @@ class TestPlaybackInterrupt:
             assert vm._active_playback is None
 
     def test_stop_playback_noop_when_nothing_playing(self):
-        import tools.voice_mode as vm
+        import harness.tools.voice_mode as vm
 
         with vm._playback_lock:
             vm._active_playback = None
@@ -937,11 +937,11 @@ class TestPlaybackInterrupt:
         vm.stop_playback()
 
     def test_play_audio_file_sets_active_playback(self, monkeypatch, sample_wav):
-        import tools.voice_mode as vm
+        import harness.tools.voice_mode as vm
 
         def _fail_import():
             raise ImportError("no sounddevice")
-        monkeypatch.setattr("tools.voice_mode._import_audio", _fail_import)
+        monkeypatch.setattr("harness.tools.voice_mode._import_audio", _fail_import)
 
         mock_proc = MagicMock()
         mock_proc.wait.return_value = 0
@@ -970,7 +970,7 @@ class TestContinuousModeFlow:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
 
@@ -1010,7 +1010,7 @@ class TestContinuousModeFlow:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         results = []
@@ -1043,7 +1043,7 @@ class TestAudioLevelIndicator:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -1069,7 +1069,7 @@ class TestAudioLevelIndicator:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         recorder = AudioRecorder()
         recorder.start()
@@ -1105,7 +1105,7 @@ class TestConfigurableSilenceParams:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
         import threading
 
         recorder = AudioRecorder()
@@ -1170,7 +1170,7 @@ class TestStreamLeakOnStartFailure:
         mock_stream.start.side_effect = OSError("Audio device busy")
         mock_sd.InputStream.return_value = mock_stream
 
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
         recorder = AudioRecorder()
 
         with pytest.raises(RuntimeError, match="Failed to open audio input stream"):
@@ -1184,7 +1184,7 @@ class TestSilenceCallbackLock:
 
     def test_fire_block_acquires_lock(self):
         import inspect
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
 
         source = inspect.getsource(AudioRecorder._ensure_stream)
         # Verify lock is used before reading _on_silence_stop in fire block
@@ -1195,7 +1195,7 @@ class TestSilenceCallbackLock:
         assert lock_pos < cb_pos
 
     def test_cancel_clears_callback_under_lock(self, mock_sd):
-        from tools.voice_mode import AudioRecorder
+        from harness.tools.voice_mode import AudioRecorder
         recorder = AudioRecorder()
         mock_sd.InputStream.return_value = MagicMock()
 

@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from tools.patch_parser import (
+from harness.tools.patch_parser import (
     OperationType,
     apply_v4a_operations,
     parse_v4a_patch,
@@ -461,7 +461,7 @@ class TestApplyDelete:
 
 class TestCountOccurrences:
     def test_basic(self):
-        from tools.patch_parser import _count_occurrences
+        from harness.tools.patch_parser import _count_occurrences
         assert _count_occurrences("aaa", "a") == 3
         assert _count_occurrences("aaa", "aa") == 2
         assert _count_occurrences("hello world", "xyz") == 0

@@ -33,7 +33,7 @@ def test_focus_topic_extracted_and_passed(capsys):
             return 100
         return 50
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate):
+    with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", side_effect=_estimate):
         shell._manual_compress("/compress database schema")
 
     output = capsys.readouterr().out
@@ -55,7 +55,7 @@ def test_no_focus_topic_when_bare_command(capsys):
     shell.agent._cached_system_prompt = ""
     shell.agent._compress_context.return_value = (list(history), "")
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
+    with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
         shell._manual_compress("/compress")
 
     shell.agent._compress_context.assert_called_once()
@@ -73,7 +73,7 @@ def test_empty_focus_after_command_treated_as_none(capsys):
     shell.agent._cached_system_prompt = ""
     shell.agent._compress_context.return_value = (list(history), "")
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
+    with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
         shell._manual_compress("/compress   ")
 
     shell.agent._compress_context.assert_called_once()
@@ -92,7 +92,7 @@ def test_focus_topic_printed_in_compression_banner(capsys):
     shell.agent._cached_system_prompt = ""
     shell.agent._compress_context.return_value = (compressed, "")
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
+    with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
         shell._manual_compress("/compress API endpoints")
 
     output = capsys.readouterr().out
@@ -110,7 +110,7 @@ def test_no_focus_prints_standard_banner(capsys):
     shell.agent._cached_system_prompt = ""
     shell.agent._compress_context.return_value = (compressed, "")
 
-    with patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
+    with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", return_value=100):
         shell._manual_compress("/compress")
 
     output = capsys.readouterr().out

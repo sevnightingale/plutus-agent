@@ -1,7 +1,7 @@
 import importlib
 import logging
 
-terminal_tool_module = importlib.import_module("tools.terminal_tool")
+terminal_tool_module = importlib.import_module("harness.tools.terminal_tool")
 
 
 def _clear_terminal_env(monkeypatch):
@@ -21,7 +21,7 @@ def _clear_terminal_env(monkeypatch):
     # Default: no Nous subscription — patch both the terminal_tool local
     # binding and tool_backend_helpers (used by resolve_modal_backend_state).
     monkeypatch.setattr(terminal_tool_module, "managed_nous_tools_enabled", lambda: False)
-    import tools.tool_backend_helpers as _tbh
+    import harness.tools.tool_backend_helpers as _tbh
     monkeypatch.setattr(_tbh, "managed_nous_tools_enabled", lambda: False)
 
 
@@ -86,7 +86,7 @@ def test_modal_backend_without_token_or_config_logs_specific_error(monkeypatch, 
 def test_modal_backend_with_managed_gateway_does_not_require_direct_creds_or_minisweagent(monkeypatch, tmp_path):
     _clear_terminal_env(monkeypatch)
     monkeypatch.setattr(terminal_tool_module, "managed_nous_tools_enabled", lambda: True)
-    import tools.tool_backend_helpers as _tbh
+    import harness.tools.tool_backend_helpers as _tbh
     monkeypatch.setattr(_tbh, "managed_nous_tools_enabled", lambda: True)
     monkeypatch.setenv("TERMINAL_ENV", "modal")
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -105,7 +105,7 @@ def test_modal_backend_with_managed_gateway_does_not_require_direct_creds_or_min
 def test_modal_backend_auto_mode_prefers_managed_gateway_over_direct_creds(monkeypatch, tmp_path):
     _clear_terminal_env(monkeypatch)
     monkeypatch.setattr(terminal_tool_module, "managed_nous_tools_enabled", lambda: True)
-    import tools.tool_backend_helpers as _tbh
+    import harness.tools.tool_backend_helpers as _tbh
     monkeypatch.setattr(_tbh, "managed_nous_tools_enabled", lambda: True)
     monkeypatch.setenv("TERMINAL_ENV", "modal")
     monkeypatch.setenv("MODAL_TOKEN_ID", "tok-id")

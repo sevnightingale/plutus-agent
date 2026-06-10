@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-import gateway.run as gateway_run
-from gateway.platforms.base import MessageEvent, MessageType
-from gateway.restart import DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
-from gateway.session import SessionEntry, build_session_key
+import harness.gateway.run as gateway_run
+from harness.gateway.platforms.base import MessageEvent, MessageType
+from harness.gateway.restart import DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
+from harness.gateway.session import SessionEntry, build_session_key
 from tests.gateway.restart_test_helpers import make_restart_runner, make_restart_source
 
 
@@ -223,7 +223,7 @@ async def test_shutdown_notification_skipped_when_no_active_agents():
 @pytest.mark.asyncio
 async def test_shutdown_notification_ignores_pending_sentinels():
     """Pending sentinels (not-yet-started agents) don't trigger notifications."""
-    from gateway.run import _AGENT_PENDING_SENTINEL
+    from harness.gateway.run import _AGENT_PENDING_SENTINEL
 
     runner, adapter = make_restart_runner()
     runner._running_agents["agent:main:telegram:dm:999"] = _AGENT_PENDING_SENTINEL

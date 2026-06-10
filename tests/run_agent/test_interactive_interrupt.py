@@ -26,8 +26,8 @@ log = logging.getLogger("interrupt_test")
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from unittest.mock import MagicMock, patch
-from run_agent import AIAgent, IterationBudget
-from tools.interrupt import set_interrupt, is_interrupted
+from harness.run_agent import AIAgent, IterationBudget
+from harness.tools.interrupt import set_interrupt, is_interrupted
 
 def make_slow_response(delay=2.0):
     """API response that takes a while."""
@@ -102,13 +102,13 @@ def main() -> int:
         """Simulates the agent_thread in cli.py's chat() method."""
         log.info("🟢 agent_thread starting")
 
-        with patch("run_agent.OpenAI") as MockOpenAI:
+        with patch("harness.run_agent.OpenAI") as MockOpenAI:
             mock_client = MagicMock()
             mock_client.chat.completions.create = make_slow_response(delay=3.0)
             mock_client.close = MagicMock()
             MockOpenAI.return_value = mock_client
 
-            from tools.delegate_tool import _run_single_child
+            from harness.tools.delegate_tool import _run_single_child
 
             # Signal that child is about to start
             original_init = AIAgent.__init__

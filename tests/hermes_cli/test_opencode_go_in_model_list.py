@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from plutus_cli.model_switch import list_authenticated_providers
+from harness.cli.model_switch import list_authenticated_providers
 
 
 # Minimum set of models that must be present for opencode-go no matter

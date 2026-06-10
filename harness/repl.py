@@ -61,26 +61,26 @@ except (ImportError, AttributeError):
 import threading
 import queue
 
-from agent.usage_pricing import (
+from harness.agent.usage_pricing import (
     CanonicalUsage,
     estimate_usage_cost,
     format_duration_compact,
     format_token_count_compact,
 )
-from agent.account_usage import fetch_account_usage, render_account_usage_lines
-from plutus_cli.banner import _format_context_length, format_banner_version_label
+from harness.agent.account_usage import fetch_account_usage, render_account_usage_lines
+from harness.cli.banner import _format_context_length, format_banner_version_label
 
 _COMMAND_SPINNER_FRAMES = ("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
 
 
 # Load .env from ~/.plutus-agent/.env first, then project root as dev fallback.
 # User-managed env files should override stale shell exports on restart.
-from plutus_constants import get_hermes_home, display_hermes_home
-from plutus_cli.env_loader import load_hermes_dotenv
-from utils import base_url_host_matches
+from harness.constants import get_hermes_home, display_hermes_home
+from harness.cli.env_loader import load_hermes_dotenv
+from harness.utils import base_url_host_matches
 
 _hermes_home = get_hermes_home()
-_project_env = Path(__file__).parent / '.env'
+_project_env = Path(__file__).parent.parent / '.env'
 load_hermes_dotenv(hermes_home=_hermes_home, project_env=_project_env)
 
 
@@ -219,7 +219,7 @@ def _load_prefill_messages(file_path: str) -> List[Dict[str, Any]]:
 
 def _parse_reasoning_config(effort: str) -> dict | None:
     """Parse a reasoning effort level into an OpenRouter reasoning config dict."""
-    from plutus_constants import parse_reasoning_effort
+    from harness.constants import parse_reasoning_effort
     result = parse_reasoning_effort(effort)
     if effort and effort.strip() and result is None:
         logger.warning("Unknown reasoning_effort '%s', using default (medium)", effort)
@@ -314,7 +314,7 @@ def load_cli_config() -> Dict[str, Any]:
     """
     # Check user config first ({HERMES_HOME}/config.yaml)
     user_config_path = _hermes_home / 'config.yaml'
-    project_config_path = Path(__file__).parent / 'cli-config.yaml'
+    project_config_path = Path(__file__).parent.parent / 'cli-config.yaml'
 
     # --ignore-user-config: force-skip the user config.yaml (still honor project
     # config as a fallback so defaults stay sensible).
@@ -493,7 +493,7 @@ def load_cli_config() -> Dict[str, Any]:
             logger.warning("Failed to load cli-config.yaml: %s", e)
 
     # Expand ${ENV_VAR} references in config values before bridging to env vars.
-    from plutus_cli.config import _expand_env_vars
+    from harness.cli.config import _expand_env_vars
     defaults = _expand_env_vars(defaults)
 
     # Apply terminal config to environment variables (so terminal_tool picks them up)
@@ -646,28 +646,28 @@ CLI_CONFIG = load_cli_config()
 # Initialize centralized logging early — agent.log + errors.log in ~/.plutus-agent/logs/.
 # This ensures CLI sessions produce a log trail even before AIAgent is instantiated.
 try:
-    from plutus_logging import setup_logging
+    from harness.log import setup_logging
     setup_logging(mode="cli")
 except Exception:
     pass  # Logging setup is best-effort — don't crash the CLI
 
 # Validate config structure early — print warnings before user hits cryptic errors
 try:
-    from plutus_cli.config import print_config_warnings
+    from harness.cli.config import print_config_warnings
     print_config_warnings()
 except Exception:
     pass
 
 # Initialize the skin engine from config
 try:
-    from plutus_cli.skin_engine import init_skin_from_config
+    from harness.cli.skin_engine import init_skin_from_config
     init_skin_from_config(CLI_CONFIG)
 except Exception:
     pass  # Skin engine is optional — default skin used if unavailable
 
 # Initialize tool preview length from config
 try:
-    from agent.display import set_tool_preview_max_len
+    from harness.agent.display import set_tool_preview_max_len
     _tpl = CLI_CONFIG.get("display", {}).get("tool_preview_length", 0)
     set_tool_preview_max_len(int(_tpl) if _tpl else 0)
 except Exception:
@@ -679,7 +679,7 @@ except Exception:
 # close TCP transports bound to dead worker loops — producing
 # "Event loop is closed" / "Press ENTER to continue..." errors.
 try:
-    from agent.auxiliary_client import neuter_async_httpx_del
+    from harness.agent.auxiliary_client import neuter_async_httpx_del
     neuter_async_httpx_del()
 except Exception:
     pass
@@ -693,23 +693,23 @@ from rich.text import Text as _RichText
 import fire
 
 # Import the agent and tool systems
-from run_agent import AIAgent
-from model_tools import get_tool_definitions, get_toolset_for_tool
+from harness.run_agent import AIAgent
+from harness.model_tools import get_tool_definitions, get_toolset_for_tool
 
 # Extracted CLI modules (Phase 3)
-from plutus_cli.banner import build_welcome_banner
-from plutus_cli.commands import SlashCommandCompleter, SlashCommandAutoSuggest
-from toolsets import get_all_toolsets, get_toolset_info, validate_toolset
+from harness.cli.banner import build_welcome_banner
+from harness.cli.commands import SlashCommandCompleter, SlashCommandAutoSuggest
+from harness.toolsets import get_all_toolsets, get_toolset_info, validate_toolset
 
 # Cron job system for scheduled tasks (execution is handled by the gateway)
-from cron import get_job
+from harness.cron import get_job
 
 # Resource cleanup imports for safe shutdown (terminal VMs, browser sessions)
-from tools.terminal_tool import cleanup_all_environments as _cleanup_all_terminals
-from tools.terminal_tool import set_sudo_password_callback, set_approval_callback
-from tools.skills_tool import set_secret_capture_callback
-from plutus_cli.callbacks import prompt_for_secret
-from tools.browser_tool import _emergency_cleanup_all_sessions as _cleanup_all_browsers
+from harness.tools.terminal_tool import cleanup_all_environments as _cleanup_all_terminals
+from harness.tools.terminal_tool import set_sudo_password_callback, set_approval_callback
+from harness.tools.skills_tool import set_secret_capture_callback
+from harness.cli.callbacks import prompt_for_secret
+from harness.tools.browser_tool import _emergency_cleanup_all_sessions as _cleanup_all_browsers
 
 # Guard to prevent cleanup from running multiple times on exit
 _cleanup_done = False
@@ -731,7 +731,7 @@ def _run_cleanup():
     except Exception:
         pass
     try:
-        from tools.mcp_tool import shutdown_mcp_servers
+        from harness.tools.mcp_tool import shutdown_mcp_servers
         shutdown_mcp_servers()
     except Exception:
         pass
@@ -739,14 +739,14 @@ def _run_cleanup():
     # AsyncHttpxClientWrapper.__del__ doesn't fire on a closed event loop
     # and trigger prompt_toolkit's "Press ENTER to continue..." handler.
     try:
-        from agent.auxiliary_client import shutdown_cached_clients
+        from harness.agent.auxiliary_client import shutdown_cached_clients
         shutdown_cached_clients()
     except Exception:
         pass
     # Shut down memory provider (on_session_end + shutdown_all) at actual
     # session boundary — NOT per-turn inside run_conversation().
     try:
-        from plutus_cli.plugins import invoke_hook as _invoke_hook
+        from harness.cli.plugins import invoke_hook as _invoke_hook
         _invoke_hook("on_session_finalize", session_id=_active_agent_ref.session_id if _active_agent_ref else None, platform="cli")
     except Exception:
         pass
@@ -967,7 +967,7 @@ def _run_state_db_auto_maintenance(session_db) -> None:
     if session_db is None:
         return
     try:
-        from plutus_cli.config import load_config as _load_full_config
+        from harness.cli.config import load_config as _load_full_config
         cfg = (_load_full_config().get("sessions") or {})
         if not cfg.get("auto_prune", False):
             return
@@ -1167,7 +1167,7 @@ class _SkinAwareAnsi:
     def __str__(self) -> str:
         if self._cached is None:
             try:
-                from plutus_cli.skin_engine import get_active_skin
+                from harness.cli.skin_engine import get_active_skin
                 self._cached = _hex_to_ansi(
                     get_active_skin().get_color(self._skin_key, self._fallback_hex),
                     bold=self._bold,
@@ -1194,7 +1194,7 @@ _DIM = _SkinAwareAnsi("banner_dim", "#B8860B")
 def _accent_hex() -> str:
     """Return the active skin accent color for legacy CLI output lines."""
     try:
-        from plutus_cli.skin_engine import get_active_skin
+        from harness.cli.skin_engine import get_active_skin
         return get_active_skin().get_color("ui_accent", "#FFBF00")
     except Exception:
         return "#FFBF00"
@@ -1264,7 +1264,7 @@ _IMAGE_EXTENSIONS = frozenset({
 })
 
 
-from plutus_constants import is_termux as _is_termux_environment
+from harness.constants import is_termux as _is_termux_environment
 
 
 def _termux_example_image_path(filename: str = "cat.png") -> str:
@@ -1618,7 +1618,7 @@ HERMES_CADUCEUS = """[#CD7F32]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⡀⠀⣀⣀�
 def _build_compact_banner() -> str:
     """Build a compact banner that fits the current terminal width."""
     try:
-        from plutus_cli.skin_engine import get_active_skin
+        from harness.cli.skin_engine import get_active_skin
         _skin = get_active_skin()
     except Exception:
         _skin = None
@@ -1685,7 +1685,7 @@ def _looks_like_slash_command(text: str) -> bool:
 # Skill Slash Commands — dynamic commands generated from installed skills
 # ============================================================================
 
-from agent.skill_commands import (
+from harness.agent.skill_commands import (
     scan_skill_commands,
     build_skill_invocation_message,
     build_plan_path,
@@ -1698,7 +1698,7 @@ _skill_commands = scan_skill_commands()
 def _get_plugin_cmd_handler_names() -> set:
     """Return plugin command names (without slash prefix) for dispatch matching."""
     try:
-        from plutus_cli.plugins import get_plugin_manager
+        from harness.cli.plugins import get_plugin_manager
         return set(get_plugin_manager()._plugin_commands.keys())
     except Exception:
         return set()
@@ -1745,7 +1745,7 @@ def save_config_value(key_path: str, value: any) -> bool:
     """
     # Use the same precedence as load_cli_config: user config first, then project config
     user_config_path = _hermes_home / 'config.yaml'
-    project_config_path = Path(__file__).parent / 'cli-config.yaml'
+    project_config_path = Path(__file__).parent.parent / 'cli-config.yaml'
     config_path = user_config_path if user_config_path.exists() else project_config_path
     
     try:
@@ -1770,7 +1770,7 @@ def save_config_value(key_path: str, value: any) -> bool:
         
         # Save back atomically — write to temp file + fsync + os.replace
         # so an interrupt never leaves config.yaml truncated or empty.
-        from utils import atomic_yaml_write
+        from harness.utils import atomic_yaml_write
         atomic_yaml_write(config_path, config)
         
         # Enforce owner-only permissions on config files (contain API keys)
@@ -1895,7 +1895,7 @@ class HermesCLI:
         if self.model == _DEFAULT_CONFIG_MODEL:
             _base_url = (_model_config.get("base_url") or "") if isinstance(_model_config, dict) else ""
             if "localhost" in _base_url or "127.0.0.1" in _base_url:
-                from plutus_cli.runtime_provider import _auto_detect_local_model
+                from harness.cli.runtime_provider import _auto_detect_local_model
                 _detected = _auto_detect_local_model(_base_url)
                 if _detected:
                     self.model = _detected
@@ -2029,7 +2029,7 @@ class HermesCLI:
         # Initialize SQLite session store early so /title works before first message
         self._session_db = None
         try:
-            from plutus_state import SessionDB
+            from harness.state import SessionDB
             self._session_db = SessionDB()
         except Exception as e:
             logger.warning("Failed to initialize SessionDB — session will NOT be indexed for search: %s", e)
@@ -2464,7 +2464,7 @@ class HermesCLI:
         changed = False
 
         try:
-            from plutus_cli.model_normalize import (
+            from harness.cli.model_normalize import (
                 _AGGREGATOR_PROVIDERS,
                 normalize_model_for_provider,
             )
@@ -2484,7 +2484,7 @@ class HermesCLI:
 
         if resolved_provider == "copilot":
             try:
-                from plutus_cli.models import copilot_model_api_mode, normalize_copilot_model_id
+                from harness.cli.models import copilot_model_api_mode, normalize_copilot_model_id
 
                 canonical = normalize_copilot_model_id(current_model, api_key=self.api_key)
                 if canonical and canonical != current_model:
@@ -2506,7 +2506,7 @@ class HermesCLI:
 
         if resolved_provider in {"opencode-zen", "opencode-go"}:
             try:
-                from plutus_cli.models import normalize_opencode_model_id, opencode_model_api_mode
+                from harness.cli.models import normalize_opencode_model_id, opencode_model_api_mode
 
                 canonical = normalize_opencode_model_id(resolved_provider, current_model)
                 if canonical and canonical != current_model:
@@ -2545,7 +2545,7 @@ class HermesCLI:
         if self._model_is_default:
             fallback_model = "gpt-5.3-codex"
             try:
-                from plutus_cli.codex_models import get_codex_model_ids
+                from harness.cli.codex_models import get_codex_model_ids
 
                 available = get_codex_model_ids(
                     access_token=self.api_key if self.api_key else None,
@@ -2933,7 +2933,7 @@ class HermesCLI:
                 return
             self._stream_box_opened = True
             try:
-                from plutus_cli.skin_engine import get_active_skin
+                from harness.cli.skin_engine import get_active_skin
                 _skin = get_active_skin()
                 label = _skin.get_branding("response_label", "◆ plutus-agent")
                 _text_hex = _skin.get_color("banner_text", "#FFF8DC")
@@ -3079,7 +3079,7 @@ class HermesCLI:
         are picked up without restarting the CLI.
         Returns True if credentials are ready, False on auth failure.
         """
-        from plutus_cli.runtime_provider import (
+        from harness.cli.runtime_provider import (
             resolve_runtime_provider,
             format_runtime_provider_error,
         )
@@ -3155,7 +3155,7 @@ class HermesCLI:
         # model so the API call doesn't fail with "model must be non-empty".
         if not self.model and resolved_provider:
             try:
-                from plutus_cli.models import get_default_model_for_provider
+                from harness.cli.models import get_default_model_for_provider
                 _default = get_default_model_for_provider(resolved_provider)
                 if _default:
                     self.model = _default
@@ -3186,7 +3186,7 @@ class HermesCLI:
         Processing / Anthropic fast mode, attach `request_overrides` so the
         API call is marked accordingly.
         """
-        from plutus_cli.models import resolve_fast_mode_overrides
+        from harness.cli.models import resolve_fast_mode_overrides
 
         runtime = {
             "api_key": self.api_key,
@@ -3239,7 +3239,7 @@ class HermesCLI:
         # Initialize SQLite session store for CLI sessions (if not already done in __init__)
         if self._session_db is None:
             try:
-                from plutus_state import SessionDB
+                from harness.state import SessionDB
                 self._session_db = SessionDB()
             except Exception as e:
                 logger.warning("SQLite session store not available — session will NOT be indexed: %s", e)
@@ -3428,7 +3428,7 @@ class HermesCLI:
                 )
 
         # Warn if the configured model is a Nous Hermes LLM (not agentic)
-        from plutus_cli.model_switch import is_nous_hermes_non_agentic
+        from harness.cli.model_switch import is_nous_hermes_non_agentic
 
         model_name = getattr(self, "model", "") or ""
         if is_nous_hermes_non_agentic(model_name):
@@ -3614,7 +3614,7 @@ class HermesCLI:
         from rich.text import Text
 
         try:
-            from plutus_cli.skin_engine import get_active_skin
+            from harness.cli.skin_engine import get_active_skin
             _skin = get_active_skin()
             _history_text_c = _skin.get_color("banner_text", "#FFF8DC")
             _session_label_c = _skin.get_color("session_label", "#DAA520")
@@ -3672,7 +3672,7 @@ class HermesCLI:
         Saves the image to ~/.plutus-agent/images/ and appends the path to
         ``_attached_images``.  Returns True if an image was attached.
         """
-        from plutus_cli.clipboard import save_clipboard_image
+        from harness.cli.clipboard import save_clipboard_image
 
         img_dir = get_hermes_home() / "images"
         self._image_counter += 1
@@ -3694,7 +3694,7 @@ class HermesCLI:
             /rollback diff <N>        — preview changes since checkpoint N
             /rollback <N> <file>      — restore a single file from checkpoint N
         """
-        from tools.checkpoint_manager import format_checkpoint_list
+        from harness.tools.checkpoint_manager import format_checkpoint_list
 
         if not hasattr(self, 'agent') or not self.agent:
             print("  No active agent session.")
@@ -3801,11 +3801,11 @@ class HermesCLI:
             /snapshot restore <id>     — restore state from snapshot
             /snapshot prune [N]        — prune to N snapshots (default 20)
         """
-        from plutus_cli.backup import (
+        from harness.cli.backup import (
             create_quick_snapshot, list_quick_snapshots,
             restore_quick_snapshot, prune_quick_snapshots,
         )
-        from plutus_constants import display_hermes_home
+        from harness.constants import display_hermes_home
 
         parts = command.split()
         subcmd = parts[1].lower() if len(parts) > 1 else "list"
@@ -3885,7 +3885,7 @@ class HermesCLI:
         Inspired by OpenAI Codex's separation of interrupt (stop current turn)
         from /stop (clean up background processes). See openai/codex#14602.
         """
-        from tools.process_registry import process_registry
+        from harness.tools.process_registry import process_registry
 
         processes = process_registry.list_sessions()
         running = [p for p in processes if p.get("status") == "running"]
@@ -3900,7 +3900,7 @@ class HermesCLI:
 
     def _handle_agents_command(self):
         """Handle /agents — show background processes and agent status."""
-        from tools.process_registry import format_uptime_short, process_registry
+        from harness.tools.process_registry import format_uptime_short, process_registry
 
         processes = process_registry.list_sessions()
         running = [p for p in processes if p.get("status") == "running"]
@@ -3933,7 +3933,7 @@ class HermesCLI:
             )
             return
 
-        from plutus_cli.clipboard import has_clipboard_image
+        from harness.cli.clipboard import has_clipboard_image
         if has_clipboard_image():
             if self._try_attach_clipboard_image():
                 n = len(self._attached_images)
@@ -4035,7 +4035,7 @@ class HermesCLI:
         image later with ``vision_analyze`` if needed.
         """
         import asyncio as _asyncio
-        from tools.vision_tools import vision_analyze_tool
+        from harness.tools.vision_tools import vision_analyze_tool
 
         analysis_prompt = (
             "Describe everything visible in this image in thorough detail. "
@@ -4091,7 +4091,7 @@ class HermesCLI:
     def _show_tool_availability_warnings(self):
         """Show warnings about disabled tools due to missing API keys."""
         try:
-            from model_tools import check_tool_availability
+            from harness.model_tools import check_tool_availability
             
             available, unavailable = check_tool_availability()
             
@@ -4129,7 +4129,7 @@ class HermesCLI:
 
         # Build status line with proper markup — skin-aware colors
         try:
-            from plutus_cli.skin_engine import get_active_skin
+            from harness.cli.skin_engine import get_active_skin
             skin = get_active_skin()
             separator_color = skin.get_color("banner_dim", "#B8860B")
             accent_color = skin.get_color("ui_accent", "#FFBF00")
@@ -4205,7 +4205,7 @@ class HermesCLI:
     
     def _fast_command_available(self) -> bool:
         try:
-            from plutus_cli.models import model_supports_fast_mode
+            from harness.cli.models import model_supports_fast_mode
         except Exception:
             return False
         agent = getattr(self, "agent", None)
@@ -4219,10 +4219,10 @@ class HermesCLI:
 
     def show_help(self):
         """Display help information with categorized commands."""
-        from plutus_cli.commands import COMMANDS_BY_CATEGORY
+        from harness.cli.commands import COMMANDS_BY_CATEGORY
 
         try:
-            from plutus_cli.skin_engine import get_active_help_header
+            from harness.cli.skin_engine import get_active_help_header
             header = get_active_help_header("(^_^)? Available Commands")
         except Exception:
             header = "(^_^)? Available Commands"
@@ -4311,7 +4311,7 @@ class HermesCLI:
         from argparse import Namespace
         from contextlib import redirect_stdout
         from io import StringIO
-        from plutus_cli.tools_config import tools_disable_enable_command
+        from harness.cli.tools_config import tools_disable_enable_command
 
         def _run_capture(ns: Namespace) -> None:
             """Run tools_disable_enable_command, routing its ANSI-colored
@@ -4371,8 +4371,8 @@ class HermesCLI:
         _run_capture(Namespace(tools_action=subcommand, names=names, platform="cli"))
 
         # Reset session so the new tool config is picked up from a clean state
-        from plutus_cli.tools_config import _get_platform_tools
-        from plutus_cli.config import load_config
+        from harness.cli.tools_config import _get_platform_tools
+        from harness.cli.config import load_config
         self.enabled_toolsets = _get_platform_tools(load_config(), "cli")
         self.new_session()
         _cprint(f"{_DIM}Session reset. New tool configuration is active.{_RST}")
@@ -4410,8 +4410,8 @@ class HermesCLI:
     
     def _handle_profile_command(self):
         """Display active profile name and home directory."""
-        from plutus_constants import display_hermes_home
-        from plutus_cli.profiles import get_active_profile_name
+        from harness.constants import display_hermes_home
+        from harness.cli.profiles import get_active_profile_name
 
         display = display_hermes_home()
         profile_name = get_active_profile_name()
@@ -4429,7 +4429,7 @@ class HermesCLI:
         terminal_timeout = os.getenv("TERMINAL_TIMEOUT", "60")
         
         user_config_path = _hermes_home / 'config.yaml'
-        project_config_path = Path(__file__).parent / 'cli-config.yaml'
+        project_config_path = Path(__file__).parent.parent / 'cli-config.yaml'
         if user_config_path.exists():
             config_path = user_config_path
         else:
@@ -4494,7 +4494,7 @@ class HermesCLI:
         if not sessions:
             return False
 
-        from plutus_cli.main import _relative_time
+        from harness.cli.main import _relative_time
 
         print()
         if reason == "history":
@@ -4588,7 +4588,7 @@ class HermesCLI:
         lifecycle point (shutdown, /new, /reset).
         """
         try:
-            from plutus_cli.plugins import invoke_hook as _invoke_hook
+            from harness.cli.plugins import invoke_hook as _invoke_hook
             _invoke_hook(
                 event_type,
                 session_id=self.agent.session_id if self.agent else None,
@@ -4634,7 +4634,7 @@ class HermesCLI:
                 self.agent._last_flushed_db_idx = 0
             if hasattr(self.agent, "_todo_store"):
                 try:
-                    from tools.todo_tool import TodoStore
+                    from harness.tools.todo_tool import TodoStore
                     self.agent._todo_store = TodoStore()
                 except Exception:
                     pass
@@ -4676,7 +4676,7 @@ class HermesCLI:
             return
 
         # Resolve title or ID
-        from plutus_cli.main import _resolve_session_by_name_or_id
+        from harness.cli.main import _resolve_session_by_name_or_id
         resolved = _resolve_session_by_name_or_id(target)
         target_id = resolved or target
 
@@ -4720,7 +4720,7 @@ class HermesCLI:
                 self.agent._last_flushed_db_idx = len(self.conversation_history)
             if hasattr(self.agent, "_todo_store"):
                 try:
-                    from tools.todo_tool import TodoStore
+                    from harness.tools.todo_tool import TodoStore
                     self.agent._todo_store = TodoStore()
                 except Exception:
                     pass
@@ -4834,7 +4834,7 @@ class HermesCLI:
                 self.agent._last_flushed_db_idx = len(self.conversation_history)
             if hasattr(self.agent, "_todo_store"):
                 try:
-                    from tools.todo_tool import TodoStore
+                    from harness.tools.todo_tool import TodoStore
                     self.agent._todo_store = TodoStore()
                 except Exception:
                     pass
@@ -4933,7 +4933,7 @@ class HermesCLI:
     def _run_curses_picker(self, title: str, items: list[str], default_index: int = 0) -> int | None:
         """Run curses_single_select via run_in_terminal so prompt_toolkit handles terminal ownership cleanly."""
         import threading
-        from plutus_cli.curses_ui import curses_single_select
+        from harness.cli.curses_ui import curses_single_select
 
         result = [None]
 
@@ -5083,7 +5083,7 @@ class HermesCLI:
             _cprint(f"    Capabilities: {mi.format_capabilities()}")
         else:
             try:
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.model_metadata import get_model_context_length
                 ctx = get_model_context_length(
                     result.new_model,
                     base_url=result.base_url or self.base_url,
@@ -5129,7 +5129,7 @@ class HermesCLI:
             model_list = provider_data.get("models", [])
             if not model_list:
                 try:
-                    from plutus_cli.models import provider_model_ids
+                    from harness.cli.models import provider_model_ids
                     live = provider_model_ids(provider_data["slug"])
                     if live:
                         model_list = live
@@ -5155,7 +5155,7 @@ class HermesCLI:
                 self._close_model_picker()
                 return
             if selected < len(model_list):
-                from plutus_cli.model_switch import switch_model
+                from harness.cli.model_switch import switch_model
                 chosen_model = model_list[selected]
                 result = switch_model(
                     raw_input=chosen_model,
@@ -5183,8 +5183,8 @@ class HermesCLI:
           /model <name> --provider <provider> — switch provider + model
           /model --provider <provider>        — switch to provider, auto-detect model
         """
-        from plutus_cli.model_switch import switch_model, parse_model_flags, list_authenticated_providers
-        from plutus_cli.providers import get_label
+        from harness.cli.model_switch import switch_model, parse_model_flags, list_authenticated_providers
+        from harness.cli.providers import get_label
 
         # Parse args from the original command
         parts = cmd_original.split(None, 1)  # split off '/model'
@@ -5204,7 +5204,7 @@ class HermesCLI:
             user_provs = None
             custom_provs = None
             try:
-                from plutus_cli.config import get_compatible_custom_providers, load_config
+                from harness.cli.config import get_compatible_custom_providers, load_config
                 cfg = load_config()
                 user_provs = cfg.get("providers")
                 custom_provs = get_compatible_custom_providers(cfg)
@@ -5310,7 +5310,7 @@ class HermesCLI:
         else:
             # Fallback to old context length lookup
             try:
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.model_metadata import get_model_context_length
                 ctx = get_model_context_length(
                     result.new_model,
                     base_url=result.base_url or self.base_url,
@@ -5347,7 +5347,7 @@ class HermesCLI:
         if not text or has_images or not _looks_like_slash_command(text):
             return False
         try:
-            from plutus_cli.commands import resolve_command
+            from harness.cli.commands import resolve_command
             base = text.split(None, 1)[0].lower().lstrip('/')
             cmd = resolve_command(base)
             return bool(cmd and cmd.name == "model")
@@ -5371,7 +5371,7 @@ class HermesCLI:
         if not getattr(self, "_agent_running", False):
             return False
         try:
-            from plutus_cli.commands import resolve_command
+            from harness.cli.commands import resolve_command
             base = text.split(None, 1)[0].lower().lstrip('/')
             cmd = resolve_command(base)
             return bool(cmd and cmd.name == "steer")
@@ -5384,12 +5384,12 @@ class HermesCLI:
         Shows current model + provider, then lists all authenticated
         providers with their available models.
         """
-        from plutus_cli.models import (
+        from harness.cli.models import (
             curated_models_for_provider, list_available_providers,
             normalize_provider, _PROVIDER_LABELS,
             get_pricing_for_provider, format_model_pricing_table,
         )
-        from plutus_cli.auth import resolve_provider as _resolve_provider
+        from harness.cli.auth import resolve_provider as _resolve_provider
 
         # Resolve current provider
         raw_provider = normalize_provider(self.provider)
@@ -5432,7 +5432,7 @@ class HermesCLI:
                         current_marker = " ← current" if (is_active and mid == self.model) else ""
                         print(f"      {mid}{current_marker}")
                 elif p["id"] == "custom":
-                    from plutus_cli.models import _get_custom_base_url
+                    from harness.cli.models import _get_custom_base_url
                     custom_url = _get_custom_base_url()
                     if custom_url:
                         print(f"      endpoint: {custom_url}")
@@ -5476,8 +5476,8 @@ class HermesCLI:
     def _handle_gquota_command(self, cmd_original: str) -> None:
         """Show Google Gemini Code Assist quota usage for the current OAuth account."""
         try:
-            from agent.google_oauth import get_valid_access_token, GoogleOAuthError, load_credentials
-            from agent.google_code_assist import retrieve_user_quota, CodeAssistError
+            from harness.agent.google_oauth import get_valid_access_token, GoogleOAuthError, load_credentials
+            from harness.agent.google_code_assist import retrieve_user_quota, CodeAssistError
         except ImportError as exc:
             self._console_print(f"  [red]Gemini modules unavailable: {exc}[/]")
             return
@@ -5567,7 +5567,7 @@ class HermesCLI:
     def _handle_cron_command(self, cmd: str):
         """Handle the /cron command to manage scheduled tasks."""
         import shlex
-        from tools.cronjob_tools import cronjob as cronjob_tool
+        from harness.tools.cronjob_tools import cronjob as cronjob_tool
 
         def _cron_api(**kwargs):
             return json.loads(cronjob_tool(**kwargs))
@@ -5811,12 +5811,12 @@ class HermesCLI:
     
     def _handle_skills_command(self, cmd: str):
         """Handle /skills slash command — delegates to plutus_cli.skills_hub."""
-        from plutus_cli.skills_hub import handle_skills_slash
+        from harness.cli.skills_hub import handle_skills_slash
         handle_skills_slash(cmd, ChatConsole())
 
     def _show_gateway_status(self):
         """Show status of the gateway and connected messaging platforms."""
-        from gateway.config import load_gateway_config, Platform
+        from harness.gateway.config import load_gateway_config, Platform
         
         print()
         print("+" + "-" * 60 + "+")
@@ -5885,7 +5885,7 @@ class HermesCLI:
 
         # Resolve aliases via central registry so adding an alias is a one-line
         # change in plutus_cli/commands.py instead of touching every dispatch site.
-        from plutus_cli.commands import resolve_command as _resolve_cmd
+        from harness.cli.commands import resolve_command as _resolve_cmd
         _base_word = cmd_lower.split()[0].lstrip("/")
         _cmd_def = _resolve_cmd(_base_word)
         canonical = _cmd_def.name if _cmd_def else _base_word
@@ -5942,10 +5942,10 @@ class HermesCLI:
                 _cprint("  ✨ (◕‿◕)✨ Fresh start! Screen cleared and conversation reset.\n")
                 # Show a random tip on new session
                 try:
-                    from plutus_cli.tips import get_random_tip
+                    from harness.cli.tips import get_random_tip
                     _tip = get_random_tip()
                     try:
-                        from plutus_cli.skin_engine import get_active_skin
+                        from harness.cli.skin_engine import get_active_skin
                         _tip_color = get_active_skin().get_color("banner_dim", "#B8860B")
                     except Exception:
                         _tip_color = "#B8860B"
@@ -5957,10 +5957,10 @@ class HermesCLI:
                 print("  ✨ (◕‿◕)✨ Fresh start! Screen cleared and conversation reset.\n")
                 # Show a random tip on new session
                 try:
-                    from plutus_cli.tips import get_random_tip
+                    from harness.cli.tips import get_random_tip
                     _tip = get_random_tip()
                     try:
-                        from plutus_cli.skin_engine import get_active_skin
+                        from harness.cli.skin_engine import get_active_skin
                         _tip_color = get_active_skin().get_color("banner_dim", "#B8860B")
                     except Exception:
                         _tip_color = "#B8860B"
@@ -5977,7 +5977,7 @@ class HermesCLI:
                     if self._session_db:
                         # Sanitize the title early so feedback matches what gets stored
                         try:
-                            from plutus_state import SessionDB
+                            from harness.state import SessionDB
                             new_title = SessionDB.sanitize_title(raw_title)
                         except ValueError as e:
                             _cprint(f"  {e}")
@@ -6082,7 +6082,7 @@ class HermesCLI:
         elif canonical == "image":
             self._handle_image_command(cmd_original)
         elif canonical == "reload":
-            from plutus_cli.config import reload_env
+            from harness.cli.config import reload_env
             count = reload_env()
             print(f"  Reloaded .env ({count} var(s) updated)")
         elif canonical == "reload-mcp":
@@ -6092,7 +6092,7 @@ class HermesCLI:
             self._handle_browser_command(cmd_original)
         elif canonical == "plugins":
             try:
-                from plutus_cli.plugins import get_plugin_manager
+                from harness.cli.plugins import get_plugin_manager
                 mgr = get_plugin_manager()
                 plugins = mgr.list_plugins()
                 if not plugins:
@@ -6203,7 +6203,7 @@ class HermesCLI:
                     self._console_print(f"[bold red]Quick command '{base_cmd}' has unsupported type (supported: 'exec', 'alias')[/]")
             # Check for plugin-registered slash commands
             elif base_cmd.lstrip("/") in _get_plugin_cmd_handler_names():
-                from plutus_cli.plugins import get_plugin_command_handler
+                from harness.cli.plugins import get_plugin_command_handler
                 plugin_handler = get_plugin_command_handler(base_cmd.lstrip("/"))
                 if plugin_handler:
                     user_args = cmd_original[len(base_cmd):].strip()
@@ -6230,7 +6230,7 @@ class HermesCLI:
                 # Prefix matching: if input uniquely identifies one command, execute it.
                 # Matches against both built-in COMMANDS and installed skill commands so
                 # that execution-time resolution agrees with tab-completion.
-                from plutus_cli.commands import COMMANDS
+                from harness.cli.commands import COMMANDS
                 typed_base = cmd_lower.split()[0]
                 all_known = set(COMMANDS) | set(_skill_commands)
                 matches = [c for c in all_known if c.startswith(typed_base)]
@@ -6387,7 +6387,7 @@ class HermesCLI:
                 ChatConsole().print(f"[{_accent_hex()}]{'─' * 40}[/]")
                 if response:
                     try:
-                        from plutus_cli.skin_engine import get_active_skin
+                        from harness.cli.skin_engine import get_active_skin
                         _skin = get_active_skin()
                         label = _skin.get_branding("response_label", "◆ plutus-agent")
                         _resp_color = _skin.get_color("response_border", "#CD7F32")
@@ -6516,7 +6516,7 @@ class HermesCLI:
 
                 if response:
                     try:
-                        from plutus_cli.skin_engine import get_active_skin
+                        from harness.cli.skin_engine import get_active_skin
                         _skin = get_active_skin()
                         _resp_color = _skin.get_color("response_border", "#4F6D4A")
                     except Exception:
@@ -6605,7 +6605,7 @@ class HermesCLI:
 
             # Clear any existing browser sessions so the next tool call uses the new backend
             try:
-                from tools.browser_tool import cleanup_all_browsers
+                from harness.tools.browser_tool import cleanup_all_browsers
                 cleanup_all_browsers()
             except Exception:
                 pass
@@ -6705,7 +6705,7 @@ class HermesCLI:
             if current:
                 os.environ.pop("BROWSER_CDP_URL", None)
                 try:
-                    from tools.browser_tool import cleanup_all_browsers
+                    from harness.tools.browser_tool import cleanup_all_browsers
                     cleanup_all_browsers()
                 except Exception:
                     pass
@@ -6746,7 +6746,7 @@ class HermesCLI:
                     print("   Status: ⚠ not reachable (Chrome may not be running)")
             else:
                 try:
-                    from tools.browser_tool import _get_cloud_provider
+                    from harness.tools.browser_tool import _get_cloud_provider
                     provider = _get_cloud_provider()
                 except Exception:
                     provider = None
@@ -6772,7 +6772,7 @@ class HermesCLI:
     def _handle_skin_command(self, cmd: str):
         """Handle /skin [name] — show or change the display skin."""
         try:
-            from plutus_cli.skin_engine import list_skins, set_active_skin, get_active_skin_name
+            from harness.cli.skin_engine import list_skins, set_active_skin, get_active_skin_name
         except ImportError:
             print("Skin engine not available.")
             return
@@ -6829,7 +6829,7 @@ class HermesCLI:
         # prompt_toolkit's renderer.  self.console.print() with Rich markup
         # writes directly to stdout which patch_stdout's StdoutProxy mangles
         # into garbled sequences like '?[33mTool progress: NEW?[0m' (#2262).
-        from plutus_cli.colors import Colors as _Colors
+        from harness.cli.colors import Colors as _Colors
         labels = {
             "off": f"{_Colors.DIM}Tool progress: OFF{_Colors.RESET} — silent mode, just the final response.",
             "new": f"{_Colors.YELLOW}Tool progress: NEW{_Colors.RESET} — show each new tool (skip repeats).",
@@ -6841,7 +6841,7 @@ class HermesCLI:
     def _toggle_yolo(self):
         """Toggle YOLO mode — skip all dangerous command approval prompts."""
         import os
-        from plutus_cli.colors import Colors as _Colors
+        from harness.cli.colors import Colors as _Colors
 
         current = bool(os.environ.get("HERMES_YOLO_MODE"))
         if current:
@@ -6926,7 +6926,7 @@ class HermesCLI:
 
         # Determine the branding for the current model
         try:
-            from plutus_cli.models import _is_anthropic_fast_model
+            from harness.cli.models import _is_anthropic_fast_model
             agent = getattr(self, "agent", None)
             model = getattr(agent, "model", None) or getattr(self, "model", None)
             feature_name = "Anthropic Fast Mode" if _is_anthropic_fast_model(model) else "Priority Processing"
@@ -6997,8 +6997,8 @@ class HermesCLI:
 
         original_count = len(self.conversation_history)
         try:
-            from agent.model_metadata import estimate_messages_tokens_rough
-            from agent.manual_compression_feedback import summarize_manual_compression
+            from harness.agent.model_metadata import estimate_messages_tokens_rough
+            from harness.agent.manual_compression_feedback import summarize_manual_compression
             original_history = list(self.conversation_history)
             approx_tokens = estimate_messages_tokens_rough(original_history)
             if focus_topic:
@@ -7044,7 +7044,7 @@ class HermesCLI:
 
     def _handle_debug_command(self):
         """Handle /debug — upload debug report + logs and print paste URLs."""
-        from plutus_cli.debug import run_debug_share
+        from harness.cli.debug import run_debug_share
         from types import SimpleNamespace
 
         args = SimpleNamespace(lines=200, expire=7, local=False)
@@ -7066,7 +7066,7 @@ class HermesCLI:
         # ── Rate limits (shown first when available) ────────────────
         rl_state = agent.get_rate_limit_state()
         if rl_state and rl_state.has_data:
-            from agent.rate_limit_tracker import format_rate_limit_display
+            from harness.agent.rate_limit_tracker import format_rate_limit_display
             print()
             print(format_rate_limit_display(rl_state))
             print()
@@ -7180,8 +7180,8 @@ class HermesCLI:
                 i += 1
 
         try:
-            from plutus_state import SessionDB
-            from agent.insights import InsightsEngine
+            from harness.state import SessionDB
+            from harness.agent.insights import InsightsEngine
 
             db = SessionDB()
             engine = InsightsEngine(db)
@@ -7208,7 +7208,7 @@ class HermesCLI:
             return
         self._last_config_check = now
 
-        from plutus_cli.config import get_config_path as _get_config_path
+        from harness.cli.config import get_config_path as _get_config_path
         cfg_path = _get_config_path()
         if not cfg_path.exists():
             return
@@ -7254,7 +7254,7 @@ class HermesCLI:
         sees the updated tools on the next turn.
         """
         try:
-            from tools.mcp_tool import shutdown_mcp_servers, discover_mcp_tools, _servers, _lock
+            from harness.tools.mcp_tool import shutdown_mcp_servers, discover_mcp_tools, _servers, _lock
 
             # Capture old server names
             with _lock:
@@ -7348,7 +7348,7 @@ class HermesCLI:
             self._stream_box_opened = False
         self._close_reasoning_box()
 
-        from agent.display import get_tool_emoji
+        from harness.agent.display import get_tool_emoji
         emoji = get_tool_emoji(tool_name, default="⚡")
         _cprint(f"  ┊ {emoji} preparing {tool_name}…")
 
@@ -7388,7 +7388,7 @@ class HermesCLI:
                     return
                 self._last_scrollback_tool = function_name
                 try:
-                    from agent.display import get_cute_tool_message
+                    from harness.agent.display import get_cute_tool_message
                     line = get_cute_tool_message(function_name, stored_args, duration)
                     if is_error:
                         line = f"{line} [error]"
@@ -7400,10 +7400,10 @@ class HermesCLI:
         if event_type != "tool.started":
             return
         if function_name and not function_name.startswith("_"):
-            from agent.display import get_tool_emoji
+            from harness.agent.display import get_tool_emoji
             emoji = get_tool_emoji(function_name)
             label = preview or function_name
-            from agent.display import get_tool_preview_max_len
+            from harness.agent.display import get_tool_preview_max_len
             _pl = get_tool_preview_max_len()
             if _pl > 0 and len(label) > _pl:
                 label = label[:_pl - 3] + "..."
@@ -7420,7 +7420,7 @@ class HermesCLI:
         if not function_name or function_name.startswith("_"):
             return
         try:
-            from tools.voice_mode import play_beep
+            from harness.tools.voice_mode import play_beep
             threading.Thread(
                 target=play_beep,
                 kwargs={"frequency": 1200, "duration": 0.06, "count": 1},
@@ -7432,7 +7432,7 @@ class HermesCLI:
     def _on_tool_start(self, tool_call_id: str, function_name: str, function_args: dict):
         """Capture local before-state for write-capable tools."""
         try:
-            from agent.display import capture_local_edit_snapshot
+            from harness.agent.display import capture_local_edit_snapshot
 
             snapshot = capture_local_edit_snapshot(function_name, function_args)
             if snapshot is not None:
@@ -7444,7 +7444,7 @@ class HermesCLI:
         """Render file edits with inline diff after write-capable tools complete."""
         snapshot = self._pending_edit_snapshots.pop(tool_call_id, None)
         try:
-            from agent.display import render_edit_diff_with_delta
+            from harness.agent.display import render_edit_diff_with_delta
 
             render_edit_diff_with_delta(
                 function_name,
@@ -7464,7 +7464,7 @@ class HermesCLI:
         """Start capturing audio from the microphone."""
         if getattr(self, '_should_exit', False):
             return
-        from tools.voice_mode import create_audio_recorder, check_voice_requirements
+        from harness.tools.voice_mode import create_audio_recorder, check_voice_requirements
 
         reqs = check_voice_requirements()
         if not reqs["audio_available"]:
@@ -7502,7 +7502,7 @@ class HermesCLI:
         # Load silence detection params from config
         voice_cfg = {}
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             voice_cfg = load_config().get("voice", {})
         except Exception:
             pass
@@ -7527,7 +7527,7 @@ class HermesCLI:
         # Audio cue: single beep BEFORE starting stream (avoid CoreAudio conflict)
         if self._voice_beeps_enabled():
             try:
-                from tools.voice_mode import play_beep
+                from harness.tools.voice_mode import play_beep
                 play_beep(frequency=880, count=1)
             except Exception:
                 pass
@@ -7580,7 +7580,7 @@ class HermesCLI:
             # Audio cue: double beep after stream stopped (no CoreAudio conflict)
             if self._voice_beeps_enabled():
                 try:
-                    from tools.voice_mode import play_beep
+                    from harness.tools.voice_mode import play_beep
                     play_beep(frequency=660, count=2)
                 except Exception:
                     pass
@@ -7597,13 +7597,13 @@ class HermesCLI:
             # Get STT model from config
             stt_model = None
             try:
-                from plutus_cli.config import load_config
+                from harness.cli.config import load_config
                 stt_config = load_config().get("stt", {})
                 stt_model = stt_config.get("model")
             except Exception:
                 pass
 
-            from tools.voice_mode import transcribe_recording
+            from harness.tools.voice_mode import transcribe_recording
             result = transcribe_recording(wav_path, model=stt_model)
 
             if result.get("success") and result.get("transcript", "").strip():
@@ -7664,8 +7664,8 @@ class HermesCLI:
             return
         self._voice_tts_done.clear()
         try:
-            from tools.tts_tool import text_to_speech_tool
-            from tools.voice_mode import play_audio_file
+            from harness.tools.tts_tool import text_to_speech_tool
+            from harness.tools.voice_mode import play_audio_file
 
             # Strip markdown and non-speech content for cleaner TTS
             tts_text = text[:4000] if len(text) > 4000 else text
@@ -7736,7 +7736,7 @@ class HermesCLI:
     def _voice_beeps_enabled(self) -> bool:
         """Return whether CLI voice mode should play record start/stop beeps."""
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             voice_cfg = load_config().get("voice", {})
             if isinstance(voice_cfg, dict):
                 return bool(voice_cfg.get("beep_enabled", True))
@@ -7750,7 +7750,7 @@ class HermesCLI:
             _cprint(f"{_DIM}Voice mode is already enabled.{_RST}")
             return
 
-        from tools.voice_mode import check_voice_requirements, detect_audio_environment
+        from harness.tools.voice_mode import check_voice_requirements, detect_audio_environment
 
         # Environment detection -- warn and block in incompatible environments
         env_check = detect_audio_environment()
@@ -7779,7 +7779,7 @@ class HermesCLI:
 
         # Check config for auto_tts
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             voice_config = load_config().get("voice", {})
             if voice_config.get("auto_tts", False):
                 with self._voice_lock:
@@ -7793,7 +7793,7 @@ class HermesCLI:
 
         tts_status = " (TTS enabled)" if self._voice_tts else ""
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             _raw_ptt = load_config().get("voice", {}).get("record_key", "ctrl+b")
             _ptt_key = _raw_ptt.lower().replace("ctrl+", "c-").replace("alt+", "a-")
         except Exception:
@@ -7828,7 +7828,7 @@ class HermesCLI:
 
         # Stop any active TTS playback
         try:
-            from tools.voice_mode import stop_playback
+            from harness.tools.voice_mode import stop_playback
             stop_playback()
         except Exception:
             pass
@@ -7847,7 +7847,7 @@ class HermesCLI:
         status = "enabled" if self._voice_tts else "disabled"
 
         if self._voice_tts:
-            from tools.tts_tool import check_tts_requirements
+            from harness.tools.tts_tool import check_tts_requirements
             if not check_tts_requirements():
                 _cprint(f"{_DIM}Warning: No TTS provider available. Install edge-tts or set API keys.{_RST}")
 
@@ -7855,8 +7855,8 @@ class HermesCLI:
 
     def _show_voice_status(self):
         """Show current voice mode status."""
-        from plutus_cli.config import load_config
-        from tools.voice_mode import check_voice_requirements
+        from harness.cli.config import load_config
+        from harness.tools.voice_mode import check_voice_requirements
 
         reqs = check_voice_requirements()
 
@@ -8336,8 +8336,8 @@ class HermesCLI:
         # Expand @ context references (e.g. @file:main.py, @diff, @folder:src/)
         if isinstance(message, str) and "@" in message:
             try:
-                from agent.context_references import preprocess_context_references
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.context_references import preprocess_context_references
+                from harness.agent.model_metadata import get_model_context_length
                 _ctx_len = get_model_context_length(
                     self.model, base_url=self.base_url or "", api_key=self.api_key or "")
                 _ctx_result = preprocess_context_references(
@@ -8359,7 +8359,7 @@ class HermesCLI:
         # rich-text editors (Google Docs, Word, etc.).  Lone surrogates are invalid
         # UTF-8 and crash JSON serialization in the OpenAI SDK.
         if isinstance(message, str):
-            from run_agent import _sanitize_surrogates
+            from harness.run_agent import _sanitize_surrogates
             message = _sanitize_surrogates(message)
 
         # Add user message to history
@@ -8392,7 +8392,7 @@ class HermesCLI:
 
             if self._voice_tts:
                 try:
-                    from tools.tts_tool import (
+                    from harness.tools.tts_tool import (
                         _load_tts_config as _load_tts_cfg,
                         _get_provider as _get_prov,
                         _import_elevenlabs,
@@ -8588,7 +8588,7 @@ class HermesCLI:
             # to a per-thread event loop; if that loop is now closed, those
             # clients' __del__ would crash prompt_toolkit's loop on GC.
             try:
-                from agent.auxiliary_client import cleanup_stale_async_clients
+                from harness.agent.auxiliary_client import cleanup_stale_async_clients
                 cleanup_stale_async_clients()
             except Exception:
                 pass
@@ -8632,7 +8632,7 @@ class HermesCLI:
             # Auto-generate session title after first exchange (non-blocking)
             if response and result and not result.get("failed") and not result.get("partial"):
                 try:
-                    from agent.title_generator import maybe_auto_title
+                    from harness.agent.title_generator import maybe_auto_title
                     maybe_auto_title(
                         self._session_db,
                         self.session_id,
@@ -8692,7 +8692,7 @@ class HermesCLI:
             if response and not response_previewed:
                 # Use skin engine for label/color with fallback
                 try:
-                    from plutus_cli.skin_engine import get_active_skin
+                    from harness.cli.skin_engine import get_active_skin
                     _skin = get_active_skin()
                     label = _skin.get_branding("response_label", "◆ plutus-agent")
                     _resp_color = _skin.get_color("response_border", "#CD7F32")
@@ -8840,7 +8840,7 @@ class HermesCLI:
             print(f"Messages:       {msg_count} ({user_msgs} user, {tool_calls} tool calls)")
         else:
             try:
-                from plutus_cli.skin_engine import get_active_goodbye
+                from harness.cli.skin_engine import get_active_goodbye
                 goodbye = get_active_goodbye("Goodbye! ◆")
             except Exception:
                 goodbye = "Goodbye! ◆"
@@ -8857,7 +8857,7 @@ class HermesCLI:
         prepended to the prompt symbol: ``coder ❯`` instead of ``❯``.
         """
         try:
-            from plutus_cli.skin_engine import get_active_prompt_symbol
+            from harness.cli.skin_engine import get_active_prompt_symbol
             symbol = get_active_prompt_symbol("❯ ")
         except Exception:
             symbol = "❯ "
@@ -8866,7 +8866,7 @@ class HermesCLI:
 
         # Prepend profile name when not default
         try:
-            from plutus_cli.profiles import get_active_profile_name
+            from harness.cli.profiles import get_active_profile_name
             profile = get_active_profile_name()
             if profile not in ("default", "custom"):
                 symbol = f"{profile} {symbol}"
@@ -8943,7 +8943,7 @@ class HermesCLI:
         """Layer the active skin's prompt_toolkit colors over the base TUI style."""
         style_dict = dict(getattr(self, "_tui_style_base", {}) or {})
         try:
-            from plutus_cli.skin_engine import get_prompt_toolkit_style_overrides
+            from harness.cli.skin_engine import get_prompt_toolkit_style_overrides
             style_dict.update(get_prompt_toolkit_style_overrides())
         except Exception:
             pass
@@ -9053,7 +9053,7 @@ class HermesCLI:
                 self._display_resumed_history()
 
         try:
-            from plutus_cli.skin_engine import get_active_skin
+            from harness.cli.skin_engine import get_active_skin
             _welcome_skin = get_active_skin()
             _welcome_text = _welcome_skin.get_branding("welcome", "Welcome to Hermes Agent! Type your message or /help for commands.")
             _welcome_color = _welcome_skin.get_color("banner_text", "#FFF8DC")
@@ -9063,7 +9063,7 @@ class HermesCLI:
         self._console_print(f"[{_welcome_color}]{_welcome_text}[/]")
         # Show a random tip to help users discover features
         try:
-            from plutus_cli.tips import get_random_tip
+            from harness.cli.tips import get_random_tip
             _tip = get_random_tip()
             try:
                 _tip_color = _welcome_skin.get_color("banner_dim", "#B8860B")
@@ -9088,11 +9088,11 @@ class HermesCLI:
         self._last_ctrl_c_time = 0  # Track double Ctrl+C for force exit
 
         # Give plugin manager a CLI reference so plugins can inject messages
-        from plutus_cli.plugins import get_plugin_manager
+        from harness.cli.plugins import get_plugin_manager
         get_plugin_manager()._cli_ref = self
 
         # Config file watcher — detect mcp_servers changes and auto-reload
-        from plutus_cli.config import get_config_path as _get_config_path
+        from harness.cli.config import get_config_path as _get_config_path
         _cfg_path = _get_config_path()
         self._config_mtime: float = _cfg_path.stat().st_mtime if _cfg_path.exists() else 0.0
         self._config_mcp_servers: dict = self.config.get("mcp_servers") or {}
@@ -9147,7 +9147,7 @@ class HermesCLI:
         # Warn the user if tirith is enabled in config but not available,
         # so they know command security scanning is degraded.
         try:
-            from tools.tirith_security import ensure_installed
+            from harness.tools.tirith_security import ensure_installed
             tirith_path = ensure_installed(log_failures=False)
             if tirith_path is None:
                 security_cfg = self.config.get("security", {}) or {}
@@ -9572,7 +9572,7 @@ class HermesCLI:
                 return
             import signal as _sig
             from prompt_toolkit.application import run_in_terminal
-            from plutus_cli.skin_engine import get_active_skin
+            from harness.cli.skin_engine import get_active_skin
             agent_name = get_active_skin().get_branding("agent_name", "plutus-agent")
             msg = f"\n{agent_name} has been suspended. Run `fg` to bring {agent_name} back."
             def _suspend():
@@ -9584,7 +9584,7 @@ class HermesCLI:
         # Default: Ctrl+B (avoids conflict with Ctrl+R readline reverse-search)
         # Config uses "ctrl+b" format; prompt_toolkit expects "c-b" format.
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             _raw_key = load_config().get("voice", {}).get("record_key", "ctrl+b")
             _voice_key = _raw_key.lower().replace("ctrl+", "c-").replace("alt+", "a-")
         except Exception:
@@ -9627,7 +9627,7 @@ class HermesCLI:
                 # stop_playback() is fast (just terminates a subprocess).
                 if not cli_ref._voice_tts_done.is_set():
                     try:
-                        from tools.voice_mode import stop_playback
+                        from harness.tools.voice_mode import stop_playback
                         stop_playback()
                         cli_ref._voice_tts_done.set()
                     except Exception:
@@ -9672,7 +9672,7 @@ class HermesCLI:
                 event.app.invalidate()
             if pasted_text:
                 # Sanitize surrogate characters (e.g. from Word/Google Docs paste) before writing
-                from run_agent import _sanitize_surrogates
+                from harness.run_agent import _sanitize_surrogates
                 pasted_text = _sanitize_surrogates(pasted_text)
                 line_count = pasted_text.count('\n')
                 buf = event.current_buffer
@@ -10530,7 +10530,7 @@ class HermesCLI:
                             # Check for background process notifications (completions
                             # and watch pattern matches) while agent is idle.
                             try:
-                                from tools.process_registry import process_registry
+                                from harness.tools.process_registry import process_registry
                                 if not process_registry.completion_queue.empty():
                                     evt = process_registry.completion_queue.get_nowait()
                                     # Skip if the agent already consumed this via wait/poll/log
@@ -10626,7 +10626,7 @@ class HermesCLI:
                         # Drain process notifications (completions + watch matches)
                         # that arrived while the agent was running.
                         try:
-                            from tools.process_registry import process_registry
+                            from harness.tools.process_registry import process_registry
                             while not process_registry.completion_queue.empty():
                                 evt = process_registry.completion_queue.get_nowait()
                                 # Skip if the agent already consumed this via wait/poll/log
@@ -10771,7 +10771,7 @@ class HermesCLI:
                 self._voice_recorder = None
             # Clean up old temp voice recordings
             try:
-                from tools.voice_mode import cleanup_temp_recordings
+                from harness.tools.voice_mode import cleanup_temp_recordings
                 cleanup_temp_recordings()
             except Exception:
                 pass
@@ -10791,7 +10791,7 @@ class HermesCLI:
             # the exit occurred, meaning run_conversation's hook didn't fire.
             if self.agent and getattr(self, '_agent_running', False):
                 try:
-                    from plutus_cli.plugins import invoke_hook as _invoke_hook
+                    from harness.cli.plugins import invoke_hook as _invoke_hook
                     _invoke_hook(
                         "on_session_end",
                         session_id=self.agent.session_id,
@@ -10877,7 +10877,7 @@ def main(
     # Handle gateway mode (messaging + cron)
     if gateway:
         import asyncio
-        from gateway.run import start_gateway
+        from harness.gateway.run import start_gateway
         print("Starting Plutus Gateway (messaging platforms)...")
         asyncio.run(start_gateway())
         return
@@ -10925,7 +10925,7 @@ def main(
                     toolsets_list.append(str(t))
     else:
         # Use the shared resolver so MCP servers are included at runtime
-        from plutus_cli.tools_config import _get_platform_tools
+        from harness.cli.tools_config import _get_platform_tools
         toolsets_list = sorted(_get_platform_tools(CLI_CONFIG, "cli"))
     
     parsed_skills = _parse_skills_argument(skills)

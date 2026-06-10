@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-from cron.jobs import (
+from harness.cron.jobs import (
     parse_duration,
     parse_schedule,
     compute_next_run,
@@ -126,7 +126,7 @@ class TestComputeNextRun:
     def test_once_recent_past_within_grace_returns_time(self, monkeypatch):
         now = datetime(2026, 3, 18, 4, 22, 3, tzinfo=timezone.utc)
         run_at = "2026-03-18T04:22:00+00:00"
-        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+        monkeypatch.setattr("harness.cron.jobs._hermes_now", lambda: now)
 
         schedule = {"kind": "once", "run_at": run_at}
 
@@ -140,7 +140,7 @@ class TestComputeNextRun:
     def test_once_with_last_run_returns_none_even_within_grace(self, monkeypatch):
         now = datetime(2026, 3, 18, 4, 22, 3, tzinfo=timezone.utc)
         run_at = "2026-03-18T04:22:00+00:00"
-        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+        monkeypatch.setattr("harness.cron.jobs._hermes_now", lambda: now)
 
         schedule = {"kind": "once", "run_at": run_at}
 
@@ -182,9 +182,9 @@ class TestComputeNextRun:
 @pytest.fixture()
 def tmp_cron_dir(tmp_path, monkeypatch):
     """Redirect cron storage to a temp directory."""
-    monkeypatch.setattr("cron.jobs.CRON_DIR", tmp_path / "cron")
-    monkeypatch.setattr("cron.jobs.JOBS_FILE", tmp_path / "cron" / "jobs.json")
-    monkeypatch.setattr("cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
+    monkeypatch.setattr("harness.cron.jobs.CRON_DIR", tmp_path / "cron")
+    monkeypatch.setattr("harness.cron.jobs.JOBS_FILE", tmp_path / "cron" / "jobs.json")
+    monkeypatch.setattr("harness.cron.jobs.OUTPUT_DIR", tmp_path / "cron" / "output")
     return tmp_path
 
 
@@ -386,7 +386,7 @@ class TestAdvanceNextRun:
         assert result is True
 
         updated = get_job(job["id"])
-        from cron.jobs import _ensure_aware, _hermes_now
+        from harness.cron.jobs import _ensure_aware, _hermes_now
         new_next_dt = _ensure_aware(datetime.fromisoformat(updated["next_run_at"]))
         assert new_next_dt > _hermes_now(), "next_run_at should be in the future after advance"
 
@@ -404,7 +404,7 @@ class TestAdvanceNextRun:
         assert result is True
 
         updated = get_job(job["id"])
-        from cron.jobs import _ensure_aware, _hermes_now
+        from harness.cron.jobs import _ensure_aware, _hermes_now
         new_next_dt = _ensure_aware(datetime.fromisoformat(updated["next_run_at"]))
         assert new_next_dt > _hermes_now(), "next_run_at should be in the future after advance"
 
@@ -430,7 +430,7 @@ class TestAdvanceNextRun:
         advance_next_run(job["id"])
         # Regardless of return value, the job should still be in the future
         updated = get_job(job["id"])
-        from cron.jobs import _ensure_aware, _hermes_now
+        from harness.cron.jobs import _ensure_aware, _hermes_now
         new_next_dt = _ensure_aware(datetime.fromisoformat(updated["next_run_at"]))
         assert new_next_dt > _hermes_now(), "next_run_at should remain in the future"
 
@@ -485,7 +485,7 @@ class TestGetDueJobs:
         assert len(due) == 0
         # next_run_at should be fast-forwarded to the future
         updated = get_job(job["id"])
-        from cron.jobs import _ensure_aware, _hermes_now
+        from harness.cron.jobs import _ensure_aware, _hermes_now
         next_dt = _ensure_aware(datetime.fromisoformat(updated["next_run_at"]))
         assert next_dt > _hermes_now()
 
@@ -506,7 +506,7 @@ class TestGetDueJobs:
 
     def test_broken_recent_one_shot_without_next_run_is_recovered(self, tmp_cron_dir, monkeypatch):
         now = datetime(2026, 3, 18, 4, 22, 30, tzinfo=timezone.utc)
-        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+        monkeypatch.setattr("harness.cron.jobs._hermes_now", lambda: now)
 
         run_at = "2026-03-18T04:22:00+00:00"
         save_jobs(
@@ -538,7 +538,7 @@ class TestGetDueJobs:
 
     def test_broken_stale_one_shot_without_next_run_is_not_recovered(self, tmp_cron_dir, monkeypatch):
         now = datetime(2026, 3, 18, 4, 30, 0, tzinfo=timezone.utc)
-        monkeypatch.setattr("cron.jobs._hermes_now", lambda: now)
+        monkeypatch.setattr("harness.cron.jobs._hermes_now", lambda: now)
 
         save_jobs(
             [{

@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 from enum import Enum
 
-from plutus_cli.config import get_hermes_home
-from utils import is_truthy_value
+from harness.cli.config import get_hermes_home
+from harness.utils import is_truthy_value
 
 logger = logging.getLogger(__name__)
 
@@ -710,7 +710,7 @@ def _validate_gateway_config(config: "GatewayConfig") -> None:
     # without changing placeholder values get a clear startup error instead
     # of a confusing "auth failed" from the platform API.
     try:
-        from plutus_cli.auth import has_usable_secret
+        from harness.cli.auth import has_usable_secret
     except ImportError:
         has_usable_secret = None  # type: ignore[assignment]
 

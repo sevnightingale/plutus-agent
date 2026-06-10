@@ -45,7 +45,7 @@ _SEED_FALLBACK_IPS: list[str] = ["149.154.167.220"]
 
 def _resolve_proxy_url() -> str | None:
     # Delegate to shared implementation (env vars + macOS system proxy detection)
-    from gateway.platforms.base import resolve_proxy_url
+    from harness.gateway.platforms.base import resolve_proxy_url
     return resolve_proxy_url("TELEGRAM_PROXY")
 
 

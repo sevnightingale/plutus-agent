@@ -44,7 +44,7 @@ def _make_mock_agent(**overrides):
 
 def _make_runner(session_key, agent=None, cached_agent=None):
     """Build a bare GatewayRunner with just the fields _handle_usage_command needs."""
-    from gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
+    from harness.gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
 
     runner = object.__new__(GatewayRunner)
     runner._running_agents = {}
@@ -77,8 +77,8 @@ class TestUsageCachedAgent:
         runner = _make_runner(SK, cached_agent=agent)
         event = MagicMock()
 
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=0.1234, status="estimated")
             result = await runner._handle_usage_command(event)
 
@@ -100,8 +100,8 @@ class TestUsageCachedAgent:
         runner = _make_runner(SK, agent=running, cached_agent=cached)
         event = MagicMock()
 
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=None, status="unknown")
             result = await runner._handle_usage_command(event)
 
@@ -111,15 +111,15 @@ class TestUsageCachedAgent:
     @pytest.mark.asyncio
     async def test_sentinel_skipped_uses_cache(self):
         """PENDING sentinel in _running_agents should fall through to cache."""
-        from gateway.run import _AGENT_PENDING_SENTINEL
+        from harness.gateway.run import _AGENT_PENDING_SENTINEL
 
         cached = _make_mock_agent()
         runner = _make_runner(SK, cached_agent=cached)
         runner._running_agents[SK] = _AGENT_PENDING_SENTINEL
         event = MagicMock()
 
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=None, status="unknown")
             result = await runner._handle_usage_command(event)
 
@@ -140,7 +140,7 @@ class TestUsageCachedAgent:
             {"role": "assistant", "content": "hi there"},
         ]
 
-        with patch("agent.model_metadata.estimate_messages_tokens_rough", return_value=500):
+        with patch("harness.agent.model_metadata.estimate_messages_tokens_rough", return_value=500):
             result = await runner._handle_usage_command(event)
 
         assert "Session Info" in result
@@ -154,8 +154,8 @@ class TestUsageCachedAgent:
         runner = _make_runner(SK, cached_agent=agent)
         event = MagicMock()
 
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=None, status="unknown")
             result = await runner._handle_usage_command(event)
 
@@ -169,8 +169,8 @@ class TestUsageCachedAgent:
         runner = _make_runner(SK, cached_agent=agent)
         event = MagicMock()
 
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=None, status="included")
             result = await runner._handle_usage_command(event)
 
@@ -189,19 +189,19 @@ class TestUsageAccountSection:
         event = MagicMock()
 
         monkeypatch.setattr(
-            "gateway.run.fetch_account_usage",
+            "harness.gateway.run.fetch_account_usage",
             lambda provider, base_url=None, api_key=None: object(),
         )
         monkeypatch.setattr(
-            "gateway.run.render_account_usage_lines",
+            "harness.gateway.run.render_account_usage_lines",
             lambda snapshot, markdown=False: [
                 "📈 **Account limits**",
                 "Provider: openai-codex (Pro)",
                 "Session: 85% remaining (15% used)",
             ],
         )
-        with patch("agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
-             patch("agent.usage_pricing.estimate_usage_cost") as mock_cost:
+        with patch("harness.agent.rate_limit_tracker.format_rate_limit_compact", return_value="RPM: 50/60"), \
+             patch("harness.agent.usage_pricing.estimate_usage_cost") as mock_cost:
             mock_cost.return_value = MagicMock(amount_usd=None, status="included")
             result = await runner._handle_usage_command(event)
 
@@ -231,13 +231,13 @@ class TestUsageAccountSection:
             calls["kwargs"] = kwargs
             return fn(*args, **kwargs)
 
-        monkeypatch.setattr("gateway.run.asyncio.to_thread", _fake_to_thread)
+        monkeypatch.setattr("harness.gateway.run.asyncio.to_thread", _fake_to_thread)
         monkeypatch.setattr(
-            "gateway.run.fetch_account_usage",
+            "harness.gateway.run.fetch_account_usage",
             lambda provider, base_url=None, api_key=None: object(),
         )
         monkeypatch.setattr(
-            "gateway.run.render_account_usage_lines",
+            "harness.gateway.run.render_account_usage_lines",
             lambda snapshot, markdown=False: [
                 "📈 **Account limits**",
                 "Provider: openai-codex (Pro)",

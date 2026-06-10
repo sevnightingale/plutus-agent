@@ -17,14 +17,14 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from gateway.config import (
+from harness.gateway.config import (
     GatewayConfig,
     HomeChannel,
     Platform,
     PlatformConfig,
 )
-from gateway.platforms.base import MessageEvent, MessageType, SendResult
-from gateway.platforms.webhook import WebhookAdapter, _INSECURE_NO_AUTH
+from harness.gateway.platforms.base import MessageEvent, MessageType, SendResult
+from harness.gateway.platforms.webhook import WebhookAdapter, _INSECURE_NO_AUTH
 
 
 # ---------------------------------------------------------------------------
@@ -179,10 +179,10 @@ class TestSkillsInjection:
 
         # The imports are lazy (inside the handler), so patch the source module
         with patch(
-            "agent.skill_commands.build_skill_invocation_message",
+            "harness.agent.skill_commands.build_skill_invocation_message",
             return_value=skill_content,
         ) as mock_build, patch(
-            "agent.skill_commands.get_skill_commands",
+            "harness.agent.skill_commands.get_skill_commands",
             return_value={"/code-review": {"name": "code-review"}},
         ):
             app = _create_app(adapter)
@@ -316,7 +316,7 @@ class TestGitHubCommentDelivery:
         mock_result.stderr = ""
 
         with patch(
-            "gateway.platforms.webhook.subprocess.run",
+            "harness.gateway.platforms.webhook.subprocess.run",
             return_value=mock_result,
         ) as mock_run:
             result = await adapter.send(

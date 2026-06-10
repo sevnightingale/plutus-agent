@@ -8,10 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
-import plutus_cli.doctor as doctor
-import plutus_cli.gateway as gateway_cli
-from plutus_cli import doctor as doctor_mod
-from plutus_cli.doctor import _has_provider_env_config
+import harness.cli.doctor as doctor
+import harness.cli.gateway as gateway_cli
+from harness.cli import doctor as doctor_mod
+from harness.cli.doctor import _has_provider_env_config
 
 
 class TestDoctorPlatformHints:
@@ -70,7 +70,7 @@ def test_run_doctor_sets_interactive_env_for_tool_checks(monkeypatch, tmp_path):
         check_tool_availability=fake_check_tool_availability,
         TOOLSET_REQUIREMENTS={},
     )
-    monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
+    monkeypatch.setitem(sys.modules, "harness.model_tools", fake_model_tools)
 
     with pytest.raises(SystemExit):
         doctor_mod.run_doctor(Namespace(fix=False))
@@ -140,11 +140,11 @@ class TestDoctorMemoryProviderSection:
             check_tool_availability=lambda *a, **kw: ([], []),
             TOOLSET_REQUIREMENTS={},
         )
-        monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
+        monkeypatch.setitem(sys.modules, "harness.model_tools", fake_model_tools)
 
         # Stub auth checks to avoid real API calls
         try:
-            from plutus_cli import auth as _auth_mod
+            from harness.cli import auth as _auth_mod
             monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
             monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
         except Exception:
@@ -219,10 +219,10 @@ def test_run_doctor_termux_does_not_mark_browser_available_without_agent_browser
             "browser": {"name": "browser"},
         },
     )
-    monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
+    monkeypatch.setitem(sys.modules, "harness.model_tools", fake_model_tools)
 
     try:
-        from plutus_cli import auth as _auth_mod
+        from harness.cli import auth as _auth_mod
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
         monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
     except Exception:
@@ -258,10 +258,10 @@ def test_run_doctor_kimi_cn_env_is_detected_and_probe_is_null_safe(monkeypatch, 
         check_tool_availability=lambda *a, **kw: ([], []),
         TOOLSET_REQUIREMENTS={},
     )
-    monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
+    monkeypatch.setitem(sys.modules, "harness.model_tools", fake_model_tools)
 
     try:
-        from plutus_cli import auth as _auth_mod
+        from harness.cli import auth as _auth_mod
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
         monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
     except Exception:
@@ -310,10 +310,10 @@ def test_run_doctor_opencode_go_skips_invalid_models_probe(monkeypatch, tmp_path
         check_tool_availability=lambda *a, **kw: ([], []),
         TOOLSET_REQUIREMENTS={},
     )
-    monkeypatch.setitem(sys.modules, "model_tools", fake_model_tools)
+    monkeypatch.setitem(sys.modules, "harness.model_tools", fake_model_tools)
 
     try:
-        from plutus_cli import auth as _auth_mod
+        from harness.cli import auth as _auth_mod
         monkeypatch.setattr(_auth_mod, "get_nous_auth_status", lambda: {})
         monkeypatch.setattr(_auth_mod, "get_codex_auth_status", lambda: {})
     except ImportError:

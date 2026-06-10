@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tools.browser_camofox import (
+from harness.tools.browser_camofox import (
     _drop_session,
     _get_session,
     _managed_persistence_enabled,
@@ -20,7 +20,7 @@ from tools.browser_camofox import (
     check_camofox_available,
     get_vnc_url,
 )
-from tools.browser_camofox_state import get_camofox_identity
+from harness.tools.browser_camofox_state import get_camofox_identity
 
 
 def _mock_response(status=200, json_data=None):
@@ -34,12 +34,12 @@ def _mock_response(status=200, json_data=None):
 def _enable_persistence():
     """Return a patch context that enables managed persistence via config."""
     config = {"browser": {"camofox": {"managed_persistence": True}}}
-    return patch("tools.browser_camofox.load_config", return_value=config)
+    return patch("harness.tools.browser_camofox.load_config", return_value=config)
 
 
 @pytest.fixture(autouse=True)
 def _clear_session_state():
-    import tools.browser_camofox as mod
+    import harness.tools.browser_camofox as mod
     yield
     with mod._sessions_lock:
         mod._sessions.clear()
@@ -50,21 +50,21 @@ def _clear_session_state():
 class TestManagedPersistenceToggle:
     def test_disabled_by_default(self):
         config = {"browser": {"camofox": {"managed_persistence": False}}}
-        with patch("tools.browser_camofox.load_config", return_value=config):
+        with patch("harness.tools.browser_camofox.load_config", return_value=config):
             assert _managed_persistence_enabled() is False
 
     def test_enabled_via_config_yaml(self):
         config = {"browser": {"camofox": {"managed_persistence": True}}}
-        with patch("tools.browser_camofox.load_config", return_value=config):
+        with patch("harness.tools.browser_camofox.load_config", return_value=config):
             assert _managed_persistence_enabled() is True
 
     def test_disabled_when_key_missing(self):
         config = {"browser": {}}
-        with patch("tools.browser_camofox.load_config", return_value=config):
+        with patch("harness.tools.browser_camofox.load_config", return_value=config):
             assert _managed_persistence_enabled() is False
 
     def test_disabled_on_config_load_error(self):
-        with patch("tools.browser_camofox.load_config", side_effect=Exception("fail")):
+        with patch("harness.tools.browser_camofox.load_config", side_effect=Exception("fail")):
             assert _managed_persistence_enabled() is False
 
 
@@ -158,7 +158,7 @@ class TestManagedPersistenceMode:
             )
 
         with _enable_persistence(), \
-             patch("tools.browser_camofox.requests.post", side_effect=_capture_post):
+             patch("harness.tools.browser_camofox.requests.post", side_effect=_capture_post):
             result = json.loads(camofox_navigate("https://example.com", task_id="task-1"))
 
         assert result["success"] is True
@@ -179,8 +179,8 @@ class TestManagedPersistenceMode:
 
         with (
             _enable_persistence(),
-            patch("tools.browser_camofox.requests.post", side_effect=_capture_post),
-            patch("tools.browser_camofox.requests.delete", return_value=_mock_response()),
+            patch("harness.tools.browser_camofox.requests.post", side_effect=_capture_post),
+            patch("harness.tools.browser_camofox.requests.delete", return_value=_mock_response()),
         ):
             first = json.loads(camofox_navigate("https://example.com", task_id="task-1"))
             camofox_close("task-1")
@@ -199,28 +199,28 @@ class TestVncUrlDiscovery:
     def test_vnc_url_from_health_port(self, monkeypatch):
         monkeypatch.setenv("CAMOFOX_URL", "http://myhost:9377")
         health_resp = _mock_response(json_data={"ok": True, "vncPort": 6080})
-        with patch("tools.browser_camofox.requests.get", return_value=health_resp):
+        with patch("harness.tools.browser_camofox.requests.get", return_value=health_resp):
             assert check_camofox_available() is True
         assert get_vnc_url() == "http://myhost:6080"
 
     def test_vnc_url_none_when_headless(self, monkeypatch):
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
         health_resp = _mock_response(json_data={"ok": True})
-        with patch("tools.browser_camofox.requests.get", return_value=health_resp):
+        with patch("harness.tools.browser_camofox.requests.get", return_value=health_resp):
             check_camofox_available()
         assert get_vnc_url() is None
 
     def test_vnc_url_rejects_invalid_port(self, monkeypatch):
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
         health_resp = _mock_response(json_data={"ok": True, "vncPort": "bad"})
-        with patch("tools.browser_camofox.requests.get", return_value=health_resp):
+        with patch("harness.tools.browser_camofox.requests.get", return_value=health_resp):
             check_camofox_available()
         assert get_vnc_url() is None
 
     def test_vnc_url_only_probed_once(self, monkeypatch):
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
         health_resp = _mock_response(json_data={"ok": True, "vncPort": 6080})
-        with patch("tools.browser_camofox.requests.get", return_value=health_resp) as mock_get:
+        with patch("harness.tools.browser_camofox.requests.get", return_value=health_resp) as mock_get:
             check_camofox_available()
             check_camofox_available()
         # Second call still hits /health for availability but doesn't re-parse vncPort
@@ -229,11 +229,11 @@ class TestVncUrlDiscovery:
     def test_navigate_includes_vnc_hint(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("CAMOFOX_URL", "http://localhost:9377")
-        import tools.browser_camofox as mod
+        import harness.tools.browser_camofox as mod
         mod._vnc_url = "http://localhost:6080"
         mod._vnc_url_checked = True
 
-        with patch("tools.browser_camofox.requests.post", return_value=_mock_response(
+        with patch("harness.tools.browser_camofox.requests.post", return_value=_mock_response(
             json_data={"tabId": "t1", "url": "https://example.com"}
         )):
             result = json.loads(camofox_navigate("https://example.com", task_id="vnc-test"))
@@ -255,7 +255,7 @@ class TestCamofoxSoftCleanup:
 
         assert result is True
         # Session should have been dropped from in-memory store
-        import tools.browser_camofox as mod
+        import harness.tools.browser_camofox as mod
         with mod._sessions_lock:
             assert "task-1" not in mod._sessions
 
@@ -265,12 +265,12 @@ class TestCamofoxSoftCleanup:
 
         _get_session("task-1")
         config = {"browser": {"camofox": {"managed_persistence": False}}}
-        with patch("tools.browser_camofox.load_config", return_value=config):
+        with patch("harness.tools.browser_camofox.load_config", return_value=config):
             result = camofox_soft_cleanup("task-1")
 
         assert result is False
         # Session should still be present — not dropped
-        import tools.browser_camofox as mod
+        import harness.tools.browser_camofox as mod
         with mod._sessions_lock:
             assert "task-1" in mod._sessions
 
@@ -281,7 +281,7 @@ class TestCamofoxSoftCleanup:
 
         with (
             _enable_persistence(),
-            patch("tools.browser_camofox.requests.delete") as mock_delete,
+            patch("harness.tools.browser_camofox.requests.delete") as mock_delete,
         ):
             _get_session("task-1")
             camofox_soft_cleanup("task-1")

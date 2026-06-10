@@ -20,13 +20,13 @@ def managed_nous_tools_enabled() -> bool:
     False — never block the agent startup path.
     """
     try:
-        from plutus_cli.auth import get_nous_auth_status
+        from harness.cli.auth import get_nous_auth_status
 
         status = get_nous_auth_status()
         if not status.get("logged_in"):
             return False
 
-        from plutus_cli.models import check_nous_free_tier
+        from harness.cli.models import check_nous_free_tier
 
         if check_nous_free_tier():
             return False  # free-tier users don't get gateway access
@@ -112,7 +112,7 @@ def prefers_gateway(config_section: str) -> bool:
     Reads ``<section>.use_gateway`` from config.yaml.  Never raises.
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         section = (load_config() or {}).get(config_section)
         if isinstance(section, dict):
             return bool(section.get("use_gateway"))
@@ -134,7 +134,7 @@ def fal_key_is_configured() -> bool:
         # Fall back to the .env file for CLI paths that may run before
         # dotenv is loaded into os.environ.
         try:
-            from plutus_cli.config import get_env_value
+            from harness.cli.config import get_env_value
 
             value = get_env_value("FAL_KEY")
         except Exception:

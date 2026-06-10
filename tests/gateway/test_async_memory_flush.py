@@ -12,8 +12,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-from gateway.config import Platform, GatewayConfig, SessionResetPolicy
-from gateway.session import SessionSource, SessionStore, SessionEntry
+from harness.gateway.config import Platform, GatewayConfig, SessionResetPolicy
+from harness.gateway.session import SessionSource, SessionStore, SessionEntry
 
 
 @pytest.fixture()
@@ -22,7 +22,7 @@ def idle_store(tmp_path):
     config = GatewayConfig(
         default_reset_policy=SessionResetPolicy(mode="idle", idle_minutes=60),
     )
-    with patch("gateway.session.SessionStore._ensure_loaded"):
+    with patch("harness.gateway.session.SessionStore._ensure_loaded"):
         s = SessionStore(sessions_dir=tmp_path, config=config)
     s._db = None
     s._loaded = True
@@ -35,7 +35,7 @@ def no_reset_store(tmp_path):
     config = GatewayConfig(
         default_reset_policy=SessionResetPolicy(mode="none"),
     )
-    with patch("gateway.session.SessionStore._ensure_loaded"):
+    with patch("harness.gateway.session.SessionStore._ensure_loaded"):
         s = SessionStore(sessions_dir=tmp_path, config=config)
     s._db = None
     s._loaded = True
@@ -96,7 +96,7 @@ class TestIsSessionExpired:
         config = GatewayConfig(
             default_reset_policy=SessionResetPolicy(mode="daily", at_hour=4),
         )
-        with patch("gateway.session.SessionStore._ensure_loaded"):
+        with patch("harness.gateway.session.SessionStore._ensure_loaded"):
             store = SessionStore(sessions_dir=tmp_path, config=config)
         store._db = None
         store._loaded = True

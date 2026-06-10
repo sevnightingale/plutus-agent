@@ -2,8 +2,8 @@
 
 import threading
 
-import agent.retry_utils as retry_utils
-from agent.retry_utils import jittered_backoff
+import harness.agent.retry_utils as retry_utils
+from harness.agent.retry_utils import jittered_backoff
 
 
 def test_backoff_is_exponential():

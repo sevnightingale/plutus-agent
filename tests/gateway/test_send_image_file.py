@@ -13,8 +13,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, SendResult
+from harness.gateway.config import PlatformConfig
+from harness.gateway.platforms.base import BasePlatformAdapter, SendResult
 
 
 def _run(coro):
@@ -82,7 +82,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 
 
 class TestTelegramSendImageFile:
@@ -190,7 +190,7 @@ def _ensure_discord_mock():
 _ensure_discord_mock()
 
 import discord as discord_mod_ref  # noqa: E402
-from gateway.platforms.discord import DiscordAdapter  # noqa: E402
+from harness.gateway.platforms.discord import DiscordAdapter  # noqa: E402
 
 
 class TestDiscordSendImageFile:
@@ -313,7 +313,7 @@ def _ensure_slack_mock():
 
 _ensure_slack_mock()
 
-from gateway.platforms.slack import SlackAdapter  # noqa: E402
+from harness.gateway.platforms.slack import SlackAdapter  # noqa: E402
 
 
 class TestSlackSendImageFile:
@@ -368,7 +368,7 @@ class TestScreenshotCleanup:
     def test_cleanup_removes_old_screenshots(self, tmp_path):
         """_cleanup_old_screenshots should remove files older than max_age_hours."""
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from harness.tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -389,7 +389,7 @@ class TestScreenshotCleanup:
 
     def test_cleanup_is_throttled_per_directory(self, tmp_path):
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from harness.tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -410,7 +410,7 @@ class TestScreenshotCleanup:
     def test_cleanup_ignores_non_screenshot_files(self, tmp_path):
         """Only files matching browser_screenshot_*.png should be cleaned."""
         import time
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from harness.tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
 
         _last_screenshot_cleanup_by_dir.clear()
 
@@ -425,13 +425,13 @@ class TestScreenshotCleanup:
 
     def test_cleanup_handles_empty_dir(self, tmp_path):
         """Cleanup should not fail on empty directory."""
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from harness.tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
         _last_screenshot_cleanup_by_dir.clear()
         _cleanup_old_screenshots(tmp_path, max_age_hours=24)  # Should not raise
 
     def test_cleanup_handles_nonexistent_dir(self):
         """Cleanup should not fail if directory doesn't exist."""
         from pathlib import Path
-        from tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
+        from harness.tools.browser_tool import _cleanup_old_screenshots, _last_screenshot_cleanup_by_dir
         _last_screenshot_cleanup_by_dir.clear()
         _cleanup_old_screenshots(Path("/nonexistent/dir"), max_age_hours=24)  # Should not raise

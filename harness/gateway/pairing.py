@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from plutus_constants import get_hermes_dir
+from harness.constants import get_hermes_dir
 
 
 # Unambiguous alphabet -- excludes 0/O, 1/I to prevent confusion

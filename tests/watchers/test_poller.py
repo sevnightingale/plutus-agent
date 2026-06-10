@@ -16,11 +16,11 @@ def temp_hermes_home(tmp_path, monkeypatch):
     (home / "cron").mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
     import importlib
-    import plutus_constants
+    import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
-    import cron.jobs
+    import harness.cron.jobs; import harness.cron as cron
     importlib.reload(cron.jobs)
-    from watchers import state, poller
+    from harness.watchers import state, poller
     importlib.reload(state)
     importlib.reload(poller)
     return home
@@ -37,7 +37,7 @@ class _StubAlert:
 
 def test_poll_once_writes_events_and_persists_state(temp_hermes_home):
     """A poll that fires events writes them to NDJSON and updates state."""
-    from watchers import poller, state
+    from harness.watchers import poller, state
 
     captured = {"calls": 0}
 
@@ -71,7 +71,7 @@ def test_poll_once_writes_events_and_persists_state(temp_hermes_home):
 
 def test_poll_once_respects_throttle(temp_hermes_home):
     """A second poll within throttle_seconds returns no events."""
-    from watchers import poller
+    from harness.watchers import poller
 
     def stub_poll(state=None):
         return ([{"kind": "opened", "coin": "BTC"}], {"x": 1})
@@ -87,8 +87,8 @@ def test_poll_once_respects_throttle(temp_hermes_home):
 
 def test_schedule_wake_session_creates_cron(temp_hermes_home):
     """A batch of fired events creates one cron job with the right skill route."""
-    from watchers.poller import schedule_wake_session
-    from cron import jobs as cron_jobs
+    from harness.watchers.poller import schedule_wake_session
+    from harness.cron import jobs as cron_jobs
 
     events = [
         {"alert": "hl_position_status_change", "kind": "closed", "coin": "BTC"},
@@ -106,12 +106,12 @@ def test_schedule_wake_session_creates_cron(temp_hermes_home):
 
 
 def test_schedule_wake_session_no_events_returns_none(temp_hermes_home):
-    from watchers.poller import schedule_wake_session
+    from harness.watchers.poller import schedule_wake_session
     assert schedule_wake_session([]) is None
 
 
 def test_schedule_wake_session_unknown_alert_falls_back_to_heartbeat(temp_hermes_home):
-    from watchers.poller import schedule_wake_session
+    from harness.watchers.poller import schedule_wake_session
 
     events = [{"alert": "future_alert_name", "delta": 1.0}]
     job = schedule_wake_session(events)
@@ -119,7 +119,7 @@ def test_schedule_wake_session_unknown_alert_falls_back_to_heartbeat(temp_hermes
 
 
 def test_emit_wake_events_appends_lines(temp_hermes_home):
-    from watchers.poller import emit_wake_events, wake_events_path
+    from harness.watchers.poller import emit_wake_events, wake_events_path
 
     n1 = emit_wake_events([{"alert": "a", "k": 1}, {"alert": "b", "k": 2}])
     n2 = emit_wake_events([{"alert": "c", "k": 3}])

@@ -55,7 +55,7 @@ def sample_repo(tmp_path: Path) -> Path:
 
 
 def test_parse_typed_references_ignores_emails_and_handles():
-    from agent.context_references import parse_context_references
+    from harness.agent.context_references import parse_context_references
 
     message = (
         "email me at user@example.com and ping @teammate "
@@ -73,7 +73,7 @@ def test_parse_typed_references_ignores_emails_and_handles():
 
 
 def test_parse_references_strips_trailing_punctuation():
-    from agent.context_references import parse_context_references
+    from harness.agent.context_references import parse_context_references
 
     refs = parse_context_references(
         "review @file:README.md, then see (@url:https://example.com/docs)."
@@ -85,7 +85,7 @@ def test_parse_references_strips_trailing_punctuation():
 
 
 def test_parse_quoted_references_with_spaces_and_preserve_unquoted_ranges():
-    from agent.context_references import parse_context_references
+    from harness.agent.context_references import parse_context_references
 
     refs = parse_context_references(
         'review @file:"C:\\Users\\Simba\\My Project\\main.py":7-9 '
@@ -103,7 +103,7 @@ def test_parse_quoted_references_with_spaces_and_preserve_unquoted_ranges():
 
 
 def test_expand_file_range_and_folder_listing(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     result = preprocess_context_references(
         "Review @file:src/main.py:1-2 and @folder:src/",
@@ -126,7 +126,7 @@ def test_expand_file_range_and_folder_listing(sample_repo: Path):
 
 
 def test_folder_listing_falls_back_when_rg_is_blocked(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     real_run = subprocess.run
 
@@ -136,7 +136,7 @@ def test_folder_listing_falls_back_when_rg_is_blocked(sample_repo: Path):
             raise PermissionError("rg blocked by policy")
         return real_run(*args, **kwargs)
 
-    with patch("agent.context_references.subprocess.run", side_effect=blocked_rg):
+    with patch("harness.agent.context_references.subprocess.run", side_effect=blocked_rg):
         result = preprocess_context_references(
             "Review @folder:src/",
             cwd=sample_repo,
@@ -151,7 +151,7 @@ def test_folder_listing_falls_back_when_rg_is_blocked(sample_repo: Path):
 
 
 def test_expand_quoted_file_reference_with_spaces(tmp_path: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     workspace = tmp_path / "repo"
     folder = workspace / "docs and specs"
@@ -175,7 +175,7 @@ def test_expand_quoted_file_reference_with_spaces(tmp_path: Path):
 
 
 def test_expand_git_diff_staged_and_log(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     result = preprocess_context_references(
         "Inspect @diff and @staged and @git:1",
@@ -193,7 +193,7 @@ def test_expand_git_diff_staged_and_log(sample_repo: Path):
 
 
 def test_binary_and_missing_files_become_warnings(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     result = preprocess_context_references(
         "Check @file:blob.bin and @file:nope.txt",
@@ -208,7 +208,7 @@ def test_binary_and_missing_files_become_warnings(sample_repo: Path):
 
 
 def test_soft_budget_warns_and_hard_budget_refuses(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     soft = preprocess_context_references(
         "Check @file:src/main.py",
@@ -231,7 +231,7 @@ def test_soft_budget_warns_and_hard_budget_refuses(sample_repo: Path):
 
 @pytest.mark.asyncio
 async def test_async_url_expansion_uses_fetcher(sample_repo: Path):
-    from agent.context_references import preprocess_context_references_async
+    from harness.agent.context_references import preprocess_context_references_async
 
     async def fake_fetch(url: str) -> str:
         assert url == "https://example.com/spec"
@@ -250,7 +250,7 @@ async def test_async_url_expansion_uses_fetcher(sample_repo: Path):
 
 
 def test_sync_url_expansion_uses_async_fetcher(sample_repo: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     async def fake_fetch(url: str) -> str:
         await asyncio.sleep(0)
@@ -268,7 +268,7 @@ def test_sync_url_expansion_uses_async_fetcher(sample_repo: Path):
 
 
 def test_restricts_paths_to_allowed_root(tmp_path: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -290,7 +290,7 @@ def test_restricts_paths_to_allowed_root(tmp_path: Path):
 
 
 def test_defaults_allowed_root_to_cwd(tmp_path: Path):
-    from agent.context_references import preprocess_context_references
+    from harness.agent.context_references import preprocess_context_references
 
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -310,7 +310,7 @@ def test_defaults_allowed_root_to_cwd(tmp_path: Path):
 
 @pytest.mark.asyncio
 async def test_blocks_sensitive_home_and_hermes_paths(tmp_path: Path, monkeypatch):
-    from agent.context_references import preprocess_context_references_async
+    from harness.agent.context_references import preprocess_context_references_async
 
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / ".hermes"))

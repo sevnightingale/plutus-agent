@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agent.skill_commands import scan_skill_commands
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionEntry, SessionSource
+from harness.agent.skill_commands import scan_skill_commands
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionEntry, SessionSource
 
 
 def _make_runner():
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner.config = GatewayConfig(
@@ -91,18 +91,18 @@ Save plans under the active workspace's .hermes/plans directory.
 class TestGatewayPlanCommand:
     @pytest.mark.asyncio
     async def test_plan_command_loads_skill_and_runs_agent(self, monkeypatch, tmp_path):
-        import gateway.run as gateway_run
+        import harness.gateway.run as gateway_run
 
         runner = _make_runner()
         event = _make_event("/plan Add OAuth login")
 
         monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "***"})
         monkeypatch.setattr(
-            "agent.model_metadata.get_model_context_length",
+            "harness.agent.model_metadata.get_model_context_length",
             lambda *_args, **_kwargs: 100_000,
         )
 
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+        with patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path):
             _make_plan_skill(tmp_path)
             scan_skill_commands()
             result = await runner._handle_message(event)
@@ -121,7 +121,7 @@ class TestGatewayPlanCommand:
         runner = _make_runner()
         event = _make_event("/help")
 
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+        with patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path):
             _make_plan_skill(tmp_path)
             scan_skill_commands()
             result = await runner._handle_help_command(event)

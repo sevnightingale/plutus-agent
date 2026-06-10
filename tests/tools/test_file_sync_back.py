@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from tools.environments.file_sync import (
+from harness.tools.environments.file_sync import (
     FileSyncManager,
     _sha256_file,
     _SYNC_BACK_BACKOFF,
@@ -203,7 +203,7 @@ class TestSyncBackConflict:
         mgr = _make_manager(tmp_path, file_mapping=mapping, bulk_download_fn=download_fn)
         mgr._pushed_hashes[remote_path] = _sha256_bytes(original_content)
 
-        with caplog.at_level(logging.WARNING, logger="tools.environments.file_sync"):
+        with caplog.at_level(logging.WARNING, logger="harness.tools.environments.file_sync"):
             mgr.sync_back(hermes_home=tmp_path / ".hermes")
 
         # Conflict warning was logged
@@ -216,7 +216,7 @@ class TestSyncBackConflict:
 class TestSyncBackRetries:
     """Retry behaviour with exponential backoff."""
 
-    @patch("tools.environments.file_sync.time.sleep")
+    @patch("harness.tools.environments.file_sync.time.sleep")
     def test_sync_back_retries_on_failure(self, mock_sleep, tmp_path):
         call_count = 0
 
@@ -237,14 +237,14 @@ class TestSyncBackRetries:
         mock_sleep.assert_any_call(_SYNC_BACK_BACKOFF[0])
         mock_sleep.assert_any_call(_SYNC_BACK_BACKOFF[1])
 
-    @patch("tools.environments.file_sync.time.sleep")
+    @patch("harness.tools.environments.file_sync.time.sleep")
     def test_sync_back_all_retries_exhausted(self, mock_sleep, tmp_path, caplog):
         def always_fail(dest: Path):
             raise RuntimeError("persistent failure")
 
         mgr = _make_manager(tmp_path, bulk_download_fn=always_fail)
 
-        with caplog.at_level(logging.WARNING, logger="tools.environments.file_sync"):
+        with caplog.at_level(logging.WARNING, logger="harness.tools.environments.file_sync"):
             # Should NOT raise -- failures are logged, not propagated
             mgr.sync_back(hermes_home=tmp_path / ".hermes")
 
@@ -307,7 +307,7 @@ class TestPushedHashesPopulated:
 class TestSyncBackFileLock:
     """Verify that fcntl.flock is used during sync-back."""
 
-    @patch("tools.environments.file_sync.fcntl.flock")
+    @patch("harness.tools.environments.file_sync.fcntl.flock")
     def test_sync_back_file_lock(self, mock_flock, tmp_path):
         download_fn = _make_download_fn({})
         mgr = _make_manager(tmp_path, bulk_download_fn=download_fn)
@@ -327,7 +327,7 @@ class TestSyncBackFileLock:
         download_fn = _make_download_fn({})
         mgr = _make_manager(tmp_path, bulk_download_fn=download_fn)
 
-        with patch("tools.environments.file_sync.fcntl", None):
+        with patch("harness.tools.environments.file_sync.fcntl", None):
             # Should not raise — locking is skipped
             mgr.sync_back(hermes_home=tmp_path / ".hermes")
 
@@ -389,9 +389,9 @@ class TestSyncBackSIGINT:
         handlers_seen = []
         original_getsignal = signal.getsignal
 
-        with patch("tools.environments.file_sync.signal.getsignal",
+        with patch("harness.tools.environments.file_sync.signal.getsignal",
                     side_effect=original_getsignal) as mock_get, \
-             patch("tools.environments.file_sync.signal.signal") as mock_set:
+             patch("harness.tools.environments.file_sync.signal.signal") as mock_set:
             mgr.sync_back(hermes_home=tmp_path / ".hermes")
 
         # signal.getsignal was called to save the original handler
@@ -411,7 +411,7 @@ class TestSyncBackSIGINT:
         def tracking_signal(*args):
             signal_called.append(args)
 
-        with patch("tools.environments.file_sync.signal.signal", side_effect=tracking_signal):
+        with patch("harness.tools.environments.file_sync.signal.signal", side_effect=tracking_signal):
             # Run from a worker thread
             exc = []
             def run():
@@ -447,8 +447,8 @@ class TestSyncBackSizeCap:
         )
 
         # Cap at 1 byte so any non-empty tar exceeds it
-        with caplog.at_level(logging.WARNING, logger="tools.environments.file_sync"):
-            with patch("tools.environments.file_sync._SYNC_BACK_MAX_BYTES", 1):
+        with caplog.at_level(logging.WARNING, logger="harness.tools.environments.file_sync"):
+            with patch("harness.tools.environments.file_sync._SYNC_BACK_MAX_BYTES", 1):
                 mgr.sync_back(hermes_home=tmp_path / ".hermes")
 
         # Host file should be untouched because extraction was skipped

@@ -10,30 +10,30 @@ import time
 
 import pytest
 
-from agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
-from tools.core import (
+from harness.agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
+from harness.tools.core import (
     account_registry,
     data_point_registry,
     event_registry,
     identity_registry,
     venue_registry,
 )
-from tools.registry import registry as tool_registry
+from harness.tools.registry import registry as tool_registry
 
 # Ensure dispatcher modules are imported so they self-register at module top level.
-import tools.dispatchers.account_state              # noqa: F401
-import tools.dispatchers.cancel_order               # noqa: F401
-import tools.dispatchers.close_position             # noqa: F401
-import tools.dispatchers.fetch_data_point           # noqa: F401
-import tools.dispatchers.list_accounts              # noqa: F401
-import tools.dispatchers.list_data_points           # noqa: F401
-import tools.dispatchers.list_event_types           # noqa: F401
-import tools.dispatchers.list_identity_systems      # noqa: F401
-import tools.dispatchers.list_venues                # noqa: F401
-import tools.dispatchers.modify_order               # noqa: F401
-import tools.dispatchers.place_order                # noqa: F401
-import tools.dispatchers.record_event               # noqa: F401
-import tools.dispatchers.record_observation         # noqa: F401
+import harness.tools.dispatchers.account_state              # noqa: F401
+import harness.tools.dispatchers.cancel_order               # noqa: F401
+import harness.tools.dispatchers.close_position             # noqa: F401
+import harness.tools.dispatchers.fetch_data_point           # noqa: F401
+import harness.tools.dispatchers.list_accounts              # noqa: F401
+import harness.tools.dispatchers.list_data_points           # noqa: F401
+import harness.tools.dispatchers.list_event_types           # noqa: F401
+import harness.tools.dispatchers.list_identity_systems      # noqa: F401
+import harness.tools.dispatchers.list_venues                # noqa: F401
+import harness.tools.dispatchers.modify_order               # noqa: F401
+import harness.tools.dispatchers.place_order                # noqa: F401
+import harness.tools.dispatchers.record_event               # noqa: F401
+import harness.tools.dispatchers.record_observation         # noqa: F401
 
 
 @pytest.fixture(autouse=True)
@@ -321,7 +321,7 @@ class TestRecordObservation:
         assert row["text_md"] == "BTC reclaimed 70k"
 
     def test_captures_session_id_from_context(self, _isolated):
-        from gateway.session_context import set_session_vars, clear_session_vars
+        from harness.gateway.session_context import set_session_vars, clear_session_vars
 
         tokens = set_session_vars(session_key="tg:plutus_chat:operator")
         try:

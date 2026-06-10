@@ -5,10 +5,10 @@ import types
 
 import pytest
 
-from plutus_cli.auth import get_active_provider
-from plutus_cli.config import load_config, save_config
-from plutus_cli import setup as setup_mod
-from plutus_cli.setup import setup_model_provider
+from harness.cli.auth import get_active_provider
+from harness.cli.config import load_config, save_config
+from harness.cli import setup as setup_mod
+from harness.cli.setup import setup_model_provider
 
 
 def _maybe_keep_current_tts(question, choices):
@@ -31,11 +31,11 @@ def _clear_provider_env(monkeypatch):
 
 def _stub_tts(monkeypatch):
     """Stub out TTS prompts so setup_model_provider doesn't block."""
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", lambda q, c, d=0: (
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", lambda q, c, d=0: (
         _maybe_keep_current_tts(q, c) if _maybe_keep_current_tts(q, c) is not None
         else d
     ))
-    monkeypatch.setattr("plutus_cli.setup.prompt_yes_no", lambda *a, **kw: False)
+    monkeypatch.setattr("harness.cli.setup.prompt_yes_no", lambda *a, **kw: False)
 
 
 def _write_model_config(tmp_path, provider, base_url="", model_name="test-model"):
@@ -64,7 +64,7 @@ def test_setup_delegates_to_select_provider_and_model(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         _write_model_config(tmp_path, "custom", "http://localhost:11434/v1", "qwen3.5:32b")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -89,7 +89,7 @@ def test_setup_syncs_openrouter_from_disk(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         _write_model_config(tmp_path, "openrouter", model_name="anthropic/claude-opus-4.6")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -110,7 +110,7 @@ def test_setup_syncs_nous_from_disk(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         _write_model_config(tmp_path, "nous", "https://inference.example.com/v1", "gemini-3-flash")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -135,7 +135,7 @@ def test_setup_custom_providers_synced(tmp_path, monkeypatch):
         cfg["custom_providers"] = [{"name": "Local", "base_url": "http://localhost:8080/v1"}]
         save_config(cfg)
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -166,7 +166,7 @@ def test_setup_gateway_skips_service_install_when_systemctl_missing(monkeypatch,
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *args, **kwargs: False)
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
-    import plutus_cli.gateway as gateway_mod
+    import harness.cli.gateway as gateway_mod
 
     monkeypatch.setattr(gateway_mod, "supports_systemd_services", lambda: False)
     monkeypatch.setattr(gateway_mod, "is_macos", lambda: False)
@@ -204,7 +204,7 @@ def test_setup_gateway_in_container_shows_docker_guidance(monkeypatch, capsys):
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *args, **kwargs: False)
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
-    import plutus_cli.gateway as gateway_mod
+    import harness.cli.gateway as gateway_mod
 
     monkeypatch.setattr(gateway_mod, "supports_systemd_services", lambda: False)
     monkeypatch.setattr(gateway_mod, "is_macos", lambda: False)
@@ -212,7 +212,7 @@ def test_setup_gateway_in_container_shows_docker_guidance(monkeypatch, capsys):
     monkeypatch.setattr(gateway_mod, "_is_service_running", lambda: False)
 
     # Patch is_container at the import location in setup.py
-    import plutus_constants
+    import harness.constants as plutus_constants
     monkeypatch.setattr(plutus_constants, "is_container", lambda: True)
 
     setup_mod.setup_gateway({})
@@ -239,7 +239,7 @@ def test_setup_syncs_custom_provider_removal_from_disk(tmp_path, monkeypatch):
         cfg["custom_providers"] = []
         save_config(cfg)
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -263,7 +263,7 @@ def test_setup_cancel_preserves_existing_config(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         pass  # user cancelled — nothing written to disk
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -285,7 +285,7 @@ def test_setup_exception_in_select_gracefully_handled(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         raise RuntimeError("something broke")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     # Should not raise
     setup_model_provider(config)
@@ -302,7 +302,7 @@ def test_setup_keyboard_interrupt_gracefully_handled(tmp_path, monkeypatch):
     def fake_select(*args, **kwargs):
         raise KeyboardInterrupt()
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
 
@@ -324,14 +324,14 @@ def test_select_provider_and_model_warns_if_named_custom_provider_disappears(
         save_config(current)
         return next(i for i, label in enumerate(choices) if label.startswith("Local (localhost:8080/v1)"))
 
-    monkeypatch.setattr("plutus_cli.auth.resolve_provider", lambda provider: None)
-    monkeypatch.setattr("plutus_cli.main._prompt_provider_choice", fake_prompt_provider_choice)
+    monkeypatch.setattr("harness.cli.auth.resolve_provider", lambda provider: None)
+    monkeypatch.setattr("harness.cli.main._prompt_provider_choice", fake_prompt_provider_choice)
     monkeypatch.setattr(
-        "plutus_cli.main._model_flow_named_custom",
+        "harness.cli.main._model_flow_named_custom",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("named custom flow should not run")),
     )
 
-    from plutus_cli.main import select_provider_and_model
+    from harness.cli.main import select_provider_and_model
 
     select_provider_and_model()
 
@@ -352,7 +352,7 @@ def test_codex_setup_uses_runtime_access_token_for_live_model_list(tmp_path, mon
     def fake_select(*args, **kwargs):
         _write_model_config(tmp_path, "openai-codex", "https://api.openai.com/v1", "gpt-4o")
 
-    monkeypatch.setattr("plutus_cli.main.select_provider_and_model", fake_select)
+    monkeypatch.setattr("harness.cli.main.select_provider_and_model", fake_select)
 
     setup_model_provider(config)
     save_config(config)
@@ -363,7 +363,7 @@ def test_codex_setup_uses_runtime_access_token_for_live_model_list(tmp_path, mon
 
 
 def test_modal_setup_can_use_nous_subscription_without_modal_creds(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr("plutus_cli.setup.managed_nous_tools_enabled", lambda: True)
+    monkeypatch.setattr("harness.cli.setup.managed_nous_tools_enabled", lambda: True)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     config = load_config()
 
@@ -378,23 +378,23 @@ def test_modal_setup_can_use_nous_subscription_without_modal_creds(tmp_path, mon
         assert "Modal Token" not in message
         raise AssertionError(f"Unexpected prompt call: {message}")
 
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("plutus_cli.setup.prompt", fake_prompt)
-    monkeypatch.setattr("plutus_cli.setup._prompt_container_resources", lambda config: None)
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("harness.cli.setup.prompt", fake_prompt)
+    monkeypatch.setattr("harness.cli.setup._prompt_container_resources", lambda config: None)
     monkeypatch.setattr(
-        "plutus_cli.setup.get_nous_subscription_features",
+        "harness.cli.setup.get_nous_subscription_features",
         lambda config: type("Features", (), {"nous_auth_present": True})(),
     )
     monkeypatch.setitem(
         sys.modules,
-        "tools.managed_tool_gateway",
+        "harness.tools.managed_tool_gateway",
         types.SimpleNamespace(
             is_managed_tool_gateway_ready=lambda vendor: vendor == "modal",
             resolve_managed_tool_gateway=lambda vendor: None,
         ),
     )
 
-    from plutus_cli.setup import setup_terminal_backend
+    from harness.cli.setup import setup_terminal_backend
 
     setup_terminal_backend(config)
 
@@ -405,7 +405,7 @@ def test_modal_setup_can_use_nous_subscription_without_modal_creds(tmp_path, mon
 
 
 def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(tmp_path, monkeypatch):
-    monkeypatch.setattr("plutus_cli.setup.managed_nous_tools_enabled", lambda: True)
+    monkeypatch.setattr("harness.cli.setup.managed_nous_tools_enabled", lambda: True)
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
     monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
@@ -420,16 +420,16 @@ def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(tm
 
     prompt_values = iter(["token-id", "token-secret", ""])
 
-    monkeypatch.setattr("plutus_cli.setup.prompt_choice", fake_prompt_choice)
-    monkeypatch.setattr("plutus_cli.setup.prompt", lambda *args, **kwargs: next(prompt_values))
-    monkeypatch.setattr("plutus_cli.setup._prompt_container_resources", lambda config: None)
+    monkeypatch.setattr("harness.cli.setup.prompt_choice", fake_prompt_choice)
+    monkeypatch.setattr("harness.cli.setup.prompt", lambda *args, **kwargs: next(prompt_values))
+    monkeypatch.setattr("harness.cli.setup._prompt_container_resources", lambda config: None)
     monkeypatch.setattr(
-        "plutus_cli.setup.get_nous_subscription_features",
+        "harness.cli.setup.get_nous_subscription_features",
         lambda config: type("Features", (), {"nous_auth_present": True})(),
     )
     monkeypatch.setitem(
         sys.modules,
-        "tools.managed_tool_gateway",
+        "harness.tools.managed_tool_gateway",
         types.SimpleNamespace(
             is_managed_tool_gateway_ready=lambda vendor: vendor == "modal",
             resolve_managed_tool_gateway=lambda vendor: None,
@@ -437,7 +437,7 @@ def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(tm
     )
     monkeypatch.setitem(sys.modules, "swe_rex", object())
 
-    from plutus_cli.setup import setup_terminal_backend
+    from harness.cli.setup import setup_terminal_backend
 
     setup_terminal_backend(config)
 
@@ -446,7 +446,7 @@ def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(tm
 
 
 def test_resolve_hermes_chat_argv_prefers_which(monkeypatch):
-    from plutus_cli import setup as setup_mod
+    from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod.shutil, "which", lambda name: "/usr/local/bin/hermes" if name == "hermes" else None)
 
@@ -454,16 +454,16 @@ def test_resolve_hermes_chat_argv_prefers_which(monkeypatch):
 
 
 def test_resolve_hermes_chat_argv_falls_back_to_module(monkeypatch):
-    from plutus_cli import setup as setup_mod
+    from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod.shutil, "which", lambda _name: None)
     monkeypatch.setattr(setup_mod.importlib.util, "find_spec", lambda name: object() if name == "plutus_cli" else None)
 
-    assert setup_mod._resolve_hermes_chat_argv() == [sys.executable, "-m", "plutus_cli.main", "chat"]
+    assert setup_mod._resolve_hermes_chat_argv() == [sys.executable, "-m", "harness.cli.main", "chat"]
 
 
 def test_offer_launch_chat_execs_fresh_process(monkeypatch):
-    from plutus_cli import setup as setup_mod
+    from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(setup_mod, "_resolve_hermes_chat_argv", lambda: ["/usr/local/bin/hermes", "chat"])
@@ -483,7 +483,7 @@ def test_offer_launch_chat_execs_fresh_process(monkeypatch):
 
 
 def test_offer_launch_chat_manual_fallback_when_unresolvable(monkeypatch, capsys):
-    from plutus_cli import setup as setup_mod
+    from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(setup_mod, "_resolve_hermes_chat_argv", lambda: None)

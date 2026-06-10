@@ -11,13 +11,13 @@ def test_launcher_delegates_to_argparse_entrypoint(monkeypatch):
     launcher_path = Path(__file__).resolve().parents[2] / "hermes"
     called = []
 
-    fake_main_module = types.ModuleType("plutus_cli.main")
+    fake_main_module = types.ModuleType("harness.cli.main")
 
     def fake_main():
-        called.append("plutus_cli.main")
+        called.append("harness.cli.main")
 
     fake_main_module.main = fake_main
-    monkeypatch.setitem(sys.modules, "plutus_cli.main", fake_main_module)
+    monkeypatch.setitem(sys.modules, "harness.cli.main", fake_main_module)
 
     fake_cli_module = types.ModuleType("cli")
 
@@ -25,7 +25,7 @@ def test_launcher_delegates_to_argparse_entrypoint(monkeypatch):
         raise AssertionError("launcher should not import cli.main")
 
     fake_cli_module.main = legacy_cli_main
-    monkeypatch.setitem(sys.modules, "cli", fake_cli_module)
+    monkeypatch.setitem(sys.modules, "harness.repl", fake_cli_module)
 
     fake_fire_module = types.ModuleType("fire")
 
@@ -39,4 +39,4 @@ def test_launcher_delegates_to_argparse_entrypoint(monkeypatch):
 
     runpy.run_path(str(launcher_path), run_name="__main__")
 
-    assert called == ["plutus_cli.main"]
+    assert called == ["harness.cli.main"]

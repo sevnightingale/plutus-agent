@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionEntry, SessionSource, build_session_key
-from tools import approval as approval_mod
-from tools.approval import (
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionEntry, SessionSource, build_session_key
+from harness.tools import approval as approval_mod
+from harness.tools.approval import (
     approve_session,
     enable_session_yolo,
     is_approved,
@@ -62,7 +62,7 @@ def _make_entry(session_id: str, source: SessionSource | None = None) -> Session
 
 
 def _make_resume_runner():
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     source = _make_source()
     session_key = build_session_key(source)
@@ -89,7 +89,7 @@ def _make_resume_runner():
 
 
 def _make_branch_runner():
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     source = _make_source()
     session_key = build_session_key(source)
@@ -169,7 +169,7 @@ def test_clear_session_boundary_security_state_is_scoped():
     Also exercises the /new reset path indirectly: /new calls this helper,
     so if the helper is scoped correctly, /new's clearing is correct too.
     """
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
 
     runner = object.__new__(GatewayRunner)
     runner._pending_approvals = {}

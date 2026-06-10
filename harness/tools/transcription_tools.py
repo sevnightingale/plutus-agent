@@ -19,7 +19,7 @@ Supported input formats: mp3, mp4, mpeg, mpga, m4a, wav, webm, ogg, aac
 
 Usage::
 
-    from tools.transcription_tools import transcribe_audio
+    from harness.tools.transcription_tools import transcribe_audio
 
     result = transcribe_audio("/path/to/audio.ogg")
     if result["success"]:
@@ -36,9 +36,9 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 
-from utils import is_truthy_value
-from tools.managed_tool_gateway import resolve_managed_tool_gateway
-from tools.tool_backend_helpers import managed_nous_tools_enabled, resolve_openai_audio_api_key
+from harness.utils import is_truthy_value
+from harness.tools.managed_tool_gateway import resolve_managed_tool_gateway
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled, resolve_openai_audio_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ _local_model_name: Optional[str] = None
 def _load_stt_config() -> dict:
     """Load the ``stt`` section from user config, falling back to defaults."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         return load_config().get("stt", {})
     except Exception:
         return {}
@@ -623,7 +623,7 @@ def _transcribe_xai(file_path: str, model_name: str) -> Dict[str, Any]:
 
     try:
         import requests
-        from tools.xai_http import hermes_xai_user_agent
+        from harness.tools.xai_http import hermes_xai_user_agent
 
         data: Dict[str, str] = {}
         if language:

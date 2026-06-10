@@ -11,7 +11,7 @@ do not get recycled into the pending-user-message follow-up path.
 
 from types import SimpleNamespace
 
-from gateway.run import _is_control_interrupt_message
+from harness.gateway.run import _is_control_interrupt_message
 
 
 def _extract_channel_prompt(pending_event):

@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 
-import plutus_constants
-from plutus_constants import get_default_hermes_root, is_container
+import harness.constants as plutus_constants
+from harness.constants import get_default_hermes_root, is_container
 
 
 class TestGetDefaultHermesRoot:

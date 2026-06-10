@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from utils import atomic_json_write
+from harness.utils import atomic_json_write
 
 import requests
 
@@ -180,7 +180,7 @@ _MODELS_DEV_TO_PROVIDER: Optional[Dict[str, str]] = None
 
 def _get_cache_path() -> Path:
     """Return path to disk cache file."""
-    from plutus_constants import get_hermes_home
+    from harness.constants import get_hermes_home
     return get_hermes_home() / "models_dev_cache.json"
 
 
@@ -418,7 +418,7 @@ def list_provider_models(provider: str) -> List[str]:
 
     Returns an empty list if the provider is unknown or has no data.
     """
-    from plutus_cli.models import normalize_provider
+    from harness.cli.models import normalize_provider
     provider = normalize_provider(provider) or provider
     
     models = _get_provider_models(provider)

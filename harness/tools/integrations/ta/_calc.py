@@ -9,7 +9,7 @@ import logging
 import pandas as pd
 import pandas_ta as ta
 
-from tools.integrations.hyperliquid.data_points import hl_candles as _hl_candles
+from harness.tools.integrations.hyperliquid.data_points import hl_candles as _hl_candles
 from .preprocessors import get_preprocessor
 
 logger = logging.getLogger(__name__)

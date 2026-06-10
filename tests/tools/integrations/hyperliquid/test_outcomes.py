@@ -12,8 +12,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from agent.lifecycle_db import get_lifecycle_db, reset_lifecycle_db_singleton
-from tools.integrations.hyperliquid import _client, outcomes
+from harness.agent.lifecycle_db import get_lifecycle_db, reset_lifecycle_db_singleton
+from harness.tools.integrations.hyperliquid import _client, outcomes
 
 
 @pytest.fixture(autouse=True)

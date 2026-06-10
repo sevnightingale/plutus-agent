@@ -317,7 +317,7 @@ def _rpc_server_loop(
     Accept one client connection and dispatch tool-call requests until
     the client disconnects or the call limit is reached.
     """
-    from model_tools import handle_function_call
+    from harness.model_tools import handle_function_call
 
     conn = None
     try:
@@ -436,7 +436,7 @@ def _get_or_create_env(task_id: str):
     terminal and file tools use, creating one if it doesn't exist yet.
     Returns ``(env, env_type)`` tuple.
     """
-    from tools.terminal_tool import (
+    from harness.tools.terminal_tool import (
         _active_environments, _env_lock, _create_environment,
         _get_env_config, _last_activity, _start_cleanup_thread,
         _creation_locks, _creation_locks_lock, _task_env_overrides,
@@ -578,7 +578,7 @@ def _rpc_poll_loop(
     independent process, so these calls run safely concurrent with the
     script-execution thread.
     """
-    from model_tools import handle_function_call
+    from harness.model_tools import handle_function_call
 
     poll_interval = 0.1  # 100 ms
 
@@ -856,11 +856,11 @@ def _execute_remote(
         )
 
     # Strip ANSI escape sequences
-    from tools.ansi_strip import strip_ansi
+    from harness.tools.ansi_strip import strip_ansi
     stdout_text = strip_ansi(stdout_text)
 
     # Redact secrets
-    from agent.redact import redact_sensitive_text
+    from harness.agent.redact import redact_sensitive_text
     stdout_text = redact_sensitive_text(stdout_text)
 
     # Build response
@@ -929,7 +929,7 @@ def execute_code(
         return tool_error("No code provided.")
 
     # Dispatch: remote backends use file-based RPC, local uses UDS
-    from tools.terminal_tool import _get_env_config
+    from harness.tools.terminal_tool import _get_env_config
     env_type = _get_env_config()["env_type"]
     if env_type != "local":
         return _execute_remote(code, task_id, enabled_tools)
@@ -937,7 +937,7 @@ def execute_code(
     # --- Local execution path (UDS) --- below this line is unchanged ---
 
     # Import per-thread interrupt check (cooperative cancellation)
-    from tools.interrupt import is_interrupted as _is_interrupted
+    from harness.tools.interrupt import is_interrupted as _is_interrupted
 
     # Resolve config
     _cfg = _load_config()
@@ -1006,7 +1006,7 @@ def execute_code(
         _SECRET_SUBSTRINGS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL",
                               "PASSWD", "AUTH")
         try:
-            from tools.env_passthrough import is_env_passthrough as _is_passthrough
+            from harness.tools.env_passthrough import is_env_passthrough as _is_passthrough
         except Exception:
             _is_passthrough = lambda _: False  # noqa: E731
         child_env = {}
@@ -1027,7 +1027,7 @@ def execute_code(
         # repo-root modules are available to child scripts.  We also prepend
         # the staging tmpdir so ``from hermes_tools import ...`` resolves even
         # when the subprocess CWD is not tmpdir (project mode).
-        _hermes_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _hermes_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         _existing_pp = child_env.get("PYTHONPATH", "")
         _pp_parts = [tmpdir, _hermes_root]
         if _existing_pp:
@@ -1044,7 +1044,7 @@ def execute_code(
 
         # Per-profile HOME isolation: redirect system tool configs into
         # {HERMES_HOME}/home/ when that directory exists.
-        from plutus_constants import get_subprocess_home
+        from harness.constants import get_subprocess_home
         _profile_home = get_subprocess_home()
         if _profile_home:
             child_env["HOME"] = _profile_home
@@ -1161,7 +1161,7 @@ def execute_code(
             # Periodic activity touch so the gateway's inactivity timeout
             # doesn't kill the agent during long code execution (#10807).
             try:
-                from tools.environments.base import touch_activity_if_due
+                from harness.tools.environments.base import touch_activity_if_due
                 touch_activity_if_due(_activity_state, "execute_code running")
             except Exception:
                 pass
@@ -1197,7 +1197,7 @@ def execute_code(
 
         # Strip ANSI escape sequences so the model never sees terminal
         # formatting — prevents it from copying escapes into file writes.
-        from tools.ansi_strip import strip_ansi
+        from harness.tools.ansi_strip import strip_ansi
         stdout_text = strip_ansi(stdout_text)
         stderr_text = strip_ansi(stderr_text)
 
@@ -1205,7 +1205,7 @@ def execute_code(
         # The sandbox env-var filter (lines 434-454) blocks os.environ access,
         # but scripts can still read secrets from disk (e.g. open('~/.plutus-agent/.env')).
         # This ensures leaked secrets never enter the model context.
-        from agent.redact import redact_sensitive_text
+        from harness.agent.redact import redact_sensitive_text
         stdout_text = redact_sensitive_text(stdout_text)
         stderr_text = redact_sensitive_text(stderr_text)
 
@@ -1310,7 +1310,7 @@ def _kill_process_group(proc, escalate: bool = False):
 def _load_config() -> dict:
     """Load code_execution config from CLI_CONFIG if available."""
     try:
-        from cli import CLI_CONFIG
+        from harness.repl import CLI_CONFIG
         return CLI_CONFIG.get("code_execution", {})
     except Exception:
         return {}
@@ -1563,7 +1563,7 @@ EXECUTE_CODE_SCHEMA = build_execute_code_schema()
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 registry.register(
     name="execute_code",

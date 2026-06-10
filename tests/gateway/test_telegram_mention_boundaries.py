@@ -13,8 +13,8 @@ those contexts.
 """
 from types import SimpleNamespace
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.telegram import TelegramAdapter
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.telegram import TelegramAdapter
 
 
 def _make_adapter():

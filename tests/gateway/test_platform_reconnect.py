@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
-from gateway.run import GatewayRunner
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
+from harness.gateway.run import GatewayRunner
 
 
 class StubAdapter(BasePlatformAdapter):
@@ -109,7 +109,7 @@ class TestPlatformReconnectWatcher:
         real_sleep = asyncio.sleep
 
         with patch.object(runner, "_create_adapter", return_value=succeed_adapter):
-            with patch("gateway.run.build_channel_directory", create=True):
+            with patch("harness.gateway.run.build_channel_directory", create=True):
                 # Run one iteration of the watcher then stop
                 async def run_one_iteration():
                     runner._running = True

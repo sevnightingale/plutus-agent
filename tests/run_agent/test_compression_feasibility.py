@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from run_agent import AIAgent
-from agent.context_compressor import ContextCompressor
+from harness.run_agent import AIAgent
+from harness.agent.context_compressor import ContextCompressor
 
 
 def _make_agent(
@@ -53,8 +53,8 @@ def _make_agent(
 # ── Core warning logic ──────────────────────────────────────────────
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=80_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=80_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_auto_corrects_threshold_when_aux_context_below_threshold(mock_get_client, mock_ctx_len):
     """Auto-correction: aux >= 64K floor but < threshold → lower threshold
     to aux_context so compression still works this session."""
@@ -86,8 +86,8 @@ def test_auto_corrects_threshold_when_aux_context_below_threshold(mock_get_clien
     assert agent.context_compressor.threshold_tokens == 80_000
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=32_768)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=32_768)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_rejects_aux_below_minimum_context(mock_get_client, mock_ctx_len):
     """Hard floor: aux context < MINIMUM_CONTEXT_LENGTH (64K) → session
     refuses to start (ValueError), mirroring the main-model rejection."""
@@ -109,8 +109,8 @@ def test_rejects_aux_below_minimum_context(mock_get_client, mock_ctx_len):
     assert "below the minimum" in err
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=200_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=200_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_no_warning_when_aux_context_sufficient(mock_get_client, mock_ctx_len):
     """No warning when aux model context >= main model threshold."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -142,8 +142,8 @@ def test_feasibility_check_passes_live_main_runtime():
     mock_client.base_url = "https://chatgpt.com/backend-api/codex"
     mock_client.api_key = "codex-token"
 
-    with patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "gpt-5.4")) as mock_get_client, \
-         patch("agent.model_metadata.get_model_context_length", return_value=200_000):
+    with patch("harness.agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "gpt-5.4")) as mock_get_client, \
+         patch("harness.agent.model_metadata.get_model_context_length", return_value=200_000):
         agent._emit_status = lambda msg: None
         agent._check_compression_model_feasibility()
 
@@ -159,8 +159,8 @@ def test_feasibility_check_passes_live_main_runtime():
     )
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=1_000_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=1_000_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_feasibility_check_passes_config_context_length(mock_get_client, mock_ctx_len):
     """auxiliary.compression.context_length from config is forwarded to
     get_model_context_length so custom endpoints that lack /models still
@@ -183,8 +183,8 @@ def test_feasibility_check_passes_config_context_length(mock_get_client, mock_ct
     )
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=128_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=128_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_feasibility_check_ignores_invalid_context_length(mock_get_client, mock_ctx_len):
     """Non-integer context_length in config is silently ignored."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -232,13 +232,13 @@ def test_init_feasibility_check_uses_aux_context_override_from_config():
     mock_client.api_key = "sk-custom"
 
     with (
-        patch("plutus_cli.config.load_config", return_value=cfg),
-        patch("run_agent.get_tool_definitions", return_value=[]),
-        patch("run_agent.check_toolset_requirements", return_value={}),
-        patch("run_agent.OpenAI"),
-        patch("run_agent.ContextCompressor", new=_StubCompressor),
-        patch("agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "custom/big-model")),
-        patch("agent.model_metadata.get_model_context_length", return_value=1_000_000) as mock_ctx_len,
+        patch("harness.cli.config.load_config", return_value=cfg),
+        patch("harness.run_agent.get_tool_definitions", return_value=[]),
+        patch("harness.run_agent.check_toolset_requirements", return_value={}),
+        patch("harness.run_agent.OpenAI"),
+        patch("harness.run_agent.ContextCompressor", new=_StubCompressor),
+        patch("harness.agent.auxiliary_client.get_text_auxiliary_client", return_value=(mock_client, "custom/big-model")),
+        patch("harness.agent.model_metadata.get_model_context_length", return_value=1_000_000) as mock_ctx_len,
     ):
         agent = AIAgent(
             api_key="test-key-1234567890",
@@ -257,7 +257,7 @@ def test_init_feasibility_check_uses_aux_context_override_from_config():
     )
 
 
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_warns_when_no_auxiliary_provider(mock_get_client):
     """Warning emitted when no auxiliary provider is configured."""
     agent = _make_agent()
@@ -286,7 +286,7 @@ def test_skips_check_when_compression_disabled():
     assert agent._compression_warning is None
 
 
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_exception_does_not_crash(mock_get_client):
     """Exceptions in the check are caught — never blocks startup."""
     agent = _make_agent()
@@ -302,8 +302,8 @@ def test_exception_does_not_crash(mock_get_client):
     assert len(messages) == 0
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=100_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=100_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_exact_threshold_boundary_no_warning(mock_get_client, mock_ctx_len):
     """No warning when aux context exactly equals the threshold."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -320,8 +320,8 @@ def test_exact_threshold_boundary_no_warning(mock_get_client, mock_ctx_len):
     assert len(messages) == 0
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=99_999)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=99_999)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_just_below_threshold_auto_corrects(mock_get_client, mock_ctx_len):
     """Auto-correct fires when aux context is one token below the threshold
     (and above the 64K hard floor)."""
@@ -345,8 +345,8 @@ def test_just_below_threshold_auto_corrects(mock_get_client, mock_ctx_len):
 # ── Two-phase: __init__ + run_conversation replay ───────────────────
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=80_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=80_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_warning_stored_for_gateway_replay(mock_get_client, mock_ctx_len):
     """__init__ stores the warning; _replay sends it through status_callback."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -374,8 +374,8 @@ def test_warning_stored_for_gateway_replay(mock_get_client, mock_ctx_len):
     )
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=200_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=200_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_no_replay_when_no_warning(mock_get_client, mock_ctx_len):
     """_replay_compression_warning is a no-op when there's no stored warning."""
     agent = _make_agent(main_context=200_000, threshold_percent=0.50)
@@ -406,8 +406,8 @@ def test_replay_without_callback_is_noop():
     agent._replay_compression_warning()
 
 
-@patch("agent.model_metadata.get_model_context_length", return_value=80_000)
-@patch("agent.auxiliary_client.get_text_auxiliary_client")
+@patch("harness.agent.model_metadata.get_model_context_length", return_value=80_000)
+@patch("harness.agent.auxiliary_client.get_text_auxiliary_client")
 def test_run_conversation_clears_warning_after_replay(mock_get_client, mock_ctx_len):
     """After replay in run_conversation, _compression_warning is cleared
     so the warning is not sent again on subsequent turns."""

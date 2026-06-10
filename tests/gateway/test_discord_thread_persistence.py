@@ -16,8 +16,8 @@ class TestDiscordThreadPersistence:
 
     def _make_adapter(self, tmp_path):
         """Build a minimal DiscordAdapter with HERMES_HOME pointed at tmp_path."""
-        from gateway.config import PlatformConfig
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig
+        from harness.gateway.platforms.discord import DiscordAdapter
 
         config = PlatformConfig(enabled=True, token="test-token")
         with patch.dict(os.environ, {"HERMES_HOME": str(tmp_path)}):
@@ -78,7 +78,7 @@ class TestDiscordThreadPersistence:
         """Load/save tolerate missing directories."""
         fake_home = tmp_path / "nonexistent" / "deep"
         with patch.dict(os.environ, {"HERMES_HOME": str(fake_home)}):
-            from gateway.platforms.helpers import ThreadParticipationTracker
+            from harness.gateway.platforms.helpers import ThreadParticipationTracker
             # ThreadParticipationTracker should return empty set, not crash
             tracker = ThreadParticipationTracker("discord")
             assert "$test" not in tracker

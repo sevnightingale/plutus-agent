@@ -15,7 +15,7 @@ The gateway ticks the scheduler every 60 seconds. A file lock prevents
 duplicate execution if multiple processes overlap.
 """
 
-from cron.jobs import (
+from harness.cron.jobs import (
     create_job,
     get_job,
     list_jobs,
@@ -26,7 +26,7 @@ from cron.jobs import (
     trigger_job,
     JOBS_FILE,
 )
-from cron.scheduler import tick
+from harness.cron.scheduler import tick
 
 __all__ = [
     "create_job",

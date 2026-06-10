@@ -16,9 +16,9 @@ import logging
 import os
 from pathlib import Path
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Any, Dict, List, Optional, Tuple
-from utils import normalize_proxy_env_vars
+from harness.utils import normalize_proxy_env_vars
 
 try:
     import anthropic as _anthropic_sdk

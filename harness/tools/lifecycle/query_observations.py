@@ -9,9 +9,9 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, List
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.lifecycle._helpers import safe_json_loads
-from tools.registry import registry, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.lifecycle._helpers import safe_json_loads
+from harness.tools.registry import registry, tool_result
 
 
 SCHEMA = {

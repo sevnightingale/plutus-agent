@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from plutus_cli.model_switch import (
+from harness.cli.model_switch import (
     _HERMES_MODEL_WARNING,
     _check_hermes_model_warning,
     is_nous_hermes_non_agentic,

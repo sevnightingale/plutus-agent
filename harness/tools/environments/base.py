@@ -20,8 +20,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import IO, Callable, Protocol
 
-from plutus_constants import get_hermes_home
-from tools.interrupt import is_interrupted
+from harness.constants import get_hermes_home
+from harness.tools.interrupt import is_interrupted
 
 logger = logging.getLogger(__name__)
 
@@ -710,7 +710,7 @@ class BaseEnvironment(ABC):
         # server, `yes > /dev/null`, etc.), leaking the subshell forever.
         # Rewriting to `A && { B & }` runs B as a plain background in the
         # current shell — no subshell wait.
-        from tools.terminal_tool import _rewrite_compound_background
+        from harness.tools.terminal_tool import _rewrite_compound_background
         exec_command = _rewrite_compound_background(exec_command)
         effective_timeout = timeout or self.timeout
         effective_cwd = cwd or self.cwd
@@ -757,7 +757,7 @@ class BaseEnvironment(ABC):
 
     def _prepare_command(self, command: str) -> tuple[str, str | None]:
         """Transform sudo commands if SUDO_PASSWORD is available."""
-        from tools.terminal_tool import _transform_sudo_command
+        from harness.tools.terminal_tool import _transform_sudo_command
 
         return _transform_sudo_command(command)
 

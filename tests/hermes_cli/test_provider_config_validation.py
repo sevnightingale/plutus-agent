@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from plutus_cli.config import _normalize_custom_provider_entry
+from harness.cli.config import _normalize_custom_provider_entry
 
 
 class TestNormalizeCustomProviderEntry:

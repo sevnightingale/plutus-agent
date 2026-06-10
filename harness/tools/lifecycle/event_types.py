@@ -24,8 +24,8 @@ import logging
 import time
 from typing import Any, Dict, List, Optional
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.core.event_registry import register_event
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.core.event_registry import register_event
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ def _embed(text: str) -> tuple[Optional[bytes], Optional[str], Optional[List[flo
     is only written when the vector succeeded.
     """
     try:
-        from tools.core.embedder import get_embedder
+        from harness.tools.core.embedder import get_embedder
         embedder = get_embedder()
         vec = embedder.embed_documents([text])[0]
         import struct
@@ -572,7 +572,7 @@ def _record_perception_digest(
     # know its own id. If the caller passes session_id_perception explicitly
     # (e.g., for back-fill from a script), respect that.
     if not session_id_perception:
-        from tools.dispatchers._helpers import session_id_from_context
+        from harness.tools.dispatchers._helpers import session_id_from_context
         session_id_perception = session_id_from_context()
 
     structured_tags: Dict[str, Any] = {

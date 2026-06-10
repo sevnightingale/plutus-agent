@@ -6,7 +6,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.checkpoint_manager import (
+from harness.tools.checkpoint_manager import (
     CheckpointManager,
     _shadow_repo_path,
     _init_shadow_repo,
@@ -55,14 +55,14 @@ def fake_home(tmp_path, monkeypatch):
 @pytest.fixture()
 def mgr(work_dir, checkpoint_base, monkeypatch):
     """CheckpointManager with redirected checkpoint base."""
-    monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+    monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
     return CheckpointManager(enabled=True, max_snapshots=50)
 
 
 @pytest.fixture()
 def disabled_mgr(checkpoint_base, monkeypatch):
     """Disabled CheckpointManager."""
-    monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+    monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
     return CheckpointManager(enabled=False)
 
 
@@ -72,24 +72,24 @@ def disabled_mgr(checkpoint_base, monkeypatch):
 
 class TestShadowRepoPath:
     def test_deterministic(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         p1 = _shadow_repo_path(str(work_dir))
         p2 = _shadow_repo_path(str(work_dir))
         assert p1 == p2
 
     def test_different_dirs_different_paths(self, tmp_path, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         p1 = _shadow_repo_path(str(tmp_path / "a"))
         p2 = _shadow_repo_path(str(tmp_path / "b"))
         assert p1 != p2
 
     def test_under_checkpoint_base(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         p = _shadow_repo_path(str(work_dir))
         assert str(p).startswith(str(checkpoint_base))
 
     def test_tilde_and_expanded_home_share_shadow_repo(self, fake_home, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         project = fake_home / "project"
         project.mkdir()
 
@@ -105,20 +105,20 @@ class TestShadowRepoPath:
 
 class TestShadowRepoInit:
     def test_creates_git_repo(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         err = _init_shadow_repo(shadow, str(work_dir))
         assert err is None
         assert (shadow / "HEAD").exists()
 
     def test_no_git_in_project_dir(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         _init_shadow_repo(shadow, str(work_dir))
         assert not (work_dir / ".git").exists()
 
     def test_has_exclude_file(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         _init_shadow_repo(shadow, str(work_dir))
         exclude = shadow / "info" / "exclude"
@@ -128,7 +128,7 @@ class TestShadowRepoInit:
         assert ".env" in content
 
     def test_has_workdir_file(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         _init_shadow_repo(shadow, str(work_dir))
         workdir_file = shadow / "HERMES_WORKDIR"
@@ -136,7 +136,7 @@ class TestShadowRepoInit:
         assert str(work_dir.resolve()) in workdir_file.read_text()
 
     def test_idempotent(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         err1 = _init_shadow_repo(shadow, str(work_dir))
         err2 = _init_shadow_repo(shadow, str(work_dir))
@@ -166,7 +166,7 @@ class TestTakeCheckpoint:
         assert result is True
 
     def test_successful_checkpoint_does_not_log_expected_diff_exit(self, mgr, work_dir, caplog):
-        with caplog.at_level(logging.ERROR, logger="tools.checkpoint_manager"):
+        with caplog.at_level(logging.ERROR, logger="harness.tools.checkpoint_manager"):
             result = mgr.ensure_checkpoint(str(work_dir), "initial")
         assert result is True
         assert not any("diff --cached --quiet" in r.getMessage() for r in caplog.records)
@@ -242,7 +242,7 @@ class TestListCheckpoints:
         assert result[2]["reason"] == "first"
 
     def test_tilde_path_lists_same_checkpoints_as_expanded_path(self, checkpoint_base, fake_home, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         mgr = CheckpointManager(enabled=True, max_snapshots=50)
         project = fake_home / "project"
         project.mkdir()
@@ -306,7 +306,7 @@ class TestRestore:
         assert "pre-rollback" in all_cps[0]["reason"]
 
     def test_tilde_path_supports_diff_and_restore_flow(self, checkpoint_base, fake_home, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         mgr = CheckpointManager(enabled=True, max_snapshots=50)
         project = fake_home / "project"
         project.mkdir()
@@ -452,7 +452,7 @@ class TestDirFileCount:
 
 class TestErrorResilience:
     def test_no_git_installed(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         mgr = CheckpointManager(enabled=True)
         # Mock git not found
         monkeypatch.setattr("shutil.which", lambda x: None)
@@ -469,8 +469,8 @@ class TestErrorResilience:
             stdout="",
             stderr="",
         )
-        with patch("tools.checkpoint_manager.subprocess.run", return_value=completed):
-            with caplog.at_level(logging.ERROR, logger="tools.checkpoint_manager"):
+        with patch("harness.tools.checkpoint_manager.subprocess.run", return_value=completed):
+            with caplog.at_level(logging.ERROR, logger="harness.tools.checkpoint_manager"):
                 ok, stdout, stderr = _run_git(
                     ["diff", "--cached", "--quiet"],
                     tmp_path / "shadow",
@@ -484,7 +484,7 @@ class TestErrorResilience:
 
     def test_run_git_invalid_working_dir_reports_path_error(self, tmp_path, caplog):
         missing = tmp_path / "missing"
-        with caplog.at_level(logging.ERROR, logger="tools.checkpoint_manager"):
+        with caplog.at_level(logging.ERROR, logger="harness.tools.checkpoint_manager"):
             ok, stdout, stderr = _run_git(
                 ["status"],
                 tmp_path / "shadow",
@@ -502,8 +502,8 @@ class TestErrorResilience:
         def raise_missing_git(*args, **kwargs):
             raise FileNotFoundError(2, "No such file or directory", "git")
 
-        monkeypatch.setattr("tools.checkpoint_manager.subprocess.run", raise_missing_git)
-        with caplog.at_level(logging.ERROR, logger="tools.checkpoint_manager"):
+        monkeypatch.setattr("harness.tools.checkpoint_manager.subprocess.run", raise_missing_git)
+        with caplog.at_level(logging.ERROR, logger="harness.tools.checkpoint_manager"):
             ok, stdout, stderr = _run_git(
                 ["status"],
                 tmp_path / "shadow",
@@ -518,7 +518,7 @@ class TestErrorResilience:
         """Checkpoint failures should never raise — they're silently logged."""
         def broken_run_git(*args, **kwargs):
             raise OSError("git exploded")
-        monkeypatch.setattr("tools.checkpoint_manager._run_git", broken_run_git)
+        monkeypatch.setattr("harness.tools.checkpoint_manager._run_git", broken_run_git)
         # Should not raise
         result = mgr.ensure_checkpoint(str(work_dir), "test")
         assert result is False
@@ -609,7 +609,7 @@ class TestGpgAndGlobalConfigIsolation:
         assert env["GIT_CONFIG_NOSYSTEM"] == "1"
 
     def test_init_sets_commit_gpgsign_false(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         _init_shadow_repo(shadow, str(work_dir))
         # Inspect the shadow's own config directly — the settings must be
@@ -621,7 +621,7 @@ class TestGpgAndGlobalConfigIsolation:
         assert result.stdout.strip() == "false"
 
     def test_init_sets_tag_gpgsign_false(self, work_dir, checkpoint_base, monkeypatch):
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
         shadow = _shadow_repo_path(str(work_dir))
         _init_shadow_repo(shadow, str(work_dir))
         result = subprocess.run(
@@ -637,7 +637,7 @@ class TestGpgAndGlobalConfigIsolation:
         is broken or pinentry is unavailable.  Before the fix, every snapshot
         either failed or spawned a pinentry window.  After the fix, snapshots
         succeed without ever invoking GPG."""
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
 
         # Fake HOME with global gpgsign=true and a deliberately broken GPG
         # binary.  If isolation fails, the commit will try to exec this
@@ -664,7 +664,7 @@ class TestGpgAndGlobalConfigIsolation:
         """Users with shadow repos created before the fix will not have
         commit.gpgsign=false in their shadow's own config.  The inline
         ``--no-gpg-sign`` flag on the commit call must cover them."""
-        monkeypatch.setattr("tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
+        monkeypatch.setattr("harness.tools.checkpoint_manager.CHECKPOINT_BASE", checkpoint_base)
 
         # Simulate a pre-fix shadow repo: init without commit.gpgsign=false
         # in its own config.  _init_shadow_repo now writes it, so we must

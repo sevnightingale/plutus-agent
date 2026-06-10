@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 # The terminal tool polls this during command execution so it can kill
 # long-running subprocesses immediately instead of blocking until timeout.
 # ---------------------------------------------------------------------------
-from tools.interrupt import is_interrupted, _interrupt_event  # noqa: F401 — re-exported
+from harness.tools.interrupt import is_interrupted, _interrupt_event  # noqa: F401 — re-exported
 # display_hermes_home imported lazily at call site (stale-module safety during hermes update)
 
 
@@ -63,8 +63,8 @@ from tools.interrupt import is_interrupted, _interrupt_event  # noqa: F401 — r
 # =============================================================================
 
 # Singularity helpers (scratch dir, SIF cache) now live in tools/environments/singularity.py
-from tools.environments.singularity import _get_scratch_dir
-from tools.tool_backend_helpers import (
+from harness.tools.environments.singularity import _get_scratch_dir
+from harness.tools.tool_backend_helpers import (
     coerce_modal_mode,
     has_direct_modal_credentials,
     managed_nous_tools_enabled,
@@ -195,7 +195,7 @@ def set_approval_callback(cb):
 # =============================================================================
 
 # Dangerous command detection + approval now consolidated in tools/approval.py
-from tools.approval import (
+from harness.tools.approval import (
     check_all_command_guards as _check_all_guards_impl,
 )
 
@@ -255,7 +255,7 @@ def _handle_sudo_failure(output: str, env_type: str) -> str:
     
     for failure in sudo_failures:
         if failure in output:
-            from plutus_constants import display_hermes_home as _dhh
+            from harness.constants import display_hermes_home as _dhh
             return output + f"\n\n💡 Tip: To enable sudo over messaging, add SUDO_PASSWORD to {_dhh()}/.env on the agent machine."
     
     return output
@@ -724,13 +724,13 @@ def _transform_sudo_command(command: str | None) -> tuple[str | None, str | None
 
 
 # Environment classes now live in tools/environments/
-from tools.environments.local import LocalEnvironment as _LocalEnvironment
-from tools.environments.singularity import SingularityEnvironment as _SingularityEnvironment
-from tools.environments.ssh import SSHEnvironment as _SSHEnvironment
-from tools.environments.docker import DockerEnvironment as _DockerEnvironment
-from tools.environments.modal import ModalEnvironment as _ModalEnvironment
-from tools.environments.managed_modal import ManagedModalEnvironment as _ManagedModalEnvironment
-from tools.managed_tool_gateway import is_managed_tool_gateway_ready
+from harness.tools.environments.local import LocalEnvironment as _LocalEnvironment
+from harness.tools.environments.singularity import SingularityEnvironment as _SingularityEnvironment
+from harness.tools.environments.ssh import SSHEnvironment as _SSHEnvironment
+from harness.tools.environments.docker import DockerEnvironment as _DockerEnvironment
+from harness.tools.environments.modal import ModalEnvironment as _ModalEnvironment
+from harness.tools.environments.managed_modal import ManagedModalEnvironment as _ManagedModalEnvironment
+from harness.tools.managed_tool_gateway import is_managed_tool_gateway_ready
 
 
 # Tool description for LLM
@@ -1015,7 +1015,7 @@ def _create_environment(env_type: str, image: str, cwd: str, timeout: int,
     
     elif env_type == "daytona":
         # Lazy import so daytona SDK is only required when backend is selected.
-        from tools.environments.daytona import DaytonaEnvironment as _DaytonaEnvironment
+        from harness.tools.environments.daytona import DaytonaEnvironment as _DaytonaEnvironment
         return _DaytonaEnvironment(
             image=image, cwd=cwd, timeout=timeout,
             cpu=int(cpu), memory=memory, disk=disk,
@@ -1045,7 +1045,7 @@ def _cleanup_inactive_envs(lifetime_seconds: int = 300):
     # Check the process registry -- skip cleanup for sandboxes with active
     # background processes (their _last_activity gets refreshed to keep them alive).
     try:
-        from tools.process_registry import process_registry
+        from harness.tools.process_registry import process_registry
         for task_id in list(_last_activity.keys()):
             if process_registry.has_active_processes(task_id):
                 _last_activity[task_id] = current_time  # Keep sandbox alive
@@ -1077,7 +1077,7 @@ def _cleanup_inactive_envs(lifetime_seconds: int = 300):
         # Invalidate stale file_ops cache entry (Bug fix: prevents
         # ShellFileOperations from referencing a dead sandbox)
         try:
-            from tools.file_tools import clear_file_ops_cache
+            from harness.tools.file_tools import clear_file_ops_cache
             clear_file_ops_cache(task_id)
         except ImportError:
             pass
@@ -1205,7 +1205,7 @@ def cleanup_vm(task_id: str):
 
     # Invalidate stale file_ops cache entry
     try:
-        from tools.file_tools import clear_file_ops_cache
+        from harness.tools.file_tools import clear_file_ops_cache
         clear_file_ops_cache(task_id)
     except ImportError:
         pass
@@ -1648,8 +1648,8 @@ def terminal_tool(
             # Spawn a tracked background process via the process registry.
             # For local backends: uses subprocess.Popen with output buffering.
             # For non-local backends: runs inside the sandbox via env.execute().
-            from tools.approval import get_current_session_key
-            from tools.process_registry import process_registry
+            from harness.tools.approval import get_current_session_key
+            from harness.tools.process_registry import process_registry
 
             session_key = get_current_session_key(default="")
             effective_cwd = workdir or cwd
@@ -1688,7 +1688,7 @@ def terminal_tool(
                 # watch-pattern and completion notifications can be
                 # routed back to the correct chat/thread.
                 if background and (notify_on_complete or watch_patterns):
-                    from gateway.session_context import get_session_env as _gse
+                    from harness.gateway.session_context import get_session_env as _gse
                     _gw_platform = _gse("HERMES_SESSION_PLATFORM", "")
                     if _gw_platform:
                         _gw_chat_id = _gse("HERMES_SESSION_CHAT_ID", "")
@@ -1788,7 +1788,7 @@ def terminal_tool(
             # replace it by returning a string from transform_terminal_output.
             # The hook is fail-open, and the first valid string return wins.
             try:
-                from plutus_cli.plugins import invoke_hook
+                from harness.cli.plugins import invoke_hook
                 hook_results = invoke_hook(
                     "transform_terminal_output",
                     command=command,
@@ -1818,11 +1818,11 @@ def terminal_tool(
 
             # Strip ANSI escape sequences so the model never sees terminal
             # formatting — prevents it from copying escapes into file writes.
-            from tools.ansi_strip import strip_ansi
+            from harness.tools.ansi_strip import strip_ansi
             output = strip_ansi(output)
 
             # Redact secrets from command output (catches env/printenv leaking keys)
-            from agent.redact import redact_sensitive_text
+            from harness.agent.redact import redact_sensitive_text
             output = redact_sensitive_text(output.strip()) if output else ""
 
             # Interpret non-zero exit codes that aren't real errors
@@ -1864,7 +1864,7 @@ def check_terminal_requirements() -> bool:
             return True
 
         elif env_type == "docker":
-            from tools.environments.docker import find_docker
+            from harness.tools.environments.docker import find_docker
             docker = find_docker()
             if not docker:
                 logger.error("Docker executable not found in PATH or common install locations")
@@ -1996,7 +1996,7 @@ if __name__ == "__main__":
     print(f"  TERMINAL_MODAL_IMAGE: {os.getenv('TERMINAL_MODAL_IMAGE', default_img)}")
     print(f"  TERMINAL_DAYTONA_IMAGE: {os.getenv('TERMINAL_DAYTONA_IMAGE', default_img)}")
     print(f"  TERMINAL_CWD: {os.getenv('TERMINAL_CWD', os.getcwd())}")
-    from plutus_constants import display_hermes_home as _dhh
+    from harness.constants import display_hermes_home as _dhh
     print(f"  TERMINAL_SANDBOX_DIR: {os.getenv('TERMINAL_SANDBOX_DIR', f'{_dhh()}/sandboxes')}")
     print(f"  TERMINAL_TIMEOUT: {os.getenv('TERMINAL_TIMEOUT', '60')}")
     print(f"  TERMINAL_LIFETIME_SECONDS: {os.getenv('TERMINAL_LIFETIME_SECONDS', '300')}")
@@ -2005,7 +2005,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
-from tools.registry import registry
+from harness.tools.registry import registry
 
 TERMINAL_SCHEMA = {
     "name": "terminal",

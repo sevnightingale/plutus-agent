@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tools.integrations.dgclaw import _cli, _env, data_points, operations, alerts
+from harness.tools.integrations.dgclaw import _cli, _env, data_points, operations, alerts
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def temp_home(tmp_path, monkeypatch):
     home = tmp_path / "plutus-agent"
     home.mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
-    import importlib, plutus_constants
+    import importlib; import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
     return home
 

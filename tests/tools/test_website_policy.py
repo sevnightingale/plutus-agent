@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from tools.website_policy import WebsitePolicyError, check_website_access, load_website_blocklist
+from harness.tools.website_policy import WebsitePolicyError, check_website_access, load_website_blocklist
 
 
 def test_load_website_blocklist_merges_config_and_shared_file(tmp_path):
@@ -86,7 +86,7 @@ def test_check_website_access_supports_wildcard_subdomains_only(tmp_path):
 
 
 def test_default_config_exposes_website_blocklist_shape():
-    from plutus_cli.config import DEFAULT_CONFIG
+    from harness.cli.config import DEFAULT_CONFIG
 
     website_blocklist = DEFAULT_CONFIG["security"]["website_blocklist"]
     assert website_blocklist["enabled"] is False
@@ -262,7 +262,7 @@ def test_check_website_access_uses_dynamic_hermes_home(monkeypatch, tmp_path):
     # Invalidate the module-level cache so the new HERMES_HOME is picked up.
     # A prior test may have cached a default policy (enabled=False) under the
     # old HERMES_HOME set by the autouse _isolate_hermes_home fixture.
-    from tools.website_policy import invalidate_cache
+    from harness.tools.website_policy import invalidate_cache
     invalidate_cache()
 
     blocked = check_website_access("https://dynamic.example/path")
@@ -296,7 +296,7 @@ def test_check_website_access_blocks_scheme_less_urls(tmp_path):
 
 
 def test_browser_navigate_returns_policy_block(monkeypatch):
-    from tools import browser_tool
+    from harness.tools import browser_tool
 
     # Allow SSRF check to pass so the policy check is reached
     monkeypatch.setattr(browser_tool, "_is_safe_url", lambda url: True)
@@ -324,7 +324,7 @@ def test_browser_navigate_returns_policy_block(monkeypatch):
 
 def test_browser_navigate_allows_when_shared_file_missing(monkeypatch, tmp_path):
     """Missing shared blocklist files are warned and skipped, not fatal."""
-    from tools import browser_tool
+    from harness.tools import browser_tool
 
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
@@ -349,7 +349,7 @@ def test_browser_navigate_allows_when_shared_file_missing(monkeypatch, tmp_path)
 
 @pytest.mark.asyncio
 async def test_web_extract_short_circuits_blocked_url(monkeypatch):
-    from tools import web_tools
+    from harness.tools import web_tools
 
     # Allow test URLs past SSRF check so website policy is what gets tested
     monkeypatch.setattr(web_tools, "is_safe_url", lambda url: True)
@@ -368,7 +368,7 @@ async def test_web_extract_short_circuits_blocked_url(monkeypatch):
         "_get_firecrawl_client",
         lambda: pytest.fail("firecrawl should not run for blocked URL"),
     )
-    monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
+    monkeypatch.setattr("harness.tools.interrupt.is_interrupted", lambda: False)
 
     result = json.loads(await web_tools.web_extract_tool(["https://blocked.test"], use_llm_processing=False))
 
@@ -387,7 +387,7 @@ def test_check_website_access_fails_open_on_malformed_config(tmp_path, monkeypat
 
     # Simulate default path by pointing HERMES_HOME to tmp_path
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    from tools import website_policy
+    from harness.tools import website_policy
     website_policy.invalidate_cache()
 
     # With default path, errors are caught and fail open
@@ -397,7 +397,7 @@ def test_check_website_access_fails_open_on_malformed_config(tmp_path, monkeypat
 
 @pytest.mark.asyncio
 async def test_web_extract_blocks_redirected_final_url(monkeypatch):
-    from tools import web_tools
+    from harness.tools import web_tools
 
     # Allow test URLs past SSRF check so website policy is what gets tested
     monkeypatch.setattr(web_tools, "is_safe_url", lambda url: True)
@@ -426,7 +426,7 @@ async def test_web_extract_blocks_redirected_final_url(monkeypatch):
 
     monkeypatch.setattr(web_tools, "check_website_access", fake_check)
     monkeypatch.setattr(web_tools, "_get_firecrawl_client", lambda: FakeFirecrawlClient())
-    monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
+    monkeypatch.setattr("harness.tools.interrupt.is_interrupted", lambda: False)
 
     result = json.loads(await web_tools.web_extract_tool(["https://allowed.test"], use_llm_processing=False))
 
@@ -437,7 +437,7 @@ async def test_web_extract_blocks_redirected_final_url(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_web_crawl_short_circuits_blocked_url(monkeypatch):
-    from tools import web_tools
+    from harness.tools import web_tools
 
     # web_crawl_tool checks for Firecrawl env before website policy
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fake-key")
@@ -458,7 +458,7 @@ async def test_web_crawl_short_circuits_blocked_url(monkeypatch):
         "_get_firecrawl_client",
         lambda: pytest.fail("firecrawl should not run for blocked crawl URL"),
     )
-    monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
+    monkeypatch.setattr("harness.tools.interrupt.is_interrupted", lambda: False)
 
     result = json.loads(await web_tools.web_crawl_tool("https://blocked.test", use_llm_processing=False))
 
@@ -468,7 +468,7 @@ async def test_web_crawl_short_circuits_blocked_url(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_web_crawl_blocks_redirected_final_url(monkeypatch):
-    from tools import web_tools
+    from harness.tools import web_tools
 
     # web_crawl_tool checks for Firecrawl env before website policy
     monkeypatch.setenv("FIRECRAWL_API_KEY", "fake-key")
@@ -503,7 +503,7 @@ async def test_web_crawl_blocks_redirected_final_url(monkeypatch):
 
     monkeypatch.setattr(web_tools, "check_website_access", fake_check)
     monkeypatch.setattr(web_tools, "_get_firecrawl_client", lambda: FakeCrawlClient())
-    monkeypatch.setattr("tools.interrupt.is_interrupted", lambda: False)
+    monkeypatch.setattr("harness.tools.interrupt.is_interrupted", lambda: False)
 
     result = json.loads(await web_tools.web_crawl_tool("https://allowed.test", use_llm_processing=False))
 

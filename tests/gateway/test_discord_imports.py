@@ -14,10 +14,10 @@ class TestDiscordImportSafety:
                 raise ImportError("discord unavailable for test")
             return original_import(name, globals, locals, fromlist, level)
 
-        monkeypatch.delitem(sys.modules, "gateway.platforms.discord", raising=False)
+        monkeypatch.delitem(sys.modules, "harness.gateway.platforms.discord", raising=False)
         monkeypatch.setattr(builtins, "__import__", fake_import)
 
-        module = importlib.import_module("gateway.platforms.discord")
+        module = importlib.import_module("harness.gateway.platforms.discord")
 
         assert module.DISCORD_AVAILABLE is False
         assert module.discord is None

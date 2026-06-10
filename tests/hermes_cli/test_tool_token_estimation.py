@@ -20,10 +20,10 @@ _needs_tiktoken = pytest.mark.skipif(not _has_tiktoken, reason="tiktoken not ins
 @_needs_tiktoken
 def test_estimate_tool_tokens_returns_positive_counts():
     """_estimate_tool_tokens should return a non-empty dict with positive values."""
-    from plutus_cli.tools_config import _estimate_tool_tokens, _tool_token_cache
+    from harness.cli.tools_config import _estimate_tool_tokens, _tool_token_cache
 
     # Clear cache to force fresh computation
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
     tc._tool_token_cache = None
 
     tokens = _estimate_tool_tokens()
@@ -39,7 +39,7 @@ def test_estimate_tool_tokens_returns_positive_counts():
 @_needs_tiktoken
 def test_estimate_tool_tokens_is_cached():
     """Second call should return the same cached dict object."""
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
     tc._tool_token_cache = None
 
     first = tc._estimate_tool_tokens()
@@ -50,7 +50,7 @@ def test_estimate_tool_tokens_is_cached():
 
 def test_estimate_tool_tokens_returns_empty_when_tiktoken_unavailable(monkeypatch):
     """Graceful degradation when tiktoken cannot be imported."""
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
     tc._tool_token_cache = None
 
     import builtins
@@ -74,7 +74,7 @@ def test_estimate_tool_tokens_returns_empty_when_tiktoken_unavailable(monkeypatc
 @_needs_tiktoken
 def test_estimate_tool_tokens_covers_known_tools():
     """Should include schemas for well-known tools like terminal, web_search."""
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
     tc._tool_token_cache = None
 
     tokens = tc._estimate_tool_tokens()
@@ -89,7 +89,7 @@ def test_estimate_tool_tokens_covers_known_tools():
 
 def test_prompt_toolset_checklist_passes_status_fn(monkeypatch):
     """_prompt_toolset_checklist should pass a status_fn to curses_checklist."""
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
 
     captured_kwargs = {}
 
@@ -98,7 +98,7 @@ def test_prompt_toolset_checklist_passes_status_fn(monkeypatch):
         captured_kwargs["title"] = title
         return selected  # Return pre-selected unchanged
 
-    monkeypatch.setattr("plutus_cli.curses_ui.curses_checklist", fake_checklist)
+    monkeypatch.setattr("harness.cli.curses_ui.curses_checklist", fake_checklist)
 
     tc._prompt_toolset_checklist("CLI", {"web", "terminal"})
 
@@ -111,8 +111,8 @@ def test_prompt_toolset_checklist_passes_status_fn(monkeypatch):
 
 def test_status_fn_returns_formatted_token_count(monkeypatch):
     """The status_fn should return a human-readable token count string."""
-    import plutus_cli.tools_config as tc
-    from plutus_cli.tools_config import CONFIGURABLE_TOOLSETS
+    import harness.cli.tools_config as tc
+    from harness.cli.tools_config import CONFIGURABLE_TOOLSETS
 
     captured = {}
 
@@ -120,7 +120,7 @@ def test_status_fn_returns_formatted_token_count(monkeypatch):
         captured["status_fn"] = status_fn
         return selected
 
-    monkeypatch.setattr("plutus_cli.curses_ui.curses_checklist", fake_checklist)
+    monkeypatch.setattr("harness.cli.curses_ui.curses_checklist", fake_checklist)
 
     tc._prompt_toolset_checklist("CLI", {"web", "terminal"})
 
@@ -139,8 +139,8 @@ def test_status_fn_returns_formatted_token_count(monkeypatch):
 
 def test_status_fn_deduplicates_overlapping_tools(monkeypatch):
     """When toolsets overlap (browser includes web_search), tokens should not double-count."""
-    import plutus_cli.tools_config as tc
-    from plutus_cli.tools_config import CONFIGURABLE_TOOLSETS
+    import harness.cli.tools_config as tc
+    from harness.cli.tools_config import CONFIGURABLE_TOOLSETS
 
     captured = {}
 
@@ -148,7 +148,7 @@ def test_status_fn_deduplicates_overlapping_tools(monkeypatch):
         captured["status_fn"] = status_fn
         return selected
 
-    monkeypatch.setattr("plutus_cli.curses_ui.curses_checklist", fake_checklist)
+    monkeypatch.setattr("harness.cli.curses_ui.curses_checklist", fake_checklist)
 
     tc._prompt_toolset_checklist("CLI", {"web"})
 
@@ -190,15 +190,15 @@ def test_status_fn_deduplicates_overlapping_tools(monkeypatch):
 
 def test_status_fn_empty_selection():
     """Status function with no tools selected should return ~0 tokens."""
-    import plutus_cli.tools_config as tc
+    import harness.cli.tools_config as tc
 
     tc._tool_token_cache = None
     tokens = tc._estimate_tool_tokens()
     if not tokens:
         pytest.skip("tiktoken unavailable")
 
-    from plutus_cli.tools_config import CONFIGURABLE_TOOLSETS
-    from toolsets import resolve_toolset
+    from harness.cli.tools_config import CONFIGURABLE_TOOLSETS
+    from harness.toolsets import resolve_toolset
 
     ts_keys = [ts_key for ts_key, _, _ in CONFIGURABLE_TOOLSETS]
 
@@ -220,7 +220,7 @@ def test_status_fn_empty_selection():
 
 def test_curses_checklist_numbered_fallback_shows_status(monkeypatch, capsys):
     """The numbered fallback should print the status_fn output."""
-    from plutus_cli.curses_ui import _numbered_fallback
+    from harness.cli.curses_ui import _numbered_fallback
 
     def my_status(chosen):
         return f"Selected {len(chosen)} items"
@@ -243,7 +243,7 @@ def test_curses_checklist_numbered_fallback_shows_status(monkeypatch, capsys):
 
 def test_curses_checklist_numbered_fallback_without_status(monkeypatch, capsys):
     """The numbered fallback should work fine without status_fn."""
-    from plutus_cli.curses_ui import _numbered_fallback
+    from harness.cli.curses_ui import _numbered_fallback
 
     monkeypatch.setattr("builtins.input", lambda _prompt="": "")
 
@@ -264,10 +264,10 @@ def test_curses_checklist_numbered_fallback_without_status(monkeypatch, capsys):
 
 def test_registry_get_schema_returns_schema():
     """registry.get_schema() should return a tool's schema dict."""
-    from tools.registry import registry
+    from harness.tools.registry import registry
 
     # Import to trigger discovery
-    import model_tools  # noqa: F401
+    import harness.model_tools as model_tools  # noqa: F401
 
     schema = registry.get_schema("terminal")
     assert schema is not None
@@ -278,6 +278,6 @@ def test_registry_get_schema_returns_schema():
 
 def test_registry_get_schema_returns_none_for_unknown():
     """registry.get_schema() should return None for unknown tools."""
-    from tools.registry import registry
+    from harness.tools.registry import registry
 
     assert registry.get_schema("nonexistent_tool_xyz") is None

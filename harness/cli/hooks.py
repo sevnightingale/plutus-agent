@@ -50,8 +50,8 @@ def hooks_command(args) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_list(_args) -> None:
-    from plutus_cli.config import load_config
-    from agent import shell_hooks
+    from harness.cli.config import load_config
+    from harness.agent import shell_hooks
 
     specs = shell_hooks.iter_configured_hooks(load_config())
 
@@ -186,9 +186,9 @@ _DEFAULT_PAYLOADS = {
 
 
 def _cmd_test(args) -> None:
-    from plutus_cli.config import load_config
-    from plutus_cli.plugins import VALID_HOOKS
-    from agent import shell_hooks
+    from harness.cli.config import load_config
+    from harness.cli.plugins import VALID_HOOKS
+    from harness.agent import shell_hooks
 
     event = args.event
     if event not in VALID_HOOKS:
@@ -273,7 +273,7 @@ def _truncate(s: str, n: int) -> str:
 # ---------------------------------------------------------------------------
 
 def _cmd_revoke(args) -> None:
-    from agent import shell_hooks
+    from harness.agent import shell_hooks
 
     removed = shell_hooks.revoke(args.command)
     if removed == 0:
@@ -291,8 +291,8 @@ def _cmd_revoke(args) -> None:
 # ---------------------------------------------------------------------------
 
 def _cmd_doctor(_args) -> None:
-    from plutus_cli.config import load_config
-    from agent import shell_hooks
+    from harness.cli.config import load_config
+    from harness.agent import shell_hooks
 
     specs = shell_hooks.iter_configured_hooks(load_config())
 

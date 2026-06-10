@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
-import gateway.mirror as mirror_mod
-from gateway.mirror import (
+import harness.gateway.mirror as mirror_mod
+from harness.gateway.mirror import (
     mirror_to_session,
     _find_session_id,
     _append_to_jsonl,
@@ -152,7 +152,7 @@ class TestMirrorToSession:
 
         with patch.object(mirror_mod, "_SESSIONS_DIR", sessions_dir), \
              patch.object(mirror_mod, "_SESSIONS_INDEX", index_file), \
-             patch("gateway.mirror._append_to_sqlite"):
+             patch("harness.gateway.mirror._append_to_sqlite"):
             result = mirror_to_session("telegram", "12345", "Hello!", source_label="cli")
 
         assert result is True
@@ -182,7 +182,7 @@ class TestMirrorToSession:
 
         with patch.object(mirror_mod, "_SESSIONS_DIR", sessions_dir), \
              patch.object(mirror_mod, "_SESSIONS_INDEX", index_file), \
-             patch("gateway.mirror._append_to_sqlite"):
+             patch("harness.gateway.mirror._append_to_sqlite"):
             result = mirror_to_session("telegram", "-1001", "Hello topic!", source_label="cron", thread_id="10")
 
         assert result is True
@@ -199,7 +199,7 @@ class TestMirrorToSession:
         assert result is False
 
     def test_error_returns_false(self, tmp_path):
-        with patch("gateway.mirror._find_session_id", side_effect=Exception("boom")):
+        with patch("harness.gateway.mirror._find_session_id", side_effect=Exception("boom")):
             result = mirror_to_session("telegram", "123", "msg")
 
         assert result is False
@@ -208,10 +208,10 @@ class TestMirrorToSession:
 class TestAppendToSqlite:
     def test_connection_is_closed_after_use(self, tmp_path):
         """Verify _append_to_sqlite closes the SessionDB connection."""
-        from gateway.mirror import _append_to_sqlite
+        from harness.gateway.mirror import _append_to_sqlite
         mock_db = MagicMock()
 
-        with patch("plutus_state.SessionDB", return_value=mock_db):
+        with patch("harness.state.SessionDB", return_value=mock_db):
             _append_to_sqlite("sess_1", {"role": "assistant", "content": "hello"})
 
         mock_db.append_message.assert_called_once()
@@ -219,11 +219,11 @@ class TestAppendToSqlite:
 
     def test_connection_closed_even_on_error(self, tmp_path):
         """Verify connection is closed even when append_message raises."""
-        from gateway.mirror import _append_to_sqlite
+        from harness.gateway.mirror import _append_to_sqlite
         mock_db = MagicMock()
         mock_db.append_message.side_effect = Exception("db error")
 
-        with patch("plutus_state.SessionDB", return_value=mock_db):
+        with patch("harness.state.SessionDB", return_value=mock_db):
             _append_to_sqlite("sess_1", {"role": "assistant", "content": "hello"})
 
         mock_db.close.assert_called_once()

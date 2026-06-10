@@ -60,11 +60,11 @@ def daytona_sdk(monkeypatch):
 def make_env(daytona_sdk, monkeypatch):
     """Factory that creates a DaytonaEnvironment with a mocked SDK."""
     # Prevent is_interrupted from interfering — patch where it's used (base.py)
-    monkeypatch.setattr("tools.environments.base.is_interrupted", lambda: False)
+    monkeypatch.setattr("harness.tools.environments.base.is_interrupted", lambda: False)
     # Prevent skills/credential sync from consuming mock exec calls
-    monkeypatch.setattr("tools.credential_files.get_credential_file_mounts", lambda: [])
-    monkeypatch.setattr("tools.credential_files.get_skills_directory_mount", lambda **kw: None)
-    monkeypatch.setattr("tools.credential_files.iter_skills_files", lambda **kw: [])
+    monkeypatch.setattr("harness.tools.credential_files.get_credential_file_mounts", lambda: [])
+    monkeypatch.setattr("harness.tools.credential_files.get_skills_directory_mount", lambda **kw: None)
+    monkeypatch.setattr("harness.tools.credential_files.iter_skills_files", lambda **kw: [])
 
     def _factory(
         sandbox=None,
@@ -95,7 +95,7 @@ def make_env(daytona_sdk, monkeypatch):
 
         daytona_sdk.Daytona = MagicMock(return_value=mock_client)
 
-        from tools.environments.daytona import DaytonaEnvironment
+        from harness.tools.environments.daytona import DaytonaEnvironment
 
         kwargs.setdefault("disk", 10240)
         env = DaytonaEnvironment(
@@ -384,7 +384,7 @@ class TestInterrupt:
         # is_interrupted is checked by base.py's _wait_for_process,
         # patch where it's actually referenced (base.py's local binding)
         monkeypatch.setattr(
-            "tools.environments.base.is_interrupted", lambda: True
+            "harness.tools.environments.base.is_interrupted", lambda: True
         )
         try:
             result = env.execute("sleep 10")

@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import importlib
-import plugins
-plugins_trade_safety = importlib.import_module("plugins.plutus-trade-safety")
+import harness.plugins as plugins
+plugins_trade_safety = importlib.import_module("harness.plugins.plutus-trade-safety")
 
 
 @pytest.fixture
 def temp_home(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-    import importlib, plutus_constants
+    import importlib; import harness.constants as plutus_constants
     importlib.reload(plutus_constants)
     return tmp_path
 

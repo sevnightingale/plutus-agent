@@ -12,7 +12,7 @@ import json
 import time
 from typing import Optional
 
-from plutus_cli.config import get_hermes_home
+from harness.cli.config import get_hermes_home
 
 
 CACHE_PATH = get_hermes_home() / "sticker_cache.json"

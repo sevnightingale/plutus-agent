@@ -31,7 +31,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 import sqlite_vec
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

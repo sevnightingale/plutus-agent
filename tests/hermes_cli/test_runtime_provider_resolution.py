@@ -1,4 +1,4 @@
-from plutus_cli import runtime_provider as rp
+from harness.cli import runtime_provider as rp
 
 
 def test_resolve_runtime_provider_uses_credential_pool(monkeypatch):
@@ -75,7 +75,7 @@ def test_resolve_runtime_provider_anthropic_explicit_override_skips_pool(monkeyp
     )
     monkeypatch.setattr(rp, "load_pool", _unexpected_pool)
     monkeypatch.setattr(
-        "agent.anthropic_adapter.resolve_anthropic_token",
+        "harness.agent.anthropic_adapter.resolve_anthropic_token",
         _unexpected_anthropic_token,
     )
 
@@ -207,7 +207,7 @@ def test_resolve_provider_alias_qwen(monkeypatch):
 
 def test_qwen_oauth_auto_fallthrough_on_auth_failure(monkeypatch):
     """When requested_provider is 'auto' and Qwen creds fail, fall through."""
-    from plutus_cli.auth import AuthError
+    from harness.cli.auth import AuthError
 
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "qwen-oauth")
     monkeypatch.setattr(
@@ -1148,13 +1148,13 @@ def test_named_custom_provider_anthropic_api_mode(monkeypatch):
 
 def test_resolve_provider_custom_returns_custom():
     """resolve_provider('custom') must return 'custom', not 'openrouter'."""
-    from plutus_cli.auth import resolve_provider
+    from harness.cli.auth import resolve_provider
     assert resolve_provider("custom") == "custom"
 
 
 def test_resolve_provider_openrouter_unchanged():
     """resolve_provider('openrouter') must still return 'openrouter'."""
-    from plutus_cli.auth import resolve_provider
+    from harness.cli.auth import resolve_provider
     assert resolve_provider("openrouter") == "openrouter"
 
 
@@ -1209,7 +1209,7 @@ def test_custom_provider_no_key_gets_placeholder(monkeypatch):
 
 def test_auto_detected_nous_auth_failure_falls_through_to_openrouter(monkeypatch):
     """When auto-detect picks Nous but credentials are revoked, fall through to OpenRouter."""
-    from plutus_cli.auth import AuthError
+    from harness.cli.auth import AuthError
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -1240,7 +1240,7 @@ def test_auto_detected_nous_auth_failure_falls_through_to_openrouter(monkeypatch
 
 def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatch):
     """When auto-detect picks Codex but credentials are revoked, fall through to OpenRouter."""
-    from plutus_cli.auth import AuthError
+    from harness.cli.auth import AuthError
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -1267,7 +1267,7 @@ def test_auto_detected_codex_auth_failure_falls_through_to_openrouter(monkeypatc
 
 def test_explicit_nous_auth_failure_still_raises(monkeypatch):
     """When user explicitly requests Nous and auth fails, the error should propagate."""
-    from plutus_cli.auth import AuthError
+    from harness.cli.auth import AuthError
     import pytest
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-or-key")

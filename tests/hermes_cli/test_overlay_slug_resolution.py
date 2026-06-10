@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from plutus_cli.model_switch import list_authenticated_providers
+from harness.cli.model_switch import list_authenticated_providers
 
 
 # -- Copilot slug resolution (env var path) ----------------------------------
@@ -48,7 +48,7 @@ def test_copilot_no_duplicate_entries():
 
 def test_kimi_for_coding_alias():
     """resolve_provider('kimi-for-coding') should return 'kimi-coding'."""
-    from plutus_cli.auth import resolve_provider
+    from harness.cli.auth import resolve_provider
 
     result = resolve_provider("kimi-for-coding")
     assert result == "kimi-coding"

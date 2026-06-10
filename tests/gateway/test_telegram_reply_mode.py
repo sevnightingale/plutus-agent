@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig, GatewayConfig, Platform, _apply_env_overrides
+from harness.gateway.config import PlatformConfig, GatewayConfig, Platform, _apply_env_overrides
 
 
 def _ensure_telegram_mock():
@@ -31,7 +31,7 @@ def _ensure_telegram_mock():
 
 _ensure_telegram_mock()
 
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 
 
 @pytest.fixture()

@@ -21,11 +21,11 @@ def test_no_duplicate_skills_subparser():
     import sys
 
     # Remove cached module if present
-    if 'plutus_cli.main' in sys.modules:
-        del sys.modules['plutus_cli.main']
+    if 'harness.cli.main' in sys.modules:
+        del sys.modules['harness.cli.main']
 
     try:
-        import plutus_cli.main  # noqa: F401
+        import harness.cli.main  # noqa: F401
     except argparse.ArgumentError as e:
         if "conflicting subparser" in str(e):
             raise AssertionError(

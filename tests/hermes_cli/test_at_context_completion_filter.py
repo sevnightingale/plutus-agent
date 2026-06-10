@@ -14,7 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from plutus_cli.commands import SlashCommandCompleter
+from harness.cli.commands import SlashCommandCompleter
 
 
 def _run(tmp_path: Path, word: str) -> list[tuple[str, str]]:

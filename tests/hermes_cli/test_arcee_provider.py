@@ -4,7 +4,7 @@ import types
 
 import pytest
 
-from plutus_cli.auth import (
+from harness.cli.auth import (
     PROVIDER_REGISTRY,
     resolve_provider,
     get_api_key_provider_status,
@@ -61,12 +61,12 @@ class TestArceeAliases:
         assert resolve_provider(alias) == "arcee"
 
     def test_normalize_provider_models_py(self):
-        from plutus_cli.models import normalize_provider
+        from harness.cli.models import normalize_provider
         assert normalize_provider("arcee-ai") == "arcee"
         assert normalize_provider("arceeai") == "arcee"
 
     def test_normalize_provider_providers_py(self):
-        from plutus_cli.providers import normalize_provider
+        from harness.cli.providers import normalize_provider
         assert normalize_provider("arcee-ai") == "arcee"
         assert normalize_provider("arceeai") == "arcee"
 
@@ -118,12 +118,12 @@ class TestArceeModelCatalog:
         """Arcee has a static _PROVIDER_MODELS catalog entry. Specific model
         names change with releases and don't belong in tests.
         """
-        from plutus_cli.models import _PROVIDER_MODELS
+        from harness.cli.models import _PROVIDER_MODELS
         assert "arcee" in _PROVIDER_MODELS
         assert len(_PROVIDER_MODELS["arcee"]) >= 1
 
     def test_canonical_provider_entry(self):
-        from plutus_cli.models import CANONICAL_PROVIDERS
+        from harness.cli.models import CANONICAL_PROVIDERS
         slugs = [p.slug for p in CANONICAL_PROVIDERS]
         assert "arcee" in slugs
 
@@ -135,15 +135,15 @@ class TestArceeModelCatalog:
 
 class TestArceeNormalization:
     def test_in_matching_prefix_strip_set(self):
-        from plutus_cli.model_normalize import _MATCHING_PREFIX_STRIP_PROVIDERS
+        from harness.cli.model_normalize import _MATCHING_PREFIX_STRIP_PROVIDERS
         assert "arcee" in _MATCHING_PREFIX_STRIP_PROVIDERS
 
     def test_strips_prefix(self):
-        from plutus_cli.model_normalize import normalize_model_for_provider
+        from harness.cli.model_normalize import normalize_model_for_provider
         assert normalize_model_for_provider("arcee/trinity-mini", "arcee") == "trinity-mini"
 
     def test_bare_name_unchanged(self):
-        from plutus_cli.model_normalize import normalize_model_for_provider
+        from harness.cli.model_normalize import normalize_model_for_provider
         assert normalize_model_for_provider("trinity-mini", "arcee") == "trinity-mini"
 
 
@@ -154,11 +154,11 @@ class TestArceeNormalization:
 
 class TestArceeURLMapping:
     def test_url_to_provider(self):
-        from agent.model_metadata import _URL_TO_PROVIDER
+        from harness.agent.model_metadata import _URL_TO_PROVIDER
         assert _URL_TO_PROVIDER.get("api.arcee.ai") == "arcee"
 
     def test_provider_prefixes(self):
-        from agent.model_metadata import _PROVIDER_PREFIXES
+        from harness.agent.model_metadata import _PROVIDER_PREFIXES
         assert "arcee" in _PROVIDER_PREFIXES
         assert "arcee-ai" in _PROVIDER_PREFIXES
         assert "arceeai" in _PROVIDER_PREFIXES
@@ -177,7 +177,7 @@ class TestArceeURLMapping:
 
 class TestArceeProvidersModule:
     def test_overlay_exists(self):
-        from plutus_cli.providers import HERMES_OVERLAYS
+        from harness.cli.providers import HERMES_OVERLAYS
         assert "arcee" in HERMES_OVERLAYS
         overlay = HERMES_OVERLAYS["arcee"]
         assert overlay.transport == "openai_chat"
@@ -185,7 +185,7 @@ class TestArceeProvidersModule:
         assert not overlay.is_aggregator
 
     def test_label(self):
-        from plutus_cli.models import _PROVIDER_LABELS
+        from harness.cli.models import _PROVIDER_LABELS
         assert _PROVIDER_LABELS["arcee"] == "Arcee AI"
 
 
@@ -197,5 +197,5 @@ class TestArceeProvidersModule:
 class TestArceeAuxiliary:
     def test_main_model_first_design(self):
         """Arcee uses main-model-first — no entry in _API_KEY_PROVIDER_AUX_MODELS."""
-        from agent.auxiliary_client import _API_KEY_PROVIDER_AUX_MODELS
+        from harness.agent.auxiliary_client import _API_KEY_PROVIDER_AUX_MODELS
         assert "arcee" not in _API_KEY_PROVIDER_AUX_MODELS

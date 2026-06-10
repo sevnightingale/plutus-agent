@@ -6,7 +6,7 @@ import pytest
 from argparse import Namespace
 from pathlib import Path
 
-from plutus_cli.webhook import (
+from harness.cli.webhook import (
     webhook_command,
     _load_subscriptions,
     _save_subscriptions,
@@ -20,7 +20,7 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     # Default: webhooks enabled (most tests need this)
     monkeypatch.setattr(
-        "plutus_cli.webhook._is_webhook_enabled", lambda: True
+        "harness.cli.webhook._is_webhook_enabled", lambda: True
     )
 
 
@@ -148,7 +148,7 @@ class TestPersistence:
 
 class TestWebhookEnabledGate:
     def test_blocks_when_disabled(self, capsys, monkeypatch):
-        monkeypatch.setattr("plutus_cli.webhook._is_webhook_enabled", lambda: False)
+        monkeypatch.setattr("harness.cli.webhook._is_webhook_enabled", lambda: False)
         webhook_command(_make_args(webhook_action="subscribe", name="blocked"))
         out = capsys.readouterr().out
         assert "not enabled" in out.lower()
@@ -156,7 +156,7 @@ class TestWebhookEnabledGate:
         assert _load_subscriptions() == {}
 
     def test_blocks_list_when_disabled(self, capsys, monkeypatch):
-        monkeypatch.setattr("plutus_cli.webhook._is_webhook_enabled", lambda: False)
+        monkeypatch.setattr("harness.cli.webhook._is_webhook_enabled", lambda: False)
         webhook_command(_make_args(webhook_action="list"))
         out = capsys.readouterr().out
         assert "not enabled" in out.lower()
@@ -170,20 +170,20 @@ class TestWebhookEnabledGate:
 
     def test_real_check_disabled(self, monkeypatch):
         monkeypatch.setattr(
-            "plutus_cli.webhook._get_webhook_config",
+            "harness.cli.webhook._get_webhook_config",
             lambda: {},
         )
         monkeypatch.setattr(
-            "plutus_cli.webhook._is_webhook_enabled",
+            "harness.cli.webhook._is_webhook_enabled",
             lambda: bool({}.get("enabled")),
         )
-        import plutus_cli.webhook as wh_mod
+        import harness.cli.webhook as wh_mod
         assert wh_mod._is_webhook_enabled() is False
 
     def test_real_check_enabled(self, monkeypatch):
         monkeypatch.setattr(
-            "plutus_cli.webhook._is_webhook_enabled",
+            "harness.cli.webhook._is_webhook_enabled",
             lambda: True,
         )
-        import plutus_cli.webhook as wh_mod
+        import harness.cli.webhook as wh_mod
         assert wh_mod._is_webhook_enabled() is True

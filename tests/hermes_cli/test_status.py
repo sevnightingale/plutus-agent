@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from plutus_cli.status import show_status
+from harness.cli.status import show_status
 
 
 def test_show_status_includes_tavily_key(monkeypatch, capsys, tmp_path):
@@ -15,9 +15,9 @@ def test_show_status_includes_tavily_key(monkeypatch, capsys, tmp_path):
 
 
 def test_show_status_termux_gateway_section_skips_systemctl(monkeypatch, capsys, tmp_path):
-    from plutus_cli import status as status_mod
-    import plutus_cli.auth as auth_mod
-    import plutus_cli.gateway as gateway_mod
+    from harness.cli import status as status_mod
+    import harness.cli.auth as auth_mod
+    import harness.cli.gateway as gateway_mod
 
     monkeypatch.setenv("TERMUX_VERSION", "0.118.3")
     monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")

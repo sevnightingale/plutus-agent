@@ -7,7 +7,7 @@ mcp_config.py, and memory_setup.py.
 
 import getpass
 
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 
 # ─── Print Helpers ────────────────────────────────────────────────────────────

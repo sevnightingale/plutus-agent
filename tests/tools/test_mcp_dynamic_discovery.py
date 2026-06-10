@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tools.mcp_tool import MCPServerTask, _register_server_tools
-from tools.registry import ToolRegistry
+from harness.tools.mcp_tool import MCPServerTask, _register_server_tools
+from harness.tools.registry import ToolRegistry
 
 
 def _make_mcp_tool(name: str, desc: str = ""):
@@ -26,9 +26,9 @@ class TestRegisterServerTools:
         server = MCPServerTask("my_srv")
         server._tools = [_make_mcp_tool("my_tool", "desc")]
         server.session = MagicMock()
-        from toolsets import resolve_toolset, validate_toolset
+        from harness.toolsets import resolve_toolset, validate_toolset
 
-        with patch("tools.registry.registry", mock_registry):
+        with patch("harness.tools.registry.registry", mock_registry):
             registered = _register_server_tools("my_srv", server, {})
             assert "mcp_my_srv_my_tool" in registered
             assert "mcp_my_srv_my_tool" in mock_registry.get_all_tool_names()
@@ -49,7 +49,7 @@ class TestRefreshTools:
         server = MCPServerTask("live_srv")
         server._refresh_lock = asyncio.Lock()
         server._config = {}
-        from toolsets import resolve_toolset
+        from harness.toolsets import resolve_toolset
 
         # Seed initial state: one old tool registered
         mock_registry.register(
@@ -67,7 +67,7 @@ class TestRefreshTools:
             )
         )
 
-        with patch("tools.registry.registry", mock_registry):
+        with patch("harness.tools.registry.registry", mock_registry):
             await server._refresh_tools()
             assert "mcp_live_srv_old_tool" not in mock_registry.get_all_tool_names()
             assert "mcp_live_srv_old_tool" not in resolve_toolset("live_srv")
@@ -81,7 +81,7 @@ class TestMessageHandler:
 
     @pytest.mark.asyncio
     async def test_dispatches_tool_list_changed(self):
-        from tools.mcp_tool import _MCP_NOTIFICATION_TYPES
+        from harness.tools.mcp_tool import _MCP_NOTIFICATION_TYPES
         if not _MCP_NOTIFICATION_TYPES:
             pytest.skip("MCP SDK ToolListChangedNotification not available")
 

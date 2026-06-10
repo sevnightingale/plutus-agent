@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from tools.registry import _enumerate_tool_modules, discover_builtin_tools
+from harness.tools.registry import _enumerate_tool_modules, discover_builtin_tools
 
 
 @pytest.fixture()
@@ -68,9 +68,9 @@ def test_enumerate_includes_all_supported_layers(fake_tools_dir):
     names = [name for name, _ in candidates]
 
     assert "tools.flat_tool" in names
-    assert "tools.dispatchers.x" in names
-    assert "tools.lifecycle.y" in names
-    assert "tools.integrations.hyperliquid.data_points" in names
+    assert "harness.tools.dispatchers.x" in names
+    assert "harness.tools.lifecycle.y" in names
+    assert "harness.tools.integrations.hyperliquid.data_points" in names
 
 
 def test_enumerate_skips_internals(fake_tools_dir):
@@ -78,8 +78,8 @@ def test_enumerate_skips_internals(fake_tools_dir):
     names = [name for name, _ in candidates]
 
     # registry.py / mcp_tool.py are deliberately excluded from the flat scan
-    assert "tools.registry" not in names
-    assert "tools.mcp_tool" not in names
+    assert "harness.tools.registry" not in names
+    assert "harness.tools.mcp_tool" not in names
     # __init__.py is never returned for any subdir
     assert not any(n.endswith(".__init__") for n in names)
 

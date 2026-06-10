@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from plutus_cli.main import cmd_update, PROJECT_ROOT
+from harness.cli.main import cmd_update, PROJECT_ROOT
 
 
 def _make_run_side_effect(branch="main", verify_ok=True, commit_count="0"):
@@ -148,10 +148,10 @@ class TestCmdUpdateBranchFallback:
         with patch("shutil.which", return_value=None), patch(
             "subprocess.run"
         ) as mock_run, patch("builtins.input") as mock_input, patch(
-            "plutus_cli.config.get_missing_env_vars", return_value=["MISSING_KEY"]
-        ), patch("plutus_cli.config.get_missing_config_fields", return_value=[]), patch(
-            "plutus_cli.config.check_config_version", return_value=(1, 2)
-        ), patch("plutus_cli.main.sys") as mock_sys:
+            "harness.cli.config.get_missing_env_vars", return_value=["MISSING_KEY"]
+        ), patch("harness.cli.config.get_missing_config_fields", return_value=[]), patch(
+            "harness.cli.config.check_config_version", return_value=(1, 2)
+        ), patch("harness.cli.main.sys") as mock_sys:
             mock_sys.stdin.isatty.return_value = False
             mock_sys.stdout.isatty.return_value = False
             mock_run.side_effect = _make_run_side_effect(

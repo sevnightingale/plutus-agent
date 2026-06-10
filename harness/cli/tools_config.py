@@ -16,25 +16,25 @@ from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 
-from plutus_cli.config import (
+from harness.cli.config import (
     load_config, save_config, get_env_value, save_env_value,
 )
-from plutus_cli.colors import Colors, color
-from plutus_cli.nous_subscription import (
+from harness.cli.colors import Colors, color
+from harness.cli.nous_subscription import (
     apply_nous_managed_defaults,
     get_nous_subscription_features,
 )
-from tools.tool_backend_helpers import fal_key_is_configured, managed_nous_tools_enabled
-from utils import base_url_hostname
+from harness.tools.tool_backend_helpers import fal_key_is_configured, managed_nous_tools_enabled
+from harness.utils import base_url_hostname
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 
 # ─── UI Helpers (shared with setup.py) ────────────────────────────────────────
 
-from plutus_cli.cli_output import (  # noqa: E402 — late import block
+from harness.cli.cli_output import (  # noqa: E402 — late import block
     print_error as _print_error,
     print_info as _print_info,
     print_success as _print_success,
@@ -80,7 +80,7 @@ def _get_effective_configurable_toolsets():
     """
     result = list(CONFIGURABLE_TOOLSETS)
     try:
-        from plutus_cli.plugins import discover_plugins, get_plugin_toolsets
+        from harness.cli.plugins import discover_plugins, get_plugin_toolsets
         discover_plugins()  # idempotent — ensures plugins are loaded
         result.extend(get_plugin_toolsets())
     except Exception:
@@ -91,7 +91,7 @@ def _get_effective_configurable_toolsets():
 def _get_plugin_toolset_keys() -> set:
     """Return the set of toolset keys provided by plugins."""
     try:
-        from plutus_cli.plugins import discover_plugins, get_plugin_toolsets
+        from harness.cli.plugins import discover_plugins, get_plugin_toolsets
         discover_plugins()  # idempotent — ensures plugins are loaded
         return {ts_key for ts_key, _, _ in get_plugin_toolsets()}
     except Exception:
@@ -100,7 +100,7 @@ def _get_plugin_toolset_keys() -> set:
 # Platform display config — derived from the canonical registry so every
 # module shares the same data.  Kept as dict-of-dicts for backward
 # compatibility with existing ``PLATFORMS[key]["label"]`` access patterns.
-from plutus_cli.platforms import PLATFORMS as _PLATFORMS_REGISTRY
+from harness.cli.platforms import PLATFORMS as _PLATFORMS_REGISTRY
 
 PLATFORMS = {
     k: {"label": info.label, "default_toolset": info.default_toolset}
@@ -370,7 +370,7 @@ def _run_post_setup(post_setup_key: str):
             if result.returncode == 0:
                 _print_success("    Node.js dependencies installed")
             else:
-                from plutus_constants import display_hermes_home
+                from harness.constants import display_hermes_home
                 _print_warning(f"    npm install failed - run manually: cd {display_hermes_home()}/hermes-agent && npm install")
         elif not node_modules.exists():
             _print_warning("    Node.js not found - browser tools require: npm install (in hermes-agent directory)")
@@ -486,7 +486,7 @@ def _get_platform_tools(
     include_default_mcp_servers: bool = True,
 ) -> Set[str]:
     """Resolve which individual toolset names are enabled for a platform."""
-    from toolsets import resolve_toolset
+    from harness.toolsets import resolve_toolset
 
     platform_toolsets = config.get("platform_toolsets") or {}
     toolset_names = platform_toolsets.get(platform)
@@ -633,7 +633,7 @@ def _toolset_has_keys(ts_key: str, config: dict = None) -> bool:
 
     if ts_key == "vision":
         try:
-            from agent.auxiliary_client import resolve_vision_provider_client
+            from harness.agent.auxiliary_client import resolve_vision_provider_client
 
             _provider, client, _model = resolve_vision_provider_client()
             return client is not None
@@ -668,7 +668,7 @@ def _toolset_has_keys(ts_key: str, config: dict = None) -> bool:
 
 def _prompt_choice(question: str, choices: list, default: int = 0) -> int:
     """Single-select menu (arrow keys). Delegates to curses_radiolist."""
-    from plutus_cli.curses_ui import curses_radiolist
+    from harness.cli.curses_ui import curses_radiolist
     return curses_radiolist(question, choices, selected=default, cancel_returns=default)
 
 
@@ -701,8 +701,8 @@ def _estimate_tool_tokens() -> Dict[str, int]:
 
     try:
         # Trigger full tool discovery (imports all tool modules).
-        import model_tools  # noqa: F401
-        from tools.registry import registry
+        import harness.model_tools as model_tools  # noqa: F401
+        from harness.tools.registry import registry
     except Exception:
         logger.debug("Tool registry unavailable; skipping token estimation")
         _tool_token_cache = {}
@@ -722,8 +722,8 @@ def _estimate_tool_tokens() -> Dict[str, int]:
 
 def _prompt_toolset_checklist(platform_label: str, enabled: Set[str]) -> Set[str]:
     """Multi-select checklist of toolsets. Returns set of selected toolset keys."""
-    from plutus_cli.curses_ui import curses_checklist
-    from toolsets import resolve_toolset
+    from harness.cli.curses_ui import curses_checklist
+    from harness.toolsets import resolve_toolset
 
     # Pre-compute per-tool token counts (cached after first call).
     tool_tokens = _estimate_tool_tokens()
@@ -798,8 +798,8 @@ def _plugin_image_gen_providers() -> list[dict]:
     function surfaces it alongside OpenAI automatically.
     """
     try:
-        from agent.image_gen_registry import list_providers
-        from plutus_cli.plugins import _ensure_plugins_discovered
+        from harness.agent.image_gen_registry import list_providers
+        from harness.cli.plugins import _ensure_plugins_discovered
 
         _ensure_plugins_discovered()
         providers = list_providers()
@@ -869,8 +869,8 @@ def _toolset_needs_configuration_prompt(ts_key: str, config: dict) -> bool:
         if fal_key_is_configured():
             return False
         try:
-            from agent.image_gen_registry import list_providers
-            from plutus_cli.plugins import _ensure_plugins_discovered
+            from harness.agent.image_gen_registry import list_providers
+            from harness.cli.plugins import _ensure_plugins_discovered
 
             _ensure_plugins_discovered()
             for provider in list_providers():
@@ -1037,7 +1037,7 @@ def _detect_active_provider_index(providers: list, config: dict) -> int:
 
 def _fal_model_catalog():
     """Lazy-load the FAL model catalog from the tool module."""
-    from tools.image_generation_tool import FAL_MODELS, DEFAULT_MODEL
+    from harness.tools.image_generation_tool import FAL_MODELS, DEFAULT_MODEL
     return FAL_MODELS, DEFAULT_MODEL
 
 
@@ -1131,8 +1131,8 @@ def _plugin_image_gen_catalog(plugin_name: str):
     ``({}, None)`` if the provider isn't registered or has no models.
     """
     try:
-        from agent.image_gen_registry import get_provider
-        from plutus_cli.plugins import _ensure_plugins_discovered
+        from harness.agent.image_gen_registry import get_provider
+        from harness.cli.plugins import _ensure_plugins_discovered
 
         _ensure_plugins_discovered()
         provider = get_provider(plugin_name)
@@ -1821,7 +1821,7 @@ def tools_command(args=None, first_install: bool = False, config: dict = None):
         platform_choices[idx] = f"Configure {pinfo['label']}  ({new_count}/{total} enabled)"
 
     print()
-    from plutus_constants import display_hermes_home
+    from harness.constants import display_hermes_home
     print(color(f"  Tool configuration saved to {display_hermes_home()}/config.yaml", Colors.DIM))
     print(color("  Changes take effect on next 'hermes' or gateway restart.", Colors.DIM))
     print()
@@ -1837,7 +1837,7 @@ def _configure_mcp_tools_interactive(config: dict):
     a per-server curses checklist.  Writes changes back as ``tools.exclude``
     entries in config.yaml.
     """
-    from plutus_cli.curses_ui import curses_checklist
+    from harness.cli.curses_ui import curses_checklist
 
     mcp_servers = config.get("mcp_servers") or {}
     if not mcp_servers:
@@ -1858,7 +1858,7 @@ def _configure_mcp_tools_interactive(config: dict):
     print(color(f"  Connecting to {len(enabled_names)} server(s): {', '.join(enabled_names)}", Colors.DIM))
 
     try:
-        from tools.mcp_tool import probe_mcp_server_tools
+        from harness.tools.mcp_tool import probe_mcp_server_tools
         server_tools = probe_mcp_server_tools()
     except Exception as exc:
         _print_error(f"Failed to probe MCP servers: {exc}")

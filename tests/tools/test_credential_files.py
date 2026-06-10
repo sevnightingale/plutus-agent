@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.credential_files import (
+from harness.tools.credential_files import (
     clear_credential_files,
     get_credential_file_mounts,
     get_cache_directory_mounts,
@@ -22,7 +22,7 @@ from tools.credential_files import (
 @pytest.fixture(autouse=True)
 def _clean_state():
     """Reset module state between tests."""
-    import tools.credential_files as _cred_mod
+    import harness.tools.credential_files as _cred_mod
     clear_credential_files()
     _cred_mod._config_files = None
     yield

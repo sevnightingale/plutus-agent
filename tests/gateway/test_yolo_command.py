@@ -4,11 +4,11 @@ import os
 
 import pytest
 
-import gateway.run as gateway_run
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
-from tools.approval import disable_session_yolo, is_session_yolo_enabled
+import harness.gateway.run as gateway_run
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
+from harness.tools.approval import disable_session_yolo, is_session_yolo_enabled
 
 
 @pytest.fixture(autouse=True)

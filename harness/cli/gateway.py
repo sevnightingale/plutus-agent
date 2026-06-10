@@ -13,15 +13,15 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
-from gateway.status import terminate_pid
-from gateway.restart import (
+from harness.gateway.status import terminate_pid
+from harness.gateway.restart import (
     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
     GATEWAY_SERVICE_RESTART_EXIT_CODE,
     parse_restart_drain_timeout,
 )
-from plutus_cli.config import (
+from harness.cli.config import (
     get_env_value,
     get_hermes_home,
     is_managed,
@@ -31,11 +31,11 @@ from plutus_cli.config import (
 )
 # display_hermes_home is imported lazily at call sites to avoid ImportError
 # when plutus_constants is cached from a pre-update version during `plutus update`.
-from plutus_cli.setup import (
+from harness.cli.setup import (
     print_header, print_info, print_success, print_warning, print_error,
     prompt, prompt_choice, prompt_yes_no,
 )
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 
 # =============================================================================
@@ -246,14 +246,14 @@ def _scan_gateway_pids(exclude_pids: set[int], all_profiles: bool = False) -> li
     """
     pids: list[int] = []
     patterns = [
-        "plutus_cli.main gateway",
-        "plutus_cli.main --profile",
-        "plutus_cli.main -p",
-        "plutus_cli/main.py gateway",
-        "plutus_cli/main.py --profile",
-        "plutus_cli/main.py -p",
+        "harness.cli.main gateway",
+        "harness.cli.main --profile",
+        "harness.cli.main -p",
+        "harness/cli/main.py gateway",
+        "harness/cli/main.py --profile",
+        "harness/cli/main.py -p",
         "plutus gateway",
-        "gateway/run.py",
+        "harness/gateway/run.py",
     ]
     current_home = str(get_hermes_home().resolve())
     current_profile_arg = _profile_arg(current_home)
@@ -357,7 +357,7 @@ def find_gateway_pids(exclude_pids: set | None = None, all_profiles: bool = Fals
     pids: list[int] = []
     if not all_profiles:
         try:
-            from gateway.status import get_running_pid
+            from harness.gateway.status import get_running_pid
 
             _append_unique_pid(pids, get_running_pid(), _exclude)
         except Exception:
@@ -446,7 +446,7 @@ def _wait_for_systemd_service_restart(
         sub_state = props.get("SubState", "")
         new_pid = None
         try:
-            from gateway.status import get_running_pid
+            from harness.gateway.status import get_running_pid
 
             new_pid = get_running_pid()
         except Exception:
@@ -481,7 +481,7 @@ def _recover_pending_systemd_restart(system: bool = False, previous_pid: int | N
         return False
 
     try:
-        from gateway.status import read_runtime_status
+        from harness.gateway.status import read_runtime_status
     except Exception:
         return False
 
@@ -552,7 +552,7 @@ def get_gateway_runtime_snapshot(system: bool = False) -> GatewayRuntimeSnapshot
             gateway_pids=gateway_pids,
         )
 
-    from plutus_constants import is_container
+    from harness.constants import is_container
 
     if is_linux() and is_container():
         return GatewayRuntimeSnapshot(
@@ -640,7 +640,7 @@ def stop_profile_gateway() -> bool:
     Returns True if a process was stopped, False if none was found.
     """
     try:
-        from gateway.status import get_running_pid, remove_pid_file
+        from harness.gateway.status import get_running_pid, remove_pid_file
     except ImportError:
         return False
 
@@ -674,7 +674,7 @@ def is_linux() -> bool:
     return sys.platform.startswith('linux')
 
 
-from plutus_constants import is_container, is_termux, is_wsl
+from harness.constants import is_container, is_termux, is_wsl
 
 
 def _wsl_systemd_operational() -> bool:
@@ -748,7 +748,7 @@ def _profile_suffix() -> str:
     """
     import hashlib
     import re
-    from plutus_constants import get_default_hermes_root
+    from harness.constants import get_default_hermes_root
     home = get_hermes_home().resolve()
     default = get_default_hermes_root().resolve()
     if home == default:
@@ -778,7 +778,7 @@ def _profile_arg(hermes_home: str | None = None) -> str:
             service definition for a different user (e.g. system service).
     """
     import re
-    from plutus_constants import get_default_hermes_root
+    from harness.constants import get_default_hermes_root
     home = Path(hermes_home or str(get_hermes_home())).resolve()
     default = get_default_hermes_root().resolve()
     if home == default:
@@ -1027,9 +1027,9 @@ _LEGACY_SERVICE_NAMES: tuple[str, ...] = ("hermes.service",)
 # ExecStart content markers that identify a unit as running our gateway.
 # A legacy unit is only flagged when its file contains one of these.
 _LEGACY_UNIT_EXECSTART_MARKERS: tuple[str, ...] = (
-    "plutus_cli.main gateway",
-    "plutus_cli/main.py gateway",
-    "gateway/run.py",
+    "harness.cli.main gateway",
+    "harness/cli/main.py gateway",
+    "harness/gateway/run.py",
     " plutus gateway ",
     "/plutus gateway ",
 )
@@ -1497,7 +1497,7 @@ def _hermes_home_for_target_user(target_home_dir: str) -> str:
     the generated systemd unit pointed at ``/home/alice/.hermes`` even
     though the actual data lived at ``/home/alice/.plutus-agent``.
     """
-    from plutus_constants import HERMES_HOME_DIR_NAME
+    from harness.constants import HERMES_HOME_DIR_NAME
 
     current_hermes = get_hermes_home().resolve()
     current_default = (Path.home() / HERMES_HOME_DIR_NAME).resolve()
@@ -1855,7 +1855,7 @@ def systemd_restart(system: bool = False):
     else:
         _preflight_user_systemd()
     refresh_systemd_unit_if_needed(system=system)
-    from gateway.status import get_running_pid
+    from harness.gateway.status import get_running_pid
 
     pid = get_running_pid()
     if pid is not None and _request_gateway_self_restart(pid):
@@ -2161,7 +2161,7 @@ def launchd_install(force: bool = False):
     print()
     print("Next steps:")
     print("  plutus gateway status             # Check status")
-    from plutus_constants import display_hermes_home as _dhh
+    from harness.constants import display_hermes_home as _dhh
     print(f"  tail -f {_dhh()}/logs/gateway.log  # View logs")
 
 def launchd_uninstall():
@@ -2229,7 +2229,7 @@ def _wait_for_gateway_exit(timeout: float = 10.0, force_after: float | None = 5.
         force_after: Seconds of graceful waiting before escalating to force-kill.
     """
     import time
-    from gateway.status import get_running_pid
+    from harness.gateway.status import get_running_pid
 
     deadline = time.monotonic() + timeout
     force_deadline = (time.monotonic() + force_after) if force_after is not None else None
@@ -2263,7 +2263,7 @@ def launchd_restart():
     label = get_launchd_label()
     target = f"{_launchd_domain()}/{label}"
     drain_timeout = _get_restart_drain_timeout()
-    from gateway.status import get_running_pid
+    from harness.gateway.status import get_running_pid
 
     try:
         pid = get_running_pid()
@@ -2346,7 +2346,7 @@ def run_gateway(verbose: int = 0, quiet: bool = False, replace: bool = False):
     """
     sys.path.insert(0, str(PROJECT_ROOT))
     
-    from gateway.run import start_gateway
+    from harness.gateway.run import start_gateway
     
     print("┌─────────────────────────────────────────────────────────┐")
     print("│           ◆ plutus-agent Gateway Starting...                 │")
@@ -2510,7 +2510,7 @@ def _platform_status(platform: dict) -> str:
 def _runtime_health_lines() -> list[str]:
     """Summarize the latest persisted gateway runtime health state."""
     try:
-        from gateway.status import read_runtime_status
+        from harness.gateway.status import read_runtime_status
     except Exception:
         return []
 
@@ -2841,7 +2841,7 @@ def gateway_setup():
                 print_info("  To enable systemd: add systemd=true to /etc/wsl.conf, then 'wsl --shutdown'")
             else:
                 if is_termux():
-                    from plutus_constants import display_hermes_home as _dhh
+                    from harness.constants import display_hermes_home as _dhh
                     print_info("  Termux does not use systemd/launchd services.")
                     print_info("  Run in foreground: plutus gateway run")
                     print_info(f"  Or start it manually in the background (best effort): nohup plutus gateway run >{_dhh()}/logs/gateway.log 2>&1 &")

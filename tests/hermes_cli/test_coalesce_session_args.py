@@ -1,7 +1,7 @@
 """Tests for _coalesce_session_name_args — multi-word session name merging."""
 
 import pytest
-from plutus_cli.main import _coalesce_session_name_args
+from harness.cli.main import _coalesce_session_name_args
 
 
 class TestCoalesceSessionNameArgs:

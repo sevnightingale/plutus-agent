@@ -19,7 +19,7 @@ import uuid
 from abc import ABC, abstractmethod
 from urllib.parse import urlsplit
 
-from utils import normalize_proxy_url
+from harness.utils import normalize_proxy_url
 
 logger = logging.getLogger(__name__)
 
@@ -242,9 +242,9 @@ from enum import Enum
 from pathlib import Path as _Path
 sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
-from gateway.config import Platform, PlatformConfig
-from gateway.session import SessionSource, build_session_key
-from plutus_constants import get_hermes_dir
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.session import SessionSource, build_session_key
+from harness.constants import get_hermes_dir
 
 
 GATEWAY_SECRET_CAPTURE_UNSUPPORTED_MESSAGE = (
@@ -300,7 +300,7 @@ async def _ssrf_redirect_guard(response):
     """
     if response.is_redirect and response.next_request:
         redirect_url = str(response.next_request.url)
-        from tools.url_safety import is_safe_url
+        from harness.tools.url_safety import is_safe_url
         if not is_safe_url(redirect_url):
             raise ValueError(
                 f"Blocked redirect to private/internal address: {safe_url_for_log(redirect_url)}"
@@ -389,7 +389,7 @@ async def cache_image_from_url(url: str, ext: str = ".jpg", retries: int = 2) ->
     Raises:
         ValueError: If the URL targets a private/internal network (SSRF protection).
     """
-    from tools.url_safety import is_safe_url
+    from harness.tools.url_safety import is_safe_url
     if not is_safe_url(url):
         raise ValueError(f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}")
 
@@ -503,7 +503,7 @@ async def cache_audio_from_url(url: str, ext: str = ".ogg", retries: int = 2) ->
     Raises:
         ValueError: If the URL targets a private/internal network (SSRF protection).
     """
-    from tools.url_safety import is_safe_url
+    from harness.tools.url_safety import is_safe_url
     if not is_safe_url(url):
         raise ValueError(f"Blocked unsafe URL (SSRF protection): {safe_url_for_log(url)}")
 
@@ -986,7 +986,7 @@ class BasePlatformAdapter(ABC):
         self._fatal_error_message = None
         self._fatal_error_retryable = True
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(platform=self.platform.value, platform_state="connected", error_code=None, error_message=None)
         except Exception:
             pass
@@ -996,7 +996,7 @@ class BasePlatformAdapter(ABC):
         if self.has_fatal_error:
             return
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(platform=self.platform.value, platform_state="disconnected", error_code=None, error_message=None)
         except Exception:
             pass
@@ -1007,7 +1007,7 @@ class BasePlatformAdapter(ABC):
         self._fatal_error_message = message
         self._fatal_error_retryable = retryable
         try:
-            from gateway.status import write_runtime_status
+            from harness.gateway.status import write_runtime_status
             write_runtime_status(
                 platform=self.platform.value,
                 platform_state="fatal",
@@ -1027,7 +1027,7 @@ class BasePlatformAdapter(ABC):
 
     def _acquire_platform_lock(self, scope: str, identity: str, resource_desc: str) -> bool:
         """Acquire a scoped lock for this adapter. Returns True on success."""
-        from gateway.status import acquire_scoped_lock
+        from harness.gateway.status import acquire_scoped_lock
         self._platform_lock_scope = scope
         self._platform_lock_identity = identity
         acquired, existing = acquire_scoped_lock(
@@ -1050,7 +1050,7 @@ class BasePlatformAdapter(ABC):
         identity = getattr(self, '_platform_lock_identity', None)
         if not identity:
             return
-        from gateway.status import release_scoped_lock
+        from harness.gateway.status import release_scoped_lock
         release_scoped_lock(self._platform_lock_scope, identity)
         self._platform_lock_identity = None
 
@@ -1973,7 +1973,7 @@ class BasePlatformAdapter(ABC):
             # session lifecycle and its cleanup races with the running task
             # (see PR #4926).
             cmd = event.get_command()
-            from plutus_cli.commands import should_bypass_active_session
+            from harness.cli.commands import should_bypass_active_session
 
             if should_bypass_active_session(cmd):
                 # /stop, /new, /reset must cancel the in-flight adapter task
@@ -2186,7 +2186,7 @@ class BasePlatformAdapter(ABC):
                         and not media_files
                         and _target_chat_id not in self._auto_tts_disabled_chats):
                     try:
-                        from tools.tts_tool import text_to_speech_tool, check_tts_requirements
+                        from harness.tools.tts_tool import text_to_speech_tool, check_tts_requirements
                         if check_tts_requirements():
                             import json as _json
                             speech_text = re.sub(r'[*_`#\[\]()]', '', text_content)[:4000].strip()

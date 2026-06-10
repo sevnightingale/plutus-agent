@@ -3,10 +3,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType
-from gateway.session import SessionSource, build_session_key
-from gateway.run import GatewayRunner
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType
+from harness.gateway.session import SessionSource, build_session_key
+from harness.gateway.run import GatewayRunner
 
 
 class _PendingAdapter:

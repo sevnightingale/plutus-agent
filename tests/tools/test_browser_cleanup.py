@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 class TestScreenshotPathRecovery:
     def test_extracts_standard_absolute_path(self):
-        from tools.browser_tool import _extract_screenshot_path_from_text
+        from harness.tools.browser_tool import _extract_screenshot_path_from_text
 
         assert (
             _extract_screenshot_path_from_text("Screenshot saved to /tmp/foo.png")
@@ -13,7 +13,7 @@ class TestScreenshotPathRecovery:
         )
 
     def test_extracts_quoted_absolute_path(self):
-        from tools.browser_tool import _extract_screenshot_path_from_text
+        from harness.tools.browser_tool import _extract_screenshot_path_from_text
 
         assert (
             _extract_screenshot_path_from_text(
@@ -25,7 +25,7 @@ class TestScreenshotPathRecovery:
 
 class TestBrowserCleanup:
     def setup_method(self):
-        from tools import browser_tool
+        from harness.tools import browser_tool
 
         self.browser_tool = browser_tool
         self.orig_active_sessions = browser_tool._active_sessions.copy()
@@ -51,12 +51,12 @@ class TestBrowserCleanup:
         browser_tool._session_last_activity["task-1"] = 123.0
 
         with (
-            patch("tools.browser_tool._maybe_stop_recording") as mock_stop,
+            patch("harness.tools.browser_tool._maybe_stop_recording") as mock_stop,
             patch(
-                "tools.browser_tool._run_browser_command",
+                "harness.tools.browser_tool._run_browser_command",
                 return_value={"success": True},
             ) as mock_run,
-            patch("tools.browser_tool.os.path.exists", return_value=False),
+            patch("harness.tools.browser_tool.os.path.exists", return_value=False),
         ):
             browser_tool.cleanup_browser("task-1")
 
@@ -75,18 +75,18 @@ class TestBrowserCleanup:
         browser_tool._session_last_activity["task-1"] = 123.0
 
         with (
-            patch("tools.browser_tool._is_camofox_mode", return_value=True),
-            patch("tools.browser_tool._maybe_stop_recording") as mock_stop,
+            patch("harness.tools.browser_tool._is_camofox_mode", return_value=True),
+            patch("harness.tools.browser_tool._maybe_stop_recording") as mock_stop,
             patch(
-                "tools.browser_tool._run_browser_command",
+                "harness.tools.browser_tool._run_browser_command",
                 return_value={"success": True},
             ),
-            patch("tools.browser_tool.os.path.exists", return_value=False),
+            patch("harness.tools.browser_tool.os.path.exists", return_value=False),
             patch(
-                "tools.browser_camofox.camofox_soft_cleanup",
+                "harness.tools.browser_camofox.camofox_soft_cleanup",
                 return_value=True,
             ) as mock_soft,
-            patch("tools.browser_camofox.camofox_close") as mock_close,
+            patch("harness.tools.browser_camofox.camofox_close") as mock_close,
         ):
             browser_tool.cleanup_browser("task-1")
 
@@ -103,18 +103,18 @@ class TestBrowserCleanup:
         browser_tool._session_last_activity["task-1"] = 123.0
 
         with (
-            patch("tools.browser_tool._is_camofox_mode", return_value=True),
-            patch("tools.browser_tool._maybe_stop_recording") as mock_stop,
+            patch("harness.tools.browser_tool._is_camofox_mode", return_value=True),
+            patch("harness.tools.browser_tool._maybe_stop_recording") as mock_stop,
             patch(
-                "tools.browser_tool._run_browser_command",
+                "harness.tools.browser_tool._run_browser_command",
                 return_value={"success": True},
             ),
-            patch("tools.browser_tool.os.path.exists", return_value=False),
+            patch("harness.tools.browser_tool.os.path.exists", return_value=False),
             patch(
-                "tools.browser_camofox.camofox_soft_cleanup",
+                "harness.tools.browser_camofox.camofox_soft_cleanup",
                 return_value=False,
             ) as mock_soft,
-            patch("tools.browser_camofox.camofox_close") as mock_close,
+            patch("harness.tools.browser_camofox.camofox_close") as mock_close,
         ):
             browser_tool.cleanup_browser("task-1")
 
@@ -130,7 +130,7 @@ class TestBrowserCleanup:
         browser_tool._session_last_activity["task-2"] = 2.0
         browser_tool._recording_sessions.update({"task-1", "task-2"})
 
-        with patch("tools.browser_tool.cleanup_all_browsers") as mock_cleanup_all:
+        with patch("harness.tools.browser_tool.cleanup_all_browsers") as mock_cleanup_all:
             browser_tool._emergency_cleanup_all_sessions()
 
         mock_cleanup_all.assert_called_once_with()

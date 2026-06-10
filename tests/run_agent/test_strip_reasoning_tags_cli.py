@@ -8,7 +8,7 @@ for tool-call tag coverage."""
 
 import pytest
 
-from cli import _strip_reasoning_tags
+from harness.repl import _strip_reasoning_tags
 
 
 class TestToolCallStripping:

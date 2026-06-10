@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import (
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import (
     MessageEvent,
     MessageType,
     SendResult,
@@ -53,7 +53,7 @@ def _ensure_telegram_mock():
 _ensure_telegram_mock()
 
 # Now we can safely import
-from gateway.platforms.telegram import TelegramAdapter  # noqa: E402
+from harness.gateway.platforms.telegram import TelegramAdapter  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -141,10 +141,10 @@ def adapter():
 def _redirect_cache(tmp_path, monkeypatch):
     """Point document/video cache to tmp_path so tests don't touch ~/.hermes."""
     monkeypatch.setattr(
-        "gateway.platforms.base.DOCUMENT_CACHE_DIR", tmp_path / "doc_cache"
+        "harness.gateway.platforms.base.DOCUMENT_CACHE_DIR", tmp_path / "doc_cache"
     )
     monkeypatch.setattr(
-        "gateway.platforms.base.VIDEO_CACHE_DIR", tmp_path / "video_cache"
+        "harness.gateway.platforms.base.VIDEO_CACHE_DIR", tmp_path / "video_cache"
     )
 
 
@@ -402,7 +402,7 @@ class TestMediaGroups:
         msg1 = _make_message(caption="two images", photo=[first_photo])
         msg2 = _make_message(photo=[second_photo])
 
-        with patch("gateway.platforms.telegram.cache_image_from_bytes", side_effect=["/tmp/burst-one.jpg", "/tmp/burst-two.jpg"]):
+        with patch("harness.gateway.platforms.telegram.cache_image_from_bytes", side_effect=["/tmp/burst-one.jpg", "/tmp/burst-two.jpg"]):
             await adapter._handle_media_message(_make_update(msg1), MagicMock())
             await adapter._handle_media_message(_make_update(msg2), MagicMock())
             assert adapter.handle_message.await_count == 0
@@ -422,7 +422,7 @@ class TestMediaGroups:
         msg1 = _make_message(caption="two images", media_group_id="album-1", photo=[first_photo])
         msg2 = _make_message(media_group_id="album-1", photo=[second_photo])
 
-        with patch("gateway.platforms.telegram.cache_image_from_bytes", side_effect=["/tmp/one.jpg", "/tmp/two.jpg"]):
+        with patch("harness.gateway.platforms.telegram.cache_image_from_bytes", side_effect=["/tmp/one.jpg", "/tmp/two.jpg"]):
             await adapter._handle_media_message(_make_update(msg1), MagicMock())
             await adapter._handle_media_message(_make_update(msg2), MagicMock())
             assert adapter.handle_message.await_count == 0
@@ -439,7 +439,7 @@ class TestMediaGroups:
         first_photo = _make_photo(_make_file_obj(b"first"))
         msg = _make_message(caption="two images", media_group_id="album-2", photo=[first_photo])
 
-        with patch("gateway.platforms.telegram.cache_image_from_bytes", return_value="/tmp/one.jpg"):
+        with patch("harness.gateway.platforms.telegram.cache_image_from_bytes", return_value="/tmp/one.jpg"):
             await adapter._handle_media_message(_make_update(msg), MagicMock())
 
         assert "album-2" in adapter._media_group_events
@@ -661,8 +661,8 @@ class TestTelegramPhotoBatching:
         )
 
         with (
-            patch("gateway.platforms.telegram.asyncio.current_task", return_value=old_task),
-            patch("gateway.platforms.telegram.asyncio.sleep", new=AsyncMock()),
+            patch("harness.gateway.platforms.telegram.asyncio.current_task", return_value=old_task),
+            patch("harness.gateway.platforms.telegram.asyncio.sleep", new=AsyncMock()),
         ):
             await adapter._flush_photo_batch(batch_key)
 

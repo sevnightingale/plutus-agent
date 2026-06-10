@@ -9,10 +9,10 @@ which prior message the user is referencing.
 """
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent
-from gateway.run import GatewayRunner
-from gateway.session import SessionSource
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.run import GatewayRunner
+from harness.gateway.session import SessionSource
 
 
 def _make_runner() -> GatewayRunner:

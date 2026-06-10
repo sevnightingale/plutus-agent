@@ -6,7 +6,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from tools.core.alert_registry import register_alert
+from harness.tools.core.alert_registry import register_alert
 
 from . import _cli
 
@@ -72,7 +72,7 @@ def poll_perp_deposit_completed(
         return [], state
 
     try:
-        from tools.integrations.acp import _cli as acp_cli
+        from harness.tools.integrations.acp import _cli as acp_cli
         if not acp_cli.is_installed():
             return [], state
         # `acp job list` doesn't accept --chain-id (REST aggregator).

@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 
-TOOLS_DIR = Path(__file__).resolve().parents[2] / "tools"
+TOOLS_DIR = Path(__file__).resolve().parents[2] / "harness" / "tools"
 
 
 def _load_tool_module(module_name: str, filename: str):
@@ -33,38 +33,38 @@ def _restore_tool_and_agent_modules():
     original_modules = {
         name: module
         for name, module in sys.modules.items()
-        if name in ("tools", "agent", "plutus_cli")
-        or name.startswith("tools.")
-        or name.startswith("agent.")
-        or name.startswith("plutus_cli.")
+        if name in ("harness.tools", "harness.agent", "harness.cli")
+        or name.startswith("harness.tools.")
+        or name.startswith("harness.agent.")
+        or name.startswith("harness.cli.")
     }
     try:
         yield
     finally:
-        _reset_modules(("tools", "agent", "plutus_cli"))
+        _reset_modules(("harness.tools", "harness.agent", "harness.cli"))
         sys.modules.update(original_modules)
 
 
 def _install_fake_tools_package(*, credential_mounts=None):
-    _reset_modules(("tools", "agent", "plutus_cli"))
+    _reset_modules(("harness.tools", "harness.agent", "harness.cli"))
 
     plutus_cli = types.ModuleType("plutus_cli")
     plutus_cli.__path__ = []  # type: ignore[attr-defined]
-    sys.modules["plutus_cli"] = plutus_cli
-    sys.modules["plutus_cli.config"] = types.SimpleNamespace(
+    sys.modules["harness.cli"] = plutus_cli
+    sys.modules["harness.cli.config"] = types.SimpleNamespace(
         get_hermes_home=lambda: Path(tempfile.gettempdir()) / "hermes-home",
     )
 
     tools_package = types.ModuleType("tools")
     tools_package.__path__ = [str(TOOLS_DIR)]  # type: ignore[attr-defined]
-    sys.modules["tools"] = tools_package
+    sys.modules["harness.tools"] = tools_package
 
-    env_package = types.ModuleType("tools.environments")
+    env_package = types.ModuleType("harness.tools.environments")
     env_package.__path__ = [str(TOOLS_DIR / "environments")]  # type: ignore[attr-defined]
-    sys.modules["tools.environments"] = env_package
+    sys.modules["harness.tools.environments"] = env_package
 
     interrupt_event = threading.Event()
-    sys.modules["tools.interrupt"] = types.SimpleNamespace(
+    sys.modules["harness.tools.interrupt"] = types.SimpleNamespace(
         set_interrupt=lambda value=True: interrupt_event.set() if value else interrupt_event.clear(),
         is_interrupted=lambda: interrupt_event.is_set(),
         _interrupt_event=interrupt_event,
@@ -79,8 +79,8 @@ def _install_fake_tools_package(*, credential_mounts=None):
         def _prepare_command(self, command: str):
             return command, None
 
-    sys.modules["tools.environments.base"] = types.SimpleNamespace(BaseEnvironment=_DummyBaseEnvironment)
-    sys.modules["tools.managed_tool_gateway"] = types.SimpleNamespace(
+    sys.modules["harness.tools.environments.base"] = types.SimpleNamespace(BaseEnvironment=_DummyBaseEnvironment)
+    sys.modules["harness.tools.managed_tool_gateway"] = types.SimpleNamespace(
         resolve_managed_tool_gateway=lambda vendor: types.SimpleNamespace(
             vendor=vendor,
             gateway_origin="https://modal-gateway.example.com",
@@ -88,7 +88,7 @@ def _install_fake_tools_package(*, credential_mounts=None):
             managed_mode=True,
         )
     )
-    sys.modules["tools.credential_files"] = types.SimpleNamespace(
+    sys.modules["harness.tools.credential_files"] = types.SimpleNamespace(
         get_credential_file_mounts=lambda: list(credential_mounts or []),
     )
 
@@ -109,8 +109,8 @@ class _FakeResponse:
 
 def test_managed_modal_execute_polls_until_completed(monkeypatch):
     _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
-    modal_common = sys.modules["tools.environments.modal_utils"]
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
+    modal_common = sys.modules["harness.tools.environments.modal_utils"]
 
     calls = []
     poll_count = {"value": 0}
@@ -148,7 +148,7 @@ def test_managed_modal_execute_polls_until_completed(monkeypatch):
 
 def test_managed_modal_create_sends_a_stable_idempotency_key(monkeypatch):
     _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
 
     create_headers = []
 
@@ -172,8 +172,8 @@ def test_managed_modal_create_sends_a_stable_idempotency_key(monkeypatch):
 
 def test_managed_modal_execute_cancels_on_interrupt(monkeypatch):
     interrupt_event = _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
-    modal_common = sys.modules["tools.environments.modal_utils"]
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
+    modal_common = sys.modules["harness.tools.environments.modal_utils"]
 
     calls = []
 
@@ -214,8 +214,8 @@ def test_managed_modal_execute_cancels_on_interrupt(monkeypatch):
 
 def test_managed_modal_execute_returns_descriptive_error_on_missing_exec(monkeypatch):
     _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
-    modal_common = sys.modules["tools.environments.modal_utils"]
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
+    modal_common = sys.modules["harness.tools.environments.modal_utils"]
 
     def fake_request(method, url, headers=None, json=None, timeout=None):
         if method == "POST" and url.endswith("/v1/sandboxes"):
@@ -241,7 +241,7 @@ def test_managed_modal_execute_returns_descriptive_error_on_missing_exec(monkeyp
 
 def test_managed_modal_create_and_cleanup_preserve_gateway_persistence_fields(monkeypatch):
     _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
 
     create_payloads = []
     terminate_payloads = []
@@ -284,7 +284,7 @@ def test_managed_modal_rejects_host_credential_passthrough():
             "container_path": "/root/.hermes/token.json",
         }]
     )
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
 
     with pytest.raises(ValueError, match="credential-file passthrough"):
         managed_modal.ManagedModalEnvironment(image="python:3.11")
@@ -292,8 +292,8 @@ def test_managed_modal_rejects_host_credential_passthrough():
 
 def test_managed_modal_execute_times_out_and_cancels(monkeypatch):
     _install_fake_tools_package()
-    managed_modal = _load_tool_module("tools.environments.managed_modal", "environments/managed_modal.py")
-    modal_common = sys.modules["tools.environments.modal_utils"]
+    managed_modal = _load_tool_module("harness.tools.environments.managed_modal", "environments/managed_modal.py")
+    modal_common = sys.modules["harness.tools.environments.modal_utils"]
 
     calls = []
     monotonic_values = iter([0.0, 0.0, 0.0, 12.5, 12.5])

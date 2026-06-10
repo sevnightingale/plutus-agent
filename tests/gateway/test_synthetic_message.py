@@ -26,7 +26,7 @@ sys.modules.setdefault("telegram", _tg)
 sys.modules.setdefault("telegram.constants", _tg.constants)
 sys.modules.setdefault("telegram.ext", types.ModuleType("telegram.ext"))
 
-from gateway.platforms.base import (
+from harness.gateway.platforms.base import (
     MessageEvent,
     MessageType,
     SessionSource,
@@ -35,7 +35,7 @@ from gateway.platforms.base import (
 
 
 def _make_runner():
-    from gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
+    from harness.gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
 
     runner = object.__new__(GatewayRunner)
     runner._running_agents = {}
@@ -105,12 +105,12 @@ class TestMessageEventSyntheticKind:
 
 class TestSyntheticKindContextVar:
     def test_default_is_empty_string(self):
-        from gateway.session_context import get_synthetic_kind
+        from harness.gateway.session_context import get_synthetic_kind
         # No prior set in this context
         assert get_synthetic_kind() == ""
 
     def test_set_and_reset(self):
-        from gateway.session_context import (
+        from harness.gateway.session_context import (
             set_synthetic_kind,
             get_synthetic_kind,
             reset_synthetic_kind,
@@ -123,7 +123,7 @@ class TestSyntheticKindContextVar:
         assert get_synthetic_kind() == ""
 
     def test_set_none_clears_to_empty(self):
-        from gateway.session_context import set_synthetic_kind, get_synthetic_kind
+        from harness.gateway.session_context import set_synthetic_kind, get_synthetic_kind
         set_synthetic_kind(None)
         assert get_synthetic_kind() == ""
 
@@ -141,7 +141,7 @@ class TestApprovalUnattended:
         }
         for k in self._saved:
             os.environ.pop(k, None)
-        from gateway.session_context import set_synthetic_kind
+        from harness.gateway.session_context import set_synthetic_kind
         set_synthetic_kind(None)
 
     def teardown_method(self):
@@ -151,22 +151,22 @@ class TestApprovalUnattended:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        from gateway.session_context import set_synthetic_kind
+        from harness.gateway.session_context import set_synthetic_kind
         set_synthetic_kind(None)
 
     def test_helper_false_when_no_origin_set(self):
-        from tools.approval import _is_unattended_origin_turn
+        from harness.tools.approval import _is_unattended_origin_turn
         assert _is_unattended_origin_turn() is False
 
     def test_helper_true_when_legacy_env_set(self):
         import os
         os.environ["HERMES_CRON_SESSION"] = "1"
-        from tools.approval import _is_unattended_origin_turn
+        from harness.tools.approval import _is_unattended_origin_turn
         assert _is_unattended_origin_turn() is True
 
     def test_helper_true_when_synthetic_kind_set(self):
-        from gateway.session_context import set_synthetic_kind
-        from tools.approval import _is_unattended_origin_turn
+        from harness.gateway.session_context import set_synthetic_kind
+        from harness.tools.approval import _is_unattended_origin_turn
         set_synthetic_kind("cron:plutus-heartbeat")
         try:
             assert _is_unattended_origin_turn() is True
@@ -175,12 +175,12 @@ class TestApprovalUnattended:
 
     def test_check_dangerous_blocks_synthetic_when_deny(self):
         """Cron-mode=deny + synthetic origin → BLOCKED with informative message."""
-        from gateway.session_context import set_synthetic_kind
-        from tools.approval import check_dangerous_command
+        from harness.gateway.session_context import set_synthetic_kind
+        from harness.tools.approval import check_dangerous_command
 
         set_synthetic_kind("cron:plutus-heartbeat")
         try:
-            with patch("tools.approval._get_cron_approval_mode", return_value="deny"):
+            with patch("harness.tools.approval._get_cron_approval_mode", return_value="deny"):
                 result = check_dangerous_command("rm -rf /tmp/test", "local")
         finally:
             set_synthetic_kind(None)
@@ -190,12 +190,12 @@ class TestApprovalUnattended:
 
     def test_check_dangerous_allows_synthetic_when_approve(self):
         """Cron-mode=approve + synthetic origin → allowed without prompting."""
-        from gateway.session_context import set_synthetic_kind
-        from tools.approval import check_dangerous_command
+        from harness.gateway.session_context import set_synthetic_kind
+        from harness.tools.approval import check_dangerous_command
 
         set_synthetic_kind("wake:hl_position_status_change")
         try:
-            with patch("tools.approval._get_cron_approval_mode", return_value="approve"):
+            with patch("harness.tools.approval._get_cron_approval_mode", return_value="approve"):
                 result = check_dangerous_command("rm -rf /tmp/test", "local")
         finally:
             set_synthetic_kind(None)
@@ -204,7 +204,7 @@ class TestApprovalUnattended:
 
     def test_normal_operator_turn_unaffected(self):
         """No synthetic kind, no cron env → falls through to normal flow."""
-        from tools.approval import check_dangerous_command
+        from harness.tools.approval import check_dangerous_command
 
         # Non-dangerous command — sanity check that the early-return doesn't
         # hijack normal operator turns.
@@ -234,8 +234,8 @@ class TestBusySynthetic:
         # Patch both the module-level and inner-scoped imports of
         # merge_pending_message_event so we can observe the queue call
         # without invoking the real merge logic.
-        with patch("gateway.run.merge_pending_message_event") as mock_outer, \
-             patch("gateway.platforms.base.merge_pending_message_event") as mock_inner:
+        with patch("harness.gateway.run.merge_pending_message_event") as mock_outer, \
+             patch("harness.gateway.platforms.base.merge_pending_message_event") as mock_inner:
             result = await runner._handle_active_session_busy_message(event, sk)
 
         assert result is True
@@ -281,7 +281,7 @@ class TestBusySynthetic:
         runner._running_agents[sk] = agent
         runner._running_agents_ts[sk] = _t.time() - 30
 
-        with patch("gateway.run.merge_pending_message_event"):
+        with patch("harness.gateway.run.merge_pending_message_event"):
             await runner._handle_active_session_busy_message(event, sk)
 
         agent.interrupt.assert_called_once()

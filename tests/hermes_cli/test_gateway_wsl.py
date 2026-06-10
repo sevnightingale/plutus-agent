@@ -8,8 +8,8 @@ from unittest.mock import patch, MagicMock, mock_open
 
 import pytest
 
-import plutus_cli.gateway as gateway
-import plutus_constants
+import harness.cli.gateway as gateway
+import harness.constants as plutus_constants
 
 
 # =============================================================================

@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 import httpx
 import pytest
 
-from tools.skills_hub import (
+from harness.tools.skills_hub import (
     GitHubAuth,
     GitHubSource,
     LobeHubSource,
@@ -83,7 +83,7 @@ class TestTrustLevelFor:
     def test_trusted_repo(self):
         src = self._source()
         # TRUSTED_REPOS is imported from skills_guard, test with known trusted repo
-        from tools.skills_guard import TRUSTED_REPOS
+        from harness.tools.skills_guard import TRUSTED_REPOS
         if TRUSTED_REPOS:
             repo = next(iter(TRUSTED_REPOS))
             assert src.trust_level_for(f"{repo}/some-skill") == "trusted"
@@ -113,9 +113,9 @@ class TestSkillsShSource:
         auth = MagicMock(spec=GitHubAuth)
         return SkillsShSource(auth=auth)
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_maps_skills_sh_results_to_prefixed_identifiers(self, mock_get, _mock_read_cache, _mock_write_cache):
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -142,9 +142,9 @@ class TestSkillsShSource:
         assert results[0].path == "vercel-react-best-practices"
         assert results[0].extra["installs"] == 207679
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_empty_search_uses_featured_homepage_links(self, mock_get, _mock_read_cache, _mock_write_cache):
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -198,9 +198,9 @@ class TestSkillsShSource:
         assert bundle.identifier == "skills-sh/anthropics/skills/frontend-design"
         assert mock_fetch.call_args_list[0] == ((expected_identifier,), {})
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     @patch.object(GitHubSource, "inspect")
     def test_inspect_delegates_to_github_source_and_relabels_meta(self, mock_inspect, mock_get, _mock_read_cache, _mock_write_cache):
         mock_inspect.return_value = SkillMeta(
@@ -273,9 +273,9 @@ class TestSkillsShSource:
         assert meta.identifier == "skills-sh/vercel-labs/agent-skills/vercel-react-best-practices"
         assert mock_list_skills.called
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     @patch.object(GitHubSource, "_list_skills_in_repo")
     @patch.object(GitHubSource, "inspect")
     def test_inspect_uses_detail_page_to_resolve_alias_skill(self, mock_inspect, mock_list_skills, mock_get, _mock_read_cache, _mock_write_cache):
@@ -306,9 +306,9 @@ class TestSkillsShSource:
         assert meta.path == "skills/react"
         assert mock_get.called
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     @patch.object(GitHubSource, "_list_skills_in_repo")
     @patch.object(GitHubSource, "fetch")
     def test_fetch_uses_detail_page_to_resolve_alias_skill(self, mock_fetch, mock_list_skills, mock_get, _mock_read_cache, _mock_write_cache):
@@ -346,8 +346,8 @@ class TestSkillsShSource:
         assert bundle.files["SKILL.md"] == "# react"
         assert mock_get.called
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
     @patch.object(SkillsShSource, "_discover_identifier")
     @patch.object(SkillsShSource, "_fetch_detail_page")
     @patch.object(GitHubSource, "fetch")
@@ -379,9 +379,9 @@ class TestSkillsShSource:
         assert mock_fetch.call_args_list[-1] == ((resolved_identifier,), {})
         assert mock_fetch.call_args_list[0] == (("owner/repo/product-designer",), {})
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     @patch.object(GitHubSource, "fetch")
     def test_fetch_falls_back_to_tree_search_for_deeply_nested_skills(
         self, mock_fetch, mock_get, _mock_read_cache, _mock_write_cache,
@@ -443,7 +443,7 @@ class TestSkillsShSource:
 
     @patch.object(GitHubSource, "_find_skill_in_repo_tree")
     @patch.object(GitHubSource, "_list_skills_in_repo")
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_discover_identifier_uses_tree_search_before_root_scan(
         self,
         mock_get,
@@ -480,7 +480,7 @@ class TestFindSkillInRepoTree:
         auth.get_headers.return_value = {"Accept": "application/vnd.github.v3+json"}
         return GitHubSource(auth=auth)
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_finds_deeply_nested_skill(self, mock_get):
         tree_entries = [
             {"path": "README.md", "type": "blob"},
@@ -505,7 +505,7 @@ class TestFindSkillInRepoTree:
         result = self._source()._find_skill_in_repo_tree("davila7/claude-code-templates", "senior-backend")
         assert result == "davila7/claude-code-templates/cli-tool/components/skills/development/senior-backend"
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_finds_root_level_skill(self, mock_get):
         tree_entries = [
             {"path": "my-skill/SKILL.md", "type": "blob"},
@@ -528,7 +528,7 @@ class TestFindSkillInRepoTree:
         result = self._source()._find_skill_in_repo_tree("owner/repo", "my-skill")
         assert result == "owner/repo/my-skill"
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_returns_none_when_skill_not_found(self, mock_get):
         tree_entries = [
             {"path": "other-skill/SKILL.md", "type": "blob"},
@@ -551,7 +551,7 @@ class TestFindSkillInRepoTree:
         result = self._source()._find_skill_in_repo_tree("owner/repo", "nonexistent")
         assert result is None
 
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_returns_none_when_repo_api_fails(self, mock_get):
         mock_get.return_value = MagicMock(status_code=404)
         result = self._source()._find_skill_in_repo_tree("owner/repo", "my-skill")
@@ -562,9 +562,9 @@ class TestWellKnownSkillSource:
     def _source(self):
         return WellKnownSkillSource()
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_reads_index_from_well_known_url(self, mock_get, _mock_read_cache, _mock_write_cache):
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -584,9 +584,9 @@ class TestWellKnownSkillSource:
         ]
         assert all(r.source == "well-known" for r in results)
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_search_accepts_domain_root_and_resolves_index(self, mock_get, _mock_read_cache, _mock_write_cache):
         mock_get.return_value = MagicMock(
             status_code=200,
@@ -599,9 +599,9 @@ class TestWellKnownSkillSource:
         called_url = mock_get.call_args.args[0]
         assert called_url == "https://example.com/.well-known/skills/index.json"
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_inspect_fetches_skill_md_from_well_known_endpoint(self, mock_get, _mock_read_cache, _mock_write_cache):
         def fake_get(url, *args, **kwargs):
             if url.endswith("/index.json"):
@@ -621,9 +621,9 @@ class TestWellKnownSkillSource:
         assert meta.source == "well-known"
         assert meta.extra["base_url"] == "https://example.com/.well-known/skills"
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_fetch_downloads_skill_files_from_well_known_endpoint(self, mock_get, _mock_read_cache, _mock_write_cache):
         def fake_get(url, *args, **kwargs):
             if url.endswith("/index.json"):
@@ -649,9 +649,9 @@ class TestWellKnownSkillSource:
         assert bundle.files["SKILL.md"] == "# Code Review\n"
         assert bundle.files["references/checklist.md"] == "- [ ] security\n"
 
-    @patch("tools.skills_hub._write_index_cache")
-    @patch("tools.skills_hub._read_index_cache", return_value=None)
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub._write_index_cache")
+    @patch("harness.tools.skills_hub._read_index_cache", return_value=None)
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_fetch_rejects_unsafe_file_paths_from_well_known_endpoint(self, mock_get, _mock_read_cache, _mock_write_cache):
         def fake_get(url, *args, **kwargs):
             if url.endswith("/index.json"):
@@ -675,7 +675,7 @@ class TestWellKnownSkillSource:
 
 class TestCheckForSkillUpdates:
     def test_bundle_content_hash_matches_installed_content_hash(self, tmp_path):
-        from tools.skills_guard import content_hash
+        from harness.tools.skills_guard import content_hash
 
         bundle = SkillBundle(
             name="demo-skill",
@@ -1048,7 +1048,7 @@ class TestUnifiedSearchDedup:
 class TestAppendAuditLog:
     def test_creates_log_entry(self, tmp_path):
         log_file = tmp_path / "audit.log"
-        with patch("tools.skills_hub.AUDIT_LOG", log_file):
+        with patch("harness.tools.skills_hub.AUDIT_LOG", log_file):
             append_audit_log("INSTALL", "test-skill", "github", "trusted", "pass")
         content = log_file.read_text()
         assert "INSTALL" in content
@@ -1058,7 +1058,7 @@ class TestAppendAuditLog:
 
     def test_appends_multiple_entries(self, tmp_path):
         log_file = tmp_path / "audit.log"
-        with patch("tools.skills_hub.AUDIT_LOG", log_file):
+        with patch("harness.tools.skills_hub.AUDIT_LOG", log_file):
             append_audit_log("INSTALL", "s1", "github", "trusted", "pass")
             append_audit_log("UNINSTALL", "s1", "github", "trusted", "n/a")
         lines = log_file.read_text().strip().split("\n")
@@ -1066,7 +1066,7 @@ class TestAppendAuditLog:
 
     def test_extra_field_included(self, tmp_path):
         log_file = tmp_path / "audit.log"
-        with patch("tools.skills_hub.AUDIT_LOG", log_file):
+        with patch("harness.tools.skills_hub.AUDIT_LOG", log_file):
             append_audit_log("INSTALL", "s1", "github", "trusted", "pass", extra="hash123")
         content = log_file.read_text()
         assert "hash123" in content
@@ -1116,7 +1116,7 @@ class TestOptionalSkillSourceBinaryAssets:
         )
         pycache_dir = skill_dir / "assets" / "neutts-cli" / "src" / "neutts_cli" / "__pycache__"
         pycache_dir.mkdir(parents=True)
-        (pycache_dir / "cli.cpython-312.pyc").write_bytes(b"junk")
+        (pycache_dir / "harness.repl.cpython-312.pyc").write_bytes(b"junk")
 
         src = OptionalSkillSource()
         src._optional_dir = optional_root
@@ -1131,7 +1131,7 @@ class TestOptionalSkillSourceBinaryAssets:
 
 class TestQuarantineBundleBinaryAssets:
     def test_quarantine_bundle_writes_binary_files(self, tmp_path):
-        import tools.skills_hub as hub
+        import harness.tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
         with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
@@ -1158,7 +1158,7 @@ class TestQuarantineBundleBinaryAssets:
         assert (q_path / "assets" / "neutts-cli" / "samples" / "jo.wav").read_bytes() == b"RIFF\x00\x01fakewav"
 
     def test_quarantine_bundle_rejects_traversal_file_paths(self, tmp_path):
-        import tools.skills_hub as hub
+        import harness.tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
         with patch.object(hub, "SKILLS_DIR", tmp_path / "skills"), \
@@ -1185,7 +1185,7 @@ class TestQuarantineBundleBinaryAssets:
         assert not (tmp_path / "skills" / "escape.txt").exists()
 
     def test_quarantine_bundle_rejects_absolute_file_paths(self, tmp_path):
-        import tools.skills_hub as hub
+        import harness.tools.skills_hub as hub
 
         hub_dir = tmp_path / "skills" / ".hub"
         absolute_target = tmp_path / "outside.txt"
@@ -1227,7 +1227,7 @@ class TestDownloadDirectoryViaTree:
         return GitHubSource(auth=auth)
 
     @patch.object(GitHubSource, "_fetch_file_content")
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_tree_api_downloads_subdirectories(self, mock_get, mock_fetch):
         """Tree API returns files from nested subdirectories."""
         repo_resp = MagicMock(status_code=200, json=lambda: {"default_branch": "main"})
@@ -1254,7 +1254,7 @@ class TestDownloadDirectoryViaTree:
         assert len(files) == 3
 
     @patch.object(GitHubSource, "_download_directory_recursive", return_value={"SKILL.md": "# ok"})
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_falls_back_on_truncated_tree(self, mock_get, mock_fallback):
         """When tree is truncated, fall back to recursive Contents API."""
         repo_resp = MagicMock(status_code=200, json=lambda: {"default_branch": "main"})
@@ -1268,7 +1268,7 @@ class TestDownloadDirectoryViaTree:
         mock_fallback.assert_called_once_with("owner/repo", "skills/my-skill")
 
     @patch.object(GitHubSource, "_download_directory_recursive", return_value={"SKILL.md": "# ok"})
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_falls_back_on_repo_api_failure(self, mock_get, mock_fallback):
         """When the repo endpoint returns non-200, fall back to Contents API."""
         mock_get.return_value = MagicMock(status_code=404)
@@ -1280,7 +1280,7 @@ class TestDownloadDirectoryViaTree:
         mock_fallback.assert_called_once()
 
     @patch.object(GitHubSource, "_fetch_file_content")
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_tree_api_skips_failed_file_fetches(self, mock_get, mock_fetch):
         """Files that fail to fetch are skipped, not fatal."""
         repo_resp = MagicMock(status_code=200, json=lambda: {"default_branch": "main"})
@@ -1303,7 +1303,7 @@ class TestDownloadDirectoryViaTree:
         assert "scripts/run.py" not in files
 
     @patch.object(GitHubSource, "_download_directory_recursive", return_value={})
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_falls_back_on_network_error(self, mock_get, mock_fallback):
         """Network errors in tree API trigger fallback."""
         mock_get.side_effect = httpx.ConnectError("connection refused")
@@ -1323,7 +1323,7 @@ class TestDownloadDirectoryRecursive:
         return GitHubSource(auth=auth)
 
     @patch.object(GitHubSource, "_fetch_file_content")
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_recursive_downloads_subdirectories(self, mock_get, mock_fetch):
         """Contents API recursion includes subdirectories."""
         root_resp = MagicMock(status_code=200, json=lambda: [
@@ -1343,7 +1343,7 @@ class TestDownloadDirectoryRecursive:
         assert "scripts/run.py" in files
 
     @patch.object(GitHubSource, "_fetch_file_content")
-    @patch("tools.skills_hub.httpx.get")
+    @patch("harness.tools.skills_hub.httpx.get")
     def test_recursive_handles_subdir_failure(self, mock_get, mock_fetch):
         """Subdirectory 403/rate-limit returns empty but doesn't crash."""
         root_resp = MagicMock(status_code=200, json=lambda: [

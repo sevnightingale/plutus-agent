@@ -5,10 +5,10 @@ referrerUrl / appName / User-Agent flow into gateway analytics.
 """
 from unittest.mock import MagicMock, patch
 
-from run_agent import AIAgent
+from harness.run_agent import AIAgent
 
 
-@patch("run_agent.OpenAI")
+@patch("harness.run_agent.OpenAI")
 def test_openrouter_base_url_applies_or_headers(mock_openai):
     mock_openai.return_value = MagicMock()
     agent = AIAgent(
@@ -27,7 +27,7 @@ def test_openrouter_base_url_applies_or_headers(mock_openai):
     assert headers["X-OpenRouter-Title"] == "Hermes Agent"
 
 
-@patch("run_agent.OpenAI")
+@patch("harness.run_agent.OpenAI")
 def test_ai_gateway_base_url_applies_attribution_headers(mock_openai):
     mock_openai.return_value = MagicMock()
     agent = AIAgent(
@@ -47,7 +47,7 @@ def test_ai_gateway_base_url_applies_attribution_headers(mock_openai):
     assert headers["User-Agent"].startswith("HermesAgent/")
 
 
-@patch("run_agent.OpenAI")
+@patch("harness.run_agent.OpenAI")
 def test_unknown_base_url_clears_default_headers(mock_openai):
     mock_openai.return_value = MagicMock()
     agent = AIAgent(

@@ -7,7 +7,7 @@ Follows the same pattern as test_whatsapp_group_gating.py.
 import sys
 from unittest.mock import MagicMock
 
-from gateway.config import Platform, PlatformConfig
+from harness.gateway.config import Platform, PlatformConfig
 
 
 # ---------------------------------------------------------------------------
@@ -40,10 +40,10 @@ def _ensure_slack_mock():
 
 _ensure_slack_mock()
 
-import gateway.platforms.slack as _slack_mod
+import harness.gateway.platforms.slack as _slack_mod
 _slack_mod.SLACK_AVAILABLE = True
 
-from gateway.platforms.slack import SlackAdapter  # noqa: E402
+from harness.gateway.platforms.slack import SlackAdapter  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -283,7 +283,7 @@ def test_bot_uid_none_processes_channel_message():
 # ---------------------------------------------------------------------------
 
 def test_config_bridges_slack_free_response_channels(monkeypatch, tmp_path):
-    from gateway.config import load_gateway_config
+    from harness.gateway.config import load_gateway_config
 
     hermes_home = tmp_path / ".hermes"
     hermes_home.mkdir()

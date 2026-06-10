@@ -4,11 +4,11 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock
 
-from plutus_cli.auth import PROVIDER_REGISTRY, resolve_provider, resolve_api_key_provider_credentials
-from plutus_cli.models import _PROVIDER_MODELS, _PROVIDER_LABELS, _PROVIDER_ALIASES, normalize_provider
-from plutus_cli.model_normalize import normalize_model_for_provider
-from agent.model_metadata import _URL_TO_PROVIDER, _PROVIDER_PREFIXES
-from agent.models_dev import PROVIDER_TO_MODELS_DEV, list_agentic_models
+from harness.cli.auth import PROVIDER_REGISTRY, resolve_provider, resolve_api_key_provider_credentials
+from harness.cli.models import _PROVIDER_MODELS, _PROVIDER_LABELS, _PROVIDER_ALIASES, normalize_provider
+from harness.cli.model_normalize import normalize_model_for_provider
+from harness.agent.model_metadata import _URL_TO_PROVIDER, _PROVIDER_PREFIXES
+from harness.agent.models_dev import PROVIDER_TO_MODELS_DEV, list_agentic_models
 
 
 # ── Provider Registry ──
@@ -95,7 +95,7 @@ class TestOllamaCloudCredentials:
 
     def test_runtime_ollama_cloud(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.runtime_provider import resolve_runtime_provider
         result = resolve_runtime_provider(requested="ollama-cloud")
         assert result["provider"] == "ollama-cloud"
         assert result["api_mode"] == "chat_completions"
@@ -116,7 +116,7 @@ class TestOllamaCloudModelCatalog:
 
     def test_provider_model_ids_returns_dynamic_models(self, tmp_path, monkeypatch):
         """provider_model_ids('ollama-cloud') should call fetch_ollama_cloud_models()."""
-        from plutus_cli.models import provider_model_ids
+        from harness.cli.models import provider_model_ids
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
@@ -129,8 +129,8 @@ class TestOllamaCloudModelCatalog:
                 }
             }
         }
-        with patch("plutus_cli.models.fetch_api_models", return_value=["qwen3.5:397b"]), \
-             patch("agent.models_dev.fetch_models_dev", return_value=mock_mdev):
+        with patch("harness.cli.models.fetch_api_models", return_value=["qwen3.5:397b"]), \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value=mock_mdev):
             result = provider_model_ids("ollama-cloud", force_refresh=True)
 
         assert len(result) > 0
@@ -142,7 +142,7 @@ class TestOllamaCloudModelCatalog:
 class TestOllamaCloudModelPicker:
     def test_ollama_cloud_shows_model_count(self, tmp_path, monkeypatch):
         """Ollama Cloud should show non-zero model count in provider picker."""
-        from plutus_cli.model_switch import list_authenticated_providers
+        from harness.cli.model_switch import list_authenticated_providers
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
@@ -155,8 +155,8 @@ class TestOllamaCloudModelPicker:
                 }
             }
         }
-        with patch("plutus_cli.models.fetch_api_models", return_value=["qwen3.5:397b"]), \
-             patch("agent.models_dev.fetch_models_dev", return_value=mock_mdev):
+        with patch("harness.cli.models.fetch_api_models", return_value=["qwen3.5:397b"]), \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value=mock_mdev):
             providers = list_authenticated_providers(current_provider="ollama-cloud")
 
         ollama = next((p for p in providers if p["slug"] == "ollama-cloud"), None)
@@ -165,7 +165,7 @@ class TestOllamaCloudModelPicker:
 
     def test_ollama_cloud_not_shown_without_creds(self, monkeypatch):
         """Ollama Cloud should not appear without credentials."""
-        from plutus_cli.model_switch import list_authenticated_providers
+        from harness.cli.model_switch import list_authenticated_providers
 
         monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
 
@@ -179,7 +179,7 @@ class TestOllamaCloudModelPicker:
 class TestOllamaCloudMergedDiscovery:
     def test_merges_live_and_models_dev(self, tmp_path, monkeypatch):
         """Live API models appear first, models.dev additions fill gaps."""
-        from plutus_cli.models import fetch_ollama_cloud_models
+        from harness.cli.models import fetch_ollama_cloud_models
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
@@ -193,8 +193,8 @@ class TestOllamaCloudMergedDiscovery:
                 }
             }
         }
-        with patch("plutus_cli.models.fetch_api_models", return_value=["qwen3.5:397b", "glm-5"]), \
-             patch("agent.models_dev.fetch_models_dev", return_value=mock_mdev):
+        with patch("harness.cli.models.fetch_api_models", return_value=["qwen3.5:397b", "glm-5"]), \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value=mock_mdev):
             result = fetch_ollama_cloud_models(force_refresh=True)
 
         # Live models first, then models.dev additions (deduped)
@@ -206,7 +206,7 @@ class TestOllamaCloudMergedDiscovery:
 
     def test_falls_back_to_models_dev_without_api_key(self, tmp_path, monkeypatch):
         """Without API key, only models.dev results are returned."""
-        from plutus_cli.models import fetch_ollama_cloud_models
+        from harness.cli.models import fetch_ollama_cloud_models
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
@@ -218,20 +218,20 @@ class TestOllamaCloudMergedDiscovery:
                 }
             }
         }
-        with patch("agent.models_dev.fetch_models_dev", return_value=mock_mdev):
+        with patch("harness.agent.models_dev.fetch_models_dev", return_value=mock_mdev):
             result = fetch_ollama_cloud_models(force_refresh=True)
 
         assert result == ["glm-5"]
 
     def test_uses_disk_cache(self, tmp_path, monkeypatch):
         """Second call returns cached results without hitting APIs."""
-        from plutus_cli.models import fetch_ollama_cloud_models
+        from harness.cli.models import fetch_ollama_cloud_models
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
 
-        with patch("plutus_cli.models.fetch_api_models", return_value=["model-a"]) as mock_api, \
-             patch("agent.models_dev.fetch_models_dev", return_value={}):
+        with patch("harness.cli.models.fetch_api_models", return_value=["model-a"]) as mock_api, \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value={}):
             first = fetch_ollama_cloud_models(force_refresh=True)
             assert first == ["model-a"]
             assert mock_api.call_count == 1
@@ -243,20 +243,20 @@ class TestOllamaCloudMergedDiscovery:
 
     def test_force_refresh_bypasses_cache(self, tmp_path, monkeypatch):
         """force_refresh=True always hits the API even with fresh cache."""
-        from plutus_cli.models import fetch_ollama_cloud_models
+        from harness.cli.models import fetch_ollama_cloud_models
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
 
-        with patch("plutus_cli.models.fetch_api_models", return_value=["model-a"]) as mock_api, \
-             patch("agent.models_dev.fetch_models_dev", return_value={}):
+        with patch("harness.cli.models.fetch_api_models", return_value=["model-a"]) as mock_api, \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value={}):
             fetch_ollama_cloud_models(force_refresh=True)
             fetch_ollama_cloud_models(force_refresh=True)
             assert mock_api.call_count == 2
 
     def test_stale_cache_used_on_total_failure(self, tmp_path, monkeypatch):
         """If both API and models.dev fail, stale cache is returned."""
-        from plutus_cli.models import fetch_ollama_cloud_models, _save_ollama_cloud_cache
+        from harness.cli.models import fetch_ollama_cloud_models, _save_ollama_cloud_cache
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
@@ -273,20 +273,20 @@ class TestOllamaCloudMergedDiscovery:
         with open(cache_path, "w") as f:
             json.dump(data, f)
 
-        with patch("plutus_cli.models.fetch_api_models", return_value=None), \
-             patch("agent.models_dev.fetch_models_dev", return_value={}):
+        with patch("harness.cli.models.fetch_api_models", return_value=None), \
+             patch("harness.agent.models_dev.fetch_models_dev", return_value={}):
             result = fetch_ollama_cloud_models(force_refresh=True)
 
         assert result == ["stale-model"]
 
     def test_empty_on_total_failure_no_cache(self, tmp_path, monkeypatch):
         """Returns empty list when everything fails and no cache exists."""
-        from plutus_cli.models import fetch_ollama_cloud_models
+        from harness.cli.models import fetch_ollama_cloud_models
 
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
         monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
 
-        with patch("agent.models_dev.fetch_models_dev", return_value={}):
+        with patch("harness.agent.models_dev.fetch_models_dev", return_value={}):
             result = fetch_ollama_cloud_models(force_refresh=True)
 
         assert result == []
@@ -337,7 +337,7 @@ class TestOllamaCloudModelsDev:
                 }
             }
         }
-        with patch("agent.models_dev.fetch_models_dev", return_value=mock_data):
+        with patch("harness.agent.models_dev.fetch_models_dev", return_value=mock_data):
             result = list_agentic_models("ollama-cloud")
         assert "qwen3.5:397b" in result
         assert "glm-5" in result
@@ -351,15 +351,15 @@ class TestOllamaCloudAgentInit:
     def test_agent_imports_without_error(self):
         """Verify run_agent.py has no SyntaxError."""
         import importlib
-        import run_agent
+        import harness.run_agent as run_agent
         importlib.reload(run_agent)
 
     def test_ollama_cloud_agent_uses_chat_completions(self, monkeypatch):
         """Ollama Cloud falls through to chat_completions — no special elif needed."""
         monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
-        with patch("run_agent.OpenAI") as mock_openai:
+        with patch("harness.run_agent.OpenAI") as mock_openai:
             mock_openai.return_value = MagicMock()
-            from run_agent import AIAgent
+            from harness.run_agent import AIAgent
             agent = AIAgent(
                 model="qwen3.5:397b",
                 provider="ollama-cloud",
@@ -374,27 +374,27 @@ class TestOllamaCloudAgentInit:
 
 class TestOllamaCloudProvidersNew:
     def test_overlay_exists(self):
-        from plutus_cli.providers import HERMES_OVERLAYS
+        from harness.cli.providers import HERMES_OVERLAYS
         assert "ollama-cloud" in HERMES_OVERLAYS
         overlay = HERMES_OVERLAYS["ollama-cloud"]
         assert overlay.transport == "openai_chat"
         assert overlay.base_url_env_var == "OLLAMA_BASE_URL"
 
     def test_alias_resolves(self):
-        from plutus_cli.providers import normalize_provider as np
+        from harness.cli.providers import normalize_provider as np
         assert np("ollama") == "custom"  # bare "ollama" = local
         assert np("ollama-cloud") == "ollama-cloud"
 
     def test_label_override(self):
-        from plutus_cli.providers import _LABEL_OVERRIDES
+        from harness.cli.providers import _LABEL_OVERRIDES
         assert _LABEL_OVERRIDES.get("ollama-cloud") == "Ollama Cloud"
 
     def test_get_label(self):
-        from plutus_cli.providers import get_label
+        from harness.cli.providers import get_label
         assert get_label("ollama-cloud") == "Ollama Cloud"
 
     def test_get_provider(self):
-        from plutus_cli.providers import get_provider
+        from harness.cli.providers import get_provider
         pdef = get_provider("ollama-cloud")
         assert pdef is not None
         assert pdef.id == "ollama-cloud"
@@ -405,6 +405,6 @@ class TestOllamaCloudProvidersNew:
 
 class TestOllamaCloudAuxiliary:
     def test_aux_model_defined(self):
-        from agent.auxiliary_client import _API_KEY_PROVIDER_AUX_MODELS
+        from harness.agent.auxiliary_client import _API_KEY_PROVIDER_AUX_MODELS
         assert "ollama-cloud" in _API_KEY_PROVIDER_AUX_MODELS
         assert _API_KEY_PROVIDER_AUX_MODELS["ollama-cloud"] == "nemotron-3-nano:30b"

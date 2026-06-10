@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Set
 
-from plutus_cli.auth import get_nous_auth_status
-from plutus_cli.config import get_env_value, load_config
-from tools.managed_tool_gateway import is_managed_tool_gateway_ready
-from tools.tool_backend_helpers import (
+from harness.cli.auth import get_nous_auth_status
+from harness.cli.config import get_env_value, load_config
+from harness.tools.managed_tool_gateway import is_managed_tool_gateway_ready
+from harness.tools.tool_backend_helpers import (
     fal_key_is_configured,
     has_direct_modal_credentials,
     managed_nous_tools_enabled,
@@ -82,7 +82,7 @@ def _model_config_dict(config: Dict[str, object]) -> Dict[str, object]:
 
 
 def _toolset_enabled(config: Dict[str, object], toolset_key: str) -> bool:
-    from toolsets import resolve_toolset
+    from harness.toolsets import resolve_toolset
 
     platform_toolsets = config.get("platform_toolsets")
     if not isinstance(platform_toolsets, dict) or not platform_toolsets:
@@ -123,7 +123,7 @@ def _has_agent_browser() -> bool:
 
     agent_browser_bin = shutil.which("agent-browser")
     local_bin = (
-        Path(__file__).parent.parent / "node_modules" / ".bin" / "agent-browser"
+        Path(__file__).parent.parent.parent / "node_modules" / ".bin" / "agent-browser"
     )
     return bool(agent_browser_bin or local_bin.exists())
 
@@ -688,7 +688,7 @@ def prompt_enable_tool_gateway(config: Dict[str, object]) -> set[str]:
         return set()
 
     try:
-        from plutus_cli.setup import prompt_choice
+        from harness.cli.setup import prompt_choice
     except Exception:
         return set()
 
@@ -766,7 +766,7 @@ def prompt_enable_tool_gateway(config: Dict[str, object]) -> set[str]:
 
     changed = apply_gateway_defaults(config, to_apply)
     if changed:
-        from plutus_cli.config import save_config
+        from harness.cli.config import save_config
         save_config(config)
         # Only report the tools that actually switched (not already-managed ones)
         newly_switched = changed - set(already_managed)

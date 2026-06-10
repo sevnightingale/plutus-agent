@@ -34,7 +34,7 @@ import threading
 import time
 import urllib.request
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ def _load_security_config() -> dict:
         "tirith_fail_open": True,
     }
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         cfg = load_config().get("security", {}) or {}
     except Exception:
         cfg = {}

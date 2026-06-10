@@ -49,7 +49,7 @@ def _make_cli(tool_progress="all"):
     }
     with patch.dict(sys.modules, prompt_toolkit_stubs), \
          patch.dict("os.environ", clean_env, clear=False):
-        import cli as mod
+        import harness.repl as mod
         mod = importlib.reload(mod)
         _cli_mod = mod
         with patch.object(mod, "get_tool_definitions", return_value=[]), \
@@ -82,7 +82,7 @@ class TestToolProgressScrollback:
             cli._on_tool_progress("tool.started", "read_file", "cli.py", {"path": "cli.py"})
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.1, is_error=False)
             # Second call (same tool)
-            cli._on_tool_progress("tool.started", "read_file", "run_agent.py", {"path": "run_agent.py"})
+            cli._on_tool_progress("tool.started", "read_file", "harness/run_agent.py", {"path": "harness/run_agent.py"})
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.2, is_error=False)
 
         assert mock_print.call_count == 2
@@ -93,7 +93,7 @@ class TestToolProgressScrollback:
         with patch.object(_cli_mod, "_cprint") as mock_print:
             cli._on_tool_progress("tool.started", "read_file", "cli.py", {"path": "cli.py"})
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.1, is_error=False)
-            cli._on_tool_progress("tool.started", "read_file", "run_agent.py", {"path": "run_agent.py"})
+            cli._on_tool_progress("tool.started", "read_file", "harness/run_agent.py", {"path": "harness/run_agent.py"})
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.2, is_error=False)
 
         assert mock_print.call_count == 1  # Only the first read_file
@@ -106,7 +106,7 @@ class TestToolProgressScrollback:
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.1, is_error=False)
             cli._on_tool_progress("tool.started", "search_files", "pattern", {"pattern": "test"})
             cli._on_tool_progress("tool.completed", "search_files", None, None, duration=0.3, is_error=False)
-            cli._on_tool_progress("tool.started", "read_file", "run_agent.py", {"path": "run_agent.py"})
+            cli._on_tool_progress("tool.started", "read_file", "harness/run_agent.py", {"path": "harness/run_agent.py"})
             cli._on_tool_progress("tool.completed", "read_file", None, None, duration=0.2, is_error=False)
 
         # read_file, search_files, read_file (3rd prints because search_files broke the streak)

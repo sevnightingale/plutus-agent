@@ -16,9 +16,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from plutus_cli.config import get_hermes_home, get_config_path, load_config, save_config
-from plutus_constants import get_optional_skills_dir
-from plutus_cli.setup import (
+from harness.cli.config import get_hermes_home, get_config_path, load_config, save_config
+from harness.constants import get_optional_skills_dir
+from harness.cli.setup import (
     Colors,
     color,
     print_header,
@@ -30,7 +30,7 @@ from plutus_cli.setup import (
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 _OPENCLAW_SCRIPT = (
     get_optional_skills_dir(PROJECT_ROOT / "optional-skills")
@@ -153,7 +153,7 @@ def _warn_if_gateway_running(auto_yes: bool) -> None:
     (e.g. Telegram 409 "terminated by other getUpdates request"). Warn the
     user and let them decide whether to continue.
     """
-    from gateway.status import get_running_pid, read_runtime_status
+    from harness.gateway.status import get_running_pid, read_runtime_status
 
     if not get_running_pid():
         return

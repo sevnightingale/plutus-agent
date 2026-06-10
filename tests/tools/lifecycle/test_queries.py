@@ -12,24 +12,24 @@ from pathlib import Path
 
 import pytest
 
-from agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
-from tools.registry import registry as tool_registry
+from harness.agent.lifecycle_db import LifecycleDB, get_lifecycle_db, reset_lifecycle_db_singleton
+from harness.tools.registry import registry as tool_registry
 
 # Importing the modules triggers their registry.register at top level.
-import tools.lifecycle.find_similar_reflections      # noqa: F401
-import tools.lifecycle.find_similar_theses           # noqa: F401
-import tools.lifecycle.inspect_position              # noqa: F401
-import tools.lifecycle.query_calibration             # noqa: F401
-import tools.lifecycle.query_capital_movements       # noqa: F401
-import tools.lifecycle.query_conviction_outcomes     # noqa: F401
-import tools.lifecycle.query_conviction_trajectory   # noqa: F401
-import tools.lifecycle.query_equity_curve            # noqa: F401
-import tools.lifecycle.query_performance             # noqa: F401
-import tools.lifecycle.query_performance_attribution # noqa: F401
-import tools.lifecycle.query_skip_outcomes           # noqa: F401
-import tools.lifecycle.query_strategy_book           # noqa: F401
-import tools.lifecycle.query_trades                  # noqa: F401
-import tools.lifecycle.query_unreflected_closes      # noqa: F401
+import harness.tools.lifecycle.find_similar_reflections      # noqa: F401
+import harness.tools.lifecycle.find_similar_theses           # noqa: F401
+import harness.tools.lifecycle.inspect_position              # noqa: F401
+import harness.tools.lifecycle.query_calibration             # noqa: F401
+import harness.tools.lifecycle.query_capital_movements       # noqa: F401
+import harness.tools.lifecycle.query_conviction_outcomes     # noqa: F401
+import harness.tools.lifecycle.query_conviction_trajectory   # noqa: F401
+import harness.tools.lifecycle.query_equity_curve            # noqa: F401
+import harness.tools.lifecycle.query_performance             # noqa: F401
+import harness.tools.lifecycle.query_performance_attribution # noqa: F401
+import harness.tools.lifecycle.query_skip_outcomes           # noqa: F401
+import harness.tools.lifecycle.query_strategy_book           # noqa: F401
+import harness.tools.lifecycle.query_trades                  # noqa: F401
+import harness.tools.lifecycle.query_unreflected_closes      # noqa: F401
 
 
 @pytest.fixture()
@@ -386,7 +386,7 @@ def voyage_key_required(monkeypatch):
     if not key:
         pytest.skip("VOYAGE_API_KEY not set")
     monkeypatch.setenv("VOYAGE_API_KEY", key)
-    from tools.core.embedder import reset_embedder_singleton
+    from harness.tools.core.embedder import reset_embedder_singleton
     reset_embedder_singleton()
     yield
     reset_embedder_singleton()
@@ -394,7 +394,7 @@ def voyage_key_required(monkeypatch):
 
 def _embed_and_insert_theses(db, items):
     """Embed each (text, symbol) and insert thesis row + thesis_vec row atomically."""
-    from tools.core.embedder import get_embedder
+    from harness.tools.core.embedder import get_embedder
     import sqlite_vec
 
     embedder = get_embedder()
@@ -452,7 +452,7 @@ class TestFindSimilarTheses:
 
 class TestFindSimilarReflections:
     def test_top1_is_most_relevant(self, db, voyage_key_required):
-        from tools.core.embedder import get_embedder
+        from harness.tools.core.embedder import get_embedder
         import sqlite_vec
         items = [
             ("Lesson: avoid chasing breakouts after 2% moves — slippage ate the edge.", "loss_postmortem"),

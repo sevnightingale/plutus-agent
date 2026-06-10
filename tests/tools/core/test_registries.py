@@ -8,7 +8,7 @@ reset clears.
 
 import pytest
 
-from tools.core import (
+from harness.tools.core import (
     account_registry,
     alert_registry,
     data_point_registry,

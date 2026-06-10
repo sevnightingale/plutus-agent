@@ -14,9 +14,9 @@ from typing import Any, Dict, List, Optional
 
 import sqlite_vec
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.core.embedder import EmbedderError, get_embedder
-from tools.registry import registry, tool_error, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.core.embedder import EmbedderError, get_embedder
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def _candidates_vec(conn, query_vec: List[float], k: int,
 
 async def _summarize(query_text: str, hits: List[Dict[str, Any]]) -> Optional[str]:
     try:
-        from agent.auxiliary_client import async_call_llm, extract_content_or_reasoning
+        from harness.agent.auxiliary_client import async_call_llm, extract_content_or_reasoning
     except Exception:
         return None
     system = (

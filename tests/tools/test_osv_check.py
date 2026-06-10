@@ -4,7 +4,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from tools.osv_check import (
+from harness.tools.osv_check import (
     check_package_for_malware,
     _infer_ecosystem,
     _parse_package_from_args,
@@ -92,7 +92,7 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
+        with patch("harness.tools.osv_check.urllib.request.urlopen", return_value=mock_response):
             result = check_package_for_malware("npx", ["-y", "@modelcontextprotocol/server-filesystem"])
         assert result is None
 
@@ -108,7 +108,7 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response):
+        with patch("harness.tools.osv_check.urllib.request.urlopen", return_value=mock_response):
             result = check_package_for_malware("npx", ["evil-pkg"])
         assert result is not None
         assert "BLOCKED" in result
@@ -117,7 +117,7 @@ class TestCheckPackageForMalware:
 
     def test_network_error_fails_open(self):
         """Network errors allow the package (fail-open)."""
-        with patch("tools.osv_check.urllib.request.urlopen", side_effect=ConnectionError("timeout")):
+        with patch("harness.tools.osv_check.urllib.request.urlopen", side_effect=ConnectionError("timeout")):
             result = check_package_for_malware("npx", ["some-package"])
         assert result is None
 
@@ -133,7 +133,7 @@ class TestCheckPackageForMalware:
         mock_response.__enter__ = lambda s: s
         mock_response.__exit__ = MagicMock(return_value=False)
 
-        with patch("tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
+        with patch("harness.tools.osv_check.urllib.request.urlopen", return_value=mock_response) as mock_url:
             check_package_for_malware("uvx", ["mcp-server-fetch"])
             # Verify PyPI ecosystem was sent
             call_data = json.loads(mock_url.call_args[0][0].data)

@@ -31,9 +31,9 @@ from concurrent.futures import (
 )
 from typing import Any, Dict, List, Optional
 
-from toolsets import TOOLSETS
-from tools import file_state
-from utils import base_url_hostname, is_truthy_value
+from harness.toolsets import TOOLSETS
+from harness.tools import file_state
+from harness.utils import base_url_hostname, is_truthy_value
 
 
 # Tools that children must never have access to
@@ -389,7 +389,7 @@ def _is_mcp_toolset_name(name: str) -> bool:
     if str(name).startswith("mcp-"):
         return True
     try:
-        from tools.registry import registry
+        from harness.tools.registry import registry
 
         target = registry.get_toolset_alias_target(str(name))
     except Exception:
@@ -730,7 +730,7 @@ def _build_child_progress_callback(
                 if preview and len(preview) > 35
                 else (preview or "")
             )
-            from agent.display import get_tool_emoji
+            from harness.agent.display import get_tool_emoji
 
             emoji = get_tool_emoji(tool_name or "")
             line = f" {prefix}├─ {emoji} {tool_name}"
@@ -791,7 +791,7 @@ def _build_child_agent(
     routing subagents to a different provider:model pair (e.g. cheap/fast
     model on OpenRouter while the parent runs on Nous Portal).
     """
-    from run_agent import AIAgent
+    from harness.run_agent import AIAgent
     import uuid as _uuid
 
     # ── Role resolution ─────────────────────────────────────────────────
@@ -825,7 +825,7 @@ def _build_child_agent(
         parent_toolsets = set(parent_enabled)
     elif parent_agent and hasattr(parent_agent, "valid_tool_names"):
         # enabled_toolsets is None (all tools) — derive from loaded tool names
-        import model_tools
+        import harness.model_tools as model_tools
 
         parent_toolsets = {
             ts
@@ -934,7 +934,7 @@ def _build_child_agent(
     try:
         delegation_effort = str(delegation_cfg.get("reasoning_effort") or "").strip()
         if delegation_effort:
-            from plutus_constants import parse_reasoning_effort
+            from harness.constants import parse_reasoning_effort
 
             parsed = parse_reasoning_effort(delegation_effort)
             if parsed is not None:
@@ -1034,7 +1034,7 @@ def _run_single_child(
 
     # Restore parent tool names using the value saved before child construction
     # mutated the global. This is the correct parent toolset, not the child's.
-    import model_tools
+    import harness.model_tools as model_tools
 
     _saved_tool_names = getattr(
         child, "_delegate_saved_tool_names", list(model_tools._last_resolved_tool_names)
@@ -1469,7 +1469,7 @@ def _run_single_child(
 
         # Restore the parent's tool names so the process-global is correct
         # for any subsequent execute_code calls or other consumers.
-        import model_tools
+        import harness.model_tools as model_tools
 
         saved_tool_names = getattr(child, "_delegate_saved_tool_names", None)
         if isinstance(saved_tool_names, list):
@@ -1618,7 +1618,7 @@ def delegate_task(
     # Save parent tool names BEFORE any child construction mutates the global.
     # _build_child_agent() calls AIAgent() which calls get_tool_definitions(),
     # which overwrites model_tools._last_resolved_tool_names with child's toolset.
-    import model_tools as _model_tools
+    import harness.model_tools as _model_tools
 
     _parent_tool_names = list(_model_tools._last_resolved_tool_names)
 
@@ -1819,7 +1819,7 @@ def delegate_task(
     # child was closed.
     _parent_session_id = getattr(parent_agent, "session_id", None)
     try:
-        from plutus_cli.plugins import invoke_hook as _invoke_hook
+        from harness.cli.plugins import invoke_hook as _invoke_hook
     except Exception:
         _invoke_hook = None
     for entry in results:
@@ -1868,7 +1868,7 @@ def _resolve_child_credential_pool(effective_provider: Optional[str], parent_age
         return parent_pool
 
     try:
-        from agent.credential_pool import load_pool
+        from harness.agent.credential_pool import load_pool
 
         pool = load_pool(effective_provider)
         if pool is not None and pool.has_credentials():
@@ -1946,7 +1946,7 @@ def _resolve_delegation_credentials(cfg: dict, parent_agent) -> dict:
 
     # Provider is configured — resolve full credentials
     try:
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         runtime = resolve_runtime_provider(requested=configured_provider)
     except Exception as exc:
@@ -1984,7 +1984,7 @@ def _load_config() -> dict:
     of the entry point (CLI, gateway, cron).
     """
     try:
-        from cli import CLI_CONFIG
+        from harness.repl import CLI_CONFIG
 
         cfg = CLI_CONFIG.get("delegation", {})
         if cfg:
@@ -1992,7 +1992,7 @@ def _load_config() -> dict:
     except Exception:
         pass
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         full = load_config()
         return full.get("delegation", {})
@@ -2146,7 +2146,7 @@ DELEGATE_TASK_SCHEMA = {
 
 
 # --- Registry ---
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 registry.register(
     name="delegate_task",

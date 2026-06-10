@@ -22,7 +22,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 from typing import Any, Callable, Dict, List, Optional, TypeVar
 
 logger = logging.getLogger(__name__)

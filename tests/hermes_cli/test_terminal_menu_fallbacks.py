@@ -4,7 +4,7 @@ import subprocess
 import sys
 import types
 
-from plutus_cli.config import load_config, save_config
+from harness.cli.config import load_config, save_config
 
 
 class _BrokenTerminalMenu:
@@ -13,7 +13,7 @@ class _BrokenTerminalMenu:
 
 
 def test_prompt_model_selection_falls_back_on_terminalmenu_runtime_error(monkeypatch):
-    from plutus_cli.auth import _prompt_model_selection
+    from harness.cli.auth import _prompt_model_selection
 
     monkeypatch.setitem(
         sys.modules,
@@ -29,7 +29,7 @@ def test_prompt_model_selection_falls_back_on_terminalmenu_runtime_error(monkeyp
 
 
 def test_prompt_reasoning_effort_falls_back_on_terminalmenu_runtime_error(monkeypatch):
-    from plutus_cli.main import _prompt_reasoning_effort_selection
+    from harness.cli.main import _prompt_reasoning_effort_selection
 
     monkeypatch.setitem(
         sys.modules,
@@ -45,7 +45,7 @@ def test_prompt_reasoning_effort_falls_back_on_terminalmenu_runtime_error(monkey
 
 
 def test_remove_custom_provider_falls_back_on_terminalmenu_runtime_error(tmp_path, monkeypatch):
-    from plutus_cli.main import _remove_custom_provider
+    from harness.cli.main import _remove_custom_provider
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setitem(
@@ -73,7 +73,7 @@ def test_remove_custom_provider_falls_back_on_terminalmenu_runtime_error(tmp_pat
 
 
 def test_named_custom_provider_model_picker_falls_back_on_terminalmenu_runtime_error(tmp_path, monkeypatch):
-    from plutus_cli.main import _model_flow_named_custom
+    from harness.cli.main import _model_flow_named_custom
 
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     monkeypatch.setitem(
@@ -81,8 +81,8 @@ def test_named_custom_provider_model_picker_falls_back_on_terminalmenu_runtime_e
         "simple_term_menu",
         types.SimpleNamespace(TerminalMenu=_BrokenTerminalMenu),
     )
-    monkeypatch.setattr("plutus_cli.models.fetch_api_models", lambda *args, **kwargs: ["model-a", "model-b"])
-    monkeypatch.setattr("plutus_cli.auth.deactivate_provider", lambda: None)
+    monkeypatch.setattr("harness.cli.models.fetch_api_models", lambda *args, **kwargs: ["model-a", "model-b"])
+    monkeypatch.setattr("harness.cli.auth.deactivate_provider", lambda: None)
 
     cfg = load_config()
     save_config(cfg)

@@ -55,7 +55,7 @@ def _isolate_env(monkeypatch, tmp_path):
 
 class TestPkce:
     def test_verifier_and_challenge_s256_roundtrip(self):
-        from agent.google_oauth import _generate_pkce_pair
+        from harness.agent.google_oauth import _generate_pkce_pair
 
         verifier, challenge = _generate_pkce_pair()
         expected = base64.urlsafe_b64encode(
@@ -67,7 +67,7 @@ class TestPkce:
 
 class TestRefreshParts:
     def test_parse_bare_token(self):
-        from agent.google_oauth import RefreshParts
+        from harness.agent.google_oauth import RefreshParts
 
         p = RefreshParts.parse("abc-token")
         assert p.refresh_token == "abc-token"
@@ -75,7 +75,7 @@ class TestRefreshParts:
         assert p.managed_project_id == ""
 
     def test_parse_packed(self):
-        from agent.google_oauth import RefreshParts
+        from harness.agent.google_oauth import RefreshParts
 
         p = RefreshParts.parse("rt|proj-123|mgr-456")
         assert p.refresh_token == "rt"
@@ -83,12 +83,12 @@ class TestRefreshParts:
         assert p.managed_project_id == "mgr-456"
 
     def test_format_bare_token(self):
-        from agent.google_oauth import RefreshParts
+        from harness.agent.google_oauth import RefreshParts
 
         assert RefreshParts(refresh_token="rt").format() == "rt"
 
     def test_format_with_project(self):
-        from agent.google_oauth import RefreshParts
+        from harness.agent.google_oauth import RefreshParts
 
         packed = RefreshParts(
             refresh_token="rt", project_id="p1", managed_project_id="m1",
@@ -101,21 +101,21 @@ class TestRefreshParts:
         assert parsed.managed_project_id == "m1"
 
     def test_format_empty_refresh_token_returns_empty(self):
-        from agent.google_oauth import RefreshParts
+        from harness.agent.google_oauth import RefreshParts
 
         assert RefreshParts(refresh_token="").format() == ""
 
 
 class TestClientCredResolution:
     def test_env_override(self, monkeypatch):
-        from agent.google_oauth import _get_client_id
+        from harness.agent.google_oauth import _get_client_id
 
         monkeypatch.setenv("HERMES_GEMINI_CLIENT_ID", "custom-id.apps.googleusercontent.com")
         assert _get_client_id() == "custom-id.apps.googleusercontent.com"
 
     def test_shipped_default_used_when_no_env(self):
         """Out of the box, the public gemini-cli desktop client is used."""
-        from agent.google_oauth import _get_client_id, _DEFAULT_CLIENT_ID
+        from harness.agent.google_oauth import _get_client_id, _DEFAULT_CLIENT_ID
 
         # Confirmed PUBLIC: baked into Google's open-source gemini-cli
         assert _DEFAULT_CLIENT_ID.endswith(".apps.googleusercontent.com")
@@ -123,7 +123,7 @@ class TestClientCredResolution:
         assert _get_client_id() == _DEFAULT_CLIENT_ID
 
     def test_shipped_default_secret_present(self):
-        from agent.google_oauth import _DEFAULT_CLIENT_SECRET, _get_client_secret
+        from harness.agent.google_oauth import _DEFAULT_CLIENT_SECRET, _get_client_secret
 
         assert _DEFAULT_CLIENT_SECRET.startswith("GOCSPX-")
         assert len(_DEFAULT_CLIENT_SECRET) >= 20
@@ -131,7 +131,7 @@ class TestClientCredResolution:
 
     def test_falls_back_to_scrape_when_defaults_wiped(self, tmp_path, monkeypatch):
         """Forks that wipe the shipped defaults should still work with gemini-cli."""
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         monkeypatch.setattr(google_oauth, "_DEFAULT_CLIENT_ID", "")
         monkeypatch.setattr(google_oauth, "_DEFAULT_CLIENT_SECRET", "")
@@ -153,7 +153,7 @@ class TestClientCredResolution:
 
     def test_missing_everything_raises_with_install_hint(self, monkeypatch):
         """When env + defaults + scrape all fail, raise with install instructions."""
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         monkeypatch.setattr(google_oauth, "_DEFAULT_CLIENT_ID", "")
         monkeypatch.setattr(google_oauth, "_DEFAULT_CLIENT_SECRET", "")
@@ -165,13 +165,13 @@ class TestClientCredResolution:
         assert exc_info.value.code == "google_oauth_client_id_missing"
 
     def test_locate_gemini_cli_oauth_js_when_absent(self, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         monkeypatch.setattr("shutil.which", lambda _: None)
         assert google_oauth._locate_gemini_cli_oauth_js() is None
 
     def test_scrape_client_credentials_parses_id_and_secret(self, tmp_path, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         # Create a fake gemini binary and oauth2.js
         fake_gemini_bin = tmp_path / "bin" / "gemini"
@@ -197,7 +197,7 @@ class TestClientCredResolution:
 
 class TestCredentialIo:
     def _make(self):
-        from agent.google_oauth import GoogleCredentials
+        from harness.agent.google_oauth import GoogleCredentials
 
         return GoogleCredentials(
             access_token="at-1",
@@ -208,7 +208,7 @@ class TestCredentialIo:
         )
 
     def test_save_and_load_packed_refresh(self):
-        from agent.google_oauth import load_credentials, save_credentials
+        from harness.agent.google_oauth import load_credentials, save_credentials
 
         creds = self._make()
         save_credentials(creds)
@@ -218,14 +218,14 @@ class TestCredentialIo:
         assert loaded.project_id == "proj-abc"
 
     def test_save_uses_0600_permissions(self):
-        from agent.google_oauth import _credentials_path, save_credentials
+        from harness.agent.google_oauth import _credentials_path, save_credentials
 
         save_credentials(self._make())
         mode = stat.S_IMODE(_credentials_path().stat().st_mode)
         assert mode == 0o600
 
     def test_disk_format_is_packed(self):
-        from agent.google_oauth import _credentials_path, save_credentials
+        from harness.agent.google_oauth import _credentials_path, save_credentials
 
         save_credentials(self._make())
         data = json.loads(_credentials_path().read_text())
@@ -233,10 +233,10 @@ class TestCredentialIo:
         assert data["refresh"] == "rt-1|proj-abc|"
 
     def test_update_project_ids(self):
-        from agent.google_oauth import (
+        from harness.agent.google_oauth import (
             load_credentials, save_credentials, update_project_ids,
         )
-        from agent.google_oauth import GoogleCredentials
+        from harness.agent.google_oauth import GoogleCredentials
 
         save_credentials(GoogleCredentials(
             access_token="at", refresh_token="rt",
@@ -251,7 +251,7 @@ class TestCredentialIo:
 
 class TestAccessTokenExpired:
     def test_fresh_token_not_expired(self):
-        from agent.google_oauth import GoogleCredentials
+        from harness.agent.google_oauth import GoogleCredentials
 
         creds = GoogleCredentials(
             access_token="at", refresh_token="rt",
@@ -261,7 +261,7 @@ class TestAccessTokenExpired:
 
     def test_near_expiry_considered_expired(self):
         """60s skew — a token with 30s left is considered expired."""
-        from agent.google_oauth import GoogleCredentials
+        from harness.agent.google_oauth import GoogleCredentials
 
         creds = GoogleCredentials(
             access_token="at", refresh_token="rt",
@@ -270,7 +270,7 @@ class TestAccessTokenExpired:
         assert creds.access_token_expired() is True
 
     def test_no_token_is_expired(self):
-        from agent.google_oauth import GoogleCredentials
+        from harness.agent.google_oauth import GoogleCredentials
 
         creds = GoogleCredentials(
             access_token="", refresh_token="rt", expires_ms=999999999,
@@ -280,7 +280,7 @@ class TestAccessTokenExpired:
 
 class TestGetValidAccessToken:
     def _save(self, **over):
-        from agent.google_oauth import GoogleCredentials, save_credentials
+        from harness.agent.google_oauth import GoogleCredentials, save_credentials
 
         defaults = {
             "access_token": "at",
@@ -291,13 +291,13 @@ class TestGetValidAccessToken:
         save_credentials(GoogleCredentials(**defaults))
 
     def test_returns_cached_when_fresh(self):
-        from agent.google_oauth import get_valid_access_token
+        from harness.agent.google_oauth import get_valid_access_token
 
         self._save(access_token="cached-token")
         assert get_valid_access_token() == "cached-token"
 
     def test_refreshes_when_near_expiry(self, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         self._save(expires_ms=int((time.time() + 30) * 1000))
         monkeypatch.setattr(
@@ -307,7 +307,7 @@ class TestGetValidAccessToken:
         assert google_oauth.get_valid_access_token() == "refreshed"
 
     def test_invalid_grant_clears_credentials(self, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         self._save(expires_ms=int((time.time() - 10) * 1000))
 
@@ -325,7 +325,7 @@ class TestGetValidAccessToken:
         assert google_oauth.load_credentials() is None
 
     def test_preserves_refresh_when_google_omits(self, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         self._save(expires_ms=int((time.time() + 30) * 1000), refresh_token="original-rt")
         monkeypatch.setattr(
@@ -343,39 +343,39 @@ class TestProjectIdResolution:
         "GOOGLE_CLOUD_PROJECT_ID",
     ])
     def test_env_vars_checked(self, monkeypatch, env_var):
-        from agent.google_oauth import resolve_project_id_from_env
+        from harness.agent.google_oauth import resolve_project_id_from_env
 
         monkeypatch.setenv(env_var, "test-proj")
         assert resolve_project_id_from_env() == "test-proj"
 
     def test_priority_order(self, monkeypatch):
-        from agent.google_oauth import resolve_project_id_from_env
+        from harness.agent.google_oauth import resolve_project_id_from_env
 
         monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "lower-priority")
         monkeypatch.setenv("HERMES_GEMINI_PROJECT_ID", "higher-priority")
         assert resolve_project_id_from_env() == "higher-priority"
 
     def test_no_env_returns_empty(self):
-        from agent.google_oauth import resolve_project_id_from_env
+        from harness.agent.google_oauth import resolve_project_id_from_env
 
         assert resolve_project_id_from_env() == ""
 
 
 class TestHeadlessDetection:
     def test_detects_ssh(self, monkeypatch):
-        from agent.google_oauth import _is_headless
+        from harness.agent.google_oauth import _is_headless
 
         monkeypatch.setenv("SSH_CONNECTION", "1.2.3.4 22 5.6.7.8 9876")
         assert _is_headless() is True
 
     def test_detects_hermes_headless(self, monkeypatch):
-        from agent.google_oauth import _is_headless
+        from harness.agent.google_oauth import _is_headless
 
         monkeypatch.setenv("HERMES_HEADLESS", "1")
         assert _is_headless() is True
 
     def test_default_not_headless(self):
-        from agent.google_oauth import _is_headless
+        from harness.agent.google_oauth import _is_headless
 
         assert _is_headless() is False
 
@@ -386,7 +386,7 @@ class TestHeadlessDetection:
 
 class TestCodeAssistVpcScDetection:
     def test_detects_vpc_sc_in_json(self):
-        from agent.google_code_assist import _is_vpc_sc_violation
+        from harness.agent.google_code_assist import _is_vpc_sc_violation
 
         body = json.dumps({
             "error": {
@@ -397,13 +397,13 @@ class TestCodeAssistVpcScDetection:
         assert _is_vpc_sc_violation(body) is True
 
     def test_detects_vpc_sc_in_message(self):
-        from agent.google_code_assist import _is_vpc_sc_violation
+        from harness.agent.google_code_assist import _is_vpc_sc_violation
 
         body = '{"error": {"message": "SECURITY_POLICY_VIOLATED"}}'
         assert _is_vpc_sc_violation(body) is True
 
     def test_non_vpc_sc_returns_false(self):
-        from agent.google_code_assist import _is_vpc_sc_violation
+        from harness.agent.google_code_assist import _is_vpc_sc_violation
 
         assert _is_vpc_sc_violation('{"error": {"message": "not found"}}') is False
         assert _is_vpc_sc_violation("") is False
@@ -411,7 +411,7 @@ class TestCodeAssistVpcScDetection:
 
 class TestLoadCodeAssist:
     def test_parses_response(self, monkeypatch):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         fake = {
             "currentTier": {"id": "free-tier"},
@@ -427,7 +427,7 @@ class TestLoadCodeAssist:
         assert "standard-tier" in info.allowed_tiers
 
     def test_vpc_sc_forces_standard_tier(self, monkeypatch):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         def boom(*a, **kw):
             raise google_code_assist.CodeAssistError(
@@ -443,7 +443,7 @@ class TestLoadCodeAssist:
 
 class TestOnboardUser:
     def test_paid_tier_requires_project_id(self):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         with pytest.raises(google_code_assist.ProjectIdRequiredError):
             google_code_assist.onboard_user(
@@ -451,7 +451,7 @@ class TestOnboardUser:
             )
 
     def test_free_tier_no_project_required(self, monkeypatch):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         monkeypatch.setattr(
             google_code_assist, "_post_json",
@@ -462,7 +462,7 @@ class TestOnboardUser:
 
     def test_lro_polling(self, monkeypatch):
         """Simulate a long-running operation that completes on the second poll."""
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         call_count = {"n": 0}
 
@@ -484,7 +484,7 @@ class TestOnboardUser:
 
 class TestRetrieveUserQuota:
     def test_parses_buckets(self, monkeypatch):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         fake = {
             "buckets": [
@@ -511,24 +511,24 @@ class TestRetrieveUserQuota:
 
 class TestResolveProjectContext:
     def test_configured_shortcircuits(self, monkeypatch):
-        from agent.google_code_assist import resolve_project_context
+        from harness.agent.google_code_assist import resolve_project_context
 
         # Should NOT call loadCodeAssist when configured_project_id is set
         def should_not_be_called(*a, **kw):
             raise AssertionError("should short-circuit")
 
         monkeypatch.setattr(
-            "agent.google_code_assist._post_json", should_not_be_called,
+            "harness.agent.google_code_assist._post_json", should_not_be_called,
         )
         ctx = resolve_project_context("at", configured_project_id="proj-abc")
         assert ctx.project_id == "proj-abc"
         assert ctx.source == "config"
 
     def test_env_shortcircuits(self, monkeypatch):
-        from agent.google_code_assist import resolve_project_context
+        from harness.agent.google_code_assist import resolve_project_context
 
         monkeypatch.setattr(
-            "agent.google_code_assist._post_json",
+            "harness.agent.google_code_assist._post_json",
             lambda *a, **kw: (_ for _ in ()).throw(AssertionError("nope")),
         )
         ctx = resolve_project_context("at", env_project_id="env-proj")
@@ -536,7 +536,7 @@ class TestResolveProjectContext:
         assert ctx.source == "env"
 
     def test_discovers_via_load_code_assist(self, monkeypatch):
-        from agent import google_code_assist
+        from harness.agent import google_code_assist
 
         monkeypatch.setattr(
             google_code_assist, "_post_json",
@@ -557,7 +557,7 @@ class TestResolveProjectContext:
 
 class TestBuildGeminiRequest:
     def test_user_assistant_messages(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(messages=[
             {"role": "user", "content": "hi"},
@@ -571,7 +571,7 @@ class TestBuildGeminiRequest:
         }
 
     def test_system_instruction_separated(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(messages=[
             {"role": "system", "content": "You are helpful"},
@@ -582,7 +582,7 @@ class TestBuildGeminiRequest:
         assert all(c["role"] != "system" for c in req["contents"])
 
     def test_multiple_system_messages_joined(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(messages=[
             {"role": "system", "content": "A"},
@@ -592,7 +592,7 @@ class TestBuildGeminiRequest:
         assert "A\nB" in req["systemInstruction"]["parts"][0]["text"]
 
     def test_tool_call_translation(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(messages=[
             {"role": "user", "content": "what's the weather?"},
@@ -614,7 +614,7 @@ class TestBuildGeminiRequest:
         assert fc_part["functionCall"]["args"] == {"city": "SF"}
 
     def test_tool_result_translation(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(messages=[
             {"role": "user", "content": "q"},
@@ -636,7 +636,7 @@ class TestBuildGeminiRequest:
         assert fr_part["functionResponse"]["response"] == {"temp": 72}
 
     def test_tools_translated_to_function_declarations(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -653,7 +653,7 @@ class TestBuildGeminiRequest:
         assert decls[0]["parameters"] == {"type": "object"}
 
     def test_tools_strip_json_schema_only_fields_from_parameters(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -689,7 +689,7 @@ class TestBuildGeminiRequest:
         }
 
     def test_tool_choice_auto(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -698,7 +698,7 @@ class TestBuildGeminiRequest:
         assert req["toolConfig"]["functionCallingConfig"]["mode"] == "AUTO"
 
     def test_tool_choice_required(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -707,7 +707,7 @@ class TestBuildGeminiRequest:
         assert req["toolConfig"]["functionCallingConfig"]["mode"] == "ANY"
 
     def test_tool_choice_specific_function(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -718,7 +718,7 @@ class TestBuildGeminiRequest:
         assert cfg["allowedFunctionNames"] == ["my_fn"]
 
     def test_generation_config_params(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -734,7 +734,7 @@ class TestBuildGeminiRequest:
         assert gc["stopSequences"] == ["###", "END"]
 
     def test_thinking_config_normalization(self):
-        from agent.gemini_cloudcode_adapter import build_gemini_request
+        from harness.agent.gemini_cloudcode_adapter import build_gemini_request
 
         req = build_gemini_request(
             messages=[{"role": "user", "content": "hi"}],
@@ -747,7 +747,7 @@ class TestBuildGeminiRequest:
 
 class TestWrapCodeAssistRequest:
     def test_envelope_shape(self):
-        from agent.gemini_cloudcode_adapter import wrap_code_assist_request
+        from harness.agent.gemini_cloudcode_adapter import wrap_code_assist_request
 
         inner = {"contents": [], "generationConfig": {}}
         wrapped = wrap_code_assist_request(
@@ -762,7 +762,7 @@ class TestWrapCodeAssistRequest:
 
 class TestTranslateGeminiResponse:
     def test_text_response(self):
-        from agent.gemini_cloudcode_adapter import _translate_gemini_response
+        from harness.agent.gemini_cloudcode_adapter import _translate_gemini_response
 
         resp = {
             "response": {
@@ -786,7 +786,7 @@ class TestTranslateGeminiResponse:
         assert result.usage.total_tokens == 15
 
     def test_function_call_response(self):
-        from agent.gemini_cloudcode_adapter import _translate_gemini_response
+        from harness.agent.gemini_cloudcode_adapter import _translate_gemini_response
 
         resp = {
             "response": {
@@ -805,7 +805,7 @@ class TestTranslateGeminiResponse:
         assert result.choices[0].finish_reason == "tool_calls"
 
     def test_thought_parts_go_to_reasoning(self):
-        from agent.gemini_cloudcode_adapter import _translate_gemini_response
+        from harness.agent.gemini_cloudcode_adapter import _translate_gemini_response
 
         resp = {
             "response": {
@@ -823,7 +823,7 @@ class TestTranslateGeminiResponse:
 
     def test_unwraps_direct_format(self):
         """If response is already at top level (no 'response' wrapper), still parse."""
-        from agent.gemini_cloudcode_adapter import _translate_gemini_response
+        from harness.agent.gemini_cloudcode_adapter import _translate_gemini_response
 
         resp = {
             "candidates": [{
@@ -835,14 +835,14 @@ class TestTranslateGeminiResponse:
         assert result.choices[0].message.content == "hi"
 
     def test_empty_candidates(self):
-        from agent.gemini_cloudcode_adapter import _translate_gemini_response
+        from harness.agent.gemini_cloudcode_adapter import _translate_gemini_response
 
         result = _translate_gemini_response({"response": {"candidates": []}}, model="gemini-2.5-flash")
         assert result.choices[0].message.content == ""
         assert result.choices[0].finish_reason == "stop"
 
     def test_finish_reason_mapping(self):
-        from agent.gemini_cloudcode_adapter import _map_gemini_finish_reason
+        from harness.agent.gemini_cloudcode_adapter import _map_gemini_finish_reason
 
         assert _map_gemini_finish_reason("STOP") == "stop"
         assert _map_gemini_finish_reason("MAX_TOKENS") == "length"
@@ -856,7 +856,7 @@ class TestTranslateStreamEvent:
         single turn (e.g. parallel file reads). Each must get its own OpenAI
         ``index`` — otherwise downstream aggregators collapse them into one.
         """
-        from agent.gemini_cloudcode_adapter import _translate_stream_event
+        from harness.agent.gemini_cloudcode_adapter import _translate_stream_event
 
         event = {
             "response": {
@@ -878,7 +878,7 @@ class TestTranslateStreamEvent:
 
     def test_counter_persists_across_events(self):
         """Index assignment must continue across SSE events in the same stream."""
-        from agent.gemini_cloudcode_adapter import _translate_stream_event
+        from harness.agent.gemini_cloudcode_adapter import _translate_stream_event
 
         def _event(name):
             return {"response": {"candidates": [{
@@ -895,7 +895,7 @@ class TestTranslateStreamEvent:
         assert chunks_c[0].choices[0].delta.tool_calls[0].index == 2
 
     def test_finish_reason_switches_to_tool_calls_when_any_seen(self):
-        from agent.gemini_cloudcode_adapter import _translate_stream_event
+        from harness.agent.gemini_cloudcode_adapter import _translate_stream_event
 
         counter = [0]
         # First event emits one tool call.
@@ -915,7 +915,7 @@ class TestTranslateStreamEvent:
 
 class TestGeminiCloudCodeClient:
     def test_client_exposes_openai_interface(self):
-        from agent.gemini_cloudcode_adapter import GeminiCloudCodeClient
+        from harness.agent.gemini_cloudcode_adapter import GeminiCloudCodeClient
 
         client = GeminiCloudCodeClient(api_key="dummy")
         try:
@@ -949,7 +949,7 @@ class TestGeminiHttpErrorParsing:
         return _FakeResponse()
 
     def test_model_capacity_exhausted_produces_friendly_message(self):
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         body = {
             "error": {
@@ -984,7 +984,7 @@ class TestGeminiHttpErrorParsing:
         assert err.response is not None
 
     def test_resource_exhausted_without_reason(self):
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         body = {
             "error": {
@@ -1000,7 +1000,7 @@ class TestGeminiHttpErrorParsing:
         assert "quota" in message.lower()
 
     def test_404_model_not_found_produces_model_retired_message(self):
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         body = {
             "error": {
@@ -1017,7 +1017,7 @@ class TestGeminiHttpErrorParsing:
         assert "gemma-4-26b-it" in message
 
     def test_unauthorized_preserves_status_code(self):
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         err = _gemini_http_error(self._fake_response(
             401, {"error": {"code": 401, "message": "Invalid token", "status": "UNAUTHENTICATED"}},
@@ -1027,7 +1027,7 @@ class TestGeminiHttpErrorParsing:
 
     def test_retry_after_header_fallback(self):
         """If the body has no RetryInfo detail, fall back to Retry-After header."""
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         resp = self._fake_response(
             429,
@@ -1039,7 +1039,7 @@ class TestGeminiHttpErrorParsing:
 
     def test_malformed_body_still_produces_structured_error(self):
         """Non-JSON body must not swallow status_code — we still want the classifier path."""
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
 
         err = _gemini_http_error(self._fake_response(500, "<html>internal error</html>"))
         assert err.status_code == 500
@@ -1053,8 +1053,8 @@ class TestGeminiHttpErrorParsing:
         _extract_status_code must see it and FailoverReason.rate_limit must
         fire, so the main loop triggers fallback_providers.
         """
-        from agent.gemini_cloudcode_adapter import _gemini_http_error
-        from agent.error_classifier import classify_api_error, FailoverReason
+        from harness.agent.gemini_cloudcode_adapter import _gemini_http_error
+        from harness.agent.error_classifier import classify_api_error, FailoverReason
 
         body = {
             "error": {
@@ -1085,28 +1085,28 @@ class TestGeminiHttpErrorParsing:
 
 class TestProviderRegistration:
     def test_registry_entry(self):
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         assert "google-gemini-cli" in PROVIDER_REGISTRY
         assert PROVIDER_REGISTRY["google-gemini-cli"].auth_type == "oauth_external"
 
     def test_google_gemini_alias_still_goes_to_api_key_gemini(self):
         """Regression guard: don't shadow the existing google-gemini → gemini alias."""
-        from plutus_cli.auth import resolve_provider
+        from harness.cli.auth import resolve_provider
 
         assert resolve_provider("google-gemini") == "gemini"
 
     def test_runtime_provider_raises_when_not_logged_in(self):
-        from plutus_cli.auth import AuthError
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.cli.auth import AuthError
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         with pytest.raises(AuthError) as exc_info:
             resolve_runtime_provider(requested="google-gemini-cli")
         assert exc_info.value.code == "google_oauth_not_logged_in"
 
     def test_runtime_provider_returns_correct_shape_when_logged_in(self):
-        from agent.google_oauth import GoogleCredentials, save_credentials
-        from plutus_cli.runtime_provider import resolve_runtime_provider
+        from harness.agent.google_oauth import GoogleCredentials, save_credentials
+        from harness.cli.runtime_provider import resolve_runtime_provider
 
         save_credentials(GoogleCredentials(
             access_token="live-tok",
@@ -1125,18 +1125,18 @@ class TestProviderRegistration:
         assert result["email"] == "t@e.com"
 
     def test_determine_api_mode(self):
-        from plutus_cli.providers import determine_api_mode
+        from harness.cli.providers import determine_api_mode
 
         assert determine_api_mode("google-gemini-cli", "cloudcode-pa://google") == "chat_completions"
 
     def test_oauth_capable_set_preserves_existing(self):
-        from plutus_cli.auth_commands import _OAUTH_CAPABLE_PROVIDERS
+        from harness.cli.auth_commands import _OAUTH_CAPABLE_PROVIDERS
 
         for required in ("anthropic", "nous", "openai-codex", "qwen-oauth", "google-gemini-cli"):
             assert required in _OAUTH_CAPABLE_PROVIDERS
 
     def test_config_env_vars_registered(self):
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
 
         for key in (
             "HERMES_GEMINI_CLIENT_ID",
@@ -1148,14 +1148,14 @@ class TestProviderRegistration:
 
 class TestAuthStatus:
     def test_not_logged_in(self):
-        from plutus_cli.auth import get_auth_status
+        from harness.cli.auth import get_auth_status
 
         s = get_auth_status("google-gemini-cli")
         assert s["logged_in"] is False
 
     def test_logged_in_reports_email_and_project(self):
-        from agent.google_oauth import GoogleCredentials, save_credentials
-        from plutus_cli.auth import get_auth_status
+        from harness.agent.google_oauth import GoogleCredentials, save_credentials
+        from harness.cli.auth import get_auth_status
 
         save_credentials(GoogleCredentials(
             access_token="tok", refresh_token="rt",
@@ -1172,14 +1172,14 @@ class TestAuthStatus:
 
 class TestGquotaCommand:
     def test_gquota_registered(self):
-        from plutus_cli.commands import COMMANDS
+        from harness.cli.commands import COMMANDS
 
         assert "/gquota" in COMMANDS
 
 
 class TestRunGeminiOauthLoginPure:
     def test_returns_pool_compatible_dict(self, monkeypatch):
-        from agent import google_oauth
+        from harness.agent import google_oauth
 
         def fake_start(**kw):
             return google_oauth.GoogleCredentials(

@@ -61,7 +61,7 @@ class TestIgnoreUserConfigEnvGate:
 
     def _reload_cli(self, monkeypatch, tmp_path):
         """Point cli._hermes_home at tmp_path and return a fresh load_cli_config."""
-        import cli
+        import harness.repl as cli
         monkeypatch.setattr(cli, "_hermes_home", tmp_path)
         return cli.load_cli_config
 
@@ -119,7 +119,7 @@ class TestIgnoreRulesEnvGate:
 
         # Import HermesCLI lazily — cli.py has heavy module-init side effects
         # that we don't want to run at test collection time.
-        import cli
+        import harness.repl as cli
         importlib.reload(cli)
 
         # Build only enough of HermesCLI to reach the ignore_rules assignment.
@@ -135,7 +135,7 @@ class TestIgnoreRulesEnvGate:
 
     def test_constructor_flag_alone_enables_ignore_rules(self, monkeypatch):
         monkeypatch.delenv("HERMES_IGNORE_RULES", raising=False)
-        import cli
+        import harness.repl as cli
         obj = object.__new__(cli.HermesCLI)
         ignore_rules = True  # constructor argument
         obj.ignore_rules = ignore_rules or os.environ.get("HERMES_IGNORE_RULES") == "1"
@@ -143,7 +143,7 @@ class TestIgnoreRulesEnvGate:
 
     def test_neither_flag_nor_env_leaves_rules_enabled(self, monkeypatch):
         monkeypatch.delenv("HERMES_IGNORE_RULES", raising=False)
-        import cli
+        import harness.repl as cli
         obj = object.__new__(cli.HermesCLI)
         ignore_rules = False
         obj.ignore_rules = ignore_rules or os.environ.get("HERMES_IGNORE_RULES") == "1"
@@ -228,7 +228,7 @@ class TestArgparseFlagsRegistered:
 
         We invoke the real argparse tree builder from plutus_cli.main.
         """
-        import plutus_cli.main as hm
+        import harness.cli.main as hm
 
         # hm has a helper that builds the argparse tree inside main().
         # We can extract it by catching the SystemExit on --help.

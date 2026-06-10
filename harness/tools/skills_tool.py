@@ -54,7 +54,7 @@ Available tools:
 - skill_view: Load full skill content (progressive disclosure tier 2-3)
 
 Usage:
-    from tools.skills_tool import skills_list, skill_view, check_skills_requirements
+    from harness.tools.skills_tool import skills_list, skill_view, check_skills_requirements
 
     # List all skills (returns metadata only - token efficient)
     result = skills_list()
@@ -69,14 +69,14 @@ Usage:
 import json
 import logging
 
-from plutus_constants import get_hermes_home, display_hermes_home
+from harness.constants import get_hermes_home, display_hermes_home
 import os
 import re
 from enum import Enum
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Set, Tuple
 
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +151,7 @@ def skill_matches_platform(frontmatter: Dict[str, Any]) -> bool:
     Delegates to ``agent.skill_utils.skill_matches_platform`` — kept here
     as a public re-export so existing callers don't need updating.
     """
-    from agent.skill_utils import skill_matches_platform as _impl
+    from harness.agent.skill_utils import skill_matches_platform as _impl
     return _impl(frontmatter)
 
 
@@ -364,7 +364,7 @@ def _capture_required_environment_variables(
 def _is_gateway_surface() -> bool:
     if os.getenv("HERMES_GATEWAY_SESSION"):
         return True
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     return bool(get_session_env("HERMES_SESSION_PLATFORM"))
 
 
@@ -404,7 +404,7 @@ def _remaining_required_environment_names(
 
 def _gateway_setup_hint() -> str:
     try:
-        from gateway.platforms.base import GATEWAY_SECRET_CAPTURE_UNSUPPORTED_MESSAGE
+        from harness.gateway.platforms.base import GATEWAY_SECRET_CAPTURE_UNSUPPORTED_MESSAGE
 
         return GATEWAY_SECRET_CAPTURE_UNSUPPORTED_MESSAGE
     except Exception:
@@ -436,7 +436,7 @@ def _parse_frontmatter(content: str) -> Tuple[Dict[str, Any], str]:
     Delegates to ``agent.skill_utils.parse_frontmatter`` — kept here
     as a public re-export so existing callers don't need updating.
     """
-    from agent.skill_utils import parse_frontmatter
+    from harness.agent.skill_utils import parse_frontmatter
     return parse_frontmatter(content)
 
 
@@ -451,7 +451,7 @@ def _get_category_from_path(skill_path: Path) -> Optional[str]:
     # then fall back to external dirs from config.
     dirs_to_check = [SKILLS_DIR]
     try:
-        from agent.skill_utils import get_external_skills_dirs
+        from harness.agent.skill_utils import get_external_skills_dirs
         dirs_to_check.extend(get_external_skills_dirs())
     except Exception:
         pass
@@ -503,7 +503,7 @@ def _get_disabled_skill_names() -> Set[str]:
     Delegates to ``agent.skill_utils.get_disabled_skill_names`` — kept here
     as a public re-export so existing callers don't need updating.
     """
-    from agent.skill_utils import get_disabled_skill_names
+    from harness.agent.skill_utils import get_disabled_skill_names
     return get_disabled_skill_names()
 
 
@@ -515,7 +515,7 @@ def _get_session_platform() -> str:
     ``_is_skill_disabled`` respects ``HERMES_SESSION_PLATFORM``.
     """
     try:
-        from gateway.session_context import get_session_env
+        from harness.gateway.session_context import get_session_env
         return get_session_env("HERMES_SESSION_PLATFORM") or ""
     except Exception:
         return ""
@@ -530,7 +530,7 @@ def _is_skill_disabled(name: str, platform: str = None) -> bool:
     3. ``HERMES_SESSION_PLATFORM`` from gateway session context
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         skills_cfg = config.get("skills", {})
         resolved_platform = platform or os.getenv("HERMES_PLATFORM") or _get_session_platform()
@@ -554,7 +554,7 @@ def _find_all_skills(*, skip_disabled: bool = False) -> List[Dict[str, Any]]:
     Returns:
         List of skill metadata dicts (name, description, category).
     """
-    from agent.skill_utils import get_external_skills_dirs, iter_skill_index_files
+    from harness.agent.skill_utils import get_external_skills_dirs, iter_skill_index_files
 
     skills = []
     seen_names: set = set()
@@ -745,7 +745,7 @@ def _serve_plugin_skill(
     bare: str,
 ) -> str:
     """Read a plugin-provided skill, apply guards, return JSON."""
-    from plutus_cli.plugins import _get_disabled_plugins, get_plugin_manager
+    from harness.cli.plugins import _get_disabled_plugins, get_plugin_manager
 
     if namespace in _get_disabled_plugins():
         return json.dumps(
@@ -843,8 +843,8 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
         # Names containing ':' are routed to the plugin skill registry.
         # Bare names fall through to the existing flat-tree scan below.
         if ":" in name:
-            from agent.skill_utils import is_valid_namespace, parse_qualified_name
-            from plutus_cli.plugins import discover_plugins, get_plugin_manager
+            from harness.agent.skill_utils import is_valid_namespace, parse_qualified_name
+            from harness.cli.plugins import discover_plugins, get_plugin_manager
 
             namespace, bare = parse_qualified_name(name)
             if not is_valid_namespace(namespace):
@@ -896,7 +896,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
             # Plugin itself not found — fall through to flat-tree scan
             # which will return a normal "not found" with suggestions.
 
-        from agent.skill_utils import get_external_skills_dirs
+        from harness.agent.skill_utils import get_external_skills_dirs
 
         # Build list of all skill directories to search
         all_dirs = []
@@ -931,7 +931,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
         # Search by directory name across all dirs
         if not skill_md:
             for search_dir in all_dirs:
-                from agent.skill_utils import iter_skill_index_files
+                from harness.agent.skill_utils import iter_skill_index_files
 
                 for found_skill_md in iter_skill_index_files(search_dir, "SKILL.md"):
                     if found_skill_md.parent.name == name:
@@ -1036,7 +1036,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
 
         # If a specific file path is requested, read that instead
         if file_path and skill_dir:
-            from tools.path_security import validate_within_dir, has_traversal_component
+            from harness.tools.path_security import validate_within_dir, has_traversal_component
 
             # Security: Prevent path traversal attacks
             if has_traversal_component(file_path):
@@ -1249,7 +1249,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
         ]
         if available_env_names:
             try:
-                from tools.env_passthrough import register_env_passthrough
+                from harness.tools.env_passthrough import register_env_passthrough
 
                 register_env_passthrough(available_env_names)
             except Exception:
@@ -1268,7 +1268,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
         missing_cred_files: list = []
         if required_cred_files_raw:
             try:
-                from tools.credential_files import register_credential_files
+                from harness.tools.credential_files import register_credential_files
 
                 missing_cred_files = register_credential_files(required_cred_files_raw)
                 if missing_cred_files:

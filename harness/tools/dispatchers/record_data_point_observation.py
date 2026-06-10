@@ -22,9 +22,9 @@ import json
 import time
 from typing import Any, Dict
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.core.data_point_registry import lookup as lookup_data_point
-from tools.registry import registry, tool_error, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.core.data_point_registry import lookup as lookup_data_point
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 SCHEMA = {
@@ -104,7 +104,7 @@ def _record_data_point_observation(args: Dict[str, Any]) -> str:
     # macro-cache cron anymore; perception resolves macro_vix/macro_dxy/etc. via
     # web_search, calls this tool, and the value is cached for everyone. (2026-06-01)
     try:
-        from agent import perception_cache
+        from harness.agent import perception_cache
         perception_cache.write_data_point(
             name,
             value,

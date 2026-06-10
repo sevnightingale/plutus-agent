@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 from unittest.mock import patch
 
-from tools.registry import ToolRegistry, discover_builtin_tools
+from harness.tools.registry import ToolRegistry, discover_builtin_tools
 
 
 def _dummy_handler(args, **kwargs):
@@ -293,82 +293,82 @@ class TestBuiltinDiscovery:
         expected = {
             # Upstream Hermes builtin tools (smart-home / mixture-of-agents /
             # rl-training modules removed in the plutus-agent trim).
-            "tools.browser_cdp_tool",
-            "tools.browser_tool",
-            "tools.clarify_tool",
-            "tools.code_execution_tool",
-            "tools.cronjob_tools",
-            "tools.delegate_tool",
-            "tools.file_tools",
-            "tools.image_generation_tool",
-            "tools.memory_tool",
-            "tools.process_registry",
-            "tools.send_message_tool",
-            "tools.session_search_tool",
-            "tools.skill_manager_tool",
-            "tools.skills_tool",
-            "tools.terminal_tool",
-            "tools.todo_tool",
-            "tools.tts_tool",
-            "tools.vision_tools",
-            "tools.web_tools",
+            "harness.tools.browser_cdp_tool",
+            "harness.tools.browser_tool",
+            "harness.tools.clarify_tool",
+            "harness.tools.code_execution_tool",
+            "harness.tools.cronjob_tools",
+            "harness.tools.delegate_tool",
+            "harness.tools.file_tools",
+            "harness.tools.image_generation_tool",
+            "harness.tools.memory_tool",
+            "harness.tools.process_registry",
+            "harness.tools.send_message_tool",
+            "harness.tools.session_search_tool",
+            "harness.tools.skill_manager_tool",
+            "harness.tools.skills_tool",
+            "harness.tools.terminal_tool",
+            "harness.tools.todo_tool",
+            "harness.tools.tts_tool",
+            "harness.tools.vision_tools",
+            "harness.tools.web_tools",
             # PLUTUS trading dispatchers (registry-backed agent-facing tools).
-            "tools.dispatchers.account_state",
-            "tools.dispatchers.cancel_order",
-            "tools.dispatchers.close_position",
-            "tools.dispatchers.fetch_data_point",
-            "tools.dispatchers.list_accounts",
-            "tools.dispatchers.list_data_points",
-            "tools.dispatchers.list_event_types",
-            "tools.dispatchers.list_identity_systems",
-            "tools.dispatchers.list_venues",
-            "tools.dispatchers.modify_order",
-            "tools.dispatchers.place_order",
-            "tools.dispatchers.place_trigger",
-            "tools.dispatchers.record_data_point_observation",
-            "tools.dispatchers.record_event",
-            "tools.dispatchers.record_observation",
-            "tools.dispatchers.record_prediction",
-            "tools.dispatchers.resolve_prediction",
-            "tools.dispatchers.spawn_subagent",
+            "harness.tools.dispatchers.account_state",
+            "harness.tools.dispatchers.cancel_order",
+            "harness.tools.dispatchers.close_position",
+            "harness.tools.dispatchers.fetch_data_point",
+            "harness.tools.dispatchers.list_accounts",
+            "harness.tools.dispatchers.list_data_points",
+            "harness.tools.dispatchers.list_event_types",
+            "harness.tools.dispatchers.list_identity_systems",
+            "harness.tools.dispatchers.list_venues",
+            "harness.tools.dispatchers.modify_order",
+            "harness.tools.dispatchers.place_order",
+            "harness.tools.dispatchers.place_trigger",
+            "harness.tools.dispatchers.record_data_point_observation",
+            "harness.tools.dispatchers.record_event",
+            "harness.tools.dispatchers.record_observation",
+            "harness.tools.dispatchers.record_prediction",
+            "harness.tools.dispatchers.resolve_prediction",
+            "harness.tools.dispatchers.spawn_subagent",
             # PLUTUS integrations (per-source registry contributors).
-            "tools.integrations.acp",
-            "tools.integrations.acp.identity",
-            "tools.integrations.acp.operations",
-            "tools.integrations.acp.setup",
-            "tools.integrations.coingecko",
-            "tools.integrations.defillama",
-            "tools.integrations.dgclaw",
-            "tools.integrations.dgclaw.operations",
-            "tools.integrations.flow",
-            "tools.integrations.gas",
-            "tools.integrations.hyperliquid",
-            "tools.integrations.macro",
-            "tools.integrations.ta",
+            "harness.tools.integrations.acp",
+            "harness.tools.integrations.acp.identity",
+            "harness.tools.integrations.acp.operations",
+            "harness.tools.integrations.acp.setup",
+            "harness.tools.integrations.coingecko",
+            "harness.tools.integrations.defillama",
+            "harness.tools.integrations.dgclaw",
+            "harness.tools.integrations.dgclaw.operations",
+            "harness.tools.integrations.flow",
+            "harness.tools.integrations.gas",
+            "harness.tools.integrations.hyperliquid",
+            "harness.tools.integrations.macro",
+            "harness.tools.integrations.ta",
             # PLUTUS lifecycle queries (direct lifecycle.db reads).
-            "tools.lifecycle.find_similar_reflections",
-            "tools.lifecycle.find_similar_theses",
-            "tools.lifecycle.inspect_position",
-            "tools.lifecycle.query_calibration",
-            "tools.lifecycle.query_capital_movements",
-            "tools.lifecycle.query_compaction_history",
-            "tools.lifecycle.query_conviction_outcomes",
-            "tools.lifecycle.query_conviction_trajectory",
-            "tools.lifecycle.query_equity_curve",
-            "tools.lifecycle.query_latest_perception_digest",
-            "tools.lifecycle.query_observations",
-            "tools.lifecycle.query_performance",
-            "tools.lifecycle.query_performance_attribution",
-            "tools.lifecycle.query_predictions",
-            "tools.lifecycle.query_skip_outcomes",
-            "tools.lifecycle.query_strategy_book",
-            "tools.lifecycle.query_strategy_stats",
-            "tools.lifecycle.query_trades",
-            "tools.lifecycle.query_unreflected_closes",
+            "harness.tools.lifecycle.find_similar_reflections",
+            "harness.tools.lifecycle.find_similar_theses",
+            "harness.tools.lifecycle.inspect_position",
+            "harness.tools.lifecycle.query_calibration",
+            "harness.tools.lifecycle.query_capital_movements",
+            "harness.tools.lifecycle.query_compaction_history",
+            "harness.tools.lifecycle.query_conviction_outcomes",
+            "harness.tools.lifecycle.query_conviction_trajectory",
+            "harness.tools.lifecycle.query_equity_curve",
+            "harness.tools.lifecycle.query_latest_perception_digest",
+            "harness.tools.lifecycle.query_observations",
+            "harness.tools.lifecycle.query_performance",
+            "harness.tools.lifecycle.query_performance_attribution",
+            "harness.tools.lifecycle.query_predictions",
+            "harness.tools.lifecycle.query_skip_outcomes",
+            "harness.tools.lifecycle.query_strategy_book",
+            "harness.tools.lifecycle.query_strategy_stats",
+            "harness.tools.lifecycle.query_trades",
+            "harness.tools.lifecycle.query_unreflected_closes",
         }
 
-        with patch("tools.registry.importlib.import_module"):
-            imported = discover_builtin_tools(Path(__file__).resolve().parents[2] / "tools")
+        with patch("harness.tools.registry.importlib.import_module"):
+            imported = discover_builtin_tools(Path(__file__).resolve().parents[2] / "harness" / "tools")
 
         assert set(imported) == expected
 
@@ -383,7 +383,7 @@ class TestBuiltinDiscovery:
         )
         (tools_dir / "beta.py").write_text("VALUE = 1\n", encoding="utf-8")
 
-        with patch("tools.registry.importlib.import_module") as mock_import:
+        with patch("harness.tools.registry.importlib.import_module") as mock_import:
             imported = discover_builtin_tools(tools_dir)
 
         assert imported == ["tools.alpha"]
@@ -402,7 +402,7 @@ class TestBuiltinDiscovery:
             encoding="utf-8",
         )
 
-        with patch("tools.registry.importlib.import_module") as mock_import:
+        with patch("harness.tools.registry.importlib.import_module") as mock_import:
             imported = discover_builtin_tools(tools_dir)
 
         assert imported == ["tools.alpha"]

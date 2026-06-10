@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-import tools.browser_tool as browser_tool
+import harness.tools.browser_tool as browser_tool
 
 
 def _reset_session_state(monkeypatch):
@@ -112,7 +112,7 @@ class TestCloudProviderRuntimeFallback:
         monkeypatch.setattr(browser_tool, "_get_cloud_provider", lambda: provider)
         monkeypatch.setattr(browser_tool, "_get_cdp_override", lambda: None)
 
-        with caplog.at_level(logging.WARNING, logger="tools.browser_tool"):
+        with caplog.at_level(logging.WARNING, logger="harness.tools.browser_tool"):
             session = browser_tool._get_session_info("task-6")
 
         assert session["fallback_from_cloud"] is True

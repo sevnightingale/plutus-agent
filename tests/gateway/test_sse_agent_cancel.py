@@ -20,8 +20,8 @@ import pytest
 
 def _make_adapter():
     """Build a minimal APIServerAdapter with mocked internals."""
-    from gateway.platforms.api_server import APIServerAdapter
-    from gateway.config import PlatformConfig
+    from harness.gateway.platforms.api_server import APIServerAdapter
+    from harness.gateway.config import PlatformConfig
 
     config = PlatformConfig(enabled=True, token="test-key")
     adapter = APIServerAdapter(config)
@@ -40,7 +40,7 @@ def _make_request():
 # ---------------------------------------------------------------------------
 
 class TestSSEAgentCancelOnDisconnect:
-    """gateway/platforms/api_server.py — _write_sse_chat_completion()"""
+    """harness/gateway/platforms/api_server.py — _write_sse_chat_completion()"""
 
     def test_agent_task_cancelled_on_client_disconnect(self):
         """When response.write raises ConnectionResetError (client dropped),
@@ -78,7 +78,7 @@ class TestSSEAgentCancelOnDisconnect:
             with patch.object(type(adapter), '_write_sse_chat_completion',
                               adapter._write_sse_chat_completion):
                 # Patch StreamResponse creation
-                with patch("gateway.platforms.api_server.web.StreamResponse",
+                with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                            return_value=mock_response):
                     await adapter._write_sse_chat_completion(
                         _make_request(), "cmpl-123", "gpt-4", 1234567890,
@@ -113,7 +113,7 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock()
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
+            with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                        return_value=mock_response):
                 await adapter._write_sse_chat_completion(
                     _make_request(), "cmpl-456", "gpt-4", 1234567890,
@@ -145,7 +145,7 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=BrokenPipeError("pipe broken"))
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
+            with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                        return_value=mock_response):
                 await adapter._write_sse_chat_completion(
                     _make_request(), "cmpl-789", "gpt-4", 1234567890,
@@ -184,7 +184,7 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=write_side_effect)
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
+            with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                        return_value=mock_response):
                 await adapter._write_sse_chat_completion(
                     _make_request(), "cmpl-done", "gpt-4", 1234567890,
@@ -233,7 +233,7 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=write_side_effect)
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
+            with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                        return_value=mock_response):
                 await adapter._write_sse_chat_completion(
                     _make_request(), "cmpl-int", "gpt-4", 1234567890,
@@ -267,7 +267,7 @@ class TestSSEAgentCancelOnDisconnect:
             mock_response.write = AsyncMock(side_effect=BrokenPipeError("gone"))
             mock_response.prepare = AsyncMock()
 
-            with patch("gateway.platforms.api_server.web.StreamResponse",
+            with patch("harness.gateway.platforms.api_server.web.StreamResponse",
                        return_value=mock_response):
                 # No agent_ref passed — should still handle disconnect cleanly
                 await adapter._write_sse_chat_completion(

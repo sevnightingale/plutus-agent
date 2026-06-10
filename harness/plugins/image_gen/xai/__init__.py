@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-from agent.image_gen_provider import (
+from harness.agent.image_gen_provider import (
     DEFAULT_ASPECT_RATIO,
     ImageGenProvider,
     error_response,
@@ -31,7 +31,7 @@ from agent.image_gen_provider import (
     save_b64_image,
     success_response,
 )
-from tools.xai_http import hermes_xai_user_agent
+from harness.tools.xai_http import hermes_xai_user_agent
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ DEFAULT_RESOLUTION = "1k"
 def _load_xai_config() -> Dict[str, Any]:
     """Read ``image_gen.xai`` from config.yaml."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None

@@ -19,7 +19,7 @@ Configuration is loaded from ~/.plutus-agent/config.yaml under the 'tts:' key.
 The user chooses the provider and voice; the model just sends text.
 
 Usage:
-    from tools.tts_tool import text_to_speech_tool, check_tts_requirements
+    from harness.tools.tts_tool import text_to_speech_tool, check_tts_requirements
 
     result = text_to_speech_tool(text="Hello world")
 """
@@ -41,12 +41,12 @@ from pathlib import Path
 from typing import Callable, Dict, Any, Optional
 from urllib.parse import urljoin
 
-from plutus_constants import display_hermes_home
+from harness.constants import display_hermes_home
 
 logger = logging.getLogger(__name__)
-from tools.managed_tool_gateway import resolve_managed_tool_gateway
-from tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway, resolve_openai_audio_api_key
-from tools.xai_http import hermes_xai_user_agent
+from harness.tools.managed_tool_gateway import resolve_managed_tool_gateway
+from harness.tools.tool_backend_helpers import managed_nous_tools_enabled, prefers_gateway, resolve_openai_audio_api_key
+from harness.tools.xai_http import hermes_xai_user_agent
 
 # ---------------------------------------------------------------------------
 # Lazy imports -- providers are imported only when actually used to avoid
@@ -117,7 +117,7 @@ GEMINI_TTS_CHANNELS = 1
 GEMINI_TTS_SAMPLE_WIDTH = 2  # 16-bit PCM (L16)
 
 def _get_default_output_dir() -> str:
-    from plutus_constants import get_hermes_dir
+    from harness.constants import get_hermes_dir
     return str(get_hermes_dir("cache/audio", "audio_cache"))
 
 DEFAULT_OUTPUT_DIR = _get_default_output_dir()
@@ -208,11 +208,11 @@ def _load_tts_config() -> Dict[str, Any]:
     for any missing fields.
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         return config.get("tts", {})
     except ImportError:
-        logger.debug("plutus_cli.config not available, using default TTS config")
+        logger.debug("harness.cli.config not available, using default TTS config")
         return {}
     except Exception as e:
         logger.warning("Failed to load TTS config: %s", e, exc_info=True)
@@ -955,7 +955,7 @@ def text_to_speech_tool(
     # Telegram voice bubbles require Opus (.ogg); OpenAI and ElevenLabs can
     # produce Opus natively (no ffmpeg needed).  Edge TTS always outputs MP3
     # and needs ffmpeg for conversion.
-    from gateway.session_context import get_session_env
+    from harness.gateway.session_context import get_session_env
     platform = get_session_env("HERMES_SESSION_PLATFORM", "").lower()
     want_opus = (platform == "telegram")
 
@@ -1370,7 +1370,7 @@ def stream_tts_to_speaker(
                         if stop_evt.is_set():
                             break
                         wf.writeframes(chunk)
-                from tools.voice_mode import play_audio_file
+                from harness.tools.voice_mode import play_audio_file
                 play_audio_file(tmp_path)
             except Exception as exc:
                 logger.warning("Temp-file TTS fallback failed: %s", exc)
@@ -1482,7 +1482,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
-from tools.registry import registry, tool_error
+from harness.tools.registry import registry, tool_error
 
 TTS_SCHEMA = {
     "name": "text_to_speech",

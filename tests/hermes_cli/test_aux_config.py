@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from plutus_cli.config import DEFAULT_CONFIG, load_config
-from plutus_cli.main import (
+from harness.cli.config import DEFAULT_CONFIG, load_config
+from harness.cli.main import (
     _AUX_TASKS,
     _format_aux_current,
     _reset_aux_to_auto,
@@ -147,7 +147,7 @@ def test_save_aux_choice_does_not_touch_main_model(tmp_path, monkeypatch):
     (tmp_path / ".hermes").mkdir(exist_ok=True)
 
     # Simulate a configured main model
-    from plutus_cli.config import save_config
+    from harness.cli.config import save_config
 
     cfg = load_config()
     cfg["model"] = {
@@ -181,7 +181,7 @@ def test_save_aux_choice_creates_missing_task_entry(tmp_path, monkeypatch):
     (tmp_path / ".hermes").mkdir(exist_ok=True)
 
     # Remove vision from config entirely
-    from plutus_cli.config import save_config
+    from harness.cli.config import save_config
 
     cfg = load_config()
     cfg.setdefault("auxiliary", {}).pop("vision", None)
@@ -205,7 +205,7 @@ def test_reset_aux_to_auto_clears_routing_preserves_timeouts(tmp_path, monkeypat
     # Configure two tasks non-auto, and bump a timeout
     _save_aux_choice("vision", provider="openrouter", model="gpt-4o")
     _save_aux_choice("compression", provider="nous", model="gemini-3-flash")
-    from plutus_cli.config import save_config
+    from harness.cli.config import save_config
 
     cfg = load_config()
     cfg["auxiliary"]["vision"]["timeout"] = 300  # user-tuned
@@ -250,7 +250,7 @@ def test_select_provider_and_model_dispatches_to_aux_menu(tmp_path, monkeypatch)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     (tmp_path / ".hermes").mkdir(exist_ok=True)
 
-    from plutus_cli import main as main_mod
+    from harness.cli import main as main_mod
 
     called = {"aux": 0, "flow": 0}
 
@@ -280,7 +280,7 @@ def test_leave_unchanged_replaces_cancel_label(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     (tmp_path / ".hermes").mkdir(exist_ok=True)
 
-    from plutus_cli import main as main_mod
+    from harness.cli import main as main_mod
 
     captured: list[list[str]] = []
 

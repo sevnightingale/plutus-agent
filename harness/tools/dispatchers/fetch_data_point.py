@@ -23,12 +23,12 @@ from __future__ import annotations
 import time
 from typing import Any, Dict
 
-from agent import perception_cache
-from agent.lifecycle_db import get_lifecycle_db
-from gateway.session_context import get_synthetic_kind
-from tools.core import data_point_registry
-from tools.dispatchers._helpers import json_dumps_compact, session_id_from_context
-from tools.registry import registry, tool_error, tool_result
+from harness.agent import perception_cache
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.gateway.session_context import get_synthetic_kind
+from harness.tools.core import data_point_registry
+from harness.tools.dispatchers._helpers import json_dumps_compact, session_id_from_context
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 SCHEMA = {

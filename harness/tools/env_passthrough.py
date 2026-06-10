@@ -60,7 +60,7 @@ def _is_hermes_provider_credential(name: str) -> bool:
     wrap third-party APIs still work.
     """
     try:
-        from tools.environments.local import _HERMES_PROVIDER_ENV_BLOCKLIST
+        from harness.tools.environments.local import _HERMES_PROVIDER_ENV_BLOCKLIST
     except Exception:
         return False
     return name in _HERMES_PROVIDER_ENV_BLOCKLIST
@@ -107,7 +107,7 @@ def _load_config_passthrough() -> frozenset[str]:
 
     result: set[str] = set()
     try:
-        from plutus_cli.config import read_raw_config
+        from harness.cli.config import read_raw_config
         cfg = read_raw_config()
         passthrough = cfg.get("terminal", {}).get("env_passthrough")
         if isinstance(passthrough, list):

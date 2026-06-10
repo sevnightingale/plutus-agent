@@ -24,7 +24,7 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 
 def _load_env() -> None:

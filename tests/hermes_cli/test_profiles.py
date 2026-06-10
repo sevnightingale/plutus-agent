@@ -14,7 +14,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from plutus_cli.profiles import (
+from harness.cli.profiles import (
     validate_profile_name,
     get_profile_dir,
     create_profile,
@@ -192,7 +192,7 @@ class TestDeleteProfile:
         profile_dir = create_profile("coder", no_alias=True)
         assert profile_dir.is_dir()
         # Mock gateway import to avoid real systemd/launchd interaction
-        with patch("plutus_cli.profiles._cleanup_gateway_service"):
+        with patch("harness.cli.profiles._cleanup_gateway_service"):
             delete_profile("coder", yes=True)
         assert not profile_dir.is_dir()
 
@@ -377,7 +377,7 @@ class TestRenameProfile:
         assert old_dir.is_dir()
 
         # Mock alias collision to avoid subprocess calls
-        with patch("plutus_cli.profiles.check_alias_collision", return_value="skip"):
+        with patch("harness.cli.profiles.check_alias_collision", return_value="skip"):
             new_dir = rename_profile("oldname", "newname")
 
         assert not old_dir.is_dir()
@@ -782,7 +782,7 @@ class TestInternalHelpers:
 
     def test_active_profile_path_docker(self, tmp_path, monkeypatch):
         """In Docker, active_profile file lives under HERMES_HOME."""
-        from plutus_cli.profiles import _get_active_profile_path
+        from harness.cli.profiles import _get_active_profile_path
         docker_home = tmp_path / "opt" / "data"
         docker_home.mkdir(parents=True)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -841,11 +841,11 @@ class TestEdgeCases:
 
     def test_gateway_running_check_with_pid_file(self, profile_env):
         """Verify _check_gateway_running uses the shared gateway PID validator."""
-        from plutus_cli.profiles import _check_gateway_running
+        from harness.cli.profiles import _check_gateway_running
         tmp_path = profile_env
         default_home = tmp_path / ".hermes"
 
-        with patch("gateway.status.get_running_pid", return_value=99999) as mock_get_running_pid:
+        with patch("harness.gateway.status.get_running_pid", return_value=99999) as mock_get_running_pid:
             assert _check_gateway_running(default_home) is True
         mock_get_running_pid.assert_called_once_with(
             default_home / "gateway.pid",
@@ -854,11 +854,11 @@ class TestEdgeCases:
 
     def test_gateway_running_check_plain_pid(self, profile_env):
         """Shared PID validator returning None means the profile is not running."""
-        from plutus_cli.profiles import _check_gateway_running
+        from harness.cli.profiles import _check_gateway_running
         tmp_path = profile_env
         default_home = tmp_path / ".hermes"
 
-        with patch("gateway.status.get_running_pid", return_value=None) as mock_get_running_pid:
+        with patch("harness.gateway.status.get_running_pid", return_value=None) as mock_get_running_pid:
             assert _check_gateway_running(default_home) is False
         mock_get_running_pid.assert_called_once_with(
             default_home / "gateway.pid",
@@ -901,7 +901,7 @@ class TestEdgeCases:
         set_active_profile("coder")
         assert get_active_profile() == "coder"
 
-        with patch("plutus_cli.profiles._cleanup_gateway_service"):
+        with patch("harness.cli.profiles._cleanup_gateway_service"):
             delete_profile("coder", yes=True)
 
         assert get_active_profile() == "default"

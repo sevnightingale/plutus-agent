@@ -184,7 +184,7 @@ def _normalize_provider_alias(provider_name: str) -> str:
     if not raw:
         return raw
     try:
-        from plutus_cli.models import normalize_provider
+        from harness.cli.models import normalize_provider
 
         return normalize_provider(raw)
     except Exception:
@@ -382,7 +382,7 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
     #     HTTP 400 "model_not_supported".  See issue #6879.
     if provider in {"copilot", "copilot-acp"}:
         try:
-            from plutus_cli.models import normalize_copilot_model_id
+            from harness.cli.models import normalize_copilot_model_id
 
             normalized = normalize_copilot_model_id(name)
             if normalized:

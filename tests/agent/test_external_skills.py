@@ -33,7 +33,7 @@ class TestGetExternalSkillsDirs:
     def test_empty_config(self, hermes_home):
         (hermes_home / "config.yaml").write_text("skills:\n  external_dirs: []\n")
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert result == []
 
@@ -42,7 +42,7 @@ class TestGetExternalSkillsDirs:
             "skills:\n  external_dirs:\n    - /nonexistent/path\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert result == []
 
@@ -51,7 +51,7 @@ class TestGetExternalSkillsDirs:
             f"skills:\n  external_dirs:\n    - {external_skills_dir}\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert len(result) == 1
         assert result[0] == external_skills_dir.resolve()
@@ -61,7 +61,7 @@ class TestGetExternalSkillsDirs:
             f"skills:\n  external_dirs:\n    - {external_skills_dir}\n    - {external_skills_dir}\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert len(result) == 1
 
@@ -71,14 +71,14 @@ class TestGetExternalSkillsDirs:
             f"skills:\n  external_dirs:\n    - {local_skills}\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert result == []
 
     def test_no_config_file(self, hermes_home):
         # No config.yaml at all
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert result == []
 
@@ -87,7 +87,7 @@ class TestGetExternalSkillsDirs:
             f"skills:\n  external_dirs: {external_skills_dir}\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_external_skills_dirs
+            from harness.agent.skill_utils import get_external_skills_dirs
             result = get_external_skills_dirs()
         assert len(result) == 1
 
@@ -98,7 +98,7 @@ class TestGetAllSkillsDirs:
             f"skills:\n  external_dirs:\n    - {external_skills_dir}\n"
         )
         with patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}):
-            from agent.skill_utils import get_all_skills_dirs
+            from harness.agent.skill_utils import get_all_skills_dirs
             result = get_all_skills_dirs()
         assert result[0] == hermes_home / "skills"
         assert result[1] == external_skills_dir.resolve()
@@ -112,9 +112,9 @@ class TestExternalSkillsInFindAll:
         local_skills = hermes_home / "skills"
         with (
             patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}),
-            patch("tools.skills_tool.SKILLS_DIR", local_skills),
+            patch("harness.tools.skills_tool.SKILLS_DIR", local_skills),
         ):
-            from tools.skills_tool import _find_all_skills
+            from harness.tools.skills_tool import _find_all_skills
             skills = _find_all_skills()
         names = [s["name"] for s in skills]
         assert "my-external-skill" in names
@@ -132,9 +132,9 @@ class TestExternalSkillsInFindAll:
         )
         with (
             patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}),
-            patch("tools.skills_tool.SKILLS_DIR", local_skills),
+            patch("harness.tools.skills_tool.SKILLS_DIR", local_skills),
         ):
-            from tools.skills_tool import _find_all_skills
+            from harness.tools.skills_tool import _find_all_skills
             skills = _find_all_skills()
         matching = [s for s in skills if s["name"] == "my-external-skill"]
         assert len(matching) == 1
@@ -149,9 +149,9 @@ class TestExternalSkillView:
         local_skills = hermes_home / "skills"
         with (
             patch.dict(os.environ, {"HERMES_HOME": str(hermes_home)}),
-            patch("tools.skills_tool.SKILLS_DIR", local_skills),
+            patch("harness.tools.skills_tool.SKILLS_DIR", local_skills),
         ):
-            from tools.skills_tool import skill_view
+            from harness.tools.skills_tool import skill_view
             result = json.loads(skill_view("my-external-skill"))
         assert result["success"] is True
         assert "external things" in result["content"]

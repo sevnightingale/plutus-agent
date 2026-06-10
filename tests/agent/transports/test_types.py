@@ -3,7 +3,7 @@
 import json
 import pytest
 
-from agent.transports.types import (
+from harness.agent.transports.types import (
     NormalizedResponse,
     ToolCall,
     Usage,
@@ -194,7 +194,7 @@ class TestToolCallBackwardCompat:
         assert tc.response_item_id is None
 
     def test_getattr_pattern_matches_agent_loop(self):
-        """run_agent.py uses getattr(tool_call, 'call_id', None) — verify it works."""
+        """harness/run_agent.py uses getattr(tool_call, 'call_id', None) — verify it works."""
         tc = ToolCall(id="1", name="fn", arguments="{}", provider_data={"call_id": "c1"})
         assert getattr(tc, "call_id", None) == "c1"
         tc_no_pd = ToolCall(id="1", name="fn", arguments="{}")

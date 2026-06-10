@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from tools.core.account_registry import register_account, RegistryError
+from harness.tools.core.account_registry import register_account, RegistryError
 
 from . import _cli
 

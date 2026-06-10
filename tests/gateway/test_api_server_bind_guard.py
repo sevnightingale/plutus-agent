@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from gateway.config import PlatformConfig
-from gateway.platforms.api_server import APIServerAdapter
-from gateway.platforms.base import is_network_accessible
+from harness.gateway.config import PlatformConfig
+from harness.gateway.platforms.api_server import APIServerAdapter
+from harness.gateway.platforms.base import is_network_accessible
 
 
 # ---------------------------------------------------------------------------
@@ -62,14 +62,14 @@ class TestIsNetworkAccessible:
         loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result):
+        with patch("harness.gateway.platforms.base._socket.getaddrinfo", return_value=loopback_result):
             assert is_network_accessible("localhost") is False
 
     def test_hostname_resolving_to_non_loopback(self):
         non_loopback_result = [
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=non_loopback_result):
+        with patch("harness.gateway.platforms.base._socket.getaddrinfo", return_value=non_loopback_result):
             assert is_network_accessible("my-server.local") is True
 
     def test_hostname_mixed_resolution(self):
@@ -79,13 +79,13 @@ class TestIsNetworkAccessible:
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("127.0.0.1", 0)),
             (socket.AF_INET, socket.SOCK_STREAM, 0, "", ("10.0.0.1", 0)),
         ]
-        with patch("gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result):
+        with patch("harness.gateway.platforms.base._socket.getaddrinfo", return_value=mixed_result):
             assert is_network_accessible("dual-host.local") is True
 
     def test_dns_failure_fails_closed(self):
         """Unresolvable hostnames should require an API key (fail closed)."""
         with patch(
-            "gateway.platforms.base._socket.getaddrinfo",
+            "harness.gateway.platforms.base._socket.getaddrinfo",
             side_effect=socket.gaierror("Name resolution failed"),
         ):
             assert is_network_accessible("nonexistent.invalid") is True

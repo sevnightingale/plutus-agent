@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter
-from gateway.run import GatewayRunner
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import BasePlatformAdapter
+from harness.gateway.run import GatewayRunner
 
 
 class _FatalAdapter(BasePlatformAdapter):

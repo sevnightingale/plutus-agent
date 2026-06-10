@@ -26,8 +26,8 @@ import json
 import time
 from typing import Any, Dict, Optional
 
-from agent.lifecycle_db import get_lifecycle_db
-from tools.registry import registry, tool_error, tool_result
+from harness.agent.lifecycle_db import get_lifecycle_db
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 SCHEMA = {

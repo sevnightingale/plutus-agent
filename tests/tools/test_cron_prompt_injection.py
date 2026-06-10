@@ -7,7 +7,7 @@ variants like "Ignore ALL prior instructions" bypassed the scanner.
 Fix: allow optional extra words with `(?:\\w+\\s+)*` groups.
 """
 
-from tools.cronjob_tools import _scan_cron_prompt
+from harness.tools.cronjob_tools import _scan_cron_prompt
 
 
 class TestMultiWordInjectionBypass:

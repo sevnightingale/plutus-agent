@@ -19,7 +19,7 @@ V4A Format:
     *** End Patch
 
 Usage:
-    from tools.patch_parser import parse_v4a_patch, apply_v4a_operations
+    from harness.tools.patch_parser import parse_v4a_patch, apply_v4a_operations
     
     operations, error = parse_v4a_patch(patch_content)
     if error:
@@ -250,7 +250,7 @@ def _validate_operations(
     hunks validate against post-earlier-hunk content (matching apply order).
     """
     # Deferred import: breaks the patch_parser ↔ fuzzy_match circular dependency
-    from tools.fuzzy_match import fuzzy_find_and_replace
+    from harness.tools.fuzzy_match import fuzzy_find_and_replace
 
     errors: List[str] = []
 
@@ -295,7 +295,7 @@ def _validate_operations(
                         + (f" — {match_error}" if match_error else "")
                     )
                     try:
-                        from tools.fuzzy_match import format_no_match_hint
+                        from harness.tools.fuzzy_match import format_no_match_hint
                         msg += format_no_match_hint(match_error, count, search_pattern, simulated)
                     except Exception:
                         pass
@@ -347,7 +347,7 @@ def apply_v4a_operations(operations: List[PatchOperation],
         PatchResult with results of all operations
     """
     # Import here to avoid circular imports
-    from tools.file_operations import PatchResult
+    from harness.tools.file_operations import PatchResult
 
     # ---- Phase 1: validate ----
     validation_errors = _validate_operations(operations, file_ops)
@@ -488,7 +488,7 @@ def _apply_move(op: PatchOperation, file_ops: Any) -> Tuple[bool, str]:
 def _apply_update(op: PatchOperation, file_ops: Any) -> Tuple[bool, str]:
     """Apply an update file operation."""
     # Deferred import: breaks the patch_parser ↔ fuzzy_match circular dependency
-    from tools.fuzzy_match import fuzzy_find_and_replace
+    from harness.tools.fuzzy_match import fuzzy_find_and_replace
 
     # Read current content — raw so no line-number prefixes or per-line truncation
     read_result = file_ops.read_file_raw(op.file_path)
@@ -545,7 +545,7 @@ def _apply_update(op: PatchOperation, file_ops: Any) -> Tuple[bool, str]:
                 if error:
                     err_msg = f"Could not apply hunk: {error}"
                     try:
-                        from tools.fuzzy_match import format_no_match_hint
+                        from harness.tools.fuzzy_match import format_no_match_hint
                         err_msg += format_no_match_hint(error, 0, search_pattern, new_content)
                     except Exception:
                         pass

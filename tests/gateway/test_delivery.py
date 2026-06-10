@@ -1,8 +1,8 @@
 """Tests for the delivery routing module."""
 
-from gateway.config import Platform
-from gateway.delivery import DeliveryTarget
-from gateway.session import SessionSource
+from harness.gateway.config import Platform
+from harness.gateway.delivery import DeliveryTarget
+from harness.gateway.session import SessionSource
 
 
 class TestParseTargetPlatformChat:

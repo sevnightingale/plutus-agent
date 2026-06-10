@@ -11,7 +11,7 @@ import threading
 
 import pytest
 
-from run_agent import AIAgent
+from harness.run_agent import AIAgent
 
 
 def _bare_agent() -> AIAgent:
@@ -281,7 +281,7 @@ class TestSteerCommandRegistry:
         """The /steer slash command must be registered so it reaches all
         platforms (CLI, gateway, TUI autocomplete, Telegram/Slack menus).
         """
-        from plutus_cli.commands import resolve_command, ACTIVE_SESSION_BYPASS_COMMANDS
+        from harness.cli.commands import resolve_command, ACTIVE_SESSION_BYPASS_COMMANDS
 
         cmd = resolve_command("steer")
         assert cmd is not None
@@ -295,7 +295,7 @@ class TestSteerCommandRegistry:
         handler. Otherwise it would be queued as user text and only
         delivered at turn end — defeating the whole point.
         """
-        from plutus_cli.commands import ACTIVE_SESSION_BYPASS_COMMANDS, should_bypass_active_session
+        from harness.cli.commands import ACTIVE_SESSION_BYPASS_COMMANDS, should_bypass_active_session
 
         assert "steer" in ACTIVE_SESSION_BYPASS_COMMANDS
         assert should_bypass_active_session("steer") is True

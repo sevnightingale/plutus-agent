@@ -41,11 +41,11 @@ import sys
 from pathlib import Path as _Path
 sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
-from gateway.config import Platform, PlatformConfig
+from harness.gateway.config import Platform, PlatformConfig
 import re
 
-from gateway.platforms.helpers import MessageDeduplicator, ThreadParticipationTracker
-from gateway.platforms.base import (
+from harness.gateway.platforms.helpers import MessageDeduplicator, ThreadParticipationTracker
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
     MessageType,
@@ -58,7 +58,7 @@ from gateway.platforms.base import (
     cache_document_from_bytes,
     SUPPORTED_DOCUMENT_TYPES,
 )
-from tools.url_safety import is_safe_url
+from harness.tools.url_safety import is_safe_url
 
 
 def _clean_discord_id(entry: str) -> str:
@@ -603,7 +603,7 @@ class DiscordAdapter(BasePlatformAdapter):
             intents.voice_states = True
 
             # Resolve proxy (DISCORD_PROXY > generic env vars > macOS system proxy)
-            from gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_bot
+            from harness.gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_bot
             proxy_url = resolve_proxy_url(platform_env_var="DISCORD_PROXY")
             if proxy_url:
                 logger.info("[%s] Using proxy for Discord: %s", self.name, proxy_url)
@@ -1169,7 +1169,7 @@ class DiscordAdapter(BasePlatformAdapter):
         reported in ``raw_response['warnings']`` so the caller can surface
         partial-send issues.
         """
-        from tools.send_message_tool import _derive_forum_thread_name
+        from harness.tools.send_message_tool import _derive_forum_thread_name
 
         formatted = self.format_message(content)
         chunks = self.truncate_message(formatted, self.MAX_MESSAGE_LENGTH)
@@ -1231,7 +1231,7 @@ class DiscordAdapter(BasePlatformAdapter):
         ForumChannel accepts the same file/files/content kwargs as
         ``channel.send``, creating the thread and starter message atomically.
         """
-        from tools.send_message_tool import _derive_forum_thread_name
+        from harness.tools.send_message_tool import _derive_forum_thread_name
 
         if not thread_name:
             # Prefer the text content, fall back to the first attached
@@ -1699,7 +1699,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
     async def _process_voice_input(self, guild_id: int, user_id: int, pcm_data: bytes):
         """Convert PCM -> WAV -> STT -> callback."""
-        from tools.voice_mode import is_whisper_hallucination
+        from harness.tools.voice_mode import is_whisper_hallucination
 
         tmp_f = tempfile.NamedTemporaryFile(suffix=".wav", prefix="vc_listen_", delete=False)
         wav_path = tmp_f.name
@@ -1707,7 +1707,7 @@ class DiscordAdapter(BasePlatformAdapter):
         try:
             await asyncio.to_thread(VoiceReceiver.pcm_to_wav, pcm_data, wav_path)
 
-            from tools.transcription_tools import transcribe_audio
+            from harness.tools.transcription_tools import transcribe_audio
             result = await asyncio.to_thread(transcribe_audio, wav_path)
 
             if not result.get("success"):
@@ -1819,7 +1819,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
             # Download the image and send as a Discord file attachment
             # (Discord renders attachments inline, unlike plain URLs)
-            from gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
+            from harness.gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
             _proxy = resolve_proxy_url(platform_env_var="DISCORD_PROXY")
             _sess_kw, _req_kw = proxy_kwargs_for_aiohttp(_proxy)
             async with aiohttp.ClientSession(**_sess_kw) as session:
@@ -1898,7 +1898,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
             # Download the GIF and send as a Discord file attachment
             # (Discord renders .gif attachments as auto-playing animations inline)
-            from gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
+            from harness.gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
             _proxy = resolve_proxy_url(platform_env_var="DISCORD_PROXY")
             _sess_kw, _req_kw = proxy_kwargs_for_aiohttp(_proxy)
             async with aiohttp.ClientSession(**_sess_kw) as session:
@@ -2362,7 +2362,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
         already_registered: set[str] = set()
         try:
-            from plutus_cli.commands import COMMAND_REGISTRY, _is_gateway_available, _resolve_config_gates
+            from harness.cli.commands import COMMAND_REGISTRY, _is_gateway_available, _resolve_config_gates
 
             try:
                 already_registered = {cmd.name for cmd in tree.get_commands()}
@@ -2404,7 +2404,7 @@ class DiscordAdapter(BasePlatformAdapter):
         # autocomplete UX as for built-in commands. No per-platform plugin
         # API needed — plugin commands are platform-agnostic.
         try:
-            from plutus_cli.commands import _iter_plugin_command_entries
+            from harness.cli.commands import _iter_plugin_command_entries
 
             for plugin_name, plugin_desc, plugin_args_hint in _iter_plugin_command_entries():
                 discord_name = plugin_name.lower()[:32]
@@ -2452,7 +2452,7 @@ class DiscordAdapter(BasePlatformAdapter):
         skill name and its description.
         """
         try:
-            from plutus_cli.commands import discord_skill_commands_by_category
+            from harness.cli.commands import discord_skill_commands_by_category
 
             existing_names = set()
             try:
@@ -2706,7 +2706,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
     def _resolve_channel_prompt(self, channel_id: str, parent_id: str | None = None) -> str | None:
         """Resolve a Discord per-channel prompt, preferring the exact channel over its parent."""
-        from gateway.platforms.base import resolve_channel_prompt
+        from harness.gateway.platforms.base import resolve_channel_prompt
         return resolve_channel_prompt(self.config.extra, channel_id, parent_id)
 
     def _discord_require_mention(self) -> bool:
@@ -2972,7 +2972,7 @@ class DiscordAdapter(BasePlatformAdapter):
                 channel = await self._client.fetch_channel(int(target_id))
 
             try:
-                from plutus_cli.providers import get_label
+                from harness.cli.providers import get_label
                 provider_label = get_label(current_provider)
             except Exception:
                 provider_label = current_provider
@@ -3157,7 +3157,7 @@ class DiscordAdapter(BasePlatformAdapter):
                 f"Blocked unsafe attachment URL (SSRF protection): {att.url}"
             )
         import aiohttp
-        from gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
+        from harness.gateway.platforms.base import resolve_proxy_url, proxy_kwargs_for_aiohttp
         _proxy = resolve_proxy_url(platform_env_var="DISCORD_PROXY")
         _sess_kw, _req_kw = proxy_kwargs_for_aiohttp(_proxy)
         async with aiohttp.ClientSession(**_sess_kw) as session:
@@ -3460,7 +3460,7 @@ class DiscordAdapter(BasePlatformAdapter):
 
     def _text_batch_key(self, event: MessageEvent) -> str:
         """Session-scoped key for text message batching."""
-        from gateway.session import build_session_key
+        from harness.gateway.session import build_session_key
         return build_session_key(
             event.source,
             group_sessions_per_user=self.config.extra.get("group_sessions_per_user", True),
@@ -3597,7 +3597,7 @@ if DISCORD_AVAILABLE:
 
             # Unblock the waiting agent thread via the gateway approval queue
             try:
-                from tools.approval import resolve_gateway_approval
+                from harness.tools.approval import resolve_gateway_approval
                 count = resolve_gateway_approval(self.session_key, choice)
                 logger.info(
                     "Discord button resolved %d approval(s) for session %s (choice=%s, user=%s)",
@@ -3685,7 +3685,7 @@ if DISCORD_AVAILABLE:
 
             # Write response file
             try:
-                from plutus_constants import get_hermes_home
+                from harness.constants import get_hermes_home
                 home = get_hermes_home()
                 response_path = home / ".update_response"
                 tmp = response_path.with_suffix(".tmp")
@@ -3896,7 +3896,7 @@ if DISCORD_AVAILABLE:
             self._build_provider_select()
 
             try:
-                from plutus_cli.providers import get_label
+                from harness.cli.providers import get_label
                 provider_label = get_label(self.current_provider)
             except Exception:
                 provider_label = self.current_provider

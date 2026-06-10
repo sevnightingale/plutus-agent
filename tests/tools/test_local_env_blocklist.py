@@ -12,7 +12,7 @@ import os
 import threading
 from unittest.mock import MagicMock, patch
 
-from tools.environments.local import (
+from harness.tools.environments.local import (
     LocalEnvironment,
     _HERMES_PROVIDER_ENV_BLOCKLIST,
     _HERMES_PROVIDER_ENV_FORCE_PREFIX,
@@ -47,9 +47,9 @@ def _run_with_env(extra_os_env=None, self_env=None):
 
     env = LocalEnvironment(cwd="/tmp", timeout=10, env=self_env)
 
-    with patch("tools.environments.local._find_bash", return_value="/bin/bash"), \
+    with patch("harness.tools.environments.local._find_bash", return_value="/bin/bash"), \
          patch("subprocess.Popen", side_effect=_make_fake_popen(captured)), \
-         patch("tools.terminal_tool._interrupt_event", fake_interrupt), \
+         patch("harness.tools.terminal_tool._interrupt_event", fake_interrupt), \
          patch.dict(os.environ, test_environ, clear=True):
         env.execute("echo hello")
 
@@ -200,7 +200,7 @@ class TestBlocklistCoverage:
     def test_registry_vars_are_in_blocklist(self):
         """Every api_key_env_var and base_url_env_var from PROVIDER_REGISTRY
         must appear in the blocklist — ensures no drift."""
-        from plutus_cli.auth import PROVIDER_REGISTRY
+        from harness.cli.auth import PROVIDER_REGISTRY
 
         for pconfig in PROVIDER_REGISTRY.values():
             for var in pconfig.api_key_env_vars:
@@ -236,7 +236,7 @@ class TestBlocklistCoverage:
 
     def test_optional_tool_and_messaging_vars_are_in_blocklist(self):
         """Tool/messaging vars from OPTIONAL_ENV_VARS should stay covered."""
-        from plutus_cli.config import OPTIONAL_ENV_VARS
+        from harness.cli.config import OPTIONAL_ENV_VARS
 
         for name, metadata in OPTIONAL_ENV_VARS.items():
             category = metadata.get("category")
@@ -295,17 +295,17 @@ class TestSanePathIncludesHomebrew:
     """Verify _SANE_PATH includes macOS Homebrew directories."""
 
     def test_sane_path_includes_homebrew_bin(self):
-        from tools.environments.local import _SANE_PATH
+        from harness.tools.environments.local import _SANE_PATH
         assert "/opt/homebrew/bin" in _SANE_PATH
 
     def test_sane_path_includes_homebrew_sbin(self):
-        from tools.environments.local import _SANE_PATH
+        from harness.tools.environments.local import _SANE_PATH
         assert "/opt/homebrew/sbin" in _SANE_PATH
 
     def test_make_run_env_appends_homebrew_on_minimal_path(self):
         """When PATH is minimal (no /usr/bin), _make_run_env should append
         _SANE_PATH which now includes Homebrew dirs."""
-        from tools.environments.local import _make_run_env
+        from harness.tools.environments.local import _make_run_env
         minimal_env = {"PATH": "/some/custom/bin"}
         with patch.dict(os.environ, minimal_env, clear=True):
             result = _make_run_env({})
@@ -314,7 +314,7 @@ class TestSanePathIncludesHomebrew:
 
     def test_make_run_env_does_not_duplicate_on_full_path(self):
         """When PATH already has /usr/bin, _make_run_env should not append."""
-        from tools.environments.local import _make_run_env
+        from harness.tools.environments.local import _make_run_env
         full_env = {"PATH": "/usr/bin:/bin"}
         with patch.dict(os.environ, full_env, clear=True):
             result = _make_run_env({})

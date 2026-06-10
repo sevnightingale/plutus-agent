@@ -1,6 +1,6 @@
 """Tests for PII redaction in gateway session context prompts."""
 
-from gateway.session import (
+from harness.gateway.session import (
     SessionContext,
     SessionSource,
     build_session_context_prompt,
@@ -8,7 +8,7 @@ from gateway.session import (
     _hash_sender_id,
     _hash_chat_id,
 )
-from gateway.config import Platform, HomeChannel
+from harness.gateway.config import Platform, HomeChannel
 
 
 # ---------------------------------------------------------------------------

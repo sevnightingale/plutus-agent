@@ -27,7 +27,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
-from agent.image_gen_provider import (
+from harness.agent.image_gen_provider import (
     DEFAULT_ASPECT_RATIO,
     ImageGenProvider,
     error_response,
@@ -82,7 +82,7 @@ _SIZES = {
 def _load_openai_config() -> Dict[str, Any]:
     """Read ``image_gen`` from config.yaml (returns {} on any failure)."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         cfg = load_config()
         section = cfg.get("image_gen") if isinstance(cfg, dict) else None

@@ -14,7 +14,7 @@ Features:
 - Support for multiple model providers
 
 Usage:
-    from run_agent import AIAgent
+    from harness.run_agent import AIAgent
     
     agent = AIAgent(base_url="http://localhost:30000/v1", model="claude-opus-4-20250514")
     response = agent.run_conversation("Tell me about the latest Python updates")
@@ -43,18 +43,18 @@ import fire
 from datetime import datetime
 from pathlib import Path
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 # Load .env from ~/.plutus-agent/.env first, then project root as dev fallback.
 # User-managed env files should override stale shell exports on restart.
-from plutus_cli.env_loader import load_hermes_dotenv
-from plutus_cli.timeouts import (
+from harness.cli.env_loader import load_hermes_dotenv
+from harness.cli.timeouts import (
     get_provider_request_timeout,
     get_provider_stale_timeout,
 )
 
 _hermes_home = get_hermes_home()
-_project_env = Path(__file__).parent / '.env'
+_project_env = Path(__file__).parent.parent / '.env'
 _loaded_env_paths = load_hermes_dotenv(hermes_home=_hermes_home, project_env=_project_env)
 if _loaded_env_paths:
     for _env_path in _loaded_env_paths:
@@ -64,28 +64,28 @@ else:
 
 
 # Import our tool system
-from model_tools import (
+from harness.model_tools import (
     get_tool_definitions,
     get_toolset_for_tool,
     handle_function_call,
     check_toolset_requirements,
 )
-from tools.terminal_tool import cleanup_vm, get_active_env, is_persistent_env
-from tools.tool_result_storage import maybe_persist_tool_result, enforce_turn_budget
-from tools.interrupt import set_interrupt as _set_interrupt
-from tools.browser_tool import cleanup_browser
+from harness.tools.terminal_tool import cleanup_vm, get_active_env, is_persistent_env
+from harness.tools.tool_result_storage import maybe_persist_tool_result, enforce_turn_budget
+from harness.tools.interrupt import set_interrupt as _set_interrupt
+from harness.tools.browser_tool import cleanup_browser
 
 
 # Agent internals extracted to agent/ package for modularity
-from agent.memory_manager import build_memory_context_block, sanitize_context
-from agent.retry_utils import jittered_backoff
-from agent.error_classifier import classify_api_error, FailoverReason
-from agent.prompt_builder import (
+from harness.agent.memory_manager import build_memory_context_block, sanitize_context
+from harness.agent.retry_utils import jittered_backoff
+from harness.agent.error_classifier import classify_api_error, FailoverReason
+from harness.agent.prompt_builder import (
     DEFAULT_AGENT_IDENTITY, PLATFORM_HINTS,
     MEMORY_GUIDANCE, SESSION_SEARCH_GUIDANCE, SKILLS_GUIDANCE,
     build_nous_subscription_prompt,
 )
-from agent.model_metadata import (
+from harness.agent.model_metadata import (
     fetch_model_metadata,
     estimate_tokens_rough, estimate_messages_tokens_rough, estimate_request_tokens_rough,
     get_next_probe_tier, parse_context_limit_from_error,
@@ -93,30 +93,30 @@ from agent.model_metadata import (
     save_context_length, is_local_endpoint,
     query_ollama_num_ctx,
 )
-from agent.context_compressor import ContextCompressor
-from agent.subdirectory_hints import SubdirectoryHintTracker
-from agent.prompt_caching import apply_anthropic_cache_control
-from agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
-from agent.worldview_loader import load_worldview_md
-from agent.strategy_loader import build_strategy_prompt_block
-from agent.usage_pricing import estimate_usage_cost, normalize_usage
-from agent.codex_responses_adapter import (
+from harness.agent.context_compressor import ContextCompressor
+from harness.agent.subdirectory_hints import SubdirectoryHintTracker
+from harness.agent.prompt_caching import apply_anthropic_cache_control
+from harness.agent.prompt_builder import build_skills_system_prompt, build_context_files_prompt, build_environment_hints, load_soul_md, TOOL_USE_ENFORCEMENT_GUIDANCE, TOOL_USE_ENFORCEMENT_MODELS, GOOGLE_MODEL_OPERATIONAL_GUIDANCE, OPENAI_MODEL_EXECUTION_GUIDANCE
+from harness.agent.worldview_loader import load_worldview_md
+from harness.agent.strategy_loader import build_strategy_prompt_block
+from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
+from harness.agent.codex_responses_adapter import (
     _derive_responses_function_call_id as _codex_derive_responses_function_call_id,
     _deterministic_call_id as _codex_deterministic_call_id,
     _split_responses_tool_id as _codex_split_responses_tool_id,
     _summarize_user_message_for_log,
 )
-from agent.display import (
+from harness.agent.display import (
     KawaiiSpinner, build_tool_preview as _build_tool_preview,
     get_cute_tool_message as _get_cute_tool_message_impl,
     _detect_tool_failure,
     get_tool_emoji as _get_tool_emoji,
 )
-from agent.trajectory import (
+from harness.agent.trajectory import (
     convert_scratchpad_to_think, has_incomplete_scratchpad,
     save_trajectory as _save_trajectory_to_file,
 )
-from utils import atomic_json_write, base_url_host_matches, base_url_hostname, env_var_enabled, normalize_proxy_url
+from harness.utils import atomic_json_write, base_url_host_matches, base_url_hostname, env_var_enabled, normalize_proxy_url
 
 
 
@@ -882,7 +882,7 @@ class AIAgent:
             pass  # Non-fatal — transport may not exist for all modes yet
 
         try:
-            from plutus_cli.model_normalize import (
+            from harness.cli.model_normalize import (
                 _AGGREGATOR_PROVIDERS,
                 normalize_model_for_provider,
             )
@@ -1036,7 +1036,7 @@ class AIAgent:
         # Centralized logging — agent.log (INFO+) and errors.log (WARNING+)
         # both live under ~/.plutus-agent/logs/.  Idempotent, so gateway mode
         # (which creates a new AIAgent per message) won't duplicate handlers.
-        from plutus_logging import setup_logging, setup_verbose_logging
+        from harness.log import setup_logging, setup_verbose_logging
         setup_logging(hermes_home=_hermes_home)
 
         if self.verbose_logging:
@@ -1095,12 +1095,12 @@ class AIAgent:
         _provider_timeout = get_provider_request_timeout(self.provider, self.model)
 
         if self.api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token
+            from harness.agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token
             # Bedrock + Claude → use AnthropicBedrock SDK for full feature parity
             # (prompt caching, thinking budgets, adaptive thinking).
             _is_bedrock_anthropic = self.provider == "bedrock"
             if _is_bedrock_anthropic:
-                from agent.anthropic_adapter import build_anthropic_bedrock_client
+                from harness.agent.anthropic_adapter import build_anthropic_bedrock_client
                 _region_match = re.search(r"bedrock-runtime\.([a-z0-9-]+)\.", base_url or "")
                 _br_region = _region_match.group(1) if _region_match else "us-east-1"
                 self._bedrock_region = _br_region
@@ -1129,7 +1129,7 @@ class AIAgent:
                 # so injects Claude-Code identity headers and system prompts
                 # that cause 401/403 on their endpoints.  Guards #1739 and
                 # the third-party identity-injection bug.
-                from agent.anthropic_adapter import _is_oauth_token as _is_oat
+                from harness.agent.anthropic_adapter import _is_oauth_token as _is_oat
                 self._is_anthropic_oauth = _is_oat(effective_key) if _is_native_anthropic else False
                 self._anthropic_client = build_anthropic_client(effective_key, base_url, timeout=_provider_timeout)
                 # No OpenAI client needed for Anthropic mode
@@ -1147,7 +1147,7 @@ class AIAgent:
             # Guardrail config — read from config.yaml at init time.
             self._bedrock_guardrail_config = None
             try:
-                from plutus_cli.config import load_config as _load_br_cfg
+                from harness.cli.config import load_config as _load_br_cfg
                 _gr = _load_br_cfg().get("bedrock", {}).get("guardrail", {})
                 if _gr.get("guardrail_identifier") and _gr.get("guardrail_version"):
                     self._bedrock_guardrail_config = {
@@ -1183,7 +1183,7 @@ class AIAgent:
                         "X-OpenRouter-Categories": "productivity,cli-agent",
                     }
                 elif base_url_host_matches(effective_base, "api.githubcopilot.com"):
-                    from plutus_cli.models import copilot_default_headers
+                    from harness.cli.models import copilot_default_headers
 
                     client_kwargs["default_headers"] = copilot_default_headers()
                 elif base_url_host_matches(effective_base, "api.kimi.com"):
@@ -1193,11 +1193,11 @@ class AIAgent:
                 elif base_url_host_matches(effective_base, "portal.qwen.ai"):
                     client_kwargs["default_headers"] = _qwen_portal_headers()
                 elif base_url_host_matches(effective_base, "chatgpt.com"):
-                    from agent.auxiliary_client import _codex_cloudflare_headers
+                    from harness.agent.auxiliary_client import _codex_cloudflare_headers
                     client_kwargs["default_headers"] = _codex_cloudflare_headers(api_key)
             else:
                 # No explicit creds — use the centralized provider router
-                from agent.auxiliary_client import resolve_provider_client
+                from harness.agent.auxiliary_client import resolve_provider_client
                 _routed_client, _ = resolve_provider_client(
                     self.provider or "auto", model=self.model, raw_codex=True)
                 if _routed_client is not None:
@@ -1221,7 +1221,7 @@ class AIAgent:
                         # (e.g. alibaba → DASHSCOPE_API_KEY, not ALIBABA_API_KEY).
                         _env_hint = f"{_explicit.upper()}_API_KEY"
                         try:
-                            from plutus_cli.auth import PROVIDER_REGISTRY
+                            from harness.cli.auth import PROVIDER_REGISTRY
                             _pcfg = PROVIDER_REGISTRY.get(_explicit)
                             if _pcfg and _pcfg.api_key_env_vars:
                                 _env_hint = _pcfg.api_key_env_vars[0]
@@ -1374,7 +1374,7 @@ class AIAgent:
         self._cached_system_prompt: Optional[str] = None
         
         # Filesystem checkpoint manager (transparent — not a tool)
-        from tools.checkpoint_manager import CheckpointManager
+        from harness.tools.checkpoint_manager import CheckpointManager
         self._checkpoint_mgr = CheckpointManager(
             enabled=checkpoints_enabled,
             max_snapshots=checkpoint_max_snapshots,
@@ -1410,12 +1410,12 @@ class AIAgent:
                 )
         
         # In-memory todo list for task planning (one per agent/session)
-        from tools.todo_tool import TodoStore
+        from harness.tools.todo_tool import TodoStore
         self._todo_store = TodoStore()
         
         # Load config once for memory, skills, and compression sections
         try:
-            from plutus_cli.config import load_config as _load_agent_config
+            from harness.cli.config import load_config as _load_agent_config
             _agent_cfg = _load_agent_config()
         except Exception:
             _agent_cfg = {}
@@ -1440,7 +1440,7 @@ class AIAgent:
                 self._memory_nudge_interval = int(mem_config.get("nudge_interval", 10))
                 self._memory_flush_min_turns = int(mem_config.get("flush_min_turns", 6))
                 if self._memory_enabled or self._user_profile_enabled:
-                    from tools.memory_tool import MemoryStore
+                    from harness.tools.memory_tool import MemoryStore
                     self._memory_store = MemoryStore(
                         memory_char_limit=mem_config.get("memory_char_limit", 2200),
                         user_char_limit=mem_config.get("user_char_limit", 1375),
@@ -1572,7 +1572,7 @@ class AIAgent:
         # Check custom_providers per-model context_length
         if _config_context_length is None:
             try:
-                from plutus_cli.config import get_compatible_custom_providers
+                from harness.cli.config import get_compatible_custom_providers
                 _custom_providers = get_compatible_custom_providers(_agent_cfg)
             except Exception:
                 _custom_providers = _agent_cfg.get("custom_providers")
@@ -1623,7 +1623,7 @@ class AIAgent:
         if _selected_engine is not None:
             self.context_compressor = _selected_engine
             # Resolve context_length for plugin engines — mirrors switch_model() path
-            from agent.model_metadata import get_model_context_length
+            from harness.agent.model_metadata import get_model_context_length
             _plugin_ctx_len = get_model_context_length(
                 self.model,
                 base_url=self.base_url,
@@ -1659,7 +1659,7 @@ class AIAgent:
 
         # Reject models whose context window is below the minimum required
         # for reliable tool-calling workflows (64K tokens).
-        from agent.model_metadata import MINIMUM_CONTEXT_LENGTH
+        from harness.agent.model_metadata import MINIMUM_CONTEXT_LENGTH
         _ctx = getattr(self.context_compressor, "context_length", 0)
         if _ctx and _ctx < MINIMUM_CONTEXT_LENGTH:
             raise ValueError(
@@ -1836,7 +1836,7 @@ class AIAgent:
         change persists across turns (unlike fallback which is
         turn-scoped).
         """
-        from plutus_cli.providers import determine_api_mode
+        from harness.cli.providers import determine_api_mode
 
         # ── Determine api_mode if not provided ──
         if not api_mode:
@@ -1871,7 +1871,7 @@ class AIAgent:
 
         # ── Build new client ──
         if api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import (
+            from harness.agent.anthropic_adapter import (
                 build_anthropic_client,
                 resolve_anthropic_token,
                 _is_oauth_token,
@@ -1919,7 +1919,7 @@ class AIAgent:
 
         # ── Update context compressor ──
         if hasattr(self, "context_compressor") and self.context_compressor:
-            from agent.model_metadata import get_model_context_length
+            from harness.agent.model_metadata import get_model_context_length
             new_context_length = get_model_context_length(
                 self.model,
                 base_url=self.base_url,
@@ -2114,8 +2114,8 @@ class AIAgent:
         if not self.compression_enabled:
             return
         try:
-            from agent.auxiliary_client import get_text_auxiliary_client
-            from agent.model_metadata import (
+            from harness.agent.auxiliary_client import get_text_auxiliary_client
+            from harness.agent.model_metadata import (
                 MINIMUM_CONTEXT_LENGTH,
                 get_model_context_length,
             )
@@ -2408,7 +2408,7 @@ class AIAgent:
         normalized_provider = (provider or "").strip().lower()
         if normalized_provider == "copilot":
             try:
-                from plutus_cli.models import _should_use_copilot_responses_api
+                from harness.cli.models import _should_use_copilot_responses_api
                 return _should_use_copilot_responses_api(model)
             except Exception:
                 # Fall back to the generic GPT-5 rule if Copilot-specific
@@ -3765,7 +3765,7 @@ class AIAgent:
         if not headers:
             return
         try:
-            from agent.rate_limit_tracker import parse_rate_limit_headers
+            from harness.agent.rate_limit_tracker import parse_rate_limit_headers
             state = parse_rate_limit_headers(headers, provider=self.provider)
             if state is not None:
                 self._rate_limit_state = state
@@ -3897,7 +3897,7 @@ class AIAgent:
 
         # 1. Kill background processes for this task
         try:
-            from tools.process_registry import process_registry
+            from harness.tools.process_registry import process_registry
             process_registry.kill_all(task_id=task_id)
         except Exception:
             pass
@@ -4148,7 +4148,7 @@ class AIAgent:
             if context_files_prompt:
                 prompt_parts.append(context_files_prompt)
 
-        from plutus_time import now as _hermes_now
+        from harness.clock import now as _hermes_now
         now = _hermes_now()
         timestamp_line = f"Conversation started: {now.strftime('%A, %B %d, %Y %I:%M %p')}"
         if self.pass_session_id and self.session_id:
@@ -4276,7 +4276,7 @@ class AIAgent:
 
         Returns the original list if no truncation was needed.
         """
-        from tools.delegate_tool import _get_max_concurrent_children
+        from harness.tools.delegate_tool import _get_max_concurrent_children
         max_children = _get_max_concurrent_children()
         delegate_count = sum(1 for tc in tool_calls if tc.function.name == "delegate_task")
         if delegate_count <= max_children:
@@ -4452,7 +4452,7 @@ class AIAgent:
             return None
 
     def _create_openai_client(self, client_kwargs: dict, *, reason: str, shared: bool) -> Any:
-        from agent.auxiliary_client import _validate_base_url, _validate_proxy_env_urls
+        from harness.agent.auxiliary_client import _validate_base_url, _validate_proxy_env_urls
         # Treat client_kwargs as read-only. Callers pass self._client_kwargs (or shallow
         # copies of it) in; any in-place mutation leaks back into the stored dict and is
         # reused on subsequent requests. #10933 hit this by injecting an httpx.Client
@@ -4465,7 +4465,7 @@ class AIAgent:
         _validate_proxy_env_urls()
         _validate_base_url(client_kwargs.get("base_url"))
         if self.provider == "copilot-acp" or str(client_kwargs.get("base_url", "")).startswith("acp://copilot"):
-            from agent.copilot_acp_client import CopilotACPClient
+            from harness.agent.copilot_acp_client import CopilotACPClient
 
             client = CopilotACPClient(**client_kwargs)
             logger.info(
@@ -4476,7 +4476,7 @@ class AIAgent:
             )
             return client
         if self.provider == "google-gemini-cli" or str(client_kwargs.get("base_url", "")).startswith("cloudcode-pa://"):
-            from agent.gemini_cloudcode_adapter import GeminiCloudCodeClient
+            from harness.agent.gemini_cloudcode_adapter import GeminiCloudCodeClient
 
             # Strip OpenAI-specific kwargs the Gemini client doesn't accept
             safe_kwargs = {
@@ -4492,7 +4492,7 @@ class AIAgent:
             )
             return client
         if self.provider == "gemini":
-            from agent.gemini_native_adapter import GeminiNativeClient, is_native_gemini_base_url
+            from harness.agent.gemini_native_adapter import GeminiNativeClient, is_native_gemini_base_url
 
             base_url = str(client_kwargs.get("base_url", "") or "")
             if is_native_gemini_base_url(base_url):
@@ -4947,7 +4947,7 @@ class AIAgent:
             return False
 
         try:
-            from plutus_cli.auth import resolve_codex_runtime_credentials
+            from harness.cli.auth import resolve_codex_runtime_credentials
 
             creds = resolve_codex_runtime_credentials(force_refresh=force)
         except Exception as exc:
@@ -4976,7 +4976,7 @@ class AIAgent:
             return False
 
         try:
-            from plutus_cli.auth import resolve_nous_runtime_credentials
+            from harness.cli.auth import resolve_nous_runtime_credentials
 
             creds = resolve_nous_runtime_credentials(
                 min_key_ttl_seconds=max(60, int(os.getenv("HERMES_NOUS_MIN_KEY_TTL_SECONDS", "1800"))),
@@ -5015,7 +5015,7 @@ class AIAgent:
             return False
 
         try:
-            from agent.anthropic_adapter import resolve_anthropic_token, build_anthropic_client
+            from harness.agent.anthropic_adapter import resolve_anthropic_token, build_anthropic_client
 
             new_token = resolve_anthropic_token()
         except Exception as exc:
@@ -5048,19 +5048,19 @@ class AIAgent:
         # Only treat as OAuth on native Anthropic; third-party endpoints using
         # the Anthropic protocol must not trip OAuth paths (#1739 & third-party
         # identity-injection guard).
-        from agent.anthropic_adapter import _is_oauth_token
+        from harness.agent.anthropic_adapter import _is_oauth_token
         self._is_anthropic_oauth = _is_oauth_token(new_token) if self.provider == "anthropic" else False
         return True
 
     def _apply_client_headers_for_base_url(self, base_url: str) -> None:
-        from agent.auxiliary_client import _AI_GATEWAY_HEADERS, _OR_HEADERS
+        from harness.agent.auxiliary_client import _AI_GATEWAY_HEADERS, _OR_HEADERS
 
         if base_url_host_matches(base_url, "openrouter.ai"):
             self._client_kwargs["default_headers"] = dict(_OR_HEADERS)
         elif base_url_host_matches(base_url, "ai-gateway.vercel.sh"):
             self._client_kwargs["default_headers"] = dict(_AI_GATEWAY_HEADERS)
         elif base_url_host_matches(base_url, "api.githubcopilot.com"):
-            from plutus_cli.models import copilot_default_headers
+            from harness.cli.models import copilot_default_headers
 
             self._client_kwargs["default_headers"] = copilot_default_headers()
         elif base_url_host_matches(base_url, "api.kimi.com"):
@@ -5068,7 +5068,7 @@ class AIAgent:
         elif base_url_host_matches(base_url, "portal.qwen.ai"):
             self._client_kwargs["default_headers"] = _qwen_portal_headers()
         elif base_url_host_matches(base_url, "chatgpt.com"):
-            from agent.auxiliary_client import _codex_cloudflare_headers
+            from harness.agent.auxiliary_client import _codex_cloudflare_headers
             self._client_kwargs["default_headers"] = _codex_cloudflare_headers(
                 self._client_kwargs.get("api_key", "")
             )
@@ -5080,7 +5080,7 @@ class AIAgent:
         runtime_base = getattr(entry, "runtime_base_url", None) or getattr(entry, "base_url", None) or self.base_url
 
         if self.api_mode == "anthropic_messages":
-            from agent.anthropic_adapter import build_anthropic_client, _is_oauth_token
+            from harness.agent.anthropic_adapter import build_anthropic_client, _is_oauth_token
 
             try:
                 self._anthropic_client.close()
@@ -5227,7 +5227,7 @@ class AIAgent:
                     # normalize_converse_response produces an OpenAI-compatible
                     # SimpleNamespace so the rest of the agent loop can treat
                     # bedrock responses like chat_completions responses.
-                    from agent.bedrock_adapter import (
+                    from harness.agent.bedrock_adapter import (
                         _get_bedrock_runtime_client,
                         normalize_converse_response,
                     )
@@ -5292,7 +5292,7 @@ class AIAgent:
                 )
                 try:
                     if self.api_mode == "anthropic_messages":
-                        from agent.anthropic_adapter import build_anthropic_client
+                        from harness.agent.anthropic_adapter import build_anthropic_client
 
                         self._anthropic_client.close()
                         self._anthropic_client = build_anthropic_client(
@@ -5324,7 +5324,7 @@ class AIAgent:
                 # seed future retries.
                 try:
                     if self.api_mode == "anthropic_messages":
-                        from agent.anthropic_adapter import build_anthropic_client
+                        from harness.agent.anthropic_adapter import build_anthropic_client
 
                         self._anthropic_client.close()
                         self._anthropic_client = build_anthropic_client(
@@ -5485,7 +5485,7 @@ class AIAgent:
 
             def _bedrock_call():
                 try:
-                    from agent.bedrock_adapter import (
+                    from harness.agent.bedrock_adapter import (
                         _get_bedrock_runtime_client,
                         stream_converse_with_callbacks,
                     )
@@ -6172,7 +6172,7 @@ class AIAgent:
             if self._interrupt_requested:
                 try:
                     if self.api_mode == "anthropic_messages":
-                        from agent.anthropic_adapter import build_anthropic_client
+                        from harness.agent.anthropic_adapter import build_anthropic_client
 
                         self._anthropic_client.close()
                         self._anthropic_client = build_anthropic_client(
@@ -6282,7 +6282,7 @@ class AIAgent:
         # raw_codex=True because the main agent needs direct responses.stream()
         # access for Codex providers.
         try:
-            from agent.auxiliary_client import resolve_provider_client
+            from harness.agent.auxiliary_client import resolve_provider_client
             # Pass base_url and api_key from fallback config so custom
             # endpoints (e.g. Ollama Cloud) resolve correctly instead of
             # falling through to OpenRouter defaults.
@@ -6307,7 +6307,7 @@ class AIAgent:
                     fb_provider)
                 return self._try_activate_fallback()  # try next in chain
             try:
-                from plutus_cli.model_normalize import normalize_model_for_provider
+                from harness.cli.model_normalize import normalize_model_for_provider
 
                 fb_model = normalize_model_for_provider(fb_model, fb_provider)
             except Exception:
@@ -6352,7 +6352,7 @@ class AIAgent:
 
             if fb_api_mode == "anthropic_messages":
                 # Build native Anthropic client instead of using OpenAI client
-                from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token, _is_oauth_token
+                from harness.agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token, _is_oauth_token
                 effective_key = (fb_client.api_key or resolve_anthropic_token() or "") if fb_provider == "anthropic" else (fb_client.api_key or "")
                 self.api_key = effective_key
                 self._anthropic_api_key = effective_key
@@ -6405,7 +6405,7 @@ class AIAgent:
             # context window (e.g. 200K) instead of the fallback's (e.g. 32K),
             # causing oversized sessions to overflow the fallback.
             if hasattr(self, 'context_compressor') and self.context_compressor:
-                from agent.model_metadata import get_model_context_length
+                from harness.agent.model_metadata import get_model_context_length
                 fb_context_length = get_model_context_length(
                     self.model, base_url=self.base_url,
                     api_key=self.api_key, provider=self.provider,
@@ -6468,7 +6468,7 @@ class AIAgent:
 
             # ── Rebuild client for the primary provider ──
             if self.api_mode == "anthropic_messages":
-                from agent.anthropic_adapter import build_anthropic_client
+                from harness.agent.anthropic_adapter import build_anthropic_client
                 self._anthropic_api_key = rt["anthropic_api_key"]
                 self._anthropic_base_url = rt["anthropic_base_url"]
                 self._anthropic_client = build_anthropic_client(
@@ -6567,7 +6567,7 @@ class AIAgent:
             self.api_key = rt["api_key"]
 
             if self.api_mode == "anthropic_messages":
-                from agent.anthropic_adapter import build_anthropic_client
+                from harness.agent.anthropic_adapter import build_anthropic_client
                 self._anthropic_api_key = rt["anthropic_api_key"]
                 self._anthropic_base_url = rt["anthropic_base_url"]
                 self._anthropic_client = build_anthropic_client(
@@ -6650,7 +6650,7 @@ class AIAgent:
 
         description = ""
         try:
-            from tools.vision_tools import vision_analyze_tool
+            from harness.tools.vision_tools import vision_analyze_tool
 
             result_json = asyncio.run(
                 vision_analyze_tool(image_url=vision_source, user_prompt=analysis_prompt)
@@ -6735,7 +6735,7 @@ class AIAgent:
             self._transport_cache = cache
         t = cache.get(mode)
         if t is None:
-            from agent.transports import get_transport
+            from harness.agent.transports import get_transport
             t = get_transport(mode)
             cache[mode] = t
         return t
@@ -6940,7 +6940,7 @@ class AIAgent:
         # Temperature: _fixed_temperature_for_model may return OMIT_TEMPERATURE
         # sentinel (temperature omitted entirely), a numeric override, or None.
         try:
-            from agent.auxiliary_client import _fixed_temperature_for_model, OMIT_TEMPERATURE
+            from harness.agent.auxiliary_client import _fixed_temperature_for_model, OMIT_TEMPERATURE
             _ft = _fixed_temperature_for_model(self.model, self.base_url)
             _omit_temp = _ft is OMIT_TEMPERATURE
             _fixed_temp = _ft if not _omit_temp else None
@@ -6967,7 +6967,7 @@ class AIAgent:
         _ant_max = None
         if (_is_or or _is_nous) and "claude" in (self.model or "").lower():
             try:
-                from agent.anthropic_adapter import _get_anthropic_max_output
+                from harness.agent.anthropic_adapter import _get_anthropic_max_output
                 _ant_max = _get_anthropic_max_output(self.model)
             except Exception:
                 pass  # fail open — let the proxy pick its default
@@ -7033,7 +7033,7 @@ class AIAgent:
             or base_url_host_matches(self._base_url_lower, "api.githubcopilot.com")
         ):
             try:
-                from plutus_cli.models import github_model_reasoning_efforts
+                from harness.cli.models import github_model_reasoning_efforts
 
                 return bool(github_model_reasoning_efforts(self.model))
             except Exception:
@@ -7057,7 +7057,7 @@ class AIAgent:
     def _github_models_reasoning_extra_body(self) -> dict | None:
         """Format reasoning payload for GitHub Models/OpenAI-compatible routes."""
         try:
-            from plutus_cli.models import github_model_reasoning_efforts
+            from harness.cli.models import github_model_reasoning_efforts
         except Exception:
             return None
 
@@ -7362,7 +7362,7 @@ class AIAgent:
 
             # Use auxiliary client for the flush call when available --
             # it's cheaper and avoids Codex Responses API incompatibility.
-            from agent.auxiliary_client import (
+            from harness.agent.auxiliary_client import (
                 call_llm as _call_llm,
                 _fixed_temperature_for_model,
                 OMIT_TEMPERATURE,
@@ -7422,7 +7422,7 @@ class AIAgent:
                 }
                 if _flush_temperature is not None:
                     api_kwargs["temperature"] = _flush_temperature
-                from agent.auxiliary_client import _get_task_timeout
+                from harness.agent.auxiliary_client import _get_task_timeout
                 response = self._ensure_primary_openai_client(reason="flush_memories").chat.completions.create(
                     **api_kwargs, timeout=_get_task_timeout("flush_memories")
                 )
@@ -7466,7 +7466,7 @@ class AIAgent:
                     try:
                         args = json.loads(tc.function.arguments)
                         flush_target = args.get("target", "memory")
-                        from tools.memory_tool import memory_tool as _memory_tool
+                        from harness.tools.memory_tool import memory_tool as _memory_tool
                         _memory_tool(
                             action=args.get("action"),
                             target=flush_target,
@@ -7587,7 +7587,7 @@ class AIAgent:
         # read content is summarised away — if the model re-reads the same
         # file it needs the full content, not a "file unchanged" stub.
         try:
-            from tools.file_tools import reset_file_dedup
+            from harness.tools.file_tools import reset_file_dedup
             reset_file_dedup(task_id)
         except Exception:
             pass
@@ -7602,7 +7602,7 @@ class AIAgent:
         # via query_compaction_history. Best-effort: never let event recording
         # failure rollback a successful compression.
         try:
-            from tools.core.event_registry import lookup as _event_lookup
+            from harness.tools.core.event_registry import lookup as _event_lookup
             _evt = _event_lookup("compaction")
             if _evt and _evt.fn:
                 _evt.fn(
@@ -7650,7 +7650,7 @@ class AIAgent:
         New DELEGATE_TASK_SCHEMA fields only need to be added here to reach all
         invocation paths (concurrent, sequential, inline).
         """
-        from tools.delegate_tool import delegate_task as _delegate_task
+        from harness.tools.delegate_tool import delegate_task as _delegate_task
         return _delegate_task(
             goal=function_args.get("goal"),
             context=function_args.get("context"),
@@ -7674,7 +7674,7 @@ class AIAgent:
         # Check plugin hooks for a block directive before executing anything.
         block_message: Optional[str] = None
         try:
-            from plutus_cli.plugins import get_pre_tool_call_block_message
+            from harness.cli.plugins import get_pre_tool_call_block_message
             block_message = get_pre_tool_call_block_message(
                 function_name, function_args, task_id=effective_task_id or "",
             )
@@ -7684,7 +7684,7 @@ class AIAgent:
             return json.dumps({"error": block_message}, ensure_ascii=False)
 
         if function_name == "todo":
-            from tools.todo_tool import todo_tool as _todo_tool
+            from harness.tools.todo_tool import todo_tool as _todo_tool
             return _todo_tool(
                 todos=function_args.get("todos"),
                 merge=function_args.get("merge", False),
@@ -7693,7 +7693,7 @@ class AIAgent:
         elif function_name == "session_search":
             if not self._session_db:
                 return json.dumps({"success": False, "error": "Session database not available."})
-            from tools.session_search_tool import session_search as _session_search
+            from harness.tools.session_search_tool import session_search as _session_search
             return _session_search(
                 query=function_args.get("query", ""),
                 role_filter=function_args.get("role_filter"),
@@ -7703,7 +7703,7 @@ class AIAgent:
             )
         elif function_name == "memory":
             target = function_args.get("target", "memory")
-            from tools.memory_tool import memory_tool as _memory_tool
+            from harness.tools.memory_tool import memory_tool as _memory_tool
             result = _memory_tool(
                 action=function_args.get("action"),
                 target=target,
@@ -7725,7 +7725,7 @@ class AIAgent:
         elif self._memory_manager and self._memory_manager.has_tool(function_name):
             return self._memory_manager.handle_tool_call(function_name, function_args)
         elif function_name == "clarify":
-            from tools.clarify_tool import clarify_tool as _clarify_tool
+            from harness.tools.clarify_tool import clarify_tool as _clarify_tool
             return _clarify_tool(
                 question=function_args.get("question", ""),
                 choices=function_args.get("choices"),
@@ -7888,7 +7888,7 @@ class AIAgent:
             # The callback is thread-local; the main thread's callback
             # is invisible to worker threads.
             try:
-                from tools.environments.base import set_activity_callback
+                from harness.tools.environments.base import set_activity_callback
                 set_activity_callback(self._touch_activity)
             except Exception:
                 pass
@@ -8103,7 +8103,7 @@ class AIAgent:
             # Check plugin hooks for a block directive before executing.
             _block_msg: Optional[str] = None
             try:
-                from plutus_cli.plugins import get_pre_tool_call_block_message
+                from harness.cli.plugins import get_pre_tool_call_block_message
                 _block_msg = get_pre_tool_call_block_message(
                     function_name, function_args, task_id=effective_task_id or "",
                 )
@@ -8139,7 +8139,7 @@ class AIAgent:
             # the agent while a command is running.
             if _block_msg is None:
                 try:
-                    from tools.environments.base import set_activity_callback
+                    from harness.tools.environments.base import set_activity_callback
                     set_activity_callback(self._touch_activity)
                 except Exception:
                     pass
@@ -8188,7 +8188,7 @@ class AIAgent:
                 function_result = json.dumps({"error": _block_msg}, ensure_ascii=False)
                 tool_duration = 0.0
             elif function_name == "todo":
-                from tools.todo_tool import todo_tool as _todo_tool
+                from harness.tools.todo_tool import todo_tool as _todo_tool
                 function_result = _todo_tool(
                     todos=function_args.get("todos"),
                     merge=function_args.get("merge", False),
@@ -8201,7 +8201,7 @@ class AIAgent:
                 if not self._session_db:
                     function_result = json.dumps({"success": False, "error": "Session database not available."})
                 else:
-                    from tools.session_search_tool import session_search as _session_search
+                    from harness.tools.session_search_tool import session_search as _session_search
                     function_result = _session_search(
                         query=function_args.get("query", ""),
                         role_filter=function_args.get("role_filter"),
@@ -8214,7 +8214,7 @@ class AIAgent:
                     self._vprint(f"  {_get_cute_tool_message_impl('session_search', function_args, tool_duration, result=function_result)}")
             elif function_name == "memory":
                 target = function_args.get("target", "memory")
-                from tools.memory_tool import memory_tool as _memory_tool
+                from harness.tools.memory_tool import memory_tool as _memory_tool
                 function_result = _memory_tool(
                     action=function_args.get("action"),
                     target=target,
@@ -8236,7 +8236,7 @@ class AIAgent:
                 if self._should_emit_quiet_tool_messages():
                     self._vprint(f"  {_get_cute_tool_message_impl('memory', function_args, tool_duration, result=function_result)}")
             elif function_name == "clarify":
-                from tools.clarify_tool import clarify_tool as _clarify_tool
+                from harness.tools.clarify_tool import clarify_tool as _clarify_tool
                 function_result = _clarify_tool(
                     question=function_args.get("question", ""),
                     choices=function_args.get("choices"),
@@ -8491,7 +8491,7 @@ class AIAgent:
 
             summary_extra_body = {}
             try:
-                from agent.auxiliary_client import _fixed_temperature_for_model, OMIT_TEMPERATURE as _OMIT_TEMP
+                from harness.agent.auxiliary_client import _fixed_temperature_for_model, OMIT_TEMPERATURE as _OMIT_TEMP
             except Exception:
                 _fixed_temperature_for_model = None
                 _OMIT_TEMP = None
@@ -8652,7 +8652,7 @@ class AIAgent:
 
         # Tag all log records on this thread with the session ID so
         # ``hermes logs --session <id>`` can filter a single conversation.
-        from plutus_logging import set_session_context
+        from harness.log import set_session_context
         set_session_context(self.session_id)
 
         # If the previous turn activated fallback, restore the primary
@@ -8814,7 +8814,7 @@ class AIAgent:
                 # continuation).  Plugins can use this to initialise
                 # session-scoped state (e.g. warm a memory cache).
                 try:
-                    from plutus_cli.plugins import invoke_hook as _invoke_hook
+                    from harness.cli.plugins import invoke_hook as _invoke_hook
                     _invoke_hook(
                         "on_session_start",
                         session_id=self.session_id,
@@ -8915,7 +8915,7 @@ class AIAgent:
         # All injected context is ephemeral (not persisted to session DB).
         _plugin_user_context = ""
         try:
-            from plutus_cli.plugins import invoke_hook as _invoke_hook
+            from harness.cli.plugins import invoke_hook as _invoke_hook
             _pre_results = _invoke_hook(
                 "pre_llm_call",
                 session_id=self.session_id,
@@ -9285,7 +9285,7 @@ class AIAgent:
                 # deepens the rate limit hole.
                 if self.provider == "nous":
                     try:
-                        from agent.nous_rate_guard import (
+                        from harness.agent.nous_rate_guard import (
                             nous_rate_limit_remaining,
                             format_remaining as _fmt_nous_remaining,
                         )
@@ -9334,7 +9334,7 @@ class AIAgent:
                         api_kwargs = self._get_transport().preflight_kwargs(api_kwargs, allow_stream=False)
 
                     try:
-                        from plutus_cli.plugins import invoke_hook as _invoke_hook
+                        from harness.cli.plugins import invoke_hook as _invoke_hook
                         _invoke_hook(
                             "pre_api_request",
                             task_id=effective_task_id,
@@ -9950,7 +9950,7 @@ class AIAgent:
                     # resume hitting Nous.
                     if self.provider == "nous":
                         try:
-                            from agent.nous_rate_guard import clear_nous_rate_limit
+                            from harness.agent.nous_rate_guard import clear_nous_rate_limit
                             clear_nous_rate_limit()
                         except Exception:
                             pass
@@ -10194,7 +10194,7 @@ class AIAgent:
                         # Credential refresh didn't help — show diagnostic info.
                         # Most common causes: Portal OAuth expired/revoked,
                         # account out of credits, or agent key blocked.
-                        from plutus_constants import display_hermes_home as _dhh_fn
+                        from harness.constants import display_hermes_home as _dhh_fn
                         _dhh = _dhh_fn()
                         _body_text = ""
                         try:
@@ -10219,7 +10219,7 @@ class AIAgent:
                         and not anthropic_auth_retry_attempted
                     ):
                         anthropic_auth_retry_attempted = True
-                        from agent.anthropic_adapter import _is_oauth_token
+                        from harness.agent.anthropic_adapter import _is_oauth_token
                         if self._try_refresh_anthropic_client_credentials():
                             print(f"{self.log_prefix}🔐 Anthropic credentials refreshed after 401. Retrying request...")
                             continue
@@ -10230,7 +10230,7 @@ class AIAgent:
                         print(f"{self.log_prefix}   Auth method: {auth_method}")
                         print(f"{self.log_prefix}   Token prefix: {key[:12]}..." if key and len(key) > 12 else f"{self.log_prefix}   Token: (empty or short)")
                         print(f"{self.log_prefix}   Troubleshooting:")
-                        from plutus_constants import display_hermes_home as _dhh_fn
+                        from harness.constants import display_hermes_home as _dhh_fn
                         _dhh = _dhh_fn()
                         print(f"{self.log_prefix}     • Check ANTHROPIC_TOKEN in {_dhh}/.env for Hermes-managed OAuth/setup tokens")
                         print(f"{self.log_prefix}     • Check ANTHROPIC_API_KEY in {_dhh}/.env for API keys or legacy token values")
@@ -10439,7 +10439,7 @@ class AIAgent:
                         and not recovered_with_pool
                     ):
                         try:
-                            from agent.nous_rate_guard import record_nous_rate_limit
+                            from harness.agent.nous_rate_guard import record_nous_rate_limit
                             _err_resp = getattr(api_error, "response", None)
                             _err_hdrs = (
                                 getattr(_err_resp, "headers", None)
@@ -10947,7 +10947,7 @@ class AIAgent:
                         assistant_message.content = str(raw)
 
                 try:
-                    from plutus_cli.plugins import invoke_hook as _invoke_hook
+                    from harness.cli.plugins import invoke_hook as _invoke_hook
                     _assistant_tool_calls = getattr(assistant_message, "tool_calls", None) or []
                     _assistant_text = assistant_message.content or ""
                     _invoke_hook(
@@ -11813,7 +11813,7 @@ class AIAgent:
         # to an external memory system).
         if final_response and not interrupted:
             try:
-                from plutus_cli.plugins import invoke_hook as _invoke_hook
+                from harness.cli.plugins import invoke_hook as _invoke_hook
                 _invoke_hook(
                     "post_llm_call",
                     session_id=self.session_id,
@@ -11918,7 +11918,7 @@ class AIAgent:
         # Fired at the very end of every run_conversation call.
         # Plugins can use this for cleanup, flushing buffers, etc.
         try:
-            from plutus_cli.plugins import invoke_hook as _invoke_hook
+            from harness.cli.plugins import invoke_hook as _invoke_hook
             _invoke_hook(
                 "on_session_end",
                 session_id=self.session_id,
@@ -11988,8 +11988,8 @@ def main(
     
     # Handle tool listing
     if list_tools:
-        from model_tools import get_all_tool_names, get_available_toolsets
-        from toolsets import get_all_toolsets, get_toolset_info
+        from harness.model_tools import get_all_tool_names, get_available_toolsets
+        from harness.toolsets import get_all_toolsets, get_toolset_info
         
         print("📋 Available Tools & Toolsets:")
         print("-" * 50)

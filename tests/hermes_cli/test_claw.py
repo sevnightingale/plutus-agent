@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from plutus_cli import claw as claw_mod
+from harness.cli import claw as claw_mod
 
 
 # ---------------------------------------------------------------------------

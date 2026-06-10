@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from cli import HermesCLI
+from harness.repl import HermesCLI
 
 
 def _assert_chrome_debug_cmd(cmd, expected_chrome, expected_port):
@@ -26,8 +26,8 @@ class TestChromeDebugLaunch:
             captured["kwargs"] = kwargs
             return object()
 
-        with patch("cli.shutil.which", side_effect=lambda name: r"C:\Chrome\chrome.exe" if name == "chrome.exe" else None), \
-             patch("cli.os.path.isfile", side_effect=lambda path: path == r"C:\Chrome\chrome.exe"), \
+        with patch("harness.repl.shutil.which", side_effect=lambda name: r"C:\Chrome\chrome.exe" if name == "chrome.exe" else None), \
+             patch("harness.repl.os.path.isfile", side_effect=lambda path: path == r"C:\Chrome\chrome.exe"), \
              patch("subprocess.Popen", side_effect=fake_popen):
             assert HermesCLI._try_launch_chrome_debug(9333, "Windows") is True
 
@@ -49,8 +49,8 @@ class TestChromeDebugLaunch:
         monkeypatch.delenv("ProgramFiles(x86)", raising=False)
         monkeypatch.delenv("LOCALAPPDATA", raising=False)
 
-        with patch("cli.shutil.which", return_value=None), \
-             patch("cli.os.path.isfile", side_effect=lambda path: path == installed), \
+        with patch("harness.repl.shutil.which", return_value=None), \
+             patch("harness.repl.os.path.isfile", side_effect=lambda path: path == installed), \
              patch("subprocess.Popen", side_effect=fake_popen):
             assert HermesCLI._try_launch_chrome_debug(9222, "Windows") is True
 

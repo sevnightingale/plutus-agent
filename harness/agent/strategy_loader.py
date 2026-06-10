@@ -51,7 +51,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 

@@ -18,12 +18,12 @@ def _isolate(tmp_path, monkeypatch):
 @pytest.fixture
 def cli_obj(_isolate):
     """Create a minimal HermesCLI instance for banner testing."""
-    with patch("cli.load_cli_config", return_value={
+    with patch("harness.repl.load_cli_config", return_value={
         "display": {"tool_progress": "new"},
         "terminal": {},
-    }), patch("cli.get_tool_definitions", return_value=[]), \
-         patch("cli.build_welcome_banner"):
-        from cli import HermesCLI
+    }), patch("harness.repl.get_tool_definitions", return_value=[]), \
+         patch("harness.repl.build_welcome_banner"):
+        from harness.repl import HermesCLI
         obj = HermesCLI.__new__(HermesCLI)
         obj.model = "test-model"
         obj.enabled_toolsets = ["hermes-core"]
@@ -47,8 +47,8 @@ class TestLowContextWarning:
     def test_no_warning_for_normal_context(self, cli_obj):
         """No warning when context is 32k+."""
         cli_obj.agent.context_compressor.context_length = 32768
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         # Check that no yellow warning was printed
@@ -59,8 +59,8 @@ class TestLowContextWarning:
     def test_warning_for_low_context(self, cli_obj):
         """Warning shown when context is 4096 (Ollama default)."""
         cli_obj.agent.context_compressor.context_length = 4096
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -71,8 +71,8 @@ class TestLowContextWarning:
     def test_warning_for_2048_context(self, cli_obj):
         """Warning shown for 2048 tokens (common LM Studio default)."""
         cli_obj.agent.context_compressor.context_length = 2048
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -82,8 +82,8 @@ class TestLowContextWarning:
     def test_no_warning_at_boundary(self, cli_obj):
         """No warning at exactly 8192 — 8192 is borderline but included in warning."""
         cli_obj.agent.context_compressor.context_length = 8192
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -93,8 +93,8 @@ class TestLowContextWarning:
     def test_no_warning_above_boundary(self, cli_obj):
         """No warning at 16384."""
         cli_obj.agent.context_compressor.context_length = 16384
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -105,8 +105,8 @@ class TestLowContextWarning:
         """Ollama-specific fix shown when port 11434 detected."""
         cli_obj.agent.context_compressor.context_length = 4096
         cli_obj.base_url = "http://localhost:11434/v1"
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -117,8 +117,8 @@ class TestLowContextWarning:
         """LM Studio-specific fix shown when port 1234 detected."""
         cli_obj.agent.context_compressor.context_length = 2048
         cli_obj.base_url = "http://localhost:1234/v1"
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -129,8 +129,8 @@ class TestLowContextWarning:
         """Generic fix shown for unknown servers."""
         cli_obj.agent.context_compressor.context_length = 4096
         cli_obj.base_url = "http://localhost:8080/v1"
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -140,8 +140,8 @@ class TestLowContextWarning:
     def test_no_warning_when_no_context_length(self, cli_obj):
         """No warning when context length is not yet known."""
         cli_obj.agent.context_compressor.context_length = None
-        with patch("cli.get_tool_definitions", return_value=[]), \
-             patch("cli.build_welcome_banner"):
+        with patch("harness.repl.get_tool_definitions", return_value=[]), \
+             patch("harness.repl.build_welcome_banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]
@@ -153,7 +153,7 @@ class TestLowContextWarning:
         cli_obj.agent.context_compressor.context_length = 4096
 
         with patch("shutil.get_terminal_size", return_value=os.terminal_size((70, 40))), \
-             patch("cli._build_compact_banner", return_value="compact banner"):
+             patch("harness.repl._build_compact_banner", return_value="compact banner"):
             cli_obj.show_banner()
 
         calls = [str(c) for c in cli_obj.console.print.call_args_list]

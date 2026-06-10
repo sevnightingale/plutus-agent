@@ -2,8 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
-from agent.skill_commands import scan_skill_commands
-from cli import HermesCLI
+from harness.agent.skill_commands import scan_skill_commands
+from harness.repl import HermesCLI
 
 
 def _make_cli():
@@ -38,7 +38,7 @@ class TestCLIPlanCommand:
     def test_plan_command_queues_plan_skill_message(self, tmp_path, monkeypatch):
         cli_obj = _make_cli()
 
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+        with patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path):
             _make_plan_skill(tmp_path)
             scan_skill_commands()
             result = cli_obj.process_command("/plan Add OAuth login")
@@ -56,7 +56,7 @@ class TestCLIPlanCommand:
     def test_plan_without_args_uses_skill_context_guidance(self, tmp_path, monkeypatch):
         cli_obj = _make_cli()
 
-        with patch("tools.skills_tool.SKILLS_DIR", tmp_path):
+        with patch("harness.tools.skills_tool.SKILLS_DIR", tmp_path):
             _make_plan_skill(tmp_path)
             scan_skill_commands()
             cli_obj.process_command("/plan")

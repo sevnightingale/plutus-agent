@@ -37,7 +37,7 @@ class TestKimiCodingSkipsAnthropicThinking:
         ],
     )
     def test_kimi_coding_endpoint_omits_thinking(self, base_url: str) -> None:
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
 
         kwargs = build_anthropic_kwargs(
             model="kimi-k2.5",
@@ -54,7 +54,7 @@ class TestKimiCodingSkipsAnthropicThinking:
         assert "output_config" not in kwargs
 
     def test_kimi_coding_with_explicit_disabled_also_omits(self) -> None:
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
 
         kwargs = build_anthropic_kwargs(
             model="kimi-k2.5",
@@ -68,7 +68,7 @@ class TestKimiCodingSkipsAnthropicThinking:
 
     def test_non_kimi_third_party_still_gets_thinking(self) -> None:
         """MiniMax and other third-party Anthropic endpoints must retain thinking."""
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
 
         kwargs = build_anthropic_kwargs(
             model="MiniMax-M2.7",
@@ -82,7 +82,7 @@ class TestKimiCodingSkipsAnthropicThinking:
         assert kwargs["thinking"]["type"] == "enabled"
 
     def test_native_anthropic_still_gets_thinking(self) -> None:
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
 
         kwargs = build_anthropic_kwargs(
             model="claude-sonnet-4-20250514",
@@ -102,7 +102,7 @@ class TestKimiCodingSkipsAnthropicThinking:
         should never see it, but if it somehow does we should not suppress
         thinking there — that path has different semantics.
         """
-        from agent.anthropic_adapter import build_anthropic_kwargs
+        from harness.agent.anthropic_adapter import build_anthropic_kwargs
 
         kwargs = build_anthropic_kwargs(
             model="kimi-k2.5",

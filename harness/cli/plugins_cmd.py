@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -173,8 +173,8 @@ def _prompt_plugin_env_vars(manifest: dict, console) -> None:
     if not requires_env:
         return
 
-    from plutus_cli.config import get_env_value, save_env_value  # noqa: F811
-    from plutus_constants import display_hermes_home
+    from harness.cli.config import get_env_value, save_env_value  # noqa: F811
+    from harness.constants import display_hermes_home
 
     # Normalise to list-of-dicts
     env_specs: list[dict] = []
@@ -360,7 +360,7 @@ def cmd_install(
                 )
                 sys.exit(1)
             if mv_int > _SUPPORTED_MANIFEST_VERSION:
-                from plutus_cli.config import recommended_update_command
+                from harness.cli.config import recommended_update_command
                 console.print(
                     f"[red]Error:[/red] Plugin '{plugin_name}' requires manifest_version "
                     f"{mv}, but this installer only supports up to {_SUPPORTED_MANIFEST_VERSION}.\n"
@@ -517,7 +517,7 @@ def _get_disabled_set() -> set:
     listed in ``plugins.enabled``.
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         disabled = config.get("plugins", {}).get("disabled", [])
         return set(disabled) if isinstance(disabled, list) else set()
@@ -527,7 +527,7 @@ def _get_disabled_set() -> set:
 
 def _save_disabled_set(disabled: set) -> None:
     """Write the disabled plugins list to config.yaml."""
-    from plutus_cli.config import load_config, save_config
+    from harness.cli.config import load_config, save_config
     config = load_config()
     if "plugins" not in config:
         config["plugins"] = {}
@@ -542,7 +542,7 @@ def _get_enabled_set() -> set:
     the key is missing (same behaviour as "nothing enabled yet").
     """
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         plugins_cfg = config.get("plugins", {})
         if not isinstance(plugins_cfg, dict):
@@ -555,7 +555,7 @@ def _get_enabled_set() -> set:
 
 def _save_enabled_set(enabled: set) -> None:
     """Write the enabled plugins list to config.yaml."""
-    from plutus_cli.config import load_config, save_config
+    from harness.cli.config import load_config, save_config
     config = load_config()
     if "plugins" not in config:
         config["plugins"] = {}
@@ -631,7 +631,7 @@ def _plugin_exists(name: str) -> bool:
                 return True
     # Bundled: <repo>/plugins/<name>/
     from pathlib import Path as _P
-    import plutus_cli
+    import harness.cli as plutus_cli
     repo_plugins = _P(plutus_cli.__file__).resolve().parent.parent / "plugins"
     if repo_plugins.is_dir():
         candidate = repo_plugins / name
@@ -659,7 +659,7 @@ def _discover_all_plugins() -> list:
     seen: dict = {}  # name -> (name, version, description, source, path)
 
     # Bundled (<repo>/plugins/<name>/), excluding memory/
-    import plutus_cli
+    import harness.cli as plutus_cli
     repo_plugins = Path(plutus_cli.__file__).resolve().parent.parent / "plugins"
     for base, source in ((repo_plugins, "bundled"), (_plugins_dir(), "user")):
         if not base.is_dir():
@@ -752,7 +752,7 @@ def _discover_memory_providers() -> list[tuple[str, str]]:
 def _get_current_memory_provider() -> str:
     """Return the current memory.provider from config (empty = built-in)."""
     try:
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
         config = load_config()
         return config.get("memory", {}).get("provider", "") or ""
     except Exception:
@@ -761,7 +761,7 @@ def _get_current_memory_provider() -> str:
 
 def _save_memory_provider(name: str) -> None:
     """Persist memory.provider to config.yaml."""
-    from plutus_cli.config import load_config, save_config
+    from harness.cli.config import load_config, save_config
     config = load_config()
     if "memory" not in config:
         config["memory"] = {}
@@ -771,7 +771,7 @@ def _save_memory_provider(name: str) -> None:
 
 def _configure_memory_provider() -> bool:
     """Launch a radio picker for memory providers. Returns True if changed."""
-    from plutus_cli.curses_ui import curses_radiolist
+    from harness.cli.curses_ui import curses_radiolist
 
     current = _get_current_memory_provider()
     providers = _discover_memory_providers()
@@ -869,7 +869,7 @@ def cmd_toggle() -> None:
 def _run_composite_ui(curses, plugin_names, plugin_labels, plugin_selected,
                       disabled, categories, console):
     """Custom curses screen with checkboxes + category action rows."""
-    from plutus_cli.curses_ui import flush_stdin
+    from harness.cli.curses_ui import flush_stdin
 
     chosen = set(plugin_selected)
     n_plugins = len(plugin_names)
@@ -1115,7 +1115,7 @@ def _run_composite_ui(curses, plugin_names, plugin_labels, plugin_selected,
 def _run_composite_fallback(plugin_names, plugin_labels, plugin_selected,
                             disabled, categories, console):
     """Text-based fallback for the composite plugins UI."""
-    from plutus_cli.colors import Colors, color
+    from harness.cli.colors import Colors, color
 
     print(color("\n  Plugins", Colors.YELLOW))
 

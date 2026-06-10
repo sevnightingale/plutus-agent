@@ -7,8 +7,8 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from agent.prompt_caching import apply_anthropic_cache_control
-from agent.anthropic_adapter import (
+from harness.agent.prompt_caching import apply_anthropic_cache_control
+from harness.agent.anthropic_adapter import (
     _is_oauth_token,
     _refresh_oauth_token,
     _to_plain_data,
@@ -23,7 +23,7 @@ from agent.anthropic_adapter import (
     resolve_anthropic_token,
     run_oauth_setup_token,
 )
-from agent.transports import get_transport
+from harness.agent.transports import get_transport
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ class TestIsOAuthToken:
 
 class TestBuildAnthropicClient:
     def test_setup_token_uses_auth_token(self):
-        with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
+        with patch("harness.agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client("sk-ant-oat01-" + "x" * 60)
             kwargs = mock_sdk.Anthropic.call_args[1]
             assert "auth_token" in kwargs
@@ -69,7 +69,7 @@ class TestBuildAnthropicClient:
             assert "api_key" not in kwargs
 
     def test_api_key_uses_api_key(self):
-        with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
+        with patch("harness.agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client("sk-ant-api03-something")
             kwargs = mock_sdk.Anthropic.call_args[1]
             assert kwargs["api_key"] == "sk-ant-api03-something"
@@ -81,7 +81,7 @@ class TestBuildAnthropicClient:
             assert "claude-code-20250219" not in betas  # OAuth-only beta NOT present
 
     def test_custom_base_url(self):
-        with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
+        with patch("harness.agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client("sk-ant-api03-x", base_url="https://custom.api.com")
             kwargs = mock_sdk.Anthropic.call_args[1]
             assert kwargs["base_url"] == "https://custom.api.com"
@@ -90,7 +90,7 @@ class TestBuildAnthropicClient:
             }
 
     def test_minimax_anthropic_endpoint_uses_bearer_auth_for_regular_api_keys(self):
-        with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
+        with patch("harness.agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client(
                 "minimax-secret-123",
                 base_url="https://api.minimax.io/anthropic",
@@ -103,7 +103,7 @@ class TestBuildAnthropicClient:
             }
 
     def test_minimax_cn_anthropic_endpoint_omits_tool_streaming_beta(self):
-        with patch("agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
+        with patch("harness.agent.anthropic_adapter._anthropic_sdk") as mock_sdk:
             build_anthropic_client(
                 "minimax-cn-secret-123",
                 base_url="https://api.minimaxi.com/anthropic",
@@ -127,7 +127,7 @@ class TestReadClaudeCodeCredentials:
                 "expiresAt": int(time.time() * 1000) + 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         creds = read_claude_code_credentials()
         assert creds is not None
         assert creds["accessToken"] == "sk-ant-oat01-token"
@@ -137,20 +137,20 @@ class TestReadClaudeCodeCredentials:
     def test_ignores_primary_api_key_for_native_anthropic_resolution(self, tmp_path, monkeypatch):
         claude_json = tmp_path / ".claude.json"
         claude_json.write_text(json.dumps({"primaryApiKey": "sk-ant-api03-primary"}))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         creds = read_claude_code_credentials()
         assert creds is None
 
     def test_returns_none_for_missing_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert read_claude_code_credentials() is None
 
     def test_returns_none_for_missing_oauth_key(self, tmp_path, monkeypatch):
         cred_file = tmp_path / ".claude" / ".credentials.json"
         cred_file.parent.mkdir(parents=True)
         cred_file.write_text(json.dumps({"someOtherKey": {}}))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert read_claude_code_credentials() is None
 
     def test_returns_none_for_empty_access_token(self, tmp_path, monkeypatch):
@@ -159,7 +159,7 @@ class TestReadClaudeCodeCredentials:
         cred_file.write_text(json.dumps({
             "claudeAiOauth": {"accessToken": "", "refreshToken": "x"}
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert read_claude_code_credentials() is None
 
 
@@ -182,7 +182,7 @@ class TestResolveAnthropicToken:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-mykey")
         monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-mytoken")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "sk-ant-oat01-mytoken"
 
     def test_does_not_resolve_primary_api_key_as_native_anthropic_token(self, monkeypatch, tmp_path):
@@ -190,7 +190,7 @@ class TestResolveAnthropicToken:
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         (tmp_path / ".claude.json").write_text(json.dumps({"primaryApiKey": "sk-ant-api03-primary"}))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() is None
 
@@ -198,28 +198,28 @@ class TestResolveAnthropicToken:
         monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-api03-mykey")
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "sk-ant-api03-mykey"
 
     def test_falls_back_to_token(self, monkeypatch, tmp_path):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.setenv("ANTHROPIC_TOKEN", "sk-ant-oat01-mytoken")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "sk-ant-oat01-mytoken"
 
     def test_returns_none_with_no_creds(self, monkeypatch, tmp_path):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() is None
 
     def test_falls_back_to_claude_code_oauth_token(self, monkeypatch, tmp_path):
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-ant-oat01-test-token")
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "sk-ant-oat01-test-token"
 
     def test_falls_back_to_claude_code_credentials(self, monkeypatch, tmp_path):
@@ -235,7 +235,7 @@ class TestResolveAnthropicToken:
                 "expiresAt": int(time.time() * 1000) + 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         assert resolve_anthropic_token() == "cc-auto-token"
 
     def test_prefers_refreshable_claude_code_credentials_over_static_anthropic_token(self, monkeypatch, tmp_path):
@@ -251,7 +251,7 @@ class TestResolveAnthropicToken:
                 "expiresAt": int(time.time() * 1000) + 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() == "cc-auto-token"
 
@@ -261,7 +261,7 @@ class TestResolveAnthropicToken:
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         claude_json = tmp_path / ".claude.json"
         claude_json.write_text(json.dumps({"primaryApiKey": "sk-ant-api03-managed-key"}))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         assert resolve_anthropic_token() == "sk-ant-oat01-static-token"
 
@@ -272,7 +272,7 @@ class TestRefreshOauthToken:
         assert _refresh_oauth_token(creds) is None
 
     def test_successful_refresh(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         creds = {
             "accessToken": "old-token",
@@ -317,7 +317,7 @@ class TestRefreshOauthToken:
 
 class TestWriteClaudeCodeCredentials:
     def test_writes_new_file(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         _write_claude_code_credentials("tok", "ref", 12345)
         cred_file = tmp_path / ".claude" / ".credentials.json"
         assert cred_file.exists()
@@ -327,7 +327,7 @@ class TestWriteClaudeCodeCredentials:
         assert data["claudeAiOauth"]["expiresAt"] == 12345
 
     def test_preserves_existing_fields(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
         cred_dir = tmp_path / ".claude"
         cred_dir.mkdir()
         cred_file = cred_dir / ".credentials.json"
@@ -355,10 +355,10 @@ class TestResolveWithRefresh:
                 "expiresAt": int(time.time() * 1000) - 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         # Mock refresh to succeed
-        with patch("agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
+        with patch("harness.agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
             result = resolve_anthropic_token()
 
         assert result == "refreshed-token"
@@ -377,9 +377,9 @@ class TestResolveWithRefresh:
                 "expiresAt": int(time.time() * 1000) - 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
-        with patch("agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
+        with patch("harness.agent.anthropic_adapter._refresh_oauth_token", return_value="refreshed-token"):
             result = resolve_anthropic_token()
 
         assert result == "refreshed-token"
@@ -407,7 +407,7 @@ class TestRunOauthSetupToken:
                 "expiresAt": int(time.time() * 1000) + 3600_000,
             }
         }))
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
@@ -425,7 +425,7 @@ class TestRunOauthSetupToken:
         monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
         monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "from-env-var")
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
@@ -438,7 +438,7 @@ class TestRunOauthSetupToken:
         monkeypatch.setattr("shutil.which", lambda _: "/usr/bin/claude")
         monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
         monkeypatch.delenv("ANTHROPIC_TOKEN", raising=False)
-        monkeypatch.setattr("agent.anthropic_adapter.Path.home", lambda: tmp_path)
+        monkeypatch.setattr("harness.agent.anthropic_adapter.Path.home", lambda: tmp_path)
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
@@ -1019,7 +1019,7 @@ class TestBuildAnthropicKwargs:
         # Because build_anthropic_kwargs doesn't currently accept sampling
         # params through its signature, we exercise the strip behavior by
         # calling the internal predicate directly.
-        from agent.anthropic_adapter import _forbids_sampling_params
+        from harness.agent.anthropic_adapter import _forbids_sampling_params
         assert _forbids_sampling_params("claude-opus-4-7") is True
         assert _forbids_sampling_params("claude-opus-4-6") is False
         assert _forbids_sampling_params("claude-sonnet-4-5") is False
@@ -1140,36 +1140,36 @@ class TestBuildAnthropicKwargs:
 
 class TestGetAnthropicMaxOutput:
     def test_opus_4_6(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-opus-4-6") == 128_000
 
     def test_opus_4_6_variant(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-opus-4-6:1m:fast") == 128_000
 
     def test_sonnet_4_6(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-sonnet-4-6") == 64_000
 
     def test_sonnet_4_date_stamped(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-sonnet-4-20250514") == 64_000
 
     def test_claude_3_5_sonnet(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-3-5-sonnet-20241022") == 8_192
 
     def test_claude_3_opus(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-3-opus-20240229") == 4_096
 
     def test_unknown_future_model(self):
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         assert _get_anthropic_max_output("claude-ultra-5-20260101") == 128_000
 
     def test_longest_prefix_wins(self):
         """'claude-3-5-sonnet' should match before 'claude-3-5'."""
-        from agent.anthropic_adapter import _get_anthropic_max_output
+        from harness.agent.anthropic_adapter import _get_anthropic_max_output
         # claude-3-5-sonnet (8192) should win over a hypothetical shorter match
         assert _get_anthropic_max_output("claude-3-5-sonnet-20241022") == 8_192
 
@@ -1666,7 +1666,7 @@ class TestToolChoice:
 # max_tokens resolver — openclaw/openclaw#66664 port
 # ---------------------------------------------------------------------------
 
-from agent.anthropic_adapter import (
+from harness.agent.anthropic_adapter import (
     _resolve_positive_anthropic_max_tokens,
     _resolve_anthropic_messages_max_tokens,
 )

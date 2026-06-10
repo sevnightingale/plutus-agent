@@ -7,20 +7,20 @@ so cement the contract here.
 """
 
 # Importing the modules triggers their top-level registry.register(...) call.
-import tools.dispatchers.account_state              # noqa: F401
-import tools.dispatchers.cancel_order               # noqa: F401
-import tools.dispatchers.close_position             # noqa: F401
-import tools.dispatchers.fetch_data_point           # noqa: F401
-import tools.dispatchers.list_accounts              # noqa: F401
-import tools.dispatchers.list_data_points           # noqa: F401
-import tools.dispatchers.list_event_types           # noqa: F401
-import tools.dispatchers.list_identity_systems      # noqa: F401
-import tools.dispatchers.list_venues                # noqa: F401
-import tools.dispatchers.modify_order               # noqa: F401
-import tools.dispatchers.place_order                # noqa: F401
-import tools.dispatchers.record_event               # noqa: F401
+import harness.tools.dispatchers.account_state              # noqa: F401
+import harness.tools.dispatchers.cancel_order               # noqa: F401
+import harness.tools.dispatchers.close_position             # noqa: F401
+import harness.tools.dispatchers.fetch_data_point           # noqa: F401
+import harness.tools.dispatchers.list_accounts              # noqa: F401
+import harness.tools.dispatchers.list_data_points           # noqa: F401
+import harness.tools.dispatchers.list_event_types           # noqa: F401
+import harness.tools.dispatchers.list_identity_systems      # noqa: F401
+import harness.tools.dispatchers.list_venues                # noqa: F401
+import harness.tools.dispatchers.modify_order               # noqa: F401
+import harness.tools.dispatchers.place_order                # noqa: F401
+import harness.tools.dispatchers.record_event               # noqa: F401
 
-from tools.registry import registry
+from harness.tools.registry import registry
 
 
 EXPECTED = {
@@ -47,7 +47,7 @@ def test_each_dispatcher_landed_in_expected_toolset():
 def test_toolsets_dict_resolves_dispatchers():
     """The static TOOLSETS perception/execution/reflection/identity entries
     must list the dispatcher tools so resolve_toolset() picks them up."""
-    from toolsets import resolve_toolset
+    from harness.toolsets import resolve_toolset
 
     for toolset, expected_names in EXPECTED.items():
         resolved = set(resolve_toolset(toolset))

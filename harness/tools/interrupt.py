@@ -9,7 +9,7 @@ and passes it to set_interrupt()/clear_interrupt().  Tools call
 is_interrupted() which checks the CURRENT thread — no argument needed.
 
 Usage in tools:
-    from tools.interrupt import is_interrupted
+    from harness.tools.interrupt import is_interrupted
     if is_interrupted():
         return {"output": "[interrupted]", "returncode": 130}
 """

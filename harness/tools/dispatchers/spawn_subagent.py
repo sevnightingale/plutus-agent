@@ -24,8 +24,8 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from agent.subagent_spawn import spawn_subagent_blocking
-from tools.registry import registry, tool_error, tool_result
+from harness.agent.subagent_spawn import spawn_subagent_blocking
+from harness.tools.registry import registry, tool_error, tool_result
 
 
 # Pre-configured toolset bundles per known sub-agent. Keep narrow.

@@ -2,7 +2,7 @@
 
 import time
 import pytest
-from agent.rate_limit_tracker import (
+from harness.agent.rate_limit_tracker import (
     RateLimitBucket,
     RateLimitState,
     parse_rate_limit_headers,
@@ -206,7 +206,7 @@ class TestAgentIntegration:
 
     def test_capture_rate_limits_none_response(self):
         """_capture_rate_limits should handle None gracefully."""
-        from agent.rate_limit_tracker import parse_rate_limit_headers
+        from harness.agent.rate_limit_tracker import parse_rate_limit_headers
         # None should not crash
         result = parse_rate_limit_headers({})
         assert result is None

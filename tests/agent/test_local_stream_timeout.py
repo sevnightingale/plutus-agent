@@ -10,7 +10,7 @@ import os
 import pytest
 from unittest.mock import patch
 
-from agent.model_metadata import is_local_endpoint
+from harness.agent.model_metadata import is_local_endpoint
 
 
 class TestLocalStreamReadTimeout:

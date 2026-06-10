@@ -75,7 +75,7 @@ try:
 except ImportError:  # pragma: no cover
     fcntl = None  # type: ignore[assignment]
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -177,7 +177,7 @@ def register_from_config(
     registered: List[ShellHookSpec] = []
 
     # Import lazily — avoids circular imports at module-load time.
-    from plutus_cli.plugins import get_plugin_manager
+    from harness.cli.plugins import get_plugin_manager
 
     manager = get_plugin_manager()
 
@@ -243,7 +243,7 @@ def _parse_hooks_block(hooks_cfg: Any) -> List[ShellHookSpec]:
     Malformed entries warn-and-skip — we never raise from config parsing
     because a broken hook must not crash the agent.
     """
-    from plutus_cli.plugins import VALID_HOOKS
+    from harness.cli.plugins import VALID_HOOKS
 
     if not isinstance(hooks_cfg, dict):
         return []

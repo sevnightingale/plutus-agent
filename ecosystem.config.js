@@ -17,7 +17,7 @@ module.exports = {
     {
       name: "plutus-watchers",
       script: `${repo}/.venv/bin/python`,
-      args: "-m watchers.run",
+      args: "-m harness.watchers.run",
       cwd: repo,
       interpreter: "none",
       autorestart: true,

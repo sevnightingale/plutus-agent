@@ -24,7 +24,7 @@ import logging
 import subprocess
 from typing import Any, Dict
 
-from tools.registry import registry, tool_error, tool_result
+from harness.tools.registry import registry, tool_error, tool_result
 
 from . import _cli
 

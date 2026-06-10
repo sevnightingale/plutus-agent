@@ -19,7 +19,7 @@ The 8-strategy chain (inspired by OpenCode), tried in order:
 Multi-occurrence matching is handled via the replace_all flag.
 
 Usage:
-    from tools.fuzzy_match import fuzzy_find_and_replace
+    from harness.tools.fuzzy_match import fuzzy_find_and_replace
     
     new_content, match_count, strategy, error = fuzzy_find_and_replace(
         content="def foo():\\n    pass",

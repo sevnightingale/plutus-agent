@@ -8,7 +8,7 @@ Covers:
 import pytest
 from unittest.mock import MagicMock, patch
 
-from tools.file_operations import ShellFileOperations
+from harness.tools.file_operations import ShellFileOperations
 
 
 # =========================================================================

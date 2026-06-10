@@ -17,7 +17,7 @@ class TestInterruptModule:
     """Tests for tools/interrupt.py"""
 
     def test_set_and_check(self):
-        from tools.interrupt import set_interrupt, is_interrupted
+        from harness.tools.interrupt import set_interrupt, is_interrupted
         set_interrupt(False)
         assert not is_interrupted()
 
@@ -29,7 +29,7 @@ class TestInterruptModule:
 
     def test_thread_safety(self):
         """Set from one thread targeting another thread's ident."""
-        from tools.interrupt import set_interrupt, is_interrupted, _interrupted_threads, _lock
+        from harness.tools.interrupt import set_interrupt, is_interrupted, _interrupted_threads, _lock
         set_interrupt(False)
         # Clear any stale thread idents left by prior tests in this worker.
         with _lock:
@@ -96,7 +96,7 @@ class TestPreToolCheck:
 
         # Import and call the method
         import types
-        from run_agent import AIAgent
+        from harness.run_agent import AIAgent
         # Bind the real methods to our mock so dispatch works correctly
         agent._execute_tool_calls_sequential = types.MethodType(AIAgent._execute_tool_calls_sequential, agent)
         agent._execute_tool_calls_concurrent = types.MethodType(AIAgent._execute_tool_calls_concurrent, agent)
@@ -174,8 +174,8 @@ class TestSIGKILLEscalation:
     )
     def test_sigterm_trap_killed_within_2s(self):
         """A process that traps SIGTERM should be SIGKILL'd after 1s grace."""
-        from tools.interrupt import set_interrupt
-        from tools.environments.local import LocalEnvironment
+        from harness.tools.interrupt import set_interrupt
+        from harness.tools.environments.local import LocalEnvironment
 
         set_interrupt(False)
         env = LocalEnvironment(cwd="/tmp", timeout=30)

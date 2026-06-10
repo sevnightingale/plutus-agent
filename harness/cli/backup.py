@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from plutus_constants import get_default_hermes_root, get_hermes_home, display_hermes_home
+from harness.constants import get_default_hermes_root, get_hermes_home, display_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -396,7 +396,7 @@ def run_import(args) -> None:
         restored_profiles = []
         if profiles_dir.is_dir():
             try:
-                from plutus_cli.profiles import (
+                from harness.cli.profiles import (
                     create_wrapper_script, check_alias_collision,
                     _is_wrapper_dir_in_path, _get_wrapper_dir,
                 )

@@ -17,10 +17,10 @@ from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
-from agent.model_metadata import estimate_messages_tokens_rough
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
-from gateway.session import SessionEntry, SessionSource
+from harness.agent.model_metadata import estimate_messages_tokens_rough
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import BasePlatformAdapter, MessageEvent, SendResult
+from harness.gateway.session import SessionEntry, SessionSource
 
 
 # ---------------------------------------------------------------------------
@@ -322,9 +322,9 @@ async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, t
 
     fake_run_agent = types.ModuleType("run_agent")
     fake_run_agent.AIAgent = FakeCompressAgent
-    monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+    monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
-    gateway_run = importlib.import_module("gateway.run")
+    gateway_run = importlib.import_module("harness.gateway.run")
     GatewayRunner = gateway_run.GatewayRunner
 
     adapter = HygieneCaptureAdapter()
@@ -367,7 +367,7 @@ async def test_session_hygiene_messages_stay_in_originating_topic(monkeypatch, t
     monkeypatch.setattr(gateway_run, "_hermes_home", tmp_path)
     monkeypatch.setattr(gateway_run, "_resolve_runtime_agent_kwargs", lambda: {"api_key": "fake"})
     monkeypatch.setattr(
-        "agent.model_metadata.get_model_context_length",
+        "harness.agent.model_metadata.get_model_context_length",
         lambda *_args, **_kwargs: 100,
     )
     monkeypatch.setenv("TELEGRAM_HOME_CHANNEL", "795544298")

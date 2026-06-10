@@ -40,8 +40,8 @@ except ImportError:
     AIOHTTP_AVAILABLE = False
     web = None  # type: ignore[assignment]
 
-from gateway.config import Platform, PlatformConfig
-from gateway.platforms.base import (
+from harness.gateway.config import Platform, PlatformConfig
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     SendResult,
     is_network_accessible,
@@ -292,7 +292,7 @@ class ResponseStore:
         self._max_size = max_size
         if db_path is None:
             try:
-                from plutus_cli.config import get_hermes_home
+                from harness.cli.config import get_hermes_home
                 db_path = str(get_hermes_home() / "response_store.db")
             except Exception:
                 db_path = ":memory:"
@@ -536,7 +536,7 @@ def _derive_chat_session_id(
 
 _CRON_AVAILABLE = False
 try:
-    from cron.jobs import (
+    from harness.cron.jobs import (
         list_jobs as _cron_list,
         get_job as _cron_get,
         create_job as _cron_create,
@@ -615,7 +615,7 @@ class APIServerAdapter(BasePlatformAdapter):
         if explicit and explicit.strip():
             return explicit.strip()
         try:
-            from plutus_cli.profiles import get_active_profile_name
+            from harness.cli.profiles import get_active_profile_name
             profile = get_active_profile_name()
             if profile and profile not in ("default", "custom"):
                 return profile
@@ -691,7 +691,7 @@ class APIServerAdapter(BasePlatformAdapter):
         """
         if self._session_db is None:
             try:
-                from plutus_state import SessionDB
+                from harness.state import SessionDB
                 self._session_db = SessionDB()
             except Exception as e:
                 logger.debug("SessionDB unavailable for API server: %s", e)
@@ -718,9 +718,9 @@ class APIServerAdapter(BasePlatformAdapter):
         from config.yaml platform_toolsets.api_server (same as all other
         gateway platforms), falling back to the hermes-api-server default.
         """
-        from run_agent import AIAgent
-        from gateway.run import _resolve_runtime_agent_kwargs, _resolve_gateway_model, _load_gateway_config
-        from plutus_cli.tools_config import _get_platform_tools
+        from harness.run_agent import AIAgent
+        from harness.gateway.run import _resolve_runtime_agent_kwargs, _resolve_gateway_model, _load_gateway_config
+        from harness.cli.tools_config import _get_platform_tools
 
         runtime_kwargs = _resolve_runtime_agent_kwargs()
         model = _resolve_gateway_model()
@@ -732,7 +732,7 @@ class APIServerAdapter(BasePlatformAdapter):
 
         # Load fallback provider chain so the API server platform has the
         # same fallback behaviour as Telegram/Discord/Slack (fixes #4954).
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         fallback_model = GatewayRunner._load_fallback_model()
 
         agent = AIAgent(
@@ -769,7 +769,7 @@ class APIServerAdapter(BasePlatformAdapter):
         dashboard can display full status without needing a shared PID file or
         /proc access.  No authentication required.
         """
-        from gateway.status import read_runtime_status
+        from harness.gateway.status import read_runtime_status
 
         runtime = read_runtime_status() or {}
         return web.json_response({
@@ -950,7 +950,7 @@ class APIServerAdapter(BasePlatformAdapter):
                     return
                 if name.startswith("_"):
                     return
-                from agent.display import get_tool_emoji
+                from harness.agent.display import get_tool_emoji
                 emoji = get_tool_emoji(name)
                 label = preview or name
                 _stream_q.put(("__tool_progress__", {
@@ -2532,7 +2532,7 @@ class APIServerAdapter(BasePlatformAdapter):
             # Ported from openclaw/openclaw#64586.
             if is_network_accessible(self._host) and self._api_key:
                 try:
-                    from plutus_cli.auth import has_usable_secret
+                    from harness.cli.auth import has_usable_secret
                     if not has_usable_secret(self._api_key, min_length=8):
                         logger.error(
                             "[%s] Refusing to start: API_SERVER_KEY is set to a "

@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import yaml
 
-import gateway.run as gateway_run
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource
+import harness.gateway.run as gateway_run
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource
 
 
 def _make_event(text="/reasoning", platform=Platform.TELEGRAM, user_id="12345", chat_id="67890"):
@@ -138,7 +138,7 @@ class TestReasoningCommand:
         )
         fake_run_agent = types.ModuleType("run_agent")
         fake_run_agent.AIAgent = _CapturingAgent
-        monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+        monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
         _CapturingAgent.last_init = None
         runner = _make_runner()
@@ -196,7 +196,7 @@ class TestReasoningCommand:
         )
         fake_run_agent = types.ModuleType("run_agent")
         fake_run_agent.AIAgent = _CapturingAgent
-        monkeypatch.setitem(sys.modules, "run_agent", fake_run_agent)
+        monkeypatch.setitem(sys.modules, "harness.run_agent", fake_run_agent)
 
         _CapturingAgent.last_init = None
         runner = _make_runner()

@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from gateway.platforms.base import (
+from harness.gateway.platforms.base import (
     BasePlatformAdapter,
     GATEWAY_SECRET_CAPTURE_UNSUPPORTED_MESSAGE,
     MessageEvent,
@@ -344,7 +344,7 @@ class TestTruncateMessage:
             async def get_chat_info(self, *a):
                 return {}
 
-        from gateway.config import Platform, PlatformConfig
+        from harness.gateway.config import Platform, PlatformConfig
 
         config = PlatformConfig(enabled=True, token="test")
         return StubAdapter(config=config, platform=Platform.TELEGRAM)

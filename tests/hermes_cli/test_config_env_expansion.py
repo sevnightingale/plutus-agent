@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from plutus_cli.config import _expand_env_vars, load_config
+from harness.cli.config import _expand_env_vars, load_config
 from unittest.mock import patch as mock_patch
 
 
@@ -72,7 +72,7 @@ class TestLoadConfigExpansion:
 
         monkeypatch.setenv("GOOGLE_API_KEY", "gsk-test-key")
         monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "1234567:ABC-token")
-        monkeypatch.setattr("plutus_cli.config.get_config_path", lambda: config_file)
+        monkeypatch.setattr("harness.cli.config.get_config_path", lambda: config_file)
 
         config = load_config()
 
@@ -86,7 +86,7 @@ class TestLoadConfigExpansion:
         config_file.write_text(config_yaml)
 
         monkeypatch.delenv("NOT_SET_XYZ_123", raising=False)
-        monkeypatch.setattr("plutus_cli.config.get_config_path", lambda: config_file)
+        monkeypatch.setattr("harness.cli.config.get_config_path", lambda: config_file)
 
         config = load_config()
 
@@ -107,9 +107,9 @@ class TestLoadCliConfigExpansion:
 
         monkeypatch.setenv("TEST_VISION_KEY_XYZ", "vis-key-123")
         # Patch the hermes home so load_cli_config finds our test config
-        monkeypatch.setattr("cli._hermes_home", tmp_path)
+        monkeypatch.setattr("harness.repl._hermes_home", tmp_path)
 
-        from cli import load_cli_config
+        from harness.repl import load_cli_config
         config = load_cli_config()
 
         assert config["auxiliary"]["vision"]["api_key"] == "vis-key-123"
@@ -124,9 +124,9 @@ class TestLoadCliConfigExpansion:
         config_file.write_text(config_yaml)
 
         monkeypatch.delenv("UNSET_CLI_VAR_ABC", raising=False)
-        monkeypatch.setattr("cli._hermes_home", tmp_path)
+        monkeypatch.setattr("harness.repl._hermes_home", tmp_path)
 
-        from cli import load_cli_config
+        from harness.repl import load_cli_config
         config = load_cli_config()
 
         assert config["auxiliary"]["vision"]["api_key"] == "${UNSET_CLI_VAR_ABC}"

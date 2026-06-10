@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
-from gateway.config import Platform
-from gateway.platforms.base import MessageEvent
-from gateway.session import SessionSource, build_session_key
+from harness.gateway.config import Platform
+from harness.gateway.platforms.base import MessageEvent
+from harness.gateway.session import SessionSource, build_session_key
 
 
 def _make_event(text="/resume", platform=Platform.TELEGRAM,
@@ -33,7 +33,7 @@ def _session_key_for_event(event):
 def _make_runner(session_db=None, current_session_id="current_session_001",
                  event=None):
     """Create a bare GatewayRunner with a mock session_store and optional session_db."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -78,7 +78,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_list_named_sessions_when_no_arg(self, tmp_path):
         """With no argument, lists recently titled sessions."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("sess_001", "telegram")
         db.create_session("sess_002", "telegram")
@@ -96,7 +96,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_list_shows_usage_when_no_titled(self, tmp_path):
         """With no arg and no titled sessions, shows instructions."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("sess_001", "telegram")  # No title
 
@@ -110,7 +110,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_by_name(self, tmp_path):
         """Resolves a title and switches to that session."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("old_session_abc", "telegram")
         db.set_session_title("old_session_abc", "My Project")
@@ -132,7 +132,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_nonexistent_name(self, tmp_path):
         """Returns error for unknown session name."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("current_session_001", "telegram")
 
@@ -145,7 +145,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_already_on_session(self, tmp_path):
         """Returns friendly message when already on the requested session."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("current_session_001", "telegram")
         db.set_session_title("current_session_001", "Active Project")
@@ -160,7 +160,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_auto_lineage(self, tmp_path):
         """Asking for 'My Project' when 'My Project #2' exists gets the latest."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("sess_v1", "telegram")
         db.set_session_title("sess_v1", "My Project")
@@ -182,7 +182,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_clears_running_agent(self, tmp_path):
         """Switching sessions clears any cached running agent."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("old_session", "telegram")
         db.set_session_title("old_session", "Old Work")
@@ -203,7 +203,7 @@ class TestHandleResumeCommand:
     @pytest.mark.asyncio
     async def test_resume_flushes_memories(self, tmp_path):
         """Resume should flush memories from the current session before switching."""
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
 
         db = SessionDB(db_path=tmp_path / "state.db")
         db.create_session("old_session", "telegram")

@@ -16,8 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from agent.prompt_builder import _scan_context_content, _truncate_content
-from plutus_constants import get_hermes_home
+from harness.agent.prompt_builder import _scan_context_content, _truncate_content
+from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ def load_worldview_md() -> Optional[str]:
     into the system prompt right after SOUL.md (identity-adjacent slot).
     """
     try:
-        from plutus_cli.config import ensure_hermes_home
+        from harness.cli.config import ensure_hermes_home
         ensure_hermes_home()
     except Exception as exc:
         logger.debug("Could not ensure HERMES_HOME before loading WORLDVIEW.md: %s", exc)

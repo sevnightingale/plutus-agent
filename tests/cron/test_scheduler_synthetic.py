@@ -18,7 +18,7 @@ import pytest
 class TestResolveOriginForInjection:
     def setup_method(self):
         # Force the primary-session cache to re-load each test.
-        import cron.scheduler as s
+        import harness.cron.scheduler as s
         s._PRIMARY_SESSION_CACHE = {"loaded": False, "value": None}
         # Clear env vars that would seep into the fallback.
         import os
@@ -39,12 +39,12 @@ class TestResolveOriginForInjection:
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-        import cron.scheduler as s
+        import harness.cron.scheduler as s
         s._PRIMARY_SESSION_CACHE = {"loaded": False, "value": None}
 
     def test_resolve_origin_stays_pure_no_fallback(self):
         """The original _resolve_origin contract — no fallback — is preserved."""
-        from cron.scheduler import _resolve_origin
+        from harness.cron.scheduler import _resolve_origin
         assert _resolve_origin({}) is None
         assert _resolve_origin({"origin": None}) is None
         assert _resolve_origin({"origin": {"platform": "telegram"}}) is None
@@ -57,7 +57,7 @@ class TestResolveOriginForInjection:
         TELEGRAM_HOME_CHANNEL env unlocks unified injection."""
         import os
         os.environ["TELEGRAM_HOME_CHANNEL"] = "1054536871"
-        from cron.scheduler import _resolve_origin_for_injection
+        from harness.cron.scheduler import _resolve_origin_for_injection
         result = _resolve_origin_for_injection({})
         assert result is not None
         assert result["platform"] == "telegram"
@@ -66,13 +66,13 @@ class TestResolveOriginForInjection:
         assert result["user_id"] == "1054536871"
 
     def test_injection_returns_none_when_no_fallback_and_no_origin(self):
-        from cron.scheduler import _resolve_origin_for_injection
+        from harness.cron.scheduler import _resolve_origin_for_injection
         assert _resolve_origin_for_injection({}) is None
 
     def test_injection_prefers_job_origin_over_fallback(self):
         import os
         os.environ["TELEGRAM_HOME_CHANNEL"] = "fallback-chat"
-        from cron.scheduler import _resolve_origin_for_injection
+        from harness.cron.scheduler import _resolve_origin_for_injection
         result = _resolve_origin_for_injection(
             {"origin": {"platform": "discord", "chat_id": "explicit-chat"}}
         )
@@ -86,16 +86,16 @@ class TestResolveOriginForInjection:
 
 class TestRunJobDispatch:
     def setup_method(self):
-        import cron.scheduler as s
+        import harness.cron.scheduler as s
         s._PRIMARY_SESSION_CACHE = {"loaded": False, "value": None}
 
     def teardown_method(self):
-        import cron.scheduler as s
+        import harness.cron.scheduler as s
         s._PRIMARY_SESSION_CACHE = {"loaded": False, "value": None}
 
     def test_run_job_falls_back_to_legacy_when_gateway_missing(self):
         """No gateway → legacy fresh-session path."""
-        from cron import scheduler
+        from harness.cron import scheduler
 
         captured = {}
 
@@ -109,7 +109,7 @@ class TestRunJobDispatch:
             "origin": {"platform": "telegram", "chat_id": "111"},
         }
 
-        with patch("cron.scheduler._legacy_run_job", side_effect=fake_legacy):
+        with patch("harness.cron.scheduler._legacy_run_job", side_effect=fake_legacy):
             success, _, response, error = scheduler.run_job(job, gateway=None)
 
         assert success
@@ -119,7 +119,7 @@ class TestRunJobDispatch:
 
     def test_run_job_uses_synthetic_when_gateway_and_origin(self):
         """Gateway + injection-eligible origin → unified-session path."""
-        from cron import scheduler
+        from harness.cron import scheduler
 
         captured = {}
 
@@ -139,9 +139,9 @@ class TestRunJobDispatch:
             mock_gateway = MagicMock()
             mock_gateway._event_loop = loop
 
-            with patch("cron.scheduler._run_job_via_synthetic",
+            with patch("harness.cron.scheduler._run_job_via_synthetic",
                        side_effect=fake_synthetic), \
-                 patch("cron.scheduler._legacy_run_job") as mock_legacy:
+                 patch("harness.cron.scheduler._legacy_run_job") as mock_legacy:
                 success, _, response, _ = scheduler.run_job(job, gateway=mock_gateway)
         finally:
             loop.close()
@@ -154,7 +154,7 @@ class TestRunJobDispatch:
 
     def test_run_job_uses_synthetic_with_primary_session_fallback(self):
         """Job without origin but with TELEGRAM_HOME_CHANNEL set → still synthetic."""
-        from cron import scheduler
+        from harness.cron import scheduler
         import os
 
         os.environ["TELEGRAM_HOME_CHANNEL"] = "1054536871"
@@ -172,7 +172,7 @@ class TestRunJobDispatch:
                 mock_gateway = MagicMock()
                 mock_gateway._event_loop = loop
 
-                with patch("cron.scheduler._run_job_via_synthetic",
+                with patch("harness.cron.scheduler._run_job_via_synthetic",
                            side_effect=fake_synthetic):
                     scheduler.run_job(job, gateway=mock_gateway)
             finally:
@@ -184,7 +184,7 @@ class TestRunJobDispatch:
 
     def test_run_job_falls_back_to_legacy_when_no_injection_origin(self):
         """Gateway provided but no origin, no fallback → legacy path."""
-        from cron import scheduler
+        from harness.cron import scheduler
 
         captured = {}
 
@@ -198,8 +198,8 @@ class TestRunJobDispatch:
             mock_gateway = MagicMock()
             mock_gateway._event_loop = loop
 
-            with patch("cron.scheduler._legacy_run_job", side_effect=fake_legacy), \
-                 patch("cron.scheduler._run_job_via_synthetic") as mock_synth:
+            with patch("harness.cron.scheduler._legacy_run_job", side_effect=fake_legacy), \
+                 patch("harness.cron.scheduler._run_job_via_synthetic") as mock_synth:
                 scheduler.run_job(job, gateway=mock_gateway)
         finally:
             loop.close()
@@ -218,7 +218,7 @@ class TestRunJobDispatch:
         to legacy gives the cron its own fresh AIAgent built with the correct
         model.
         """
-        from cron import scheduler
+        from harness.cron import scheduler
 
         captured = {}
 
@@ -240,8 +240,8 @@ class TestRunJobDispatch:
             mock_gateway = MagicMock()
             mock_gateway._event_loop = loop
 
-            with patch("cron.scheduler._legacy_run_job", side_effect=fake_legacy), \
-                 patch("cron.scheduler._run_job_via_synthetic") as mock_synth:
+            with patch("harness.cron.scheduler._legacy_run_job", side_effect=fake_legacy), \
+                 patch("harness.cron.scheduler._run_job_via_synthetic") as mock_synth:
                 scheduler.run_job(job, gateway=mock_gateway)
         finally:
             loop.close()
@@ -255,7 +255,7 @@ class TestRunJobDispatch:
         """V2: jobs WITHOUT `model` set (plutus-main on operator-session default,
         plutus-macro-cache, plutus-daily-check-in) route to unified-session
         synthetic injection. Operator session's model carries them."""
-        from cron import scheduler
+        from harness.cron import scheduler
 
         captured = {}
 
@@ -276,8 +276,8 @@ class TestRunJobDispatch:
             mock_gateway = MagicMock()
             mock_gateway._event_loop = loop
 
-            with patch("cron.scheduler._run_job_via_synthetic", side_effect=fake_synthetic), \
-                 patch("cron.scheduler._legacy_run_job") as mock_legacy:
+            with patch("harness.cron.scheduler._run_job_via_synthetic", side_effect=fake_synthetic), \
+                 patch("harness.cron.scheduler._legacy_run_job") as mock_legacy:
                 scheduler.run_job(job, gateway=mock_gateway)
         finally:
             loop.close()
@@ -293,7 +293,7 @@ class TestRunJobDispatch:
 
 class TestWrapSyntheticPrompt:
     def test_wraps_with_marker(self):
-        from cron.scheduler import _wrap_synthetic_prompt
+        from harness.cron.scheduler import _wrap_synthetic_prompt
         from datetime import datetime
         ts = datetime(2026, 5, 9, 18, 0, 0)
         out = _wrap_synthetic_prompt("run heartbeat", kind="cron:plutus-heartbeat", ts=ts)
@@ -308,7 +308,7 @@ class TestWrapSyntheticPrompt:
 class TestRunJobViaSynthetic:
     def test_routes_through_deliver_synthetic_message(self):
         """End-to-end: prompt is wrapped, kind is set, response surfaced."""
-        from cron.scheduler import _run_job_via_synthetic
+        from harness.cron.scheduler import _run_job_via_synthetic
 
         loop = asyncio.new_event_loop()
         # Drive the loop in a background thread so run_coroutine_threadsafe
@@ -358,7 +358,7 @@ class TestRunJobViaSynthetic:
         assert "synthetic injection" in doc
 
     def test_returns_failure_on_unknown_platform(self):
-        from cron.scheduler import _run_job_via_synthetic
+        from harness.cron.scheduler import _run_job_via_synthetic
 
         loop = asyncio.new_event_loop()
         try:

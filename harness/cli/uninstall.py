@@ -11,9 +11,9 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from plutus_constants import get_hermes_home
+from harness.constants import get_hermes_home
 
-from plutus_cli.colors import Colors, color
+from harness.cli.colors import Colors, color
 
 def log_info(msg: str):
     print(f"{color('→', Colors.CYAN)} {msg}")
@@ -26,7 +26,7 @@ def log_warn(msg: str):
 
 def get_project_root() -> Path:
     """Get the project installation directory."""
-    return Path(__file__).parent.parent.resolve()
+    return Path(__file__).parent.parent.parent.resolve()
 
 
 def find_shell_configs() -> list:
@@ -132,7 +132,7 @@ def uninstall_gateway_service():
 
     # 1. Kill any standalone gateway processes (all platforms, including Termux)
     try:
-        from plutus_cli.gateway import kill_gateway_processes, find_gateway_pids
+        from harness.cli.gateway import kill_gateway_processes, find_gateway_pids
         pids = find_gateway_pids()
         if pids:
             killed = kill_gateway_processes()
@@ -153,7 +153,7 @@ def uninstall_gateway_service():
     # 2. Linux: uninstall systemd services (both user and system scopes)
     if system == "Linux":
         try:
-            from plutus_cli.gateway import (
+            from harness.cli.gateway import (
                 get_systemd_unit_path,
                 get_service_name,
                 _systemctl_cmd,
@@ -190,7 +190,7 @@ def uninstall_gateway_service():
     # 3. macOS: uninstall launchd plist
     elif system == "Darwin":
         try:
-            from plutus_cli.gateway import get_launchd_plist_path
+            from harness.cli.gateway import get_launchd_plist_path
             plist_path = get_launchd_plist_path()
             if plist_path.exists():
                 subprocess.run(["launchctl", "unload", str(plist_path)],
@@ -207,7 +207,7 @@ def uninstall_gateway_service():
 def _is_default_hermes_home(hermes_home: Path) -> bool:
     """Return True when ``hermes_home`` points at the default (non-profile) root."""
     try:
-        from plutus_constants import get_default_hermes_root
+        from harness.constants import get_default_hermes_root
         return hermes_home.resolve() == get_default_hermes_root().resolve()
     except Exception:
         return False
@@ -218,7 +218,7 @@ def _discover_named_profiles():
     if profile support is unavailable or nothing is installed beyond the
     default root."""
     try:
-        from plutus_cli.profiles import list_profiles
+        from harness.cli.profiles import list_profiles
     except Exception:
         return []
     try:
@@ -245,7 +245,7 @@ def _uninstall_profile(profile) -> None:
     # 1. Stop and remove this profile's gateway service.
     #    Use `python -m plutus_cli.main` so we don't depend on a `hermes`
     #    wrapper that may be half-removed mid-uninstall.
-    hermes_invocation = [_sys.executable, "-m", "plutus_cli.main", "--profile", name]
+    hermes_invocation = [_sys.executable, "-m", "harness.cli.main", "--profile", name]
     for subcmd in ("stop", "uninstall"):
         try:
             subprocess.run(

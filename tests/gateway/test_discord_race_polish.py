@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gateway.config import Platform, PlatformConfig
+from harness.gateway.config import Platform, PlatformConfig
 
 
 def _make_adapter():
-    from gateway.platforms.discord import DiscordAdapter
+    from harness.gateway.platforms.discord import DiscordAdapter
 
     adapter = object.__new__(DiscordAdapter)
     adapter._platform = Platform.DISCORD
@@ -60,7 +60,7 @@ async def test_concurrent_joins_do_not_double_connect():
     channel.guild.id = 42
     channel.connect = lambda: slow_connect(channel)
 
-    from gateway.platforms import discord as discord_mod
+    from harness.gateway.platforms import discord as discord_mod
     with patch.object(discord_mod, "VoiceReceiver",
                       MagicMock(return_value=MagicMock(start=lambda: None))):
         with patch.object(discord_mod.asyncio, "ensure_future",

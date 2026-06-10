@@ -8,8 +8,8 @@ pin the translation and the curated-list filtering.
 import json
 from unittest.mock import patch, MagicMock
 
-from plutus_cli import models as models_module
-from plutus_cli.models import (
+from harness.cli import models as models_module
+from harness.cli.models import (
     VERCEL_AI_GATEWAY_MODELS,
     _ai_gateway_model_is_free,
     fetch_ai_gateway_models,

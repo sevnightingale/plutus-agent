@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from plutus_cli.config import (
+from harness.cli.config import (
     DEFAULT_CONFIG,
     reload_env,
     redact_key,
@@ -29,7 +29,7 @@ class TestReloadEnv:
         """reload_env() adds vars from .env that are not in os.environ."""
         env_file = tmp_path / ".env"
         env_file.write_text("TEST_RELOAD_VAR=hello123\n")
-        with patch("plutus_cli.config.get_env_path", return_value=env_file):
+        with patch("harness.cli.config.get_env_path", return_value=env_file):
             os.environ.pop("TEST_RELOAD_VAR", None)
             count = reload_env()
             assert count >= 1
@@ -40,7 +40,7 @@ class TestReloadEnv:
         """reload_env() updates vars whose value changed on disk."""
         env_file = tmp_path / ".env"
         env_file.write_text("TEST_RELOAD_VAR=old_value\n")
-        with patch("plutus_cli.config.get_env_path", return_value=env_file):
+        with patch("harness.cli.config.get_env_path", return_value=env_file):
             os.environ["TEST_RELOAD_VAR"] = "old_value"
             # Now change the file
             env_file.write_text("TEST_RELOAD_VAR=new_value\n")
@@ -55,7 +55,7 @@ class TestReloadEnv:
         env_file.write_text("")  # empty .env
         # Pick a known key from OPTIONAL_ENV_VARS
         known_key = next(iter(OPTIONAL_ENV_VARS.keys()))
-        with patch("plutus_cli.config.get_env_path", return_value=env_file):
+        with patch("harness.cli.config.get_env_path", return_value=env_file):
             os.environ[known_key] = "stale_value"
             count = reload_env()
             assert known_key not in os.environ
@@ -65,7 +65,7 @@ class TestReloadEnv:
         """reload_env() preserves non-Hermes env vars even when absent from .env."""
         env_file = tmp_path / ".env"
         env_file.write_text("")
-        with patch("plutus_cli.config.get_env_path", return_value=env_file):
+        with patch("harness.cli.config.get_env_path", return_value=env_file):
             os.environ["MY_CUSTOM_UNRELATED_VAR"] = "keep_me"
             reload_env()
             assert os.environ.get("MY_CUSTOM_UNRELATED_VAR") == "keep_me"
@@ -108,9 +108,9 @@ class TestWebServerEndpoints:
         except ImportError:
             pytest.skip("fastapi/starlette not installed")
 
-        import plutus_state
-        from plutus_constants import get_hermes_home
-        from plutus_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
+        import harness.state as plutus_state
+        from harness.constants import get_hermes_home
+        from harness.cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
         monkeypatch.setattr(plutus_state, "DEFAULT_DB_PATH", get_hermes_home() / "state.db")
 
@@ -126,8 +126,8 @@ class TestWebServerEndpoints:
         assert "active_sessions" in data
 
     def test_get_status_filters_unconfigured_gateway_platforms(self, monkeypatch):
-        import gateway.config as gateway_config
-        import plutus_cli.web_server as web_server
+        import harness.gateway.config as gateway_config
+        import harness.cli.web_server as web_server
 
         class _Platform:
             def __init__(self, value):
@@ -162,8 +162,8 @@ class TestWebServerEndpoints:
         }
 
     def test_get_status_hides_stale_platforms_when_gateway_not_running(self, monkeypatch):
-        import gateway.config as gateway_config
-        import plutus_cli.web_server as web_server
+        import harness.gateway.config as gateway_config
+        import harness.cli.web_server as web_server
 
         class _GatewayConfig:
             def get_connected_platforms(self):
@@ -220,8 +220,8 @@ class TestWebServerEndpoints:
 
     def test_reveal_env_var(self, tmp_path):
         """POST /api/env/reveal should return the real unredacted value."""
-        from plutus_cli.config import save_env_value
-        from plutus_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
+        from harness.cli.config import save_env_value
+        from harness.cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
         save_env_value("TEST_REVEAL_KEY", "super-secret-value-12345")
         resp = self.client.post(
             "/api/env/reveal",
@@ -235,7 +235,7 @@ class TestWebServerEndpoints:
 
     def test_reveal_env_var_not_found(self):
         """POST /api/env/reveal should 404 for unknown keys."""
-        from plutus_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
+        from harness.cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
         resp = self.client.post(
             "/api/env/reveal",
             json={"key": "NONEXISTENT_KEY_XYZ"},
@@ -246,8 +246,8 @@ class TestWebServerEndpoints:
     def test_reveal_env_var_no_token(self, tmp_path):
         """POST /api/env/reveal without token should return 401."""
         from starlette.testclient import TestClient
-        from plutus_cli.web_server import app
-        from plutus_cli.config import save_env_value
+        from harness.cli.web_server import app
+        from harness.cli.config import save_env_value
         save_env_value("TEST_REVEAL_NOAUTH", "secret-value")
         # Use a fresh client WITHOUT the dashboard session header
         unauth_client = TestClient(app)
@@ -259,8 +259,8 @@ class TestWebServerEndpoints:
 
     def test_reveal_env_var_bad_token(self, tmp_path):
         """POST /api/env/reveal with wrong token should return 401."""
-        from plutus_cli.config import save_env_value
-        from plutus_cli.web_server import _SESSION_HEADER_NAME
+        from harness.cli.config import save_env_value
+        from harness.cli.web_server import _SESSION_HEADER_NAME
         save_env_value("TEST_REVEAL_BADAUTH", "secret-value")
         resp = self.client.post(
             "/api/env/reveal",
@@ -271,8 +271,8 @@ class TestWebServerEndpoints:
 
     def test_reveal_env_var_custom_session_header_ignores_proxy_authorization(self, tmp_path):
         """A valid dashboard session header should coexist with proxy auth."""
-        from plutus_cli.config import save_env_value
-        from plutus_cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
+        from harness.cli.config import save_env_value
+        from harness.cli.web_server import _SESSION_HEADER_NAME, _SESSION_TOKEN
 
         save_env_value("TEST_REVEAL_PROXY_AUTH", "secret-value")
         resp = self.client.post(
@@ -289,8 +289,8 @@ class TestWebServerEndpoints:
 
     def test_reveal_env_var_legacy_authorization_header_still_works(self, tmp_path):
         """Keep old dashboard bundles working while the new header rolls out."""
-        from plutus_cli.config import save_env_value
-        from plutus_cli.web_server import _SESSION_TOKEN
+        from harness.cli.config import save_env_value
+        from harness.cli.web_server import _SESSION_TOKEN
 
         save_env_value("TEST_REVEAL_LEGACY_AUTH", "secret-value")
         resp = self.client.post(
@@ -317,7 +317,7 @@ class TestWebServerEndpoints:
     def test_unauthenticated_api_blocked(self):
         """API requests without the session token should be rejected."""
         from starlette.testclient import TestClient
-        from plutus_cli.web_server import app
+        from harness.cli.web_server import app
         # Create a client WITHOUT the dashboard session header
         unauth_client = TestClient(app)
         resp = unauth_client.get("/api/env")
@@ -353,18 +353,18 @@ class TestWebServerEndpoints:
 
 class TestBuildSchemaFromConfig:
     def test_produces_expected_field_count(self):
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         # DEFAULT_CONFIG has ~150+ leaf fields
         assert len(CONFIG_SCHEMA) > 100
 
     def test_schema_entries_have_required_fields(self):
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         for key, entry in list(CONFIG_SCHEMA.items())[:10]:
             assert "type" in entry, f"Missing type for {key}"
             assert "category" in entry, f"Missing category for {key}"
 
     def test_overrides_applied(self):
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         # terminal.backend should be a select with options
         if "terminal.backend" in CONFIG_SCHEMA:
             entry = CONFIG_SCHEMA["terminal.backend"]
@@ -373,7 +373,7 @@ class TestBuildSchemaFromConfig:
             assert "local" in entry["options"]
 
     def test_empty_prefix_produces_correct_keys(self):
-        from plutus_cli.web_server import _build_schema_from_config
+        from harness.cli.web_server import _build_schema_from_config
         test_config = {"model": "test", "nested": {"key": "val"}}
         schema = _build_schema_from_config(test_config)
         assert "model" in schema
@@ -381,18 +381,18 @@ class TestBuildSchemaFromConfig:
 
     def test_top_level_scalars_get_general_category(self):
         """Top-level scalar fields should be in 'general' category."""
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         assert CONFIG_SCHEMA["model"]["category"] == "general"
 
     def test_nested_keys_get_parent_category(self):
         """Nested fields should use the top-level parent as their category."""
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         if "agent.max_turns" in CONFIG_SCHEMA:
             assert CONFIG_SCHEMA["agent.max_turns"]["category"] == "agent"
 
     def test_category_merge_applied(self):
         """Small categories should be merged into larger ones."""
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         categories = {e["category"] for e in CONFIG_SCHEMA.values()}
         # These should be merged away
         assert "privacy" not in categories  # merged into security
@@ -400,7 +400,7 @@ class TestBuildSchemaFromConfig:
 
     def test_no_single_field_categories(self):
         """After merging, no category should have just 1 field."""
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         from collections import Counter
         cats = Counter(e["category"] for e in CONFIG_SCHEMA.values())
         for cat, count in cats.items():
@@ -421,7 +421,7 @@ class TestConfigRoundTrip:
             from starlette.testclient import TestClient
         except ImportError:
             pytest.skip("fastapi/starlette not installed")
-        from plutus_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
+        from harness.cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
         self.client = TestClient(app)
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
@@ -439,7 +439,7 @@ class TestConfigRoundTrip:
 
     def test_round_trip_preserves_model_subkeys(self):
         """Save and reload should not lose model.provider, model.base_url, etc."""
-        from plutus_cli.config import load_config, save_config
+        from harness.cli.config import load_config, save_config
 
         # Set up a config with model as a dict (the common user config form)
         save_config({
@@ -468,7 +468,7 @@ class TestConfigRoundTrip:
 
     def test_edit_model_name_preserved(self):
         """Changing the model string should update model.default on disk."""
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         web_config = self.client.get("/api/config").json()
         original_model = web_config["model"]
@@ -489,7 +489,7 @@ class TestConfigRoundTrip:
 
     def test_edit_nested_value(self):
         """Editing a nested config value should persist correctly."""
-        from plutus_cli.config import load_config
+        from harness.cli.config import load_config
 
         web_config = self.client.get("/api/config").json()
         original_turns = web_config.get("agent", {}).get("max_turns")
@@ -555,9 +555,9 @@ class TestNewEndpoints:
         except ImportError:
             pytest.skip("fastapi/starlette not installed")
 
-        import plutus_state
-        from plutus_constants import get_hermes_home
-        from plutus_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
+        import harness.state as plutus_state
+        from harness.constants import get_hermes_home
+        from harness.cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
 
         monkeypatch.setattr(plutus_state, "DEFAULT_DB_PATH", get_hermes_home() / "state.db")
 
@@ -595,9 +595,9 @@ class TestNewEndpoints:
             assert "enabled" in skills[0]
 
     def test_skills_list_includes_disabled_skills(self, monkeypatch):
-        import tools.skills_tool as skills_tool
-        import plutus_cli.skills_config as skills_config
-        import plutus_cli.web_server as web_server
+        import harness.tools.skills_tool as skills_tool
+        import harness.cli.skills_config as skills_config
+        import harness.cli.web_server as web_server
 
         def _fake_find_all_skills(*, skip_disabled=False):
             if skip_disabled:
@@ -642,9 +642,9 @@ class TestNewEndpoints:
             assert "enabled" in toolsets[0]
 
     def test_toolsets_list_matches_cli_enabled_state(self, monkeypatch):
-        import plutus_cli.tools_config as tools_config
-        import toolsets as toolsets_module
-        import plutus_cli.web_server as web_server
+        import harness.cli.tools_config as tools_config
+        import harness.toolsets as toolsets_module
+        import harness.cli.web_server as web_server
 
         monkeypatch.setattr(
             tools_config,
@@ -751,7 +751,7 @@ class TestNewEndpoints:
         }
 
     def test_analytics_usage_includes_skill_breakdown(self):
-        from plutus_state import SessionDB
+        from harness.state import SessionDB
 
         db = SessionDB()
         try:
@@ -828,7 +828,7 @@ class TestModelContextLength:
 
     def test_normalize_extracts_context_length_from_dict(self):
         """normalize should surface context_length from model dict."""
-        from plutus_cli.web_server import _normalize_config_for_web
+        from harness.cli.web_server import _normalize_config_for_web
 
         cfg = {
             "model": {
@@ -843,7 +843,7 @@ class TestModelContextLength:
 
     def test_normalize_bare_string_model_yields_zero(self):
         """normalize should set model_context_length=0 for bare string model."""
-        from plutus_cli.web_server import _normalize_config_for_web
+        from harness.cli.web_server import _normalize_config_for_web
 
         result = _normalize_config_for_web({"model": "anthropic/claude-sonnet-4"})
         assert result["model"] == "anthropic/claude-sonnet-4"
@@ -851,7 +851,7 @@ class TestModelContextLength:
 
     def test_normalize_dict_without_context_length_yields_zero(self):
         """normalize should default to 0 when model dict has no context_length."""
-        from plutus_cli.web_server import _normalize_config_for_web
+        from harness.cli.web_server import _normalize_config_for_web
 
         cfg = {"model": {"default": "test/model", "provider": "openrouter"}}
         result = _normalize_config_for_web(cfg)
@@ -859,7 +859,7 @@ class TestModelContextLength:
 
     def test_normalize_non_int_context_length_yields_zero(self):
         """normalize should coerce non-int context_length to 0."""
-        from plutus_cli.web_server import _normalize_config_for_web
+        from harness.cli.web_server import _normalize_config_for_web
 
         cfg = {"model": {"default": "test/model", "context_length": "invalid"}}
         result = _normalize_config_for_web(cfg)
@@ -867,8 +867,8 @@ class TestModelContextLength:
 
     def test_denormalize_writes_context_length_into_model_dict(self):
         """denormalize should write model_context_length back into model dict."""
-        from plutus_cli.web_server import _denormalize_config_from_web
-        from plutus_cli.config import save_config
+        from harness.cli.web_server import _denormalize_config_from_web
+        from harness.cli.config import save_config
 
         # Set up disk config with model as a dict
         save_config({
@@ -885,8 +885,8 @@ class TestModelContextLength:
 
     def test_denormalize_zero_removes_context_length(self):
         """denormalize with model_context_length=0 should remove context_length key."""
-        from plutus_cli.web_server import _denormalize_config_from_web
-        from plutus_cli.config import save_config
+        from harness.cli.web_server import _denormalize_config_from_web
+        from harness.cli.config import save_config
 
         save_config({
             "model": {
@@ -905,8 +905,8 @@ class TestModelContextLength:
 
     def test_denormalize_upgrades_bare_string_to_dict(self):
         """denormalize should upgrade bare string model to dict when context_length set."""
-        from plutus_cli.web_server import _denormalize_config_from_web
-        from plutus_cli.config import save_config
+        from harness.cli.web_server import _denormalize_config_from_web
+        from harness.cli.config import save_config
 
         # Disk has model as bare string
         save_config({"model": "anthropic/claude-sonnet-4"})
@@ -921,8 +921,8 @@ class TestModelContextLength:
 
     def test_denormalize_bare_string_stays_string_when_zero(self):
         """denormalize should keep bare string model as string when context_length=0."""
-        from plutus_cli.web_server import _denormalize_config_from_web
-        from plutus_cli.config import save_config
+        from harness.cli.web_server import _denormalize_config_from_web
+        from harness.cli.config import save_config
 
         save_config({"model": "anthropic/claude-sonnet-4"})
 
@@ -934,8 +934,8 @@ class TestModelContextLength:
 
     def test_denormalize_coerces_string_context_length(self):
         """denormalize should handle string model_context_length from frontend."""
-        from plutus_cli.web_server import _denormalize_config_from_web
-        from plutus_cli.config import save_config
+        from harness.cli.web_server import _denormalize_config_from_web
+        from harness.cli.config import save_config
 
         save_config({
             "model": {"default": "test/model", "provider": "openrouter"}
@@ -953,18 +953,18 @@ class TestModelContextLengthSchema:
     """Tests for model_context_length placement in CONFIG_SCHEMA."""
 
     def test_schema_has_model_context_length(self):
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         assert "model_context_length" in CONFIG_SCHEMA
 
     def test_schema_model_context_length_after_model(self):
         """model_context_length should appear immediately after model in schema."""
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         keys = list(CONFIG_SCHEMA.keys())
         model_idx = keys.index("model")
         assert keys[model_idx + 1] == "model_context_length"
 
     def test_schema_model_context_length_is_number(self):
-        from plutus_cli.web_server import CONFIG_SCHEMA
+        from harness.cli.web_server import CONFIG_SCHEMA
         entry = CONFIG_SCHEMA["model_context_length"]
         assert entry["type"] == "number"
         assert "category" in entry
@@ -979,7 +979,7 @@ class TestModelInfoEndpoint:
             from starlette.testclient import TestClient
         except ImportError:
             pytest.skip("fastapi/starlette not installed")
-        from plutus_cli.web_server import app
+        from harness.cli.web_server import app
         self.client = TestClient(app)
 
     def test_model_info_returns_200(self):
@@ -994,7 +994,7 @@ class TestModelInfoEndpoint:
         assert "capabilities" in data
 
     def test_model_info_with_dict_config(self, monkeypatch):
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {
             "model": {
@@ -1004,7 +1004,7 @@ class TestModelInfoEndpoint:
             }
         })
 
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
+        with patch("harness.agent.model_metadata.get_model_context_length", return_value=200000):
             resp = self.client.get("/api/model/info")
 
         data = resp.json()
@@ -1015,13 +1015,13 @@ class TestModelInfoEndpoint:
         assert data["effective_context_length"] == 100000  # override wins
 
     def test_model_info_auto_detect_when_no_override(self, monkeypatch):
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {
             "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"}
         })
 
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
+        with patch("harness.agent.model_metadata.get_model_context_length", return_value=200000):
             resp = self.client.get("/api/model/info")
 
         data = resp.json()
@@ -1030,7 +1030,7 @@ class TestModelInfoEndpoint:
         assert data["effective_context_length"] == 200000  # auto wins
 
     def test_model_info_empty_model(self, monkeypatch):
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {"model": ""})
 
@@ -1040,13 +1040,13 @@ class TestModelInfoEndpoint:
         assert data["effective_context_length"] == 0
 
     def test_model_info_bare_string_model(self, monkeypatch):
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {
             "model": "anthropic/claude-sonnet-4"
         })
 
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000):
+        with patch("harness.agent.model_metadata.get_model_context_length", return_value=200000):
             resp = self.client.get("/api/model/info")
 
         data = resp.json()
@@ -1056,7 +1056,7 @@ class TestModelInfoEndpoint:
         assert data["effective_context_length"] == 200000
 
     def test_model_info_capabilities(self, monkeypatch):
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {
             "model": {"default": "anthropic/claude-opus-4.6", "provider": "openrouter"}
@@ -1070,8 +1070,8 @@ class TestModelInfoEndpoint:
         mock_caps.max_output_tokens = 32000
         mock_caps.model_family = "claude-opus"
 
-        with patch("agent.model_metadata.get_model_context_length", return_value=200000), \
-             patch("agent.models_dev.get_model_capabilities", return_value=mock_caps):
+        with patch("harness.agent.model_metadata.get_model_context_length", return_value=200000), \
+             patch("harness.agent.models_dev.get_model_capabilities", return_value=mock_caps):
             resp = self.client.get("/api/model/info")
 
         caps = resp.json()["capabilities"]
@@ -1083,13 +1083,13 @@ class TestModelInfoEndpoint:
 
     def test_model_info_graceful_on_metadata_error(self, monkeypatch):
         """Endpoint should return zeros on import/resolution errors, not 500."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "load_config", lambda: {
             "model": "some/obscure-model"
         })
 
-        with patch("agent.model_metadata.get_model_context_length", side_effect=Exception("boom")):
+        with patch("harness.agent.model_metadata.get_model_context_length", side_effect=Exception("boom")):
             resp = self.client.get("/api/model/info")
 
         assert resp.status_code == 200
@@ -1107,7 +1107,7 @@ class TestProbeGatewayHealth:
 
     def test_returns_false_when_no_url_configured(self, monkeypatch):
         """When GATEWAY_HEALTH_URL is unset, the probe returns (False, None)."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", None)
         alive, body = ws._probe_gateway_health()
         assert alive is False
@@ -1115,7 +1115,7 @@ class TestProbeGatewayHealth:
 
     def test_normalizes_url_with_health_suffix(self, monkeypatch):
         """If the user sets the URL to include /health, it's stripped to base."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642/health")
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
         # Both paths should fail (no server), but we verify they were constructed
@@ -1135,7 +1135,7 @@ class TestProbeGatewayHealth:
 
     def test_normalizes_url_with_health_detailed_suffix(self, monkeypatch):
         """If the user sets the URL to include /health/detailed, it's stripped to base."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642/health/detailed")
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
         calls = []
@@ -1151,7 +1151,7 @@ class TestProbeGatewayHealth:
 
     def test_successful_detailed_probe(self, monkeypatch):
         """Successful /health/detailed probe returns (True, body_dict)."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642")
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
 
@@ -1175,7 +1175,7 @@ class TestProbeGatewayHealth:
 
     def test_detailed_fails_falls_back_to_simple_health(self, monkeypatch):
         """If /health/detailed fails, falls back to /health."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_URL", "http://gw:8642")
         monkeypatch.setattr(ws, "_GATEWAY_HEALTH_TIMEOUT", 1)
 
@@ -1209,13 +1209,13 @@ class TestStatusRemoteGateway:
         except ImportError:
             pytest.skip("fastapi/starlette not installed")
 
-        from plutus_cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
+        from harness.cli.web_server import app, _SESSION_HEADER_NAME, _SESSION_TOKEN
         self.client = TestClient(app)
         self.client.headers[_SESSION_HEADER_NAME] = _SESSION_TOKEN
 
     def test_status_falls_back_to_remote_probe(self, monkeypatch):
         """When local PID check fails and remote probe succeeds, gateway shows running."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
         monkeypatch.setattr(ws, "read_runtime_status", lambda: None)
@@ -1237,7 +1237,7 @@ class TestStatusRemoteGateway:
 
     def test_status_remote_probe_not_attempted_when_local_pid_found(self, monkeypatch):
         """When local PID check succeeds, the remote probe is never called."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: 1234)
         monkeypatch.setattr(ws, "read_runtime_status", lambda: {
@@ -1260,7 +1260,7 @@ class TestStatusRemoteGateway:
 
     def test_status_remote_probe_not_attempted_when_no_url(self, monkeypatch):
         """When GATEWAY_HEALTH_URL is unset, no probe is attempted."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
         monkeypatch.setattr(ws, "read_runtime_status", lambda: None)
@@ -1274,7 +1274,7 @@ class TestStatusRemoteGateway:
 
     def test_status_remote_running_null_pid(self, monkeypatch):
         """Remote gateway running but PID not in response — pid should be None."""
-        import plutus_cli.web_server as ws
+        import harness.cli.web_server as ws
 
         monkeypatch.setattr(ws, "get_running_pid", lambda: None)
         monkeypatch.setattr(ws, "read_runtime_status", lambda: None)
@@ -1300,20 +1300,20 @@ class TestNormaliseThemeDefinition:
     """Tests for _normalise_theme_definition() — parses YAML theme files."""
 
     def test_rejects_missing_name(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         assert _normalise_theme_definition({}) is None
         assert _normalise_theme_definition({"name": ""}) is None
         assert _normalise_theme_definition({"name": "   "}) is None
 
     def test_rejects_non_dict(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         assert _normalise_theme_definition("string") is None
         assert _normalise_theme_definition(None) is None
         assert _normalise_theme_definition([1, 2, 3]) is None
 
     def test_loose_colors_shorthand(self):
         """Bare hex strings under `colors` parse as {hex, alpha=1.0}."""
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({
             "name": "loose",
             "colors": {"background": "#000000", "midground": "#ffffff"},
@@ -1326,7 +1326,7 @@ class TestNormaliseThemeDefinition:
         assert result["palette"]["foreground"]["alpha"] == 0.0
 
     def test_full_palette_form(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({
             "name": "full",
             "palette": {
@@ -1342,7 +1342,7 @@ class TestNormaliseThemeDefinition:
         assert result["palette"]["noiseOpacity"] == 0.5
 
     def test_default_typography_applied_when_missing(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({"name": "minimal"})
         typo = result["typography"]
         assert "fontSans" in typo
@@ -1352,7 +1352,7 @@ class TestNormaliseThemeDefinition:
         assert typo["letterSpacing"] == "0"
 
     def test_partial_typography_merges_with_defaults(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({
             "name": "partial",
             "typography": {
@@ -1366,13 +1366,13 @@ class TestNormaliseThemeDefinition:
         assert "monospace" in result["typography"]["fontMono"]
 
     def test_layout_defaults(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({"name": "minimal"})
         assert result["layout"]["radius"] == "0.5rem"
         assert result["layout"]["density"] == "comfortable"
 
     def test_invalid_density_falls_back(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({
             "name": "bad",
             "layout": {"density": "ultra-spacious"},
@@ -1380,13 +1380,13 @@ class TestNormaliseThemeDefinition:
         assert result["layout"]["density"] == "comfortable"
 
     def test_valid_densities_accepted(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         for d in ("compact", "comfortable", "spacious"):
             r = _normalise_theme_definition({"name": "x", "layout": {"density": d}})
             assert r["layout"]["density"] == d
 
     def test_color_overrides_filter_unknown_keys(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({
             "name": "o",
             "colorOverrides": {
@@ -1402,12 +1402,12 @@ class TestNormaliseThemeDefinition:
         }
 
     def test_color_overrides_omitted_when_empty(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({"name": "x"})
         assert "colorOverrides" not in result
 
     def test_alpha_clamped_to_unit_range(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "c",
             "palette": {"background": {"hex": "#000", "alpha": 99.5}},
@@ -1420,7 +1420,7 @@ class TestNormaliseThemeDefinition:
         assert r2["palette"]["background"]["alpha"] == 0.0
 
     def test_invalid_alpha_uses_default(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "c",
             "palette": {"background": {"hex": "#000", "alpha": "not a number"}},
@@ -1433,7 +1433,7 @@ class TestDiscoverUserThemes:
 
     def test_returns_empty_when_dir_missing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-        from plutus_cli import web_server
+        from harness.cli import web_server
         assert web_server._discover_user_themes() == []
 
     def test_loads_and_normalises_yaml(self, tmp_path, monkeypatch):
@@ -1450,7 +1450,7 @@ class TestDiscoverUserThemes:
             "layout:\n"
             "  density: spacious\n"
         )
-        from plutus_cli import web_server
+        from harness.cli import web_server
         results = web_server._discover_user_themes()
         assert len(results) == 1
         assert results[0]["name"] == "ocean"
@@ -1467,7 +1467,7 @@ class TestDiscoverUserThemes:
         (themes_dir / "bad.yaml").write_text("::: not valid yaml :::\n\tindent wrong")
         (themes_dir / "nameless.yaml").write_text("label: No Name Here\n")
         (themes_dir / "ok.yaml").write_text("name: ok\n")
-        from plutus_cli import web_server
+        from harness.cli import web_server
         results = web_server._discover_user_themes()
         names = [r["name"] for r in results]
         assert "ok" in names
@@ -1481,25 +1481,25 @@ class TestNormaliseThemeExtensions:
     the dashboard without shipping code."""
 
     def test_layout_variant_defaults_to_standard(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         result = _normalise_theme_definition({"name": "t"})
         assert result["layoutVariant"] == "standard"
 
     def test_layout_variant_accepts_known_values(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         for variant in ("standard", "cockpit", "tiled"):
             r = _normalise_theme_definition({"name": "t", "layoutVariant": variant})
             assert r["layoutVariant"] == variant
 
     def test_layout_variant_rejects_unknown(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({"name": "t", "layoutVariant": "warship"})
         assert r["layoutVariant"] == "standard"
         r2 = _normalise_theme_definition({"name": "t", "layoutVariant": 12})
         assert r2["layoutVariant"] == "standard"
 
     def test_assets_named_slots_passthrough(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "t",
             "assets": {
@@ -1517,7 +1517,7 @@ class TestNormaliseThemeExtensions:
         assert "notAKnownKey" not in r["assets"]  # unknown slot ignored
 
     def test_assets_custom_block(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "t",
             "assets": {
@@ -1535,12 +1535,12 @@ class TestNormaliseThemeExtensions:
         }
 
     def test_assets_absent_means_no_field(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({"name": "t"})
         assert "assets" not in r
 
     def test_custom_css_passthrough_and_capped(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         # Small CSS passes through verbatim.
         r = _normalise_theme_definition({
             "name": "t",
@@ -1554,13 +1554,13 @@ class TestNormaliseThemeExtensions:
         assert len(r2["customCSS"]) <= 32 * 1024
 
     def test_custom_css_empty_dropped(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         for val in ("", "   \n\t", None):
             r = _normalise_theme_definition({"name": "t", "customCSS": val})
             assert "customCSS" not in r
 
     def test_component_styles_per_bucket(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "t",
             "componentStyles": {
@@ -1581,7 +1581,7 @@ class TestNormaliseThemeExtensions:
         assert "rogueBucket" not in r["componentStyles"]
 
     def test_component_styles_empty_buckets_dropped(self):
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "t",
             "componentStyles": {
@@ -1596,7 +1596,7 @@ class TestNormaliseThemeExtensions:
 
     def test_component_styles_accepts_numeric_values(self):
         """Numeric values (e.g. opacity: 0.8) are coerced to strings."""
-        from plutus_cli.web_server import _normalise_theme_definition
+        from harness.cli.web_server import _normalise_theme_definition
         r = _normalise_theme_definition({
             "name": "t",
             "componentStyles": {"card": {"opacity": 0.8, "zIndex": 5}},
@@ -1624,7 +1624,7 @@ class TestDashboardPluginManifestExtensions:
             "slots": ["sidebar", "header-left"],
             "entry": "dist/index.js",
         })
-        from plutus_cli import web_server
+        from harness.cli import web_server
         # Bust the process-level cache so the test plugin is picked up.
         web_server._dashboard_plugins_cache = None
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
@@ -1641,7 +1641,7 @@ class TestDashboardPluginManifestExtensions:
             "tab": {"path": "/bad", "override": "no-leading-slash"},
             "entry": "dist/index.js",
         })
-        from plutus_cli import web_server
+        from harness.cli import web_server
         web_server._dashboard_plugins_cache = None
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
         entry = next(p for p in plugins if p["name"] == "bad-override")
@@ -1655,7 +1655,7 @@ class TestDashboardPluginManifestExtensions:
             "tab": {"path": "/no-slots"},
             "entry": "dist/index.js",
         })
-        from plutus_cli import web_server
+        from harness.cli import web_server
         web_server._dashboard_plugins_cache = None
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
         entry = next(p for p in plugins if p["name"] == "no-slots")
@@ -1672,7 +1672,7 @@ class TestDashboardPluginManifestExtensions:
             "slots": ["sidebar", "", 42, None, "header-right"],
             "entry": "dist/index.js",
         })
-        from plutus_cli import web_server
+        from harness.cli import web_server
         web_server._dashboard_plugins_cache = None
         plugins = web_server._get_dashboard_plugins(force_rescan=True)
         entry = next(p for p in plugins if p["name"] == "mixed-slots")

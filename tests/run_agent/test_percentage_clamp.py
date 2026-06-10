@@ -8,7 +8,7 @@ memory tool output.
 """
 
 class TestMemoryToolPercentClamp:
-    """tools/memory_tool.py — _success_response and _render_block pct"""
+    """harness/tools/memory_tool.py — _success_response and _render_block pct"""
 
     def test_over_limit_clamped_at_100(self):
         """Percentage should be capped at 100 even if current > limit."""
@@ -55,7 +55,7 @@ class TestCLIStatsPercentClamp:
 
 
 class TestGatewayStatsPercentClamp:
-    """gateway/run.py — _format_usage_stats percentage"""
+    """harness/gateway/run.py — _format_usage_stats percentage"""
 
     def test_over_context_clamped_at_100(self):
         last_prompt_tokens = 210_000
@@ -81,20 +81,20 @@ class TestSourceLinesAreClamped:
             return f.read()
 
     def test_gateway_run_clamped(self):
-        src = self._read_file("gateway/run.py")
+        src = self._read_file("harness/gateway/run.py")
         # Check that the stats handler has min(100, ...)
         assert "min(100, ctx.last_prompt_tokens" in src, (
-            "gateway/run.py stats pct is not clamped with min(100, ...)"
+            "harness/gateway/run.py stats pct is not clamped with min(100, ...)"
         )
 
     def test_cli_clamped(self):
-        src = self._read_file("cli.py")
+        src = self._read_file("harness/repl.py")
         assert "min(100, (last_prompt" in src, (
             "cli.py /stats pct is not clamped with min(100, ...)"
         )
 
     def test_memory_tool_clamped(self):
-        src = self._read_file("tools/memory_tool.py")
+        src = self._read_file("harness/tools/memory_tool.py")
         # Both _success_response and _render_block should have min(100, ...)
         count = src.count("min(100, int((current / limit)")
         assert count >= 2, (

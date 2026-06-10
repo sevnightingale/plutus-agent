@@ -51,7 +51,7 @@ def _ensure_discord_mock():
 
 _ensure_discord_mock()
 
-from gateway.platforms.base import MessageEvent, MessageType, SessionSource
+from harness.gateway.platforms.base import MessageEvent, MessageType, SessionSource
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +73,7 @@ def _make_event(text: str = "", message_type=MessageType.TEXT, chat_id="123") ->
 
 def _make_runner(tmp_path):
     """Create a bare GatewayRunner without calling __init__."""
-    from gateway.run import GatewayRunner
+    from harness.gateway.run import GatewayRunner
     runner = object.__new__(GatewayRunner)
     runner.adapters = {}
     runner._voice_mode = {}
@@ -166,7 +166,7 @@ class TestHandleVoiceCommand:
         assert data["telegram:123"] == "off"
 
     def test_sync_voice_mode_state_to_adapter_restores_off_chats(self, runner):
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         runner._voice_mode = {"telegram:123": "off", "telegram:456": "all"}
         adapter = SimpleNamespace(
             _auto_tts_disabled_chats=set(),
@@ -178,7 +178,7 @@ class TestHandleVoiceCommand:
         assert adapter._auto_tts_disabled_chats == {"123"}
 
     def test_restart_restores_voice_off_state(self, runner, tmp_path):
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         runner._VOICE_MODE_PATH.write_text(json.dumps({"telegram:123": "off"}))
 
         restored_runner = _make_runner(tmp_path)
@@ -375,8 +375,8 @@ class TestSendVoiceReply:
 
         tts_result = json.dumps({"success": True, "file_path": "/tmp/test.ogg"})
 
-        with patch("tools.tts_tool.text_to_speech_tool", return_value=tts_result), \
-             patch("tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
+        with patch("harness.tools.tts_tool.text_to_speech_tool", return_value=tts_result), \
+             patch("harness.tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
              patch("os.path.isfile", return_value=True), \
              patch("os.unlink"), \
              patch("os.makedirs"):
@@ -390,8 +390,8 @@ class TestSendVoiceReply:
     async def test_empty_text_after_strip_skips(self, runner):
         event = _make_event()
 
-        with patch("tools.tts_tool.text_to_speech_tool") as mock_tts, \
-             patch("tools.tts_tool._strip_markdown_for_tts", return_value=""):
+        with patch("harness.tools.tts_tool.text_to_speech_tool") as mock_tts, \
+             patch("harness.tools.tts_tool._strip_markdown_for_tts", return_value=""):
             await runner._send_voice_reply(event, "```code only```")
 
         mock_tts.assert_not_called()
@@ -403,8 +403,8 @@ class TestSendVoiceReply:
         runner.adapters[event.source.platform] = mock_adapter
         tts_result = json.dumps({"success": False, "error": "API error"})
 
-        with patch("tools.tts_tool.text_to_speech_tool", return_value=tts_result), \
-             patch("tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
+        with patch("harness.tools.tts_tool.text_to_speech_tool", return_value=tts_result), \
+             patch("harness.tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
              patch("os.path.isfile", return_value=False), \
              patch("os.makedirs"):
             await runner._send_voice_reply(event, "Hello")
@@ -414,8 +414,8 @@ class TestSendVoiceReply:
     @pytest.mark.asyncio
     async def test_exception_caught(self, runner):
         event = _make_event()
-        with patch("tools.tts_tool.text_to_speech_tool", side_effect=RuntimeError("boom")), \
-             patch("tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
+        with patch("harness.tools.tts_tool.text_to_speech_tool", side_effect=RuntimeError("boom")), \
+             patch("harness.tools.tts_tool._strip_markdown_for_tts", side_effect=lambda t: t), \
              patch("os.makedirs"):
             # Should not raise
             await runner._send_voice_reply(event, "Hello")
@@ -429,8 +429,8 @@ class TestDiscordPlayTtsSkip:
     """Discord adapter skips play_tts when bot is in a voice channel."""
 
     def _make_discord_adapter(self):
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import Platform, PlatformConfig
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import Platform, PlatformConfig
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -499,13 +499,13 @@ class TestVoiceInHelp:
 
     def test_voice_in_help_output(self):
         """The gateway help text includes /voice (generated from registry)."""
-        from plutus_cli.commands import gateway_help_lines
+        from harness.cli.commands import gateway_help_lines
         help_text = "\n".join(gateway_help_lines())
         assert "/voice" in help_text
 
     def test_voice_is_known_command(self):
         """The /voice command is in GATEWAY_KNOWN_COMMANDS."""
-        from plutus_cli.commands import GATEWAY_KNOWN_COMMANDS
+        from harness.cli.commands import GATEWAY_KNOWN_COMMANDS
         assert "voice" in GATEWAY_KNOWN_COMMANDS
 
 
@@ -517,7 +517,7 @@ class TestVoiceReceiver:
     """Test VoiceReceiver silence detection, SSRC mapping, and lifecycle."""
 
     def _make_receiver(self):
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         mock_vc = MagicMock()
         mock_vc._connection.secret_key = [0] * 32
         mock_vc._connection.dave_session = None
@@ -823,14 +823,14 @@ class TestVoiceChannelCommands:
     @pytest.mark.asyncio
     async def test_input_no_adapter(self, runner):
         """No Discord adapter — early return, no crash."""
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         # No adapters set
         await runner._handle_voice_channel_input(111, 42, "Hello")
 
     @pytest.mark.asyncio
     async def test_input_no_text_channel(self, runner):
         """No text channel mapped for guild — early return."""
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         mock_adapter = AsyncMock()
         mock_adapter._voice_text_channels = {}
         mock_adapter._client = MagicMock()
@@ -840,7 +840,7 @@ class TestVoiceChannelCommands:
     @pytest.mark.asyncio
     async def test_input_creates_event_and_dispatches(self, runner):
         """Voice input creates synthetic event and calls handle_message."""
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         mock_adapter = AsyncMock()
         mock_adapter._voice_text_channels = {111: 123}
         mock_adapter._voice_sources = {}
@@ -860,7 +860,7 @@ class TestVoiceChannelCommands:
     @pytest.mark.asyncio
     async def test_input_reuses_bound_source_metadata(self, runner):
         """Voice input should share the linked text channel session metadata."""
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
 
         bound_source = SessionSource(
             chat_id="123",
@@ -892,7 +892,7 @@ class TestVoiceChannelCommands:
     @pytest.mark.asyncio
     async def test_input_posts_transcript_in_text_channel(self, runner):
         """Voice input sends transcript message to text channel."""
-        from gateway.config import Platform
+        from harness.gateway.config import Platform
         mock_adapter = AsyncMock()
         mock_adapter._voice_text_channels = {111: 123}
         mock_adapter._voice_sources = {}
@@ -944,8 +944,8 @@ class TestDiscordVoiceChannelMethods:
     """Test DiscordAdapter voice channel methods (join, leave, play, etc.)."""
 
     def _make_adapter(self):
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import Platform, PlatformConfig
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import Platform, PlatformConfig
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -1086,10 +1086,10 @@ class TestDiscordVoiceChannelMethods:
 
         pcm_data = b"\x00" * 96000
 
-        with patch("gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
-             patch("tools.transcription_tools.transcribe_audio",
+        with patch("harness.gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
+             patch("harness.tools.transcription_tools.transcribe_audio",
                    return_value={"success": True, "transcript": "Hello"}), \
-             patch("tools.voice_mode.is_whisper_hallucination", return_value=False):
+             patch("harness.tools.voice_mode.is_whisper_hallucination", return_value=False):
             await adapter._process_voice_input(111, 42, pcm_data)
 
         callback.assert_called_once_with(guild_id=111, user_id=42, transcript="Hello")
@@ -1101,10 +1101,10 @@ class TestDiscordVoiceChannelMethods:
         callback = AsyncMock()
         adapter._voice_input_callback = callback
 
-        with patch("gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
-             patch("tools.transcription_tools.transcribe_audio",
+        with patch("harness.gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
+             patch("harness.tools.transcription_tools.transcribe_audio",
                    return_value={"success": True, "transcript": "Thank you."}), \
-             patch("tools.voice_mode.is_whisper_hallucination", return_value=True):
+             patch("harness.tools.voice_mode.is_whisper_hallucination", return_value=True):
             await adapter._process_voice_input(111, 42, b"\x00" * 96000)
 
         callback.assert_not_called()
@@ -1116,8 +1116,8 @@ class TestDiscordVoiceChannelMethods:
         callback = AsyncMock()
         adapter._voice_input_callback = callback
 
-        with patch("gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
-             patch("tools.transcription_tools.transcribe_audio",
+        with patch("harness.gateway.platforms.discord.VoiceReceiver.pcm_to_wav"), \
+             patch("harness.tools.transcription_tools.transcribe_audio",
                    return_value={"success": False, "error": "API error"}):
             await adapter._process_voice_input(111, 42, b"\x00" * 96000)
 
@@ -1129,7 +1129,7 @@ class TestDiscordVoiceChannelMethods:
         adapter = self._make_adapter()
         adapter._voice_input_callback = AsyncMock()
 
-        with patch("gateway.platforms.discord.VoiceReceiver.pcm_to_wav",
+        with patch("harness.gateway.platforms.discord.VoiceReceiver.pcm_to_wav",
                    side_effect=RuntimeError("ffmpeg not found")):
             await adapter._process_voice_input(111, 42, b"\x00" * 96000)
         # Should not raise
@@ -1147,7 +1147,7 @@ class TestVoiceReceiverThreadSafety:
     """Verify that VoiceReceiver buffer access is protected by lock."""
 
     def _make_receiver(self):
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         mock_vc = MagicMock()
         mock_vc._connection.secret_key = [0] * 32
         mock_vc._connection.dave_session = None
@@ -1160,7 +1160,7 @@ class TestVoiceReceiverThreadSafety:
     def test_check_silence_holds_lock(self):
         """check_silence must hold lock while iterating buffers."""
         import ast, inspect, textwrap
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         source = textwrap.dedent(inspect.getsource(VoiceReceiver.check_silence))
         tree = ast.parse(source)
         # Find 'with self._lock:' that contains buffer iteration
@@ -1181,7 +1181,7 @@ class TestVoiceReceiverThreadSafety:
     def test_on_packet_buffer_write_holds_lock(self):
         """_on_packet must hold lock when writing to buffers."""
         import ast, inspect, textwrap
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         source = textwrap.dedent(inspect.getsource(VoiceReceiver._on_packet))
         tree = ast.parse(source)
         # Find 'with self._lock:' that contains buffer extend
@@ -1234,7 +1234,7 @@ class TestCallbackWiringOrder:
     def test_callback_set_before_join(self):
         """_handle_voice_channel_join wires callback before calling join."""
         import ast, inspect
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         source = inspect.getsource(GatewayRunner._handle_voice_channel_join)
         lines = source.split("\n")
         callback_line = None
@@ -1369,7 +1369,7 @@ class TestAutoTtsEmptyTextGuard:
     def test_base_empty_check_in_source(self):
         """base.py must check speech_text is non-empty before calling TTS."""
         import ast, inspect
-        from gateway.platforms.base import BasePlatformAdapter
+        from harness.gateway.platforms.base import BasePlatformAdapter
         source = inspect.getsource(BasePlatformAdapter._process_message_background)
         assert "if not speech_text" in source or "not speech_text" in source, (
             "base.py must guard against empty speech_text before TTS call"
@@ -1381,7 +1381,7 @@ class TestStreamTtsToSpeaker:
 
     def test_none_sentinel_flushes_buffer(self):
         """None sentinel causes remaining buffer to be spoken."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1399,7 +1399,7 @@ class TestStreamTtsToSpeaker:
 
     def test_stop_event_aborts_early(self):
         """Setting stop_event causes early exit."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1415,7 +1415,7 @@ class TestStreamTtsToSpeaker:
 
     def test_done_event_set_on_exception(self):
         """tts_done_event is set even when an exception occurs."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1429,7 +1429,7 @@ class TestStreamTtsToSpeaker:
 
     def test_think_blocks_stripped(self):
         """<think>...</think> content is not spoken."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1447,7 +1447,7 @@ class TestStreamTtsToSpeaker:
 
     def test_sentence_splitting(self):
         """Sentences are split at boundaries and spoken individually."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1464,7 +1464,7 @@ class TestStreamTtsToSpeaker:
 
     def test_markdown_stripped_in_speech(self):
         """Markdown formatting is removed before display/speech."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1480,7 +1480,7 @@ class TestStreamTtsToSpeaker:
 
     def test_duplicate_sentences_deduped(self):
         """Repeated sentences are spoken only once."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1498,7 +1498,7 @@ class TestStreamTtsToSpeaker:
 
     def test_no_api_key_display_only(self):
         """Without ELEVENLABS_API_KEY, display callback still works."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1515,7 +1515,7 @@ class TestStreamTtsToSpeaker:
 
     def test_long_buffer_flushed_on_timeout(self):
         """Buffer longer than long_flush_len is flushed on queue timeout."""
-        from tools.tts_tool import stream_tts_to_speaker
+        from harness.tools.tts_tool import stream_tts_to_speaker
         text_q = queue.Queue()
         stop_evt = threading.Event()
         done_evt = threading.Event()
@@ -1548,7 +1548,7 @@ class TestStopAcquiresLock:
 
     @staticmethod
     def _make_receiver():
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         vc = MagicMock()
         vc._connection.secret_key = [0] * 32
         vc._connection.dave_session = None
@@ -1650,7 +1650,7 @@ class TestPacketDebugCounterIsInstanceLevel:
 
     @staticmethod
     def _make_receiver():
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         vc = MagicMock()
         vc._connection.secret_key = [0] * 32
         vc._connection.dave_session = None
@@ -1683,7 +1683,7 @@ class TestPlayInVoiceChannelUsesRunningLoop:
     def test_source_uses_get_running_loop(self):
         """The method source code calls get_running_loop, not get_event_loop."""
         import inspect
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         source = inspect.getsource(DiscordAdapter.play_in_voice_channel)
         assert "get_running_loop" in source, \
             "play_in_voice_channel should use asyncio.get_running_loop()"
@@ -1701,7 +1701,7 @@ class TestSendVoiceReplyFilename:
     def test_filename_uses_uuid(self):
         """The method uses uuid in the filename, not time-based."""
         import inspect
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         source = inspect.getsource(GatewayRunner._send_voice_reply)
         assert "uuid" in source, \
             "_send_voice_reply should use uuid for unique filenames"
@@ -1727,8 +1727,8 @@ class TestVoiceTimeoutCleansRunnerState:
 
     @staticmethod
     def _make_discord_adapter():
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import PlatformConfig, Platform
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig, Platform
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -1818,8 +1818,8 @@ class TestPlaybackTimeout:
 
     @staticmethod
     def _make_discord_adapter():
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import PlatformConfig, Platform
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig, Platform
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -1842,7 +1842,7 @@ class TestPlaybackTimeout:
     def test_source_has_wait_for_timeout(self):
         """The method uses asyncio.wait_for with timeout."""
         import inspect
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         source = inspect.getsource(DiscordAdapter.play_in_voice_channel)
         assert "wait_for" in source, \
             "play_in_voice_channel must use asyncio.wait_for for timeout"
@@ -1851,14 +1851,14 @@ class TestPlaybackTimeout:
 
     def test_playback_timeout_constant_exists(self):
         """PLAYBACK_TIMEOUT constant is defined on DiscordAdapter."""
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         assert hasattr(DiscordAdapter, "PLAYBACK_TIMEOUT")
         assert DiscordAdapter.PLAYBACK_TIMEOUT > 0
 
     @pytest.mark.asyncio
     async def test_playback_timeout_fires(self):
         """When done event is never set, playback times out gracefully."""
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         adapter = self._make_discord_adapter()
 
         mock_vc = MagicMock()
@@ -1886,7 +1886,7 @@ class TestPlaybackTimeout:
     @pytest.mark.asyncio
     async def test_is_playing_wait_has_timeout(self):
         """While loop waiting for previous playback has a timeout."""
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         adapter = self._make_discord_adapter()
 
         mock_vc = MagicMock()
@@ -1921,7 +1921,7 @@ class TestSendVoiceReplyCleanup:
     def test_cleanup_in_finally(self):
         """The method has cleanup in a finally block, not inside try."""
         import inspect, textwrap, ast
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         source = textwrap.dedent(inspect.getsource(GatewayRunner._send_voice_reply))
         tree = ast.parse(source)
         func = tree.body[0]
@@ -1959,8 +1959,8 @@ class TestSendVoiceReplyCleanup:
             "file_path": str(audio_file),
         })
 
-        with patch("gateway.run.asyncio.to_thread", new_callable=AsyncMock, return_value=tts_result), \
-             patch("tools.tts_tool._strip_markdown_for_tts", return_value="hello"), \
+        with patch("harness.gateway.run.asyncio.to_thread", new_callable=AsyncMock, return_value=tts_result), \
+             patch("harness.tools.tts_tool._strip_markdown_for_tts", return_value="hello"), \
              patch("os.path.isfile", return_value=True), \
              patch("os.makedirs"):
             await runner._send_voice_reply(event, "Hello world")
@@ -1980,7 +1980,7 @@ class TestAutoTtsTempFileCleanup:
     def test_source_has_finally_remove(self):
         """play_tts call is wrapped in try/finally with os.remove."""
         import inspect
-        from gateway.platforms.base import BasePlatformAdapter
+        from harness.gateway.platforms.base import BasePlatformAdapter
         source = inspect.getsource(BasePlatformAdapter._process_message_background)
         # Find the play_tts section and verify cleanup
         play_tts_idx = source.find("play_tts")
@@ -2002,8 +2002,8 @@ class TestVoiceChannelAwareness:
     """Tests for get_voice_channel_info() and get_voice_channel_context()."""
 
     def _make_adapter(self):
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import PlatformConfig
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -2145,7 +2145,7 @@ class TestVoiceReception:
 
     @staticmethod
     def _make_receiver(allowed_ids=None, members=None, dave=False, bot_id=9999):
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         vc = MagicMock()
         vc._connection.secret_key = [0] * 32
         vc._connection.dave_session = MagicMock() if dave else None
@@ -2329,7 +2329,7 @@ class TestVoiceReception:
 
     def _make_receiver_with_nacl(self, dave_session=None, mapped_ssrcs=None):
         """Create a receiver that can process _on_packet with mocked NaCl + Opus."""
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         vc = MagicMock()
         vc._connection.secret_key = [0] * 32
         vc._connection.dave_session = dave_session
@@ -2471,8 +2471,8 @@ class TestVoiceTTSPlayback:
 
     @staticmethod
     def _make_discord_adapter():
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import PlatformConfig, Platform
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig, Platform
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake-token"
         adapter = object.__new__(DiscordAdapter)
@@ -2510,7 +2510,7 @@ class TestVoiceTTSPlayback:
     async def test_play_tts_fallback_when_not_in_vc(self):
         """play_tts sends as file attachment when bot is not in VC."""
         adapter = self._make_discord_adapter()
-        from gateway.platforms.base import SendResult
+        from harness.gateway.platforms.base import SendResult
         adapter.send_voice = AsyncMock(return_value=SendResult(success=False, error="no client"))
         result = await adapter.play_tts(chat_id="123", audio_path="/tmp/tts.ogg")
         assert result.success is False
@@ -2525,7 +2525,7 @@ class TestVoiceTTSPlayback:
         adapter._voice_clients[111] = mock_vc
         adapter._voice_text_channels[111] = 123
 
-        from gateway.platforms.base import SendResult
+        from harness.gateway.platforms.base import SendResult
         adapter.send_voice = AsyncMock(return_value=SendResult(success=True))
         # Different chat_id — shouldn't match VC
         result = await adapter.play_tts(chat_id="999", audio_path="/tmp/tts.ogg")
@@ -2535,7 +2535,7 @@ class TestVoiceTTSPlayback:
 
     @staticmethod
     def _make_runner():
-        from gateway.run import GatewayRunner
+        from harness.gateway.run import GatewayRunner
         runner = object.__new__(GatewayRunner)
         runner._voice_mode = {}
         runner.adapters = {}
@@ -2543,8 +2543,8 @@ class TestVoiceTTSPlayback:
 
     def _call_should_reply(self, runner, voice_mode, msg_type, response="Hello",
                            agent_msgs=None, already_sent=False):
-        from gateway.platforms.base import MessageType, MessageEvent, SessionSource
-        from gateway.config import Platform
+        from harness.gateway.platforms.base import MessageType, MessageEvent, SessionSource
+        from harness.gateway.config import Platform
         runner._voice_mode["discord:ch1"] = voice_mode
         source = SessionSource(
             platform=Platform.DISCORD, chat_id="ch1",
@@ -2559,43 +2559,43 @@ class TestVoiceTTSPlayback:
 
     def test_voice_input_runner_skips(self):
         """Streaming OFF + voice input: runner skips — base adapter handles."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.VOICE, already_sent=False) is False
 
     def test_text_input_voice_all_runner_fires(self):
         """Streaming OFF + text input + voice_mode=all: runner generates TTS."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.TEXT, already_sent=False) is True
 
     def test_text_input_voice_off_no_tts(self):
         """Streaming OFF + text input + voice_mode=off: no TTS."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "off", MessageType.TEXT) is False
 
     def test_text_input_voice_only_no_tts(self):
         """Streaming OFF + text input + voice_mode=voice_only: no TTS for text."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "voice_only", MessageType.TEXT) is False
 
     def test_error_response_no_tts(self):
         """Error response: no TTS regardless of voice_mode."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.TEXT, response="Error: boom") is False
 
     def test_empty_response_no_tts(self):
         """Empty response: no TTS."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.TEXT, response="") is False
 
     def test_agent_tts_tool_dedup(self):
         """Agent already called text_to_speech tool: runner skips."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         agent_msgs = [{"role": "assistant", "tool_calls": [
             {"id": "1", "type": "function", "function": {"name": "text_to_speech", "arguments": "{}"}}
@@ -2606,31 +2606,31 @@ class TestVoiceTTSPlayback:
 
     def test_streaming_on_voice_input_runner_fires(self):
         """Streaming ON + voice input: runner handles TTS (base adapter has no text)."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.VOICE, already_sent=True) is True
 
     def test_streaming_on_text_input_runner_fires(self):
         """Streaming ON + text input: runner handles TTS (same as before)."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.TEXT, already_sent=True) is True
 
     def test_streaming_on_voice_off_no_tts(self):
         """Streaming ON + voice_mode=off: no TTS regardless of streaming."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "off", MessageType.VOICE, already_sent=True) is False
 
     def test_streaming_on_empty_response_no_tts(self):
         """Streaming ON + empty response: no TTS."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         assert self._call_should_reply(runner, "all", MessageType.VOICE, response="", already_sent=True) is False
 
     def test_streaming_on_agent_tts_dedup(self):
         """Streaming ON + agent called TTS: runner skips (dedup still works)."""
-        from gateway.platforms.base import MessageType
+        from harness.gateway.platforms.base import MessageType
         runner = self._make_runner()
         agent_msgs = [{"role": "assistant", "tool_calls": [
             {"id": "1", "type": "function", "function": {"name": "text_to_speech", "arguments": "{}"}}
@@ -2644,15 +2644,15 @@ class TestUDPKeepalive:
     """UDP keepalive prevents Discord from dropping the voice session."""
 
     def test_keepalive_interval_is_reasonable(self):
-        from gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.platforms.discord import DiscordAdapter
         interval = DiscordAdapter._KEEPALIVE_INTERVAL
         assert 5 <= interval <= 30, f"Keepalive interval {interval}s should be between 5-30s"
 
     @pytest.mark.asyncio
     async def test_keepalive_sends_silence_frame(self):
         """Listen loop sends silence frame via send_packet after interval."""
-        from gateway.platforms.discord import DiscordAdapter
-        from gateway.config import PlatformConfig, Platform
+        from harness.gateway.platforms.discord import DiscordAdapter
+        from harness.gateway.config import PlatformConfig, Platform
 
         config = PlatformConfig(enabled=True, extra={})
         config.token = "fake"
@@ -2673,7 +2673,7 @@ class TestUDPKeepalive:
         adapter._voice_clients[111] = mock_vc
         mock_vc._connection = mock_conn
 
-        from gateway.platforms.discord import VoiceReceiver
+        from harness.gateway.platforms.discord import VoiceReceiver
         mock_receiver_vc = MagicMock()
         mock_receiver_vc._connection.secret_key = [0] * 32
         mock_receiver_vc._connection.dave_session = None

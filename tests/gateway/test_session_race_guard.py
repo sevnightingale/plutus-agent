@@ -13,10 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from gateway.config import GatewayConfig, Platform, PlatformConfig
-from gateway.platforms.base import MessageEvent, MessageType, merge_pending_message_event
-from gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
-from gateway.session import SessionSource, build_session_key
+from harness.gateway.config import GatewayConfig, Platform, PlatformConfig
+from harness.gateway.platforms.base import MessageEvent, MessageType, merge_pending_message_event
+from harness.gateway.run import GatewayRunner, _AGENT_PENDING_SENTINEL
+from harness.gateway.session import SessionSource, build_session_key
 
 
 class _FakeAdapter:
@@ -467,8 +467,8 @@ async def test_shutdown_skips_sentinel():
     runner._exit_reason = None
     runner._shutdown_all_gateway_honcho = lambda: None
 
-    with patch("gateway.status.remove_pid_file"), \
-         patch("gateway.status.write_runtime_status"):
+    with patch("harness.gateway.status.remove_pid_file"), \
+         patch("harness.gateway.status.write_runtime_status"):
         await runner.stop()
 
     # Real agent should have been interrupted

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools.environments import docker as docker_mod
+from harness.tools.environments import docker as docker_mod
 
 
 @pytest.fixture(autouse=True)
@@ -18,7 +18,7 @@ def _reset_cache():
 
 class TestFindDocker:
     def test_found_via_shutil_which(self):
-        with patch("tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
+        with patch("harness.tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/docker"
 
@@ -28,22 +28,22 @@ class TestFindDocker:
         fake_docker.write_text("#!/bin/sh\n")
         fake_docker.chmod(0o755)
 
-        with patch("tools.environments.docker.shutil.which", return_value=None), \
-             patch("tools.environments.docker._DOCKER_SEARCH_PATHS", [str(fake_docker)]):
+        with patch("harness.tools.environments.docker.shutil.which", return_value=None), \
+             patch("harness.tools.environments.docker._DOCKER_SEARCH_PATHS", [str(fake_docker)]):
             result = docker_mod.find_docker()
         assert result == str(fake_docker)
 
     def test_returns_none_when_not_found(self):
-        with patch("tools.environments.docker.shutil.which", return_value=None), \
-             patch("tools.environments.docker._DOCKER_SEARCH_PATHS", ["/nonexistent/docker"]):
+        with patch("harness.tools.environments.docker.shutil.which", return_value=None), \
+             patch("harness.tools.environments.docker._DOCKER_SEARCH_PATHS", ["/nonexistent/docker"]):
             result = docker_mod.find_docker()
         assert result is None
 
     def test_caches_result(self):
-        with patch("tools.environments.docker.shutil.which", return_value="/usr/local/bin/docker"):
+        with patch("harness.tools.environments.docker.shutil.which", return_value="/usr/local/bin/docker"):
             first = docker_mod.find_docker()
         # Second call should use cache, not call shutil.which again
-        with patch("tools.environments.docker.shutil.which", return_value=None):
+        with patch("harness.tools.environments.docker.shutil.which", return_value=None):
             second = docker_mod.find_docker()
         assert first == second == "/usr/local/bin/docker"
 
@@ -54,7 +54,7 @@ class TestFindDocker:
         fake_binary.chmod(0o755)
 
         with patch.dict(os.environ, {"HERMES_DOCKER_BINARY": str(fake_binary)}), \
-             patch("tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
+             patch("harness.tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
             result = docker_mod.find_docker()
         assert result == str(fake_binary)
 
@@ -65,14 +65,14 @@ class TestFindDocker:
         fake_binary.chmod(0o644)  # not executable
 
         with patch.dict(os.environ, {"HERMES_DOCKER_BINARY": str(fake_binary)}), \
-             patch("tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
+             patch("harness.tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/docker"
 
     def test_env_var_override_ignored_if_nonexistent(self):
         """Non-existent HERMES_DOCKER_BINARY path falls through."""
         with patch.dict(os.environ, {"HERMES_DOCKER_BINARY": "/nonexistent/podman"}), \
-             patch("tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
+             patch("harness.tools.environments.docker.shutil.which", return_value="/usr/bin/docker"):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/docker"
 
@@ -85,8 +85,8 @@ class TestFindDocker:
                 return "/usr/bin/podman"
             return None
 
-        with patch("tools.environments.docker.shutil.which", side_effect=which_side_effect), \
-             patch("tools.environments.docker._DOCKER_SEARCH_PATHS", []):
+        with patch("harness.tools.environments.docker.shutil.which", side_effect=which_side_effect), \
+             patch("harness.tools.environments.docker._DOCKER_SEARCH_PATHS", []):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/podman"
 
@@ -99,6 +99,6 @@ class TestFindDocker:
                 return "/usr/bin/podman"
             return None
 
-        with patch("tools.environments.docker.shutil.which", side_effect=which_side_effect):
+        with patch("harness.tools.environments.docker.shutil.which", side_effect=which_side_effect):
             result = docker_mod.find_docker()
         assert result == "/usr/bin/docker"

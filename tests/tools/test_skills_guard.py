@@ -21,7 +21,7 @@ def _can_symlink():
         return False
 
 
-from tools.skills_guard import (
+from harness.tools.skills_guard import (
     Finding,
     ScanResult,
     scan_file,

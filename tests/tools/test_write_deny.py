@@ -4,7 +4,7 @@ import os
 import pytest
 from pathlib import Path
 
-from tools.file_operations import _is_write_denied
+from harness.tools.file_operations import _is_write_denied
 
 
 class TestWriteDenyExactPaths:

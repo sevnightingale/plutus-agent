@@ -10,10 +10,10 @@ from pathlib import Path
 
 # Files that must have Windows-safe process management
 GUARDED_FILES = [
-    "tools/environments/local.py",
-    "tools/process_registry.py",
-    "tools/code_execution_tool.py",
-    "gateway/platforms/whatsapp.py",
+    "harness/tools/environments/local.py",
+    "harness/tools/process_registry.py",
+    "harness/tools/code_execution_tool.py",
+    "harness/gateway/platforms/whatsapp.py",
 ]
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
