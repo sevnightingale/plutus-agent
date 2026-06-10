@@ -427,35 +427,6 @@ def _run_post_setup(post_setup_key: str):
             _print_warning("    kittentts install timed out (>5min)")
             _print_info(f"    Run manually: python -m pip install -U '{wheel_url}' soundfile")
 
-    elif post_setup_key == "rl_training":
-        try:
-            __import__("tinker_atropos")
-        except ImportError:
-            tinker_dir = PROJECT_ROOT / "tinker-atropos"
-            if tinker_dir.exists() and (tinker_dir / "pyproject.toml").exists():
-                _print_info("    Installing tinker-atropos submodule...")
-                import subprocess
-                uv_bin = shutil.which("uv")
-                if uv_bin:
-                    result = subprocess.run(
-                        [uv_bin, "pip", "install", "--python", sys.executable, "-e", str(tinker_dir)],
-                        capture_output=True, text=True
-                    )
-                else:
-                    result = subprocess.run(
-                        [sys.executable, "-m", "pip", "install", "-e", str(tinker_dir)],
-                        capture_output=True, text=True
-                    )
-                if result.returncode == 0:
-                    _print_success("    tinker-atropos installed")
-                else:
-                    _print_warning("    tinker-atropos install failed - run manually:")
-                    _print_info('      uv pip install -e "./tinker-atropos"')
-            else:
-                _print_warning("    tinker-atropos submodule not found - run:")
-                _print_info("      git submodule update --init --recursive")
-                _print_info('      uv pip install -e "./tinker-atropos"')
-
 
 # ─── Platform / Toolset Helpers ───────────────────────────────────────────────
 

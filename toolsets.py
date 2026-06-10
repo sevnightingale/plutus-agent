@@ -309,18 +309,6 @@ TOOLSETS = {
     },
     
     
-    "rl": {
-        "description": "RL training tools for running reinforcement learning on Tinker-Atropos",
-        "tools": [
-            "rl_list_environments", "rl_select_environment",
-            "rl_get_current_config", "rl_edit_config",
-            "rl_start_training", "rl_check_status",
-            "rl_stop_training", "rl_get_results",
-            "rl_list_runs", "rl_test_inference"
-        ],
-        "includes": []
-    },
-
     "file": {
         "description": "File manipulation tools: read, write, patch (with fuzzy matching), and search (content + files)",
         "tools": ["read_file", "write_file", "patch", "search_files"],
@@ -409,25 +397,6 @@ TOOLSETS = {
     # All platforms share the same core tools (including send_message,
     # which is gated on gateway running via its check_fn).
     # ==========================================================================
-
-    "hermes-acp": {
-        "description": "Editor integration (VS Code, Zed, JetBrains) — coding-focused tools without messaging, audio, or clarify UI",
-        "tools": [
-            "web_search", "web_extract",
-            "terminal", "process",
-            "read_file", "write_file", "patch", "search_files",
-            "vision_analyze",
-            "skills_list", "skill_view", "skill_manage",
-            "browser_navigate", "browser_snapshot", "browser_click",
-            "browser_type", "browser_scroll", "browser_back",
-            "browser_press", "browser_get_images",
-            "browser_vision", "browser_console", "browser_cdp",
-            "todo", "memory",
-            "session_search",
-            "execute_code", "delegate_task",
-        ],
-        "includes": []
-    },
 
     "hermes-api-server": {
         "description": "OpenAI-compatible API server — full agent tools accessible via HTTP (no interactive UI tools like clarify or send_message)",

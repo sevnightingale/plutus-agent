@@ -741,11 +741,6 @@ def mcp_command(args):
     """Main dispatcher for ``hermes mcp`` subcommands."""
     action = getattr(args, "mcp_action", None)
 
-    if action == "serve":
-        from mcp_serve import run_mcp_server
-        run_mcp_server(verbose=getattr(args, "verbose", False))
-        return
-
     handlers = {
         "add": cmd_mcp_add,
         "remove": cmd_mcp_remove,

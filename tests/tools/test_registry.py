@@ -306,7 +306,6 @@ class TestBuiltinDiscovery:
             "tools.image_generation_tool",
             "tools.memory_tool",
             "tools.process_registry",
-            "tools.rl_training_tool",
             "tools.send_message_tool",
             "tools.session_search_tool",
             "tools.skill_manager_tool",
