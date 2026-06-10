@@ -596,6 +596,47 @@ def remove_job(job_id: str) -> bool:
     return False
 
 
+def clean_stale_jobs(max_age_hours: int = 1) -> int:
+    """Remove completed one-shot jobs older than ``max_age_hours``.
+
+    Called by the main beat to prevent ``jobs.json`` from accumulating
+    dead wake-event entries. Returns the number of jobs removed.
+    """
+    with _jobs_file_lock:
+        jobs = load_jobs()
+        cutoff = _hermes_now() - timedelta(hours=max_age_hours)
+        kept = []
+        removed = 0
+        for job in jobs:
+            # Only clean one-shot jobs that are completed/failed
+            repeat = job.get("repeat", {})
+            state = job.get("state", "")
+            last_run = job.get("last_run_at")
+            kind = job.get("schedule", {}).get("kind", "")
+
+            is_oneshot = kind == "once" or (repeat.get("times") == 1 and repeat.get("completed", 0) >= 1)
+            is_done = state in ("completed", "error")
+            is_old = False
+            if last_run:
+                try:
+                    last_run_dt = datetime.fromisoformat(last_run)
+                    if last_run_dt.tzinfo is None:
+                        last_run_dt = last_run_dt.replace(tzinfo=_hermes_now().tzinfo)
+                    is_old = last_run_dt < cutoff
+                except Exception:
+                    pass
+
+            if is_oneshot and is_done and is_old:
+                removed += 1
+                continue
+            kept.append(job)
+
+        if removed:
+            save_jobs(kept)
+            logger.info("clean_stale_jobs: removed %d completed one-shot jobs", removed)
+        return removed
+
+
 def mark_job_run(job_id: str, success: bool, error: Optional[str] = None,
                  delivery_error: Optional[str] = None):
     """

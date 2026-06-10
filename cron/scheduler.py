@@ -8,6 +8,7 @@ Uses a file-based lock (~/.plutus-agent/cron/.tick.lock) so only one tick
 runs at a time if multiple processes overlap.
 """
 
+import time
 import asyncio
 import concurrent.futures
 import contextvars
@@ -840,6 +841,7 @@ def _run_job_via_synthetic(
 
     job_id = job["id"]
     job_name = job["name"]
+    _start_time = time.time()
     kind = f"cron:{job_id}"
     wrapped = _wrap_synthetic_prompt(prompt, kind=kind, ts=_hermes_now())
 
@@ -848,6 +850,10 @@ def _run_job_via_synthetic(
     except Exception as e:
         msg = f"unknown origin platform: {origin.get('platform')!r}"
         logger.error("Job '%s': %s", job_id, msg)
+        _log_job_completion(
+            job, start_time=_start_time, success=False,
+            final_response="", error=msg, mode="synthetic",
+        )
         return False, _build_failure_doc(job, prompt, msg), "", msg
 
     coro = gateway.deliver_synthetic_message(
@@ -872,10 +878,18 @@ def _run_job_via_synthetic(
         future.cancel()
         msg = f"synthetic injection timed out after {int(timeout_s)}s"
         logger.error("Job '%s': %s", job_id, msg)
+        _log_job_completion(
+            job, start_time=_start_time, success=False,
+            final_response="", error=msg, mode="synthetic",
+        )
         return False, _build_failure_doc(job, prompt, msg), "", msg
     except Exception as e:
         msg = f"{type(e).__name__}: {e}"
         logger.exception("Job '%s' synthetic injection failed: %s", job_id, msg)
+        _log_job_completion(
+            job, start_time=_start_time, success=False,
+            final_response="", error=msg, mode="synthetic",
+        )
         return False, _build_failure_doc(job, prompt, msg), "", msg
 
     final_response = (response or "").strip() if isinstance(response, str) else ""
@@ -893,8 +907,43 @@ def _run_job_via_synthetic(
         "## Response\n\n"
         f"{final_response or '(No response generated)'}\n"
     )
-    logger.info("Job '%s' completed (synthetic injection)", job_name)
+    _log_job_completion(
+        job, start_time=_start_time, success=True,
+        final_response=final_response, mode="synthetic",
+    )
     return True, output, final_response, None
+
+
+def _log_job_completion(
+    job: dict,
+    *,
+    start_time: float,
+    success: bool,
+    final_response: str,
+    error: Optional[str] = None,
+    model: Optional[str] = None,
+    api_calls: int = 0,
+    mode: str = "unknown",
+):
+    """Log a structured completion line for every cron job exit."""
+    job_name = job.get("name", job.get("id", "?"))
+    job_id = job.get("id", "?")
+    duration = time.time() - start_time
+    output_chars = len(final_response) if final_response else 0
+    _model = model or job.get("model", "default")
+
+    if success:
+        logger.info(
+            "cron.scheduler: Job '%s' (ID %s) completed in %.2fs — "
+            "model=%s, mode=%s, api_calls=%d, output_chars=%d",
+            job_name, job_id, duration, _model, mode, api_calls, output_chars,
+        )
+    else:
+        logger.error(
+            "cron.scheduler: Job '%s' (ID %s) FAILED after %.2fs — "
+            "model=%s, mode=%s, error=%s",
+            job_name, job_id, duration, _model, mode, error or "unknown",
+        )
 
 
 def _build_failure_doc(job: dict, prompt: str, error: str) -> str:
@@ -907,7 +956,7 @@ def _build_failure_doc(job: dict, prompt: str, error: str) -> str:
         "## Prompt\n\n"
         f"{prompt}\n\n"
         "## Error\n\n"
-        f"```\n{error}\n```\n"
+        f"```{error}\n```\n"
     )
 
 
@@ -994,7 +1043,7 @@ def run_job(job: dict, gateway=None) -> tuple[bool, str, str, Optional[str]]:
             except Exception:
                 gw_loop = None
         if gw_loop is not None:
-            _cron_timeout = float(os.getenv("HERMES_CRON_TIMEOUT", 600))
+            _cron_timeout = float(os.getenv("PLUTUS_CRON_TIMEOUT") or os.getenv("HERMES_CRON_TIMEOUT", 600))
             return _run_job_via_synthetic(
                 job, prompt, injection_origin, gateway, gw_loop, _cron_timeout,
             )
@@ -1031,6 +1080,11 @@ def _legacy_run_job(
     """
     from run_agent import AIAgent
 
+    _start_time = time.time()
+    _job_id = job.get("id", "?")
+    _job_name = job.get("name", _job_id)
+    _model_used = job.get("model") or os.getenv("HERMES_MODEL") or ""
+
     # Initialize SQLite session store so cron job messages are persisted
     # and discoverable via session_search (same pattern as gateway/run.py).
     _session_db = None
@@ -1038,7 +1092,7 @@ def _legacy_run_job(
         from plutus_state import SessionDB
         _session_db = SessionDB()
     except Exception as e:
-        logger.debug("Job '%s': SQLite session store not available: %s", job.get("id", "?"), e)
+        logger.debug("Job '%s': SQLite session store not available: %s", _job_id, e)
 
     job_id = job["id"]
     job_name = job["name"]
@@ -1144,6 +1198,10 @@ def _legacy_run_job(
             runtime = resolve_runtime_provider(**runtime_kwargs)
         except Exception as exc:
             message = format_runtime_provider_error(exc)
+            _log_job_completion(
+                job, start_time=_start_time, success=False,
+                final_response="", error=message, model=_model_used, mode="legacy",
+            )
             raise RuntimeError(message) from exc
 
         fallback_model = _cfg.get("fallback_providers") or _cfg.get("fallback_model") or None
@@ -1262,17 +1320,29 @@ def _legacy_run_job(
             )
             if hasattr(agent, "interrupt"):
                 agent.interrupt("Cron job timed out (inactivity)")
-            raise TimeoutError(
+            _err_msg = (
                 f"Cron job '{job_name}' idle for "
                 f"{int(_secs_ago)}s (limit {int(_cron_inactivity_limit)}s) "
                 f"— last activity: {_last_desc}"
             )
+            _log_job_completion(
+                job, start_time=_start_time, success=False,
+                final_response="", error=_err_msg, model=_model_used,
+                api_calls=_iter_n, mode="legacy",
+            )
+            raise TimeoutError(_err_msg)
 
         # Guard against non-dict returns from run_conversation under error conditions
         if not isinstance(result, dict):
-            raise RuntimeError(
+            _err_msg = (
                 f"agent.run_conversation returned {type(result).__name__} instead of dict: {result!r}"
             )
+            _log_job_completion(
+                job, start_time=_start_time, success=False,
+                final_response="", error=_err_msg, model=_model_used,
+                api_calls=0, mode="legacy",
+            )
+            raise RuntimeError(_err_msg)
 
         final_response = result.get("final_response", "") or ""
         # Strip leaked placeholder text that upstream may inject on empty completions.
@@ -1282,6 +1352,15 @@ def _legacy_run_job(
         # for delivery logic (empty response = no delivery).
         logged_response = final_response if final_response else "(No response generated)"
         
+        # Extract api_call_count if available
+        _api_calls = 0
+        try:
+            _api_calls = result.get("api_call_count", 0)
+            if not _api_calls and hasattr(agent, "get_activity_summary"):
+                _api_calls = agent.get_activity_summary().get("api_call_count", 0)
+        except Exception:
+            pass
+
         output = f"""# Cron Job: {job_name}
 
 **Job ID:** {job_id}
@@ -1297,13 +1376,31 @@ def _legacy_run_job(
 {logged_response}
 """
         
-        logger.info("Job '%s' completed successfully", job_name)
+        _log_job_completion(
+            job, start_time=_start_time, success=True,
+            final_response=final_response, model=model,
+            api_calls=_api_calls, mode="legacy",
+        )
         return True, output, final_response, None
         
     except Exception as e:
         error_msg = f"{type(e).__name__}: {str(e)}"
         logger.exception("Job '%s' failed: %s", job_name, error_msg)
         
+        # Extract best-effort api_calls even on failure
+        _fail_api_calls = 0
+        try:
+            if hasattr(agent, "get_activity_summary"):
+                _fail_api_calls = agent.get_activity_summary().get("api_call_count", 0)
+        except Exception:
+            pass
+
+        _log_job_completion(
+            job, start_time=_start_time, success=False,
+            final_response="", error=error_msg, model=_model_used,
+            api_calls=_fail_api_calls, mode="legacy",
+        )
+
         output = f"""# Cron Job: {job_name} (FAILED)
 
 **Job ID:** {job_id}

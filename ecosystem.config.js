@@ -12,6 +12,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 20,
       kill_timeout: 10000,
+      max_memory_restart: "900M",
     },
     {
       name: "plutus-watchers",
