@@ -18,22 +18,6 @@ Usage:
     plutus cron list           # List cron jobs
     plutus cron status         # Check if cron scheduler is running
     plutus doctor              # Check configuration and dependencies
-    plutus honcho setup                    # Configure Honcho AI memory integration
-    plutus honcho status                   # Show Honcho config and connection status
-    plutus honcho sessions                 # List directory → session name mappings
-    plutus honcho map <name>               # Map current directory to a session name
-    plutus honcho peer                     # Show peer names and dialectic settings
-    plutus honcho peer --user NAME         # Set user peer name
-    plutus honcho peer --ai NAME           # Set AI peer name
-    plutus honcho peer --reasoning LEVEL   # Set dialectic reasoning level
-    plutus honcho mode                     # Show current memory mode
-    plutus honcho mode [hybrid|honcho|local]  # Set memory mode
-    plutus honcho tokens                   # Show token budget settings
-    plutus honcho tokens --context N       # Set session.context() token cap
-    plutus honcho tokens --dialectic N     # Set dialectic result char cap
-    plutus honcho identity                 # Show AI peer identity representation
-    plutus honcho identity <file>          # Seed AI peer identity from a file (SOUL.md etc.)
-    plutus honcho migrate                  # Step-by-step migration guide: OpenClaw native → Hermes + Honcho
     plutus version             Show version
     plutus update              Update to latest version
     hermes uninstall           Uninstall plutus-agent
@@ -5804,16 +5788,6 @@ def _cmd_update_impl(args, gateway_mode: bool):
         except Exception:
             pass  # profiles module not available or no profiles
 
-        # Sync Honcho host blocks to all profiles
-        try:
-            from plugins.memory.honcho.cli import sync_honcho_profiles_quiet
-
-            synced = sync_honcho_profiles_quiet()
-            if synced:
-                print(f"\n-> Honcho: synced {synced} profile(s)")
-        except Exception:
-            pass  # honcho plugin not installed or not configured
-
         # Check for config migrations
         print()
         print("→ Checking configuration for new options...")
@@ -6247,7 +6221,6 @@ def _coalesce_session_name_args(argv: list) -> list:
         "uninstall",
         "profile",
         "dashboard",
-        "honcho",
         "claw",
         "plugins",
         "acp",
@@ -6395,16 +6368,6 @@ def cmd_profile(args):
                     print(f"Full copy from {source_label}.")
                 else:
                     print(f"Cloned config, .env, SOUL.md from {source_label}.")
-
-            # Auto-clone Honcho config for the new profile (only with --clone/--clone-all)
-            if clone or clone_all:
-                try:
-                    from plugins.memory.honcho.cli import clone_honcho_for_profile
-
-                    if clone_honcho_for_profile(name):
-                        print(f"Honcho config cloned (peer: {name})")
-                except Exception:
-                    pass  # Honcho plugin not installed or not configured
 
             # Seed bundled skills (skip if --clone-all already copied them)
             if not clone_all:
@@ -8001,44 +7964,18 @@ Examples:
     plugins_parser.set_defaults(func=cmd_plugins)
 
     # =========================================================================
-    # Plugin CLI commands — dynamically registered by memory/general plugins.
-    # Plugins provide a register_cli(subparser) function that builds their
-    # own argparse tree.  No hardcoded plugin commands in main.py.
-    # =========================================================================
-    try:
-        from plugins.memory import discover_plugin_cli_commands
-
-        for cmd_info in discover_plugin_cli_commands():
-            plugin_parser = subparsers.add_parser(
-                cmd_info["name"],
-                help=cmd_info["help"],
-                description=cmd_info.get("description", ""),
-                formatter_class=__import__("argparse").RawDescriptionHelpFormatter,
-            )
-            cmd_info["setup_fn"](plugin_parser)
-    except Exception as _exc:
-        logging.getLogger(__name__).debug("Plugin CLI discovery failed: %s", _exc)
-
-    # =========================================================================
-    # memory command
+    # memory command (built-in memory only — external providers were removed)
     # =========================================================================
     memory_parser = subparsers.add_parser(
         "memory",
-        help="Configure external memory provider",
+        help="Manage built-in memory",
         description=(
-            "Set up and manage external memory provider plugins.\n\n"
-            "Available providers: honcho, openviking, mem0, hindsight,\n"
-            "holographic, retaindb, byterover.\n\n"
-            "Only one external provider can be active at a time.\n"
-            "Built-in memory (MEMORY.md/USER.md) is always active."
+            "Manage Plutus's built-in memory (MEMORY.md / USER.md).\n\n"
+            "External memory providers were removed; only built-in memory remains."
         ),
     )
     memory_sub = memory_parser.add_subparsers(dest="memory_command")
-    memory_sub.add_parser(
-        "setup", help="Interactive provider selection and configuration"
-    )
-    memory_sub.add_parser("status", help="Show current memory provider config")
-    memory_sub.add_parser("off", help="Disable external provider (built-in only)")
+    memory_sub.add_parser("off", help="Clear any leftover external provider config (built-in only)")
     _reset_parser = memory_sub.add_parser(
         "reset",
         help="Erase all built-in memory (MEMORY.md and USER.md)",
@@ -8114,9 +8051,7 @@ Examples:
             )
             print(f"  Files were in: {display_hermes_home()}/memories/\n")
         else:
-            from plutus_cli.memory_setup import memory_command
-
-            memory_command(args)
+            memory_parser.print_help()
 
     memory_parser.set_defaults(func=cmd_memory)
 

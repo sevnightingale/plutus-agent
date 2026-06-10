@@ -49,53 +49,6 @@ class TestProviderEnvDetection:
         assert not _has_provider_env_config(content)
 
 
-class TestDoctorToolAvailabilityOverrides:
-    def test_marks_honcho_available_when_configured(self, monkeypatch):
-        monkeypatch.setattr(doctor, "_honcho_is_configured_for_doctor", lambda: True)
-
-        available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-            [],
-            [{"name": "honcho", "env_vars": [], "tools": ["query_user_context"]}],
-        )
-
-        assert available == ["honcho"]
-        assert unavailable == []
-
-    def test_leaves_honcho_unavailable_when_not_configured(self, monkeypatch):
-        monkeypatch.setattr(doctor, "_honcho_is_configured_for_doctor", lambda: False)
-
-        honcho_entry = {"name": "honcho", "env_vars": [], "tools": ["query_user_context"]}
-        available, unavailable = doctor._apply_doctor_tool_availability_overrides(
-            [],
-            [honcho_entry],
-        )
-
-        assert available == []
-        assert unavailable == [honcho_entry]
-
-
-class TestHonchoDoctorConfigDetection:
-    def test_reports_configured_when_enabled_with_api_key(self, monkeypatch):
-        fake_config = SimpleNamespace(enabled=True, api_key="***")
-
-        monkeypatch.setattr(
-            "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
-            lambda: fake_config,
-        )
-
-        assert doctor._honcho_is_configured_for_doctor()
-
-    def test_reports_not_configured_without_api_key(self, monkeypatch):
-        fake_config = SimpleNamespace(enabled=True, api_key="")
-
-        monkeypatch.setattr(
-            "plugins.memory.honcho.client.HonchoClientConfig.from_global_config",
-            lambda: fake_config,
-        )
-
-        assert not doctor._honcho_is_configured_for_doctor()
-
-
 def test_run_doctor_sets_interactive_env_for_tool_checks(monkeypatch, tmp_path):
     """Doctor should present CLI-gated tools as available in CLI context."""
     project_root = tmp_path / "project"
@@ -211,20 +164,10 @@ class TestDoctorMemoryProviderSection:
         assert "Honcho API key" not in out
         assert "Mem0" not in out
 
-    def test_honcho_provider_not_installed_shows_fail(self, monkeypatch, tmp_path):
-        # Make honcho import fail
-        monkeypatch.setitem(
-            sys.modules, "plugins.memory.honcho.client", None
-        )
+    def test_external_provider_set_shows_not_builtin(self, monkeypatch, tmp_path):
+        # External memory providers were removed; a non-empty provider should
+        # no longer report the built-in as active.
         out = self._run_doctor_and_capture(monkeypatch, tmp_path, provider="honcho")
-        assert "Memory Provider" in out
-        # Should show failure since honcho is set but not importable
-        assert "Built-in memory active" not in out
-
-    def test_mem0_provider_not_installed_shows_fail(self, monkeypatch, tmp_path):
-        # Make mem0 import fail
-        monkeypatch.setitem(sys.modules, "plugins.memory.mem0", None)
-        out = self._run_doctor_and_capture(monkeypatch, tmp_path, provider="mem0")
         assert "Memory Provider" in out
         assert "Built-in memory active" not in out
 

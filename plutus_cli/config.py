@@ -731,27 +731,18 @@ DEFAULT_CONFIG = {
         "user_profile_enabled": True,
         "memory_char_limit": 2200,   # ~800 tokens at 2.75 chars/token
         "user_char_limit": 1375,     # ~500 tokens at 2.75 chars/token
-        # External memory provider plugin (empty = built-in only).
-        # plutus-agent defaults to "holographic" (local SQLite + HRR
-        # entity-keyed cumulative facts). Other valid options:
-        # "openviking", "mem0", "hindsight", "retaindb", "byterover".
-        # Only ONE external provider is allowed at a time.
-        "provider": "holographic",
+        # External memory providers were removed; only built-in memory
+        # (MEMORY.md / USER.md) remains. Leave empty.
+        "provider": "",
     },
     "plugins": {
         # Plugins are opt-in by default; the names listed here load on
-        # next start. New plutus-agent installs ship with the holographic
-        # memory provider and the plutus-trade-safety hooks (HALT
-        # kill-switch + Telegram trade notifications) enabled.
+        # next start. New plutus-agent installs ship with the
+        # plutus-trade-safety hooks (HALT kill-switch + Telegram trade
+        # notifications) enabled.
         "enabled": [
-            "holographic",
             "plutus-trade-safety",
         ],
-        "plutus-memory-store": {
-            "auto_extract": True,    # auto-extract facts at session end
-            "default_trust": 0.5,
-            "hrr_dim": 1024,
-        },
     },
     "notifications": {
         # Telegram chat id where successful trade tool calls (place_order /
@@ -828,11 +819,6 @@ DEFAULT_CONFIG = {
         # scanned regardless of this setting.
         "guard_agent_created": False,
     },
-
-    # Honcho AI-native memory -- reads ~/.honcho/config.json as single source of truth.
-    # This section is only needed for hermes-specific overrides; everything else
-    # (apiKey, workspace, peerName, sessions, enabled) comes from the global config.
-    "honcho": {},
 
     # IANA timezone (e.g. "Asia/Kolkata", "America/New_York").
     # Empty string means use server-local time.

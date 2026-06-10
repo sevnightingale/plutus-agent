@@ -540,15 +540,6 @@ class TestProviderDiscovery:
         result = _get_current_memory_provider()
         assert result == ""
 
-    def test_get_current_context_engine_default(self, tmp_path, monkeypatch):
-        """Default config returns 'compressor'."""
-        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text("context:\n  engine: compressor\n")
-        from plutus_cli.plugins_cmd import _get_current_context_engine
-        result = _get_current_context_engine()
-        assert result == "compressor"
-
     def test_save_memory_provider(self, tmp_path, monkeypatch):
         """Saving a memory provider persists to config.yaml."""
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
@@ -559,31 +550,10 @@ class TestProviderDiscovery:
         content = yaml.safe_load(config_file.read_text())
         assert content["memory"]["provider"] == "honcho"
 
-    def test_save_context_engine(self, tmp_path, monkeypatch):
-        """Saving a context engine persists to config.yaml."""
-        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text("context:\n  engine: compressor\n")
-        from plutus_cli.plugins_cmd import _save_context_engine
-        _save_context_engine("lcm")
-        content = yaml.safe_load(config_file.read_text())
-        assert content["context"]["engine"] == "lcm"
-
     def test_discover_memory_providers_empty(self):
-        """Discovery returns empty list when import fails."""
-        with patch("plugins.memory.discover_memory_providers",
-                    side_effect=ImportError("no module")):
-            from plutus_cli.plugins_cmd import _discover_memory_providers
-            result = _discover_memory_providers()
-            assert result == []
-
-    def test_discover_context_engines_empty(self):
-        """Discovery returns empty list when import fails."""
-        with patch("plugins.context_engine.discover_context_engines",
-                    side_effect=ImportError("no module")):
-            from plutus_cli.plugins_cmd import _discover_context_engines
-            result = _discover_context_engines()
-            assert result == []
+        """Discovery returns empty list (external providers removed)."""
+        from plutus_cli.plugins_cmd import _discover_memory_providers
+        assert _discover_memory_providers() == []
 
 
 # ── Auto-activation fix ──────────────────────────────────────────────────

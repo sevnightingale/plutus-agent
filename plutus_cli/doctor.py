@@ -89,31 +89,12 @@ def _has_provider_env_config(content: str) -> bool:
     return any(key in content for key in _PROVIDER_ENV_HINTS)
 
 
-def _honcho_is_configured_for_doctor() -> bool:
-    """Return True when Honcho is configured, even if this process has no active session."""
-    try:
-        from plugins.memory.honcho.client import HonchoClientConfig
-
-        cfg = HonchoClientConfig.from_global_config()
-        return bool(cfg.enabled and (cfg.api_key or cfg.base_url))
-    except Exception:
-        return False
-
-
 def _apply_doctor_tool_availability_overrides(available: list[str], unavailable: list[dict]) -> tuple[list[str], list[dict]]:
-    """Adjust runtime-gated tool availability for doctor diagnostics."""
-    if not _honcho_is_configured_for_doctor():
-        return available, unavailable
+    """Adjust runtime-gated tool availability for doctor diagnostics.
 
-    updated_available = list(available)
-    updated_unavailable = []
-    for item in unavailable:
-        if item.get("name") == "honcho":
-            if "honcho" not in updated_available:
-                updated_available.append("honcho")
-            continue
-        updated_unavailable.append(item)
-    return updated_available, updated_unavailable
+    External memory providers were removed; no overrides remain.
+    """
+    return available, unavailable
 
 
 def check_ok(text: str, detail: str = ""):
@@ -1104,67 +1085,14 @@ def run_doctor(args):
     except Exception:
         pass
 
+    # External memory providers were removed; only built-in memory remains.
     if not _active_memory_provider:
         check_ok("Built-in memory active", "(no external provider configured — this is fine)")
-    elif _active_memory_provider == "honcho":
-        try:
-            from plugins.memory.honcho.client import HonchoClientConfig, resolve_config_path
-            hcfg = HonchoClientConfig.from_global_config()
-            _honcho_cfg_path = resolve_config_path()
-
-            if not _honcho_cfg_path.exists():
-                check_warn("Honcho config not found", "run: plutus memory setup")
-            elif not hcfg.enabled:
-                check_info(f"Honcho disabled (set enabled: true in {_honcho_cfg_path} to activate)")
-            elif not (hcfg.api_key or hcfg.base_url):
-                check_fail("Honcho API key or base URL not set", "run: plutus memory setup")
-                issues.append("No Honcho API key — run 'plutus memory setup'")
-            else:
-                from plugins.memory.honcho.client import get_honcho_client, reset_honcho_client
-                reset_honcho_client()
-                try:
-                    get_honcho_client(hcfg)
-                    check_ok(
-                        "Honcho connected",
-                        f"workspace={hcfg.workspace_id} mode={hcfg.recall_mode} freq={hcfg.write_frequency}",
-                    )
-                except Exception as _e:
-                    check_fail("Honcho connection failed", str(_e))
-                    issues.append(f"Honcho unreachable: {_e}")
-        except ImportError:
-            check_fail("honcho-ai not installed", "pip install honcho-ai")
-            issues.append("Honcho is set as memory provider but honcho-ai is not installed")
-        except Exception as _e:
-            check_warn("Honcho check failed", str(_e))
-    elif _active_memory_provider == "mem0":
-        try:
-            from plugins.memory.mem0 import _load_config as _load_mem0_config
-            mem0_cfg = _load_mem0_config()
-            mem0_key = mem0_cfg.get("api_key", "")
-            if mem0_key:
-                check_ok("Mem0 API key configured")
-                check_info(f"user_id={mem0_cfg.get('user_id', '?')}  agent_id={mem0_cfg.get('agent_id', '?')}")
-            else:
-                check_fail("Mem0 API key not set", "(set MEM0_API_KEY in .env or run plutus memory setup)")
-                issues.append("Mem0 is set as memory provider but API key is missing")
-        except ImportError:
-            check_fail("Mem0 plugin not loadable", "pip install mem0ai")
-            issues.append("Mem0 is set as memory provider but mem0ai is not installed")
-        except Exception as _e:
-            check_warn("Mem0 check failed", str(_e))
     else:
-        # Generic check for other memory providers (openviking, hindsight, etc.)
-        try:
-            from plugins.memory import load_memory_provider
-            _provider = load_memory_provider(_active_memory_provider)
-            if _provider and _provider.is_available():
-                check_ok(f"{_active_memory_provider} provider active")
-            elif _provider:
-                check_warn(f"{_active_memory_provider} configured but not available", "run: plutus memory status")
-            else:
-                check_warn(f"{_active_memory_provider} plugin not found", "run: plutus memory setup")
-        except Exception as _e:
-            check_warn(f"{_active_memory_provider} check failed", str(_e))
+        check_warn(
+            f"memory.provider={_active_memory_provider!r} is set but external providers were removed",
+            "(ignored — built-in memory is active; clear it with 'plutus memory clear')",
+        )
 
     # =========================================================================
     # Profiles

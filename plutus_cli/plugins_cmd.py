@@ -741,12 +741,12 @@ def cmd_list() -> None:
 
 
 def _discover_memory_providers() -> list[tuple[str, str]]:
-    """Return [(name, description), ...] for available memory providers."""
-    try:
-        from plugins.memory import discover_memory_providers
-        return [(name, desc) for name, desc, _avail in discover_memory_providers()]
-    except Exception:
-        return []
+    """Return [(name, description), ...] for available memory providers.
+
+    External memory providers were removed; only built-in memory remains,
+    so there are no external providers to discover.
+    """
+    return []
 
 
 def _get_current_memory_provider() -> str:

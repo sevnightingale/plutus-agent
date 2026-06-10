@@ -1451,68 +1451,19 @@ class AIAgent:
         
 
 
-        # Memory provider plugin (external — one at a time, alongside built-in)
-        # Reads memory.provider from config to select which plugin to activate.
+        # External memory-provider subsystem REMOVED (was: holographic/honcho/mem0/etc
+        # plugins loaded via plugins.memory). Built-in file-backed memory (the `memory`
+        # tool + _memory_store above) is unaffected. _memory_manager stays None so the
+        # guarded usages below become harmless no-ops.
         self._memory_manager = None
         if not skip_memory:
-            try:
-                _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
-
-                if _mem_provider_name:
-                    from agent.memory_manager import MemoryManager as _MemoryManager
-                    from plugins.memory import load_memory_provider as _load_mem
-                    self._memory_manager = _MemoryManager()
-                    _mp = _load_mem(_mem_provider_name)
-                    if _mp and _mp.is_available():
-                        self._memory_manager.add_provider(_mp)
-                    if self._memory_manager.providers:
-                        _init_kwargs = {
-                            "session_id": self.session_id,
-                            "platform": platform or "cli",
-                            "hermes_home": str(get_hermes_home()),
-                            "agent_context": "primary",
-                        }
-                        # Thread session title for memory provider scoping
-                        # (e.g. honcho uses this to derive chat-scoped session keys)
-                        if self._session_db:
-                            try:
-                                _st = self._session_db.get_session_title(self.session_id)
-                                if _st:
-                                    _init_kwargs["session_title"] = _st
-                            except Exception:
-                                pass
-                        # Thread gateway user identity for per-user memory scoping
-                        if self._user_id:
-                            _init_kwargs["user_id"] = self._user_id
-                        if self._user_name:
-                            _init_kwargs["user_name"] = self._user_name
-                        if self._chat_id:
-                            _init_kwargs["chat_id"] = self._chat_id
-                        if self._chat_name:
-                            _init_kwargs["chat_name"] = self._chat_name
-                        if self._chat_type:
-                            _init_kwargs["chat_type"] = self._chat_type
-                        if self._thread_id:
-                            _init_kwargs["thread_id"] = self._thread_id
-                        # Thread gateway session key for stable per-chat Honcho session isolation
-                        if self._gateway_session_key:
-                            _init_kwargs["gateway_session_key"] = self._gateway_session_key
-                        # Profile identity for per-profile provider scoping
-                        try:
-                            from plutus_cli.profiles import get_active_profile_name
-                            _profile = get_active_profile_name()
-                            _init_kwargs["agent_identity"] = _profile
-                            _init_kwargs["agent_workspace"] = "hermes"
-                        except Exception:
-                            pass
-                        self._memory_manager.initialize_all(**_init_kwargs)
-                        logger.info("Memory provider '%s' activated", _mem_provider_name)
-                    else:
-                        logger.debug("Memory provider '%s' not found or not available", _mem_provider_name)
-                        self._memory_manager = None
-            except Exception as _mpe:
-                logger.warning("Memory provider plugin init failed: %s", _mpe)
-                self._memory_manager = None
+            _mem_provider_name = mem_config.get("provider", "") if mem_config else ""
+            if _mem_provider_name:
+                logger.warning(
+                    "memory.provider=%r is set but external memory providers were "
+                    "removed; ignoring. Built-in memory is active.",
+                    _mem_provider_name,
+                )
 
         # Inject memory provider tool schemas into the tool surface.
         # Skip tools whose names already exist (plugins may register the
