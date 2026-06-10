@@ -361,7 +361,7 @@ class TestCmdUpdateLaunchdRestart:
 
         captured = capsys.readouterr().out
         assert "Restarted" in captured
-        assert "Restart manually: hermes gateway run" not in captured
+        assert "Restart manually: plutus gateway run" not in captured
         mock_launchd_restart.assert_called_once_with()
 
     @patch("shutil.which", return_value=None)
@@ -390,7 +390,7 @@ class TestCmdUpdateLaunchdRestart:
             cmd_update(mock_args)
 
         captured = capsys.readouterr().out
-        assert "Restart manually: hermes gateway run" in captured
+        assert "Restart manually: plutus gateway run" in captured
 
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run")
@@ -907,8 +907,8 @@ class TestFindGatewayPidsExclude:
             return subprocess.CompletedProcess(
                 cmd, 0,
                 stdout=(
-                    "user  100  0.0  0.0  0  0  ?  S  00:00  0:00  python gateway/run.py\n"
-                    "user  200  0.0  0.0  0  0  ?  S  00:00  0:00  python gateway/run.py\n"
+                    "user  100  0.0  0.0  0  0  ?  S  00:00  0:00  python harness/gateway/run.py\n"
+                    "user  200  0.0  0.0  0  0  ?  S  00:00  0:00  python harness/gateway/run.py\n"
                 ),
                 stderr="",
             )
@@ -927,8 +927,8 @@ class TestFindGatewayPidsExclude:
             return subprocess.CompletedProcess(
                 cmd, 0,
                 stdout=(
-                    "user  100  0.0  0.0  0  0  ?  S  00:00  0:00  python gateway/run.py\n"
-                    "user  200  0.0  0.0  0  0  ?  S  00:00  0:00  python gateway/run.py\n"
+                    "user  100  0.0  0.0  0  0  ?  S  00:00  0:00  python harness/gateway/run.py\n"
+                    "user  200  0.0  0.0  0  0  ?  S  00:00  0:00  python harness/gateway/run.py\n"
                 ),
                 stderr="",
             )
@@ -950,8 +950,8 @@ class TestFindGatewayPidsExclude:
             return subprocess.CompletedProcess(
                 cmd, 0,
                 stdout=(
-                    "100 /Users/dgrieco/.hermes/hermes-agent/venv/bin/python -m plutus_cli.main --profile orcha gateway run --replace\n"
-                    "200 /Users/dgrieco/.hermes/hermes-agent/venv/bin/python -m plutus_cli.main --profile other gateway run --replace\n"
+                    "100 /Users/dgrieco/.hermes/hermes-agent/venv/bin/python -m harness.cli.main --profile orcha gateway run --replace\n"
+                    "200 /Users/dgrieco/.hermes/hermes-agent/venv/bin/python -m harness.cli.main --profile other gateway run --replace\n"
                 ),
                 stderr="",
             )
@@ -1128,7 +1128,7 @@ class TestCmdUpdateLegacyGatewayWarning:
         captured = capsys.readouterr().out
         assert "Legacy Hermes gateway unit(s) detected" in captured
         assert "hermes.service" in captured
-        assert "hermes gateway migrate-legacy" in captured
+        assert "plutus gateway migrate-legacy" in captured
         assert "(user scope)" in captured
 
     @patch("shutil.which", return_value=None)

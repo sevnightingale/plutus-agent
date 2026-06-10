@@ -27,7 +27,7 @@ def _ensure_telegram_mock() -> None:
     already cached a module with ``ChatType = None``.
     """
     if "telegram" in sys.modules and hasattr(sys.modules["telegram"], "__file__"):
-        return  # Real library is installed — nothing to mock
+        return  # Real library already imported — don't shadow live bindings.
 
     mod = MagicMock()
     mod.ext.ContextTypes.DEFAULT_TYPE = type(None)
@@ -75,8 +75,11 @@ def _ensure_discord_mock() -> None:
     this function (it short-circuits when already present) rather than
     maintaining their own mock setup.
     """
-    if "discord" in sys.modules and hasattr(sys.modules["discord"], "__file__"):
-        return  # Real library is installed — nothing to mock
+    try:
+        import discord as _real_discord  # noqa: F401
+        return  # Real library importable — never shadow it with a mock.
+    except ImportError:
+        pass
 
     from types import SimpleNamespace
 

@@ -247,7 +247,7 @@ class TestPatchHints:
 
         from harness.tools.file_tools import patch_tool
         raw = patch_tool(mode="replace", path="foo.py", old_string="x", new_string="y")
-        assert "[Hint:" in raw
+        assert '"_hint"' in raw
         assert "read_file" in raw
 
     @patch("harness.tools.file_tools._get_file_ops")

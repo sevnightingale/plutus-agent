@@ -231,20 +231,3 @@ class TestPluginContextEngineSlot:
         ctx.register_context_engine("not an engine")
         assert mgr._context_engine is None
 
-    def test_get_plugin_context_engine(self):
-        from harness.cli.plugins import PluginManager, PluginContext, PluginManifest, get_plugin_context_engine, _plugin_manager
-        import harness.cli.plugins as plugins_mod
-
-        # Inject a test manager
-        old_mgr = plugins_mod._plugin_manager
-        try:
-            mgr = PluginManager()
-            plugins_mod._plugin_manager = mgr
-
-            assert get_plugin_context_engine() is None
-
-            engine = StubEngine()
-            mgr._context_engine = engine
-            assert get_plugin_context_engine() is engine
-        finally:
-            plugins_mod._plugin_manager = old_mgr

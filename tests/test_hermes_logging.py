@@ -461,21 +461,21 @@ class TestComponentFilter:
     """Unit tests for _ComponentFilter."""
 
     def test_passes_matching_prefix(self):
-        f = plutus_logging._ComponentFilter(("gateway",))
+        f = plutus_logging._ComponentFilter(("harness.gateway",))
         record = logging.LogRecord(
             "harness.gateway.run", logging.INFO, "", 0, "msg", (), None
         )
         assert f.filter(record) is True
 
     def test_passes_nested_matching_prefix(self):
-        f = plutus_logging._ComponentFilter(("gateway",))
+        f = plutus_logging._ComponentFilter(("harness.gateway",))
         record = logging.LogRecord(
             "harness.gateway.platforms.telegram", logging.INFO, "", 0, "msg", (), None
         )
         assert f.filter(record) is True
 
     def test_blocks_non_matching(self):
-        f = plutus_logging._ComponentFilter(("gateway",))
+        f = plutus_logging._ComponentFilter(("harness.gateway",))
         record = logging.LogRecord(
             "harness.tools.terminal_tool", logging.INFO, "", 0, "msg", (), None
         )
@@ -502,24 +502,24 @@ class TestComponentPrefixes:
 
     def test_gateway_prefix(self):
         assert "gateway" in plutus_logging.COMPONENT_PREFIXES
-        assert ("gateway",) == plutus_logging.COMPONENT_PREFIXES["gateway"]
+        assert ("harness.gateway",) == plutus_logging.COMPONENT_PREFIXES["gateway"]
 
     def test_agent_prefix(self):
         prefixes = plutus_logging.COMPONENT_PREFIXES["agent"]
-        assert "agent" in prefixes
-        assert "run_agent" in prefixes
-        assert "model_tools" in prefixes
+        assert "harness.agent" in prefixes
+        assert "harness.run_agent" in prefixes
+        assert "harness.model_tools" in prefixes
 
     def test_tools_prefix(self):
-        assert ("tools",) == plutus_logging.COMPONENT_PREFIXES["tools"]
+        assert ("harness.tools",) == plutus_logging.COMPONENT_PREFIXES["tools"]
 
     def test_cli_prefix(self):
         prefixes = plutus_logging.COMPONENT_PREFIXES["cli"]
-        assert "plutus_cli" in prefixes
-        assert "cli" in prefixes
+        assert "harness.cli" in prefixes
+        assert "harness.repl" in prefixes
 
     def test_cron_prefix(self):
-        assert ("cron",) == plutus_logging.COMPONENT_PREFIXES["cron"]
+        assert ("harness.cron",) == plutus_logging.COMPONENT_PREFIXES["cron"]
 
 
 class TestSetupVerboseLogging:

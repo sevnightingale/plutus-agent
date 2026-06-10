@@ -186,6 +186,15 @@ _HERMES_BEHAVIORAL_VARS = frozenset({
     "HERMES_HOME_MODE",
     "BROWSER_CDP_URL",
     "CAMOFOX_URL",
+    # Filesystem-territory roots — if a test exercises a code path that
+    # dotenv-loads the REAL ~/.plutus-agent/.env (via Path.home(), which is
+    # deliberately NOT redirected — see note below), these land in os.environ
+    # and persist for the worker, turning every later /tmp-path file-tool
+    # test into an "outside territory" denial. Blank both spellings per test.
+    "HERMES_WRITE_SAFE_ROOT",
+    "HERMES_READ_SAFE_ROOT",
+    "PLUTUS_WRITE_SAFE_ROOT",
+    "PLUTUS_READ_SAFE_ROOT",
     # Platform allowlists — not credentials, but if set from any source
     # (user shell, earlier leaky test, CI env), they change gateway auth
     # behavior and flake button-authorization tests.
@@ -212,6 +221,65 @@ _HERMES_BEHAVIORAL_VARS = frozenset({
     "EMAIL_ALLOW_ALL_USERS",
     "SMS_ALLOW_ALL_USERS",
 })
+
+
+@pytest.fixture(autouse=True)
+def _sys_modules_hygiene():
+    """Undo sys.modules pops/replacements of our modules after each test.
+
+    Several tests force fresh imports by popping entries out of sys.modules
+    (e.g. ``_import_cli`` in test_cli_provider_resolution, the tirith reimport
+    in test_command_guards). Under xdist, every later test in that worker then
+    imports a NEW module object while earlier ``from X import f`` bindings
+    still point at the old one — ``patch("X.attr")`` lands on the new module
+    dict and the old function never sees it. The result is order-dependent
+    failure cascades whose size varies run to run with work-stealing.
+
+    Snapshot the harness/trading entries before each test and make the
+    subset EXACTLY equal to the snapshot afterwards: originals restored,
+    newcomers popped. Newcomers must go — a submodule first imported while
+    a popper test held a FRESH parent package stays cached in sys.modules,
+    but its attribute binding lives on that popped parent object; once the
+    original parent is restored, cached imports never re-bind the attr and
+    monkeypatch.setattr("pkg.sub.attr") dies with AttributeError. Popping
+    forces the next import to be a clean full load that re-binds the parent.
+
+    sys.modules alone is NOT enough: a fresh import also REBINDS the parent
+    package attribute (``harness.tools = <new module>``), and monkeypatch
+    resolves dotted targets by attribute walk from the top package, not via
+    sys.modules. So parent attributes are restored to match the snapshot,
+    and dangling attributes left by popped newcomers are deleted.
+    """
+    prefixes = ("harness", "trading")
+
+    def _ours(name):
+        return name in prefixes or name.startswith(("harness.", "trading."))
+
+    saved = {
+        name: mod for name, mod in list(sys.modules.items()) if _ours(name)
+    }
+    yield
+    newcomers = {
+        name: sys.modules.pop(name)
+        for name in [n for n in list(sys.modules) if _ours(n) and n not in saved]
+    }
+    for name, mod in saved.items():
+        if sys.modules.get(name) is not mod:
+            sys.modules[name] = mod
+    # Re-point parent package attributes at the restored module objects.
+    for name, mod in saved.items():
+        parent, _, child = name.rpartition(".")
+        if parent:
+            pmod = sys.modules.get(parent)
+            if pmod is not None and getattr(pmod, child, None) is not mod:
+                setattr(pmod, child, mod)
+    # Drop attributes that still point at popped newcomer modules.
+    for name, mod in newcomers.items():
+        parent, _, child = name.rpartition(".")
+        if parent:
+            pmod = sys.modules.get(parent)
+            if pmod is not None and getattr(pmod, child, None) is mod:
+                delattr(pmod, child)
 
 
 @pytest.fixture(autouse=True)

@@ -56,7 +56,7 @@ class TestParseSince:
 
 class TestParseLineTimestamp:
     def test_standard_format(self):
-        ts = _parse_line_timestamp("2026-04-11 10:23:45 INFO gateway.run: msg")
+        ts = _parse_line_timestamp("2026-04-11 10:23:45 INFO harness.gateway.run: msg")
         assert ts == datetime(2026, 4, 11, 10, 23, 45)
 
     def test_no_timestamp(self):
@@ -65,16 +65,16 @@ class TestParseLineTimestamp:
 
 class TestExtractLevel:
     def test_info(self):
-        assert _extract_level("2026-01-01 00:00:00 INFO gateway.run: msg") == "INFO"
+        assert _extract_level("2026-01-01 00:00:00 INFO harness.gateway.run: msg") == "INFO"
 
     def test_warning(self):
-        assert _extract_level("2026-01-01 00:00:00 WARNING tools.file: msg") == "WARNING"
+        assert _extract_level("2026-01-01 00:00:00 WARNING harness.tools.file: msg") == "WARNING"
 
     def test_error(self):
-        assert _extract_level("2026-01-01 00:00:00 ERROR run_agent: msg") == "ERROR"
+        assert _extract_level("2026-01-01 00:00:00 ERROR harness.run_agent: msg") == "ERROR"
 
     def test_debug(self):
-        assert _extract_level("2026-01-01 00:00:00 DEBUG agent.aux: msg") == "DEBUG"
+        assert _extract_level("2026-01-01 00:00:00 DEBUG harness.agent.aux: msg") == "DEBUG"
 
     def test_no_level(self):
         assert _extract_level("random text") is None
@@ -86,28 +86,28 @@ class TestExtractLevel:
 
 class TestExtractLoggerName:
     def test_standard_line(self):
-        line = "2026-04-11 10:23:45 INFO gateway.run: Starting gateway"
+        line = "2026-04-11 10:23:45 INFO harness.gateway.run: Starting gateway"
         assert _extract_logger_name(line) == "harness.gateway.run"
 
     def test_nested_logger(self):
-        line = "2026-04-11 10:23:45 INFO gateway.platforms.telegram: connected"
+        line = "2026-04-11 10:23:45 INFO harness.gateway.platforms.telegram: connected"
         assert _extract_logger_name(line) == "harness.gateway.platforms.telegram"
 
     def test_warning_level(self):
-        line = "2026-04-11 10:23:45 WARNING tools.terminal_tool: timeout"
+        line = "2026-04-11 10:23:45 WARNING harness.tools.terminal_tool: timeout"
         assert _extract_logger_name(line) == "harness.tools.terminal_tool"
 
     def test_with_session_tag(self):
-        line = "2026-04-11 10:23:45 INFO [abc123] tools.file_tools: reading file"
+        line = "2026-04-11 10:23:45 INFO [abc123] harness.tools.file_tools: reading file"
         assert _extract_logger_name(line) == "harness.tools.file_tools"
 
     def test_with_session_tag_and_error(self):
-        line = "2026-04-11 10:23:45 ERROR [sess_xyz] agent.context_compressor: failed"
+        line = "2026-04-11 10:23:45 ERROR [sess_xyz] harness.agent.context_compressor: failed"
         assert _extract_logger_name(line) == "harness.agent.context_compressor"
 
     def test_top_level_module(self):
-        line = "2026-04-11 10:23:45 INFO run_agent: starting conversation"
-        assert _extract_logger_name(line) == "run_agent"
+        line = "2026-04-11 10:23:45 INFO harness.run_agent: starting conversation"
+        assert _extract_logger_name(line) == "harness.run_agent"
 
     def test_no_match(self):
         assert _extract_logger_name("random text") is None
@@ -115,36 +115,36 @@ class TestExtractLoggerName:
 
 class TestLineMatchesComponent:
     def test_gateway_component(self):
-        line = "2026-04-11 10:23:45 INFO gateway.run: msg"
-        assert _line_matches_component(line, ("gateway",))
+        line = "2026-04-11 10:23:45 INFO harness.gateway.run: msg"
+        assert _line_matches_component(line, ("harness.gateway",))
 
     def test_gateway_nested(self):
-        line = "2026-04-11 10:23:45 INFO gateway.platforms.telegram: msg"
-        assert _line_matches_component(line, ("gateway",))
+        line = "2026-04-11 10:23:45 INFO harness.gateway.platforms.telegram: msg"
+        assert _line_matches_component(line, ("harness.gateway",))
 
     def test_tools_component(self):
-        line = "2026-04-11 10:23:45 INFO tools.terminal_tool: msg"
-        assert _line_matches_component(line, ("tools",))
+        line = "2026-04-11 10:23:45 INFO harness.tools.terminal_tool: msg"
+        assert _line_matches_component(line, ("harness.tools",))
 
     def test_agent_with_multiple_prefixes(self):
-        prefixes = ("agent", "run_agent", "model_tools")
+        prefixes = ("harness.agent", "harness.run_agent", "harness.model_tools")
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO agent.context_compressor: msg", prefixes)
+            "2026-04-11 10:23:45 INFO harness.agent.context_compressor: msg", prefixes)
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO run_agent: msg", prefixes)
+            "2026-04-11 10:23:45 INFO harness.run_agent: msg", prefixes)
         assert _line_matches_component(
-            "2026-04-11 10:23:45 INFO model_tools: msg", prefixes)
+            "2026-04-11 10:23:45 INFO harness.model_tools: msg", prefixes)
 
     def test_no_match(self):
-        line = "2026-04-11 10:23:45 INFO tools.browser: msg"
-        assert not _line_matches_component(line, ("gateway",))
+        line = "2026-04-11 10:23:45 INFO harness.tools.browser: msg"
+        assert not _line_matches_component(line, ("harness.gateway",))
 
     def test_with_session_tag(self):
-        line = "2026-04-11 10:23:45 INFO [abc] gateway.run: msg"
-        assert _line_matches_component(line, ("gateway",))
+        line = "2026-04-11 10:23:45 INFO [abc] harness.gateway.run: msg"
+        assert _line_matches_component(line, ("harness.gateway",))
 
     def test_unparseable_line(self):
-        assert not _line_matches_component("random text", ("gateway",))
+        assert not _line_matches_component("random text", ("harness.gateway",))
 
 
 # ---------------------------------------------------------------------------
@@ -169,27 +169,27 @@ class TestMatchesFilters:
 
     def test_component_filter(self):
         assert _matches_filters(
-            "2026-01-01 00:00:00 INFO gateway.run: msg",
-            component_prefixes=("gateway",))
+            "2026-01-01 00:00:00 INFO harness.gateway.run: msg",
+            component_prefixes=("harness.gateway",))
         assert not _matches_filters(
-            "2026-01-01 00:00:00 INFO tools.file: msg",
-            component_prefixes=("gateway",))
+            "2026-01-01 00:00:00 INFO harness.tools.file: msg",
+            component_prefixes=("harness.gateway",))
 
     def test_combined_filters(self):
         """All filters must pass for a line to match."""
-        line = "2026-04-11 10:00:00 WARNING [sess_1] gateway.run: connection lost"
+        line = "2026-04-11 10:00:00 WARNING [sess_1] harness.gateway.run: connection lost"
         assert _matches_filters(
             line,
             min_level="WARNING",
             session_filter="sess_1",
-            component_prefixes=("gateway",),
+            component_prefixes=("harness.gateway",),
         )
         # Fails component filter
         assert not _matches_filters(
             line,
             min_level="WARNING",
             session_filter="sess_1",
-            component_prefixes=("tools",),
+            component_prefixes=("harness.tools",),
         )
 
     def test_since_filter(self):
@@ -221,17 +221,17 @@ class TestReadTail:
     def test_read_with_component_filter(self, tmp_path):
         log_file = tmp_path / "test.log"
         lines = [
-            "2026-01-01 00:00:00 INFO gateway.run: gw msg\n",
-            "2026-01-01 00:00:01 INFO tools.file: tool msg\n",
-            "2026-01-01 00:00:02 INFO gateway.session: session msg\n",
-            "2026-01-01 00:00:03 INFO agent.compressor: agent msg\n",
+            "2026-01-01 00:00:00 INFO harness.gateway.run: gw msg\n",
+            "2026-01-01 00:00:01 INFO harness.tools.file: tool msg\n",
+            "2026-01-01 00:00:02 INFO harness.gateway.session: session msg\n",
+            "2026-01-01 00:00:03 INFO harness.agent.compressor: agent msg\n",
         ]
         log_file.write_text("".join(lines))
 
         result = _read_tail(
             log_file, 50,
             has_filters=True,
-            component_prefixes=("gateway",),
+            component_prefixes=("harness.gateway",),
         )
         assert len(result) == 2
         assert "gw msg" in result[0]

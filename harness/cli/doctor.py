@@ -219,6 +219,9 @@ def run_doctor(args):
             check_ok(name, "(optional)")
         except ImportError:
             check_warn(name, "(optional, not installed)")
+        except Exception as exc:  # noqa: BLE001 — a broken optional package
+            # must not kill the doctor; report it and keep diagnosing.
+            check_warn(name, f"(optional, import failed: {type(exc).__name__})")
     
     # =========================================================================
     # Check: Configuration files

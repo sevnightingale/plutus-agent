@@ -139,13 +139,15 @@ class _ComponentFilter(logging.Filter):
 
 
 # Logger name prefixes that belong to each component.
-# Used by _ComponentFilter and exposed for ``hermes logs --component``.
+# Used by _ComponentFilter and exposed for ``plutus-agent logs --component``.
+# Loggers are __name__-based, so every prefix lives under the harness package
+# (post-restructure layout; batch_runner died in the demolition).
 COMPONENT_PREFIXES = {
-    "gateway": ("gateway",),
-    "agent": ("agent", "run_agent", "model_tools", "batch_runner"),
-    "tools": ("tools",),
-    "cli": ("plutus_cli", "cli"),
-    "cron": ("cron",),
+    "gateway": ("harness.gateway",),
+    "agent": ("harness.agent", "harness.run_agent", "harness.model_tools"),
+    "tools": ("harness.tools",),
+    "cli": ("harness.cli", "harness.repl"),
+    "cron": ("harness.cron",),
 }
 
 

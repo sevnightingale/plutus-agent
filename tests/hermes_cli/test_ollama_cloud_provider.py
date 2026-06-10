@@ -349,10 +349,16 @@ class TestOllamaCloudModelsDev:
 
 class TestOllamaCloudAgentInit:
     def test_agent_imports_without_error(self):
-        """Verify run_agent.py has no SyntaxError."""
-        import importlib
+        """Verify run_agent.py has no SyntaxError.
+
+        AST-parse the source instead of importlib.reload — reloading the
+        live module mid-suite resets its module-level state for every
+        other test in the worker.
+        """
+        import ast
+        import inspect
         import harness.run_agent as run_agent
-        importlib.reload(run_agent)
+        ast.parse(inspect.getsource(run_agent))
 
     def test_ollama_cloud_agent_uses_chat_completions(self, monkeypatch):
         """Ollama Cloud falls through to chat_completions — no special elif needed."""

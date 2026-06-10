@@ -88,9 +88,9 @@ class TestHandleUpdateCommand:
                 pass
 
             # Actually, simplest: just patch the specific file attr
-            fake_file = str(fake_root / "gateway" / "run.py")
-            (fake_root / "gateway").mkdir(parents=True)
-            (fake_root / "gateway" / "run.py").touch()
+            fake_file = str(fake_root / "harness" / "gateway" / "run.py")
+            (fake_root / "harness" / "gateway").mkdir(parents=True)
+            (fake_root / "harness" / "gateway" / "run.py").touch()
 
             with patch("harness.gateway.run.__file__", fake_file):
                 result = await runner._handle_update_command(event)
@@ -107,9 +107,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
 
         with patch("harness.gateway.run._hermes_home", tmp_path), \
              patch("harness.gateway.run.__file__", fake_file), \
@@ -129,9 +129,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 
@@ -145,7 +145,7 @@ class TestHandleUpdateCommand:
              patch("subprocess.Popen", mock_popen):
             result = await runner._handle_update_command(event)
 
-        assert "Starting Hermes update" in result
+        assert "Starting Plutus update" in result
         call_args = mock_popen.call_args[0][0]
         # The update_cmd uses sys.executable -m plutus_cli.main
         joined = " ".join(call_args) if isinstance(call_args, list) else call_args
@@ -194,9 +194,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 
@@ -223,9 +223,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 
@@ -241,7 +241,7 @@ class TestHandleUpdateCommand:
         assert call_args[0] == "/usr/bin/setsid"
         assert call_args[1] == "bash"
         assert ".update_exit_code" in call_args[-1]
-        assert "Starting Hermes update" in result
+        assert "Starting Plutus update" in result
 
     @pytest.mark.asyncio
     async def test_fallback_when_no_setsid(self, tmp_path):
@@ -252,9 +252,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 
@@ -281,7 +281,7 @@ class TestHandleUpdateCommand:
         # start_new_session=True should be in kwargs
         call_kwargs = mock_popen.call_args[1]
         assert call_kwargs.get("start_new_session") is True
-        assert "Starting Hermes update" in result
+        assert "Starting Plutus update" in result
 
     @pytest.mark.asyncio
     async def test_popen_failure_cleans_up(self, tmp_path):
@@ -292,9 +292,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 
@@ -318,9 +318,9 @@ class TestHandleUpdateCommand:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 

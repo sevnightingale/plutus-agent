@@ -1026,12 +1026,19 @@ _LEGACY_SERVICE_NAMES: tuple[str, ...] = ("hermes.service",)
 
 # ExecStart content markers that identify a unit as running our gateway.
 # A legacy unit is only flagged when its file contains one of these.
+# These deliberately reference PRE-restructure module paths — they match the
+# content of OLD unit files written by old installs. Do not "modernize" them
+# (the 2026-06 import sweep did exactly that and broke legacy detection).
 _LEGACY_UNIT_EXECSTART_MARKERS: tuple[str, ...] = (
-    "harness.cli.main gateway",
-    "harness/cli/main.py gateway",
-    "harness/gateway/run.py",
+    "plutus_cli.main gateway",
+    "plutus_cli/main.py gateway",
+    "gateway/run.py",
     " plutus gateway ",
     "/plutus gateway ",
+    # Upstream-era units invoked the `hermes` binary; the rebrand sweep once
+    # rewrote these to "plutus" and silently broke true-legacy detection.
+    " hermes gateway ",
+    "/hermes gateway ",
 )
 
 
@@ -1568,7 +1575,7 @@ StartLimitBurst=5
 Type=simple
 User={username}
 Group={group_name}
-ExecStart={python_path} -m plutus_cli.main{f" {profile_arg}" if profile_arg else ""} gateway run --replace
+ExecStart={python_path} -m harness.cli.main{f" {profile_arg}" if profile_arg else ""} gateway run --replace
 WorkingDirectory={working_dir}
 Environment="HOME={home_dir}"
 Environment="USER={username}"
@@ -1603,7 +1610,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-ExecStart={python_path} -m plutus_cli.main{f" {profile_arg}" if profile_arg else ""} gateway run --replace
+ExecStart={python_path} -m harness.cli.main{f" {profile_arg}" if profile_arg else ""} gateway run --replace
 WorkingDirectory={working_dir}
 Environment="PATH={sane_path}"
 Environment="VIRTUAL_ENV={venv_dir}"

@@ -181,10 +181,16 @@ class TestGeminiContextLength:
 
 class TestGeminiAgentInit:
     def test_agent_imports_without_error(self):
-        """Verify run_agent.py has no SyntaxError (the critical bug)."""
-        import importlib
+        """Verify run_agent.py has no SyntaxError (the critical bug).
+
+        AST-parse the source instead of importlib.reload — reloading the
+        live 14K-line module re-executes it mid-suite and resets its
+        module-level state for every other test in the worker.
+        """
+        import ast
+        import inspect
         import harness.run_agent as run_agent
-        importlib.reload(run_agent)
+        ast.parse(inspect.getsource(run_agent))
 
     def test_gemini_agent_uses_chat_completions(self, monkeypatch):
         """Gemini still reports chat_completions even though the transport is native."""

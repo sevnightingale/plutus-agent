@@ -166,6 +166,17 @@ async def test_send_does_not_retry_on_unrelated_errors():
 import discord as _discord_mod  # noqa: E402 — imported after _ensure_discord_mock
 
 
+class _FakeForumChannel(_discord_mod.ForumChannel):
+    """Constructible stand-in: the real ForumChannel requires (state, guild,
+    data) and uses __slots__. A plain subclass gains a __dict__ (arbitrary
+    attr assignment) and an argless __init__, while isinstance checks against
+    discord.ForumChannel still pass — works for real or mock discord.
+    """
+
+    def __init__(self):
+        pass
+
+
 class TestIsForumParent:
     def test_none_returns_false(self):
         adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
@@ -173,12 +184,7 @@ class TestIsForumParent:
 
     def test_forum_channel_class_instance(self):
         adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
-        forum_cls = getattr(_discord_mod, "ForumChannel", None)
-        if forum_cls is None:
-            # Re-create a type for the mock
-            forum_cls = type("ForumChannel", (), {})
-            _discord_mod.ForumChannel = forum_cls
-        ch = forum_cls()
+        ch = _FakeForumChannel()
         assert adapter._is_forum_parent(ch) is True
 
     def test_type_value_15(self):
@@ -208,7 +214,7 @@ async def test_send_to_forum_creates_thread_post():
         message=SimpleNamespace(id=500),
         thread=thread_ch,
     )
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.name = "ideas"
     forum_channel.create_thread = AsyncMock(return_value=thread)
@@ -242,7 +248,7 @@ async def test_send_to_forum_sends_remaining_chunks():
         message=chunk_msg_1,
         thread=thread_ch,
     )
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.name = "ideas"
     forum_channel.create_thread = AsyncMock(return_value=thread)
@@ -263,7 +269,7 @@ async def test_send_to_forum_sends_remaining_chunks():
 async def test_send_to_forum_create_thread_failure():
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
 
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.name = "ideas"
     forum_channel.create_thread = AsyncMock(side_effect=Exception("rate limited"))
@@ -297,7 +303,7 @@ async def test_send_to_forum_follow_up_chunk_failures_collected_as_warnings():
         send=AsyncMock(side_effect=Exception("rate limited")),
     )
     thread = SimpleNamespace(id=555, message=chunk_msg_1, thread=thread_ch)
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.name = "ideas"
     forum_channel.create_thread = AsyncMock(return_value=thread)
@@ -325,7 +331,7 @@ async def test_forum_post_file_creates_thread_with_attachment():
 
     thread_ch = SimpleNamespace(id=777, send=AsyncMock())
     thread = SimpleNamespace(id=777, message=SimpleNamespace(id=800), thread=thread_ch)
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.name = "ideas"
     forum_channel.create_thread = AsyncMock(return_value=thread)
@@ -355,7 +361,7 @@ async def test_forum_post_file_uses_filename_when_no_content():
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
 
     thread = SimpleNamespace(id=1, message=SimpleNamespace(id=2), thread=SimpleNamespace(id=1, send=AsyncMock()))
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 10
     forum_channel.name = "forum"
     forum_channel.create_thread = AsyncMock(return_value=thread)
@@ -374,7 +380,7 @@ async def test_forum_post_file_creation_failure():
     """_forum_post_file returns a failed SendResult when create_thread raises."""
     adapter = DiscordAdapter(PlatformConfig(enabled=True, token="***"))
 
-    forum_channel = _discord_mod.ForumChannel()
+    forum_channel = _FakeForumChannel()
     forum_channel.id = 999
     forum_channel.create_thread = AsyncMock(side_effect=Exception("missing perms"))
 

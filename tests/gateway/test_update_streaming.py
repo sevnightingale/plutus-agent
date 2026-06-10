@@ -211,9 +211,9 @@ class TestUpdateCommandGatewayFlag:
         fake_root = tmp_path / "project"
         fake_root.mkdir()
         (fake_root / ".git").mkdir()
-        (fake_root / "gateway").mkdir()
-        (fake_root / "gateway" / "run.py").touch()
-        fake_file = str(fake_root / "gateway" / "run.py")
+        (fake_root / "harness" / "gateway").mkdir(parents=True)
+        (fake_root / "harness" / "gateway" / "run.py").touch()
+        fake_file = str(fake_root / "harness" / "gateway" / "run.py")
         hermes_home = tmp_path / "hermes"
         hermes_home.mkdir()
 

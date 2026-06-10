@@ -611,7 +611,13 @@ class _FakeTextChannel:
 
 
 class _FakeThreadChannel(_discord_mod.Thread):
-    """isinstance(ch, discord.Thread) → True."""
+    """isinstance(ch, discord.Thread) → True (real or mock discord).
+
+    Real discord.Thread exposes ``parent`` as a read-only property; the
+    class-level shadow below replaces it so __init__ can assign directly.
+    """
+
+    parent = None  # shadow discord.Thread's read-only property
 
     def __init__(self, channel_id=200, name="existing-thread", guild_name="TestGuild", parent_id=100):
         # Don't call super().__init__ — mock Thread is just an empty type

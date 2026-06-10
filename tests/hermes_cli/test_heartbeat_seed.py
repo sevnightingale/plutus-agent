@@ -14,11 +14,17 @@ def temp_hermes_home(tmp_path, monkeypatch):
     home.mkdir()
     (home / "cron").mkdir()
     monkeypatch.setenv("HERMES_HOME", str(home))
-    # cron.jobs imports HERMES_DIR at module load time — reload to pick up env
+    # cron.jobs captures HERMES_DIR at module load time — reload to pick up
+    # the env, then reload AGAIN after the env is restored. Without the
+    # second reload the tmp path stays baked into the module (reload mutates
+    # the shared module dict in place) and poisons every later cron-touching
+    # test in this worker.
     import importlib
     import harness.cron.jobs; import harness.cron as cron
     importlib.reload(cron.jobs)
-    return home
+    yield home
+    monkeypatch.undo()
+    importlib.reload(cron.jobs)
 
 
 def test_seed_heartbeat_creates_job(temp_hermes_home):
