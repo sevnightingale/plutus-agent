@@ -224,6 +224,7 @@ class TestNonInteractiveSetup:
             "Model & Provider",
             "Terminal Backend",
             "Messaging Platforms (Gateway)",
+            "Trading Desk",
             "Tools",
             "Agent Settings",
             "Exit",

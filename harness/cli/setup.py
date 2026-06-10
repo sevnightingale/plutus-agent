@@ -2842,6 +2842,92 @@ def _offer_openclaw_migration(hermes_home: Path) -> bool:
 
 
 # =============================================================================
+# Optional desk integrations — declarative, single source of truth for the
+# wizard step, the `plutus setup trading` section, and the end-of-setup
+# summary. Every entry is skippable; the desk degrades gracefully and LOGS
+# what's missing (never silently falls back).
+# =============================================================================
+
+OPTIONAL_INTEGRATIONS = [
+    {
+        "key": "arena",
+        "label": "Degen Arena forum (dgclaw)",
+        "env": "DGCLAW_API_KEY",
+        "powers": "record() posts predictions/outcomes to the Arena forum — "
+                  "the public track record's legibility layer",
+        "without": "forum fan-out fails per-target (logged); db + journal "
+                   "recording unaffected",
+        "extra": "also needs the dgclaw-skill clone (DGCLAW_SKILL_ROOT, "
+                 "default ~/dgclaw-skill)",
+    },
+    {
+        "key": "firecrawl",
+        "label": "Web research (Firecrawl)",
+        "env": "FIRECRAWL_API_KEY",
+        "powers": "web search/extract for perception's narrative panel and "
+                  "predict's research sessions",
+        "without": "web-dependent data points read FAILED and are treated as "
+                   "missing — never defaulted",
+    },
+    {
+        "key": "embeddings",
+        "label": "Embeddings (Voyage)",
+        "env": "VOYAGE_API_KEY",
+        "powers": "semantic search over the journal and theses",
+        "without": "keyword search only",
+    },
+]
+
+
+def _setup_optional_integrations() -> None:
+    """One screen, one prompt per integration. Enter skips/keeps."""
+    from harness.cli.config import get_env_value, save_env_value
+
+    print()
+    print_header("Optional desk integrations")
+    print_info("All skippable — re-run any time with: plutus setup trading")
+    for integ in OPTIONAL_INTEGRATIONS:
+        print()
+        print_info(f"{integ['label']} — {integ['powers']}.")
+        if integ.get("extra"):
+            print_info(f"  ({integ['extra']})")
+        current = get_env_value(integ["env"])
+        status = "set — Enter keeps it" if current else "not set — Enter skips"
+        try:
+            value = input(f"  {integ['env']} ({status}): ").strip()
+        except EOFError:
+            value = ""
+        if value:
+            save_env_value(integ["env"], value)
+
+
+def _print_desk_integrations_summary() -> None:
+    """Configured vs skipped, with the cost of each skip and the redo path."""
+    from harness.cli.config import get_env_value
+
+    print()
+    print_header("Desk Integrations")
+    for integ in OPTIONAL_INTEGRATIONS:
+        if get_env_value(integ["env"]):
+            print_success(f"{integ['label']}: configured")
+        else:
+            print_info(f"✗ {integ['label']}: skipped — {integ['without']}")
+    print_info("Add or change later: plutus setup trading")
+
+
+def setup_trading(config: dict):
+    """Trading Desk section — watchlist, wallets, optional integrations.
+
+    The re-run path for everything trading-specific the first-time wizard
+    asked about (`plutus setup trading`).
+    """
+    _setup_watchlist(config)
+    _setup_hyperliquid_wallets()
+    _setup_optional_integrations()
+    _print_desk_integrations_summary()
+
+
+# =============================================================================
 # Main Wizard Orchestrator
 # =============================================================================
 
@@ -2850,6 +2936,7 @@ SETUP_SECTIONS = [
     ("tts", "Text-to-Speech", setup_tts),
     ("terminal", "Terminal Backend", setup_terminal_backend),
     ("gateway", "Messaging Platforms (Gateway)", setup_gateway),
+    ("trading", "Trading Desk", setup_trading),
     ("tools", "Tools", setup_tools),
     ("agent", "Agent Settings", setup_agent_settings),
 ]
@@ -2861,6 +2948,7 @@ RETURNING_USER_MENU_SECTION_KEYS = [
     "model",
     "terminal",
     "gateway",
+    "trading",
     "tools",
     "agent",
 ]
@@ -2992,6 +3080,7 @@ def run_setup_wizard(args):
             "Model & Provider",
             "Terminal Backend",
             "Messaging Platforms (Gateway)",
+            "Trading Desk",
             "Tools",
             "Agent Settings",
             "Exit",
@@ -3005,10 +3094,10 @@ def run_setup_wizard(args):
         elif choice == 1:
             # Full setup — fall through to run all sections
             pass
-        elif choice == 7:
+        elif choice == 8:
             print_info("Exiting. Run 'plutus setup' again when ready.")
             return
-        elif 2 <= choice <= 6:
+        elif 2 <= choice <= 7:
             # Individual section — map by key, not by position.
             # SETUP_SECTIONS includes TTS but the returning-user menu skips it,
             # so positional indexing (choice - 2) would dispatch the wrong section.
@@ -3030,8 +3119,8 @@ def run_setup_wizard(args):
             config = load_config()
 
         # Single first-time path (rebuild R5): provider → messaging →
-        # watchlist → wallets → first boot. Advanced sections stay
-        # reachable afterwards via `plutus setup` (returning-user menu).
+        # watchlist → wallets → optional integrations → first boot.
+        # Advanced sections stay reachable via `plutus setup` (menu).
         _run_first_time_setup(config, hermes_home, is_existing)
         return
 
@@ -3109,10 +3198,10 @@ def _offer_launch_chat():
 def _run_first_time_setup(config: dict, hermes_home, is_existing: bool):
     """THE first-time path (rebuild R5 — single path, no quick/full fork).
 
-    provider → messaging → watchlist → Hyperliquid wallets → first boot
-    (blackboards + lifecycle.db v2 + desk crons). Advanced sections (TTS,
-    terminal backend, tools, agent settings) get sensible defaults and stay
-    reachable via ``plutus setup``.
+    provider → messaging → watchlist → Hyperliquid wallets → optional desk
+    integrations → first boot (blackboards + lifecycle.db v2 + desk crons).
+    Advanced sections (TTS, terminal backend, tools, agent settings) get
+    sensible defaults and stay reachable via ``plutus setup``.
     """
     # Step 1: Model & Provider (essential — skips rotation/vision/TTS)
     setup_model_provider(config, quick=True)
@@ -3144,7 +3233,11 @@ def _run_first_time_setup(config: dict, hermes_home, is_existing: bool):
     # Step 5: Hyperliquid wallets (skippable — research-only mode without)
     _setup_hyperliquid_wallets()
 
-    # Step 6: First boot — blackboards, lifecycle.db v2, desk crons
+    # Step 6: Optional desk integrations (Arena, Firecrawl, Voyage) —
+    # all skippable, re-runnable via `plutus setup trading`
+    _setup_optional_integrations()
+
+    # Step 7: First boot — blackboards, lifecycle.db v2, desk crons
     _first_boot(config)
 
     print()
@@ -3156,6 +3249,7 @@ def _run_first_time_setup(config: dict, hermes_home, is_existing: bool):
         print_info("  Connect Telegram/Discord:  plutus setup gateway")
     print()
 
+    _print_desk_integrations_summary()
     _print_setup_summary(config, hermes_home)
 
     _offer_launch_chat()

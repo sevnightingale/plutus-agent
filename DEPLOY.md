@@ -35,9 +35,13 @@ cd ~/plutus-agent && git pull && uv pip install -e ".[all]" --python .venv/bin/p
 ```
 
 Single path: model provider → Telegram → **watchlist (≤3 symbols; pick BTC
-for the calibration phase)** → Hyperliquid wallets → optional embeddings →
-first boot (creates PLUTUS.md / REGIME.md / PERCEPTION.md / strategies/ /
-ledger/ / lifecycle.db v2 and seeds the desk crons).
+for the calibration phase)** → Hyperliquid wallets → optional desk
+integrations (Degen Arena `DGCLAW_API_KEY`, Firecrawl, Voyage embeddings —
+all skippable, paste from the backup `.env`) → first boot (creates
+PLUTUS.md / REGIME.md / PERCEPTION.md / strategies/ / ledger/ /
+lifecycle.db v2 and seeds the desk crons). The wizard ends with a
+Desk Integrations summary showing what was skipped and what each skip
+costs; re-run any trading-specific step later with `plutus setup trading`.
 
 When prompted for wallet values, restore `HL_PUBLIC_ADDRESS`,
 `HL_API_WALLET_ADDRESS`, `HL_API_WALLET_KEY` from
@@ -47,12 +51,14 @@ see TRADING.md's recovery runbook.
 
 ## 3b. Restore the rest from the backup
 
-After the wizard, merge the FULL backup `.env` — every key in it except
-`HL_MASTER_ADDRESS` is still read by the rebuilt code (`DGCLAW_API_KEY`
-powers the Arena forum fan-out; `TELEGRAM_ALLOWED_USERS` /
-`TELEGRAM_HOME_CHANNEL` gate messaging; `PLUTUS_*_SAFE_ROOT` gate the file
-tools; `FIRECRAWL_API_KEY`, `OPENCODE_GO_API_KEY`, `VOYAGE_API_KEY`).
-Append whatever the wizard didn't already write; no duplicate keys.
+After the wizard, merge what's left of the backup `.env` — every key in it
+except `HL_MASTER_ADDRESS` is still read by the rebuilt code. The wizard
+now collects the provider key, wallets, and the optional integrations
+(`DGCLAW_API_KEY`, `FIRECRAWL_API_KEY`, `VOYAGE_API_KEY`), so the merge
+remainder is: `TELEGRAM_ALLOWED_USERS` / `TELEGRAM_HOME_CHANNEL` (gate
+messaging), `PLUTUS_READ_SAFE_ROOT` / `PLUTUS_WRITE_SAFE_ROOT` (gate the
+file tools), `PLUTUS_CRON_TIMEOUT`, `DGCLAW_SKILL_ROOT`. Append whatever
+the wizard didn't already write; no duplicate keys.
 
 Identity continuity (optional, recommended):
 

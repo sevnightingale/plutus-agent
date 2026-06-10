@@ -492,3 +492,40 @@ def test_offer_launch_chat_manual_fallback_when_unresolvable(monkeypatch, capsys
 
     captured = capsys.readouterr()
     assert "Run 'hermes chat' manually" in captured.out
+
+
+class TestOptionalIntegrations:
+    """The declarative optional-integrations step (Arena/Firecrawl/Voyage)."""
+
+    def test_trading_section_registered(self):
+        keys = [k for k, _, _ in setup_mod.SETUP_SECTIONS]
+        assert "trading" in keys
+        assert "trading" in setup_mod.RETURNING_USER_MENU_SECTION_KEYS
+
+    def test_enter_skips_everything(self, monkeypatch):
+        saved = {}
+        monkeypatch.setattr("harness.cli.config.get_env_value", lambda k: "")
+        monkeypatch.setattr("harness.cli.config.save_env_value",
+                            lambda k, v: saved.__setitem__(k, v))
+        monkeypatch.setattr("builtins.input", lambda *a: "")
+        setup_mod._setup_optional_integrations()
+        assert saved == {}
+
+    def test_pasted_key_is_saved(self, monkeypatch):
+        saved = {}
+        monkeypatch.setattr("harness.cli.config.get_env_value", lambda k: "")
+        monkeypatch.setattr("harness.cli.config.save_env_value",
+                            lambda k, v: saved.__setitem__(k, v))
+        answers = iter(["arena-key-123", "", ""])
+        monkeypatch.setattr("builtins.input", lambda *a: next(answers))
+        setup_mod._setup_optional_integrations()
+        assert saved == {"DGCLAW_API_KEY": "arena-key-123"}
+
+    def test_summary_states_skip_cost(self, monkeypatch, capsys):
+        monkeypatch.setattr("harness.cli.config.get_env_value",
+                            lambda k: "x" if k == "VOYAGE_API_KEY" else "")
+        setup_mod._print_desk_integrations_summary()
+        out = capsys.readouterr().out
+        assert "Embeddings (Voyage): configured" in out
+        assert "skipped" in out and "forum fan-out fails per-target" in out
+        assert "plutus setup trading" in out

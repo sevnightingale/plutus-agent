@@ -2,6 +2,7 @@
 
 from argparse import Namespace
 from types import ModuleType
+from unittest import mock
 from unittest.mock import MagicMock, patch
 
 from harness.cli import setup as setup_mod
@@ -321,16 +322,23 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "prompt_choice", return_value=1),
             patch.object(setup_mod, "_offer_openclaw_migration", return_value=True),
             patch.object(setup_mod, "setup_model_provider") as setup_model_provider,
-            patch.object(setup_mod, "setup_terminal_backend"),
-            patch.object(setup_mod, "setup_agent_settings"),
-            patch.object(setup_mod, "setup_gateway"),
-            patch.object(setup_mod, "setup_tools"),
-            patch.object(setup_mod, "_setup_watchlist"),
-            patch.object(setup_mod, "_setup_hyperliquid_wallets"),
-            patch.object(setup_mod, "_first_boot"),
-            patch.object(setup_mod, "save_config"),
-            patch.object(setup_mod, "_print_setup_summary"),
-            patch.object(setup_mod, "_offer_launch_chat"),
+            # One patcher for the no-assertion steps — a flat list of
+            # patch.object items here trips CPython's nested-block limit.
+            patch.multiple(
+                setup_mod,
+                setup_terminal_backend=mock.DEFAULT,
+                setup_agent_settings=mock.DEFAULT,
+                setup_gateway=mock.DEFAULT,
+                setup_tools=mock.DEFAULT,
+                _setup_watchlist=mock.DEFAULT,
+                _setup_hyperliquid_wallets=mock.DEFAULT,
+                _setup_optional_integrations=mock.DEFAULT,
+                _first_boot=mock.DEFAULT,
+                save_config=mock.DEFAULT,
+                _print_setup_summary=mock.DEFAULT,
+                _print_desk_integrations_summary=mock.DEFAULT,
+                _offer_launch_chat=mock.DEFAULT,
+            ),
         ):
             setup_mod.run_setup_wizard(args)
 
