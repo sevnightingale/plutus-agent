@@ -39,12 +39,36 @@ for the calibration phase)** → Hyperliquid wallets → optional embeddings →
 first boot (creates PLUTUS.md / REGIME.md / PERCEPTION.md / strategies/ /
 ledger/ / lifecycle.db v2 and seeds the desk crons).
 
-When prompted for wallet values, restore from the backup:
-`HL_PUBLIC_ADDRESS`, `HL_API_WALLET_ADDRESS`, `HL_API_WALLET_KEY` (and
-`VOYAGE_API_KEY` if you use embeddings) from
+When prompted for wallet values, restore `HL_PUBLIC_ADDRESS`,
+`HL_API_WALLET_ADDRESS`, `HL_API_WALLET_KEY` from
 `~/plutus-runtime-v1-backup/.env`. If you deliberately want a fully fresh
 wallet instead, that means re-running the `approveAgent` registration —
 see TRADING.md's recovery runbook.
+
+## 3b. Restore the rest from the backup
+
+After the wizard, merge the FULL backup `.env` — every key in it except
+`HL_MASTER_ADDRESS` is still read by the rebuilt code (`DGCLAW_API_KEY`
+powers the Arena forum fan-out; `TELEGRAM_ALLOWED_USERS` /
+`TELEGRAM_HOME_CHANNEL` gate messaging; `PLUTUS_*_SAFE_ROOT` gate the file
+tools; `FIRECRAWL_API_KEY`, `OPENCODE_GO_API_KEY`, `VOYAGE_API_KEY`).
+Append whatever the wizard didn't already write; no duplicate keys.
+
+Identity continuity (optional, recommended):
+
+- `SOUL.md` — still injected into main's system prompt. Copy from the
+  backup AFTER pruning sections the desk now owns (cron architecture,
+  session mechanics, cognitive architecture — PLUTUS.md + AGENT.md
+  recipes replace them). Keep the identity sections.
+- `memories/` (MEMORY.md, USER.md) — built-in memory tool store; copy as-is.
+- `auth.json` — provider credentials; copy back to skip re-auth.
+
+Do NOT copy: `config.yaml` (the old one holds the `session_reset: none`
+death-spiral setting; the wizard's fresh one carries the rebuilt
+defaults), v1 `strategies/` (incompatible dir-status format — mine as
+operator seeds later), v1 `lifecycle.db` (calibration starts from zero,
+locked), `price_alerts.json` (still read, but its ranges are stale market
+levels — set fresh ones).
 
 ## 4. Verify trade readiness
 
