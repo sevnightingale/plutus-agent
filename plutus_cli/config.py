@@ -747,7 +747,7 @@ DEFAULT_CONFIG = {
             "holographic",
             "plutus-trade-safety",
         ],
-        "hermes-memory-store": {
+        "plutus-memory-store": {
             "auto_extract": True,    # auto-extract facts at session end
             "default_trust": 0.5,
             "hrr_dim": 1024,

@@ -1,4 +1,4 @@
-"""hermes-memory-store — holographic memory plugin using MemoryProvider interface.
+"""plutus-memory-store — holographic memory plugin using MemoryProvider interface.
 
 Registers as a MemoryProvider plugin, giving the agent structured fact storage
 with entity resolution, trust scoring, and HRR-based compositional retrieval.
@@ -7,7 +7,7 @@ Original plugin by dusterbloom (PR #2351), adapted to the MemoryProvider ABC.
 
 Config in $HERMES_HOME/config.yaml (profile-scoped):
   plugins:
-    hermes-memory-store:
+    plutus-memory-store:   # legacy key 'hermes-memory-store' still read as a fallback
       db_path: $HERMES_HOME/memory_store.db   # omit to use the default
       auto_extract: false
       default_trust: 0.5
@@ -102,7 +102,9 @@ def _load_plugin_config() -> dict:
         import yaml
         with open(config_path) as f:
             all_config = yaml.safe_load(f) or {}
-        return all_config.get("plugins", {}).get("hermes-memory-store", {}) or {}
+        _plugins = all_config.get("plugins", {})
+        # Prefer the PLUTUS-branded key; fall back to the legacy hermes name.
+        return _plugins.get("plutus-memory-store") or _plugins.get("hermes-memory-store") or {}
     except Exception:
         return {}
 
@@ -128,7 +130,7 @@ class HolographicMemoryProvider(MemoryProvider):
         return True  # SQLite is always available, numpy is optional
 
     def save_config(self, values, hermes_home):
-        """Write config to config.yaml under plugins.hermes-memory-store."""
+        """Write config to config.yaml under plugins.plutus-memory-store."""
         from pathlib import Path
         config_path = Path(hermes_home) / "config.yaml"
         try:
@@ -138,7 +140,8 @@ class HolographicMemoryProvider(MemoryProvider):
                 with open(config_path) as f:
                     existing = yaml.safe_load(f) or {}
             existing.setdefault("plugins", {})
-            existing["plugins"]["hermes-memory-store"] = values
+            existing["plugins"].pop("hermes-memory-store", None)  # migrate legacy key
+            existing["plugins"]["plutus-memory-store"] = values
             with open(config_path, "w") as f:
                 yaml.dump(existing, f, default_flow_style=False)
         except Exception:
