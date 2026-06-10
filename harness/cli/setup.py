@@ -3029,14 +3029,11 @@ def run_setup_wizard(args):
         if migration_ran:
             config = load_config()
 
-        setup_mode = prompt_choice("How would you like to set up Plutus?", [
-            "Quick setup — provider, model & messaging (recommended)",
-            "Full setup — configure everything",
-        ], 0)
-
-        if setup_mode == 0:
-            _run_first_time_quick_setup(config, hermes_home, is_existing)
-            return
+        # Single first-time path (rebuild R5): provider → messaging →
+        # watchlist → wallets → first boot. Advanced sections stay
+        # reachable afterwards via `plutus setup` (returning-user menu).
+        _run_first_time_setup(config, hermes_home, is_existing)
+        return
 
     # ── Full Setup — run all sections ──
     print_header("Configuration Location")
@@ -3109,12 +3106,13 @@ def _offer_launch_chat():
     os.execvp(chat_argv[0], chat_argv)
 
 
-def _run_first_time_quick_setup(config: dict, hermes_home, is_existing: bool):
-    """Streamlined first-time setup: provider + model only.
+def _run_first_time_setup(config: dict, hermes_home, is_existing: bool):
+    """THE first-time path (rebuild R5 — single path, no quick/full fork).
 
-    Applies sensible defaults for TTS (Edge), terminal (local), agent
-    settings, and tools — the user can customize later via
-    ``plutus setup <section>``.
+    provider → messaging → watchlist → Hyperliquid wallets → first boot
+    (blackboards + lifecycle.db v2 + desk crons). Advanced sections (TTS,
+    terminal backend, tools, agent settings) get sensible defaults and stay
+    reachable via ``plutus setup``.
     """
     # Step 1: Model & Provider (essential — skips rotation/vision/TTS)
     setup_model_provider(config, quick=True)
@@ -3125,7 +3123,7 @@ def _run_first_time_quick_setup(config: dict, hermes_home, is_existing: bool):
 
     save_config(config)
 
-    # Step 3: Offer messaging gateway setup
+    # Step 3: Messaging gateway
     print()
     gateway_choice = prompt_choice(
         "Connect a messaging platform? (Telegram, Discord, etc.)",
@@ -3140,9 +3138,19 @@ def _run_first_time_quick_setup(config: dict, hermes_home, is_existing: bool):
         setup_gateway(config)
         save_config(config)
 
+    # Step 4: Watchlist — the desk's calibration-phase universe
+    _setup_watchlist(config)
+
+    # Step 5: Hyperliquid wallets (skippable — research-only mode without)
+    _setup_hyperliquid_wallets()
+
+    # Step 6: First boot — blackboards, lifecycle.db v2, desk crons
+    _first_boot(config)
+
     print()
     print_success("Setup complete! You're ready to go.")
     print()
+    print_info("  Start the fleet:           see DEPLOY.md (pm2 start ...)")
     print_info("  Configure all settings:    plutus setup")
     if gateway_choice != 0:
         print_info("  Connect Telegram/Discord:  plutus setup gateway")
@@ -3151,6 +3159,88 @@ def _run_first_time_quick_setup(config: dict, hermes_home, is_existing: bool):
     _print_setup_summary(config, hermes_home)
 
     _offer_launch_chat()
+
+
+def _setup_watchlist(config: dict) -> list:
+    """The desk's initial universe (≤3 symbols; BTC-only calibration phase)."""
+    print()
+    print_header("Watchlist")
+    print_info("The desk's initial trading universe (max 3 symbols).")
+    print_info("Start with ONE — BTC — for the calibration phase; expansion")
+    print_info("beyond the watchlist is a reflect promotion decision later.")
+    try:
+        raw = input("  Symbols, comma-separated [BTC]: ").strip()
+    except EOFError:
+        raw = ""
+    symbols = [s.strip().upper() for s in (raw or "BTC").split(",") if s.strip()][:3]
+    # Best-effort validation against HL listed assets — warn, never block
+    # (setup must work offline).
+    try:
+        from trading.integrations.hyperliquid._client import get_info
+        listed = {m["name"].upper() for m in get_info().meta()["universe"]}
+        unknown = [s for s in symbols if s not in listed]
+        if unknown:
+            print_info(f"  ⚠ not listed on Hyperliquid right now: {', '.join(unknown)}")
+    except Exception:
+        pass
+    config.setdefault("trading", {})["watchlist"] = symbols
+    save_config(config)
+    print_success(f"Watchlist: {', '.join(symbols)}")
+    return symbols
+
+
+def _setup_hyperliquid_wallets() -> None:
+    """Collect the two-wallet env values (TRADING.md model). Skippable."""
+    from harness.cli.config import get_env_value, save_env_value
+
+    print()
+    print_header("Hyperliquid wallets")
+    print_info("Two wallets (TRADING.md): the MASTER holds funds (key never")
+    print_info("on disk) and the AGENT/API wallet signs trades, holds nothing,")
+    print_info("and MUST be registered on-chain via approveAgent — an")
+    print_info("unregistered agent wallet makes every trade fail silently.")
+    print_info("Press Enter to skip any value (research-only mode works).")
+    for var, label in (
+        ("HL_PUBLIC_ADDRESS", "Master wallet address"),
+        ("HL_API_WALLET_ADDRESS", "Agent/API wallet address"),
+        ("HL_API_WALLET_KEY", "Agent/API wallet private key"),
+    ):
+        current = get_env_value(var)
+        suffix = " (set — Enter keeps it)" if current else ""
+        try:
+            value = input(f"  {label}{suffix}: ").strip()
+        except EOFError:
+            value = ""
+        if value:
+            save_env_value(var, value)
+    if not get_env_value("HL_API_WALLET_KEY"):
+        print_info("  No agent wallet key — the desk runs research-only until")
+        print_info("  one is configured (predictions, no trades).")
+
+
+def _first_boot(config: dict) -> None:
+    """Create the blackboards, lifecycle.db v2, and the desk's cron jobs."""
+    from harness.cli.heartbeat import seed_desk_crons
+    from harness.runtime_templates import ensure_runtime_files
+
+    print()
+    print_header("First boot")
+    watchlist = (config.get("trading") or {}).get("watchlist") or ["BTC"]
+    created = ensure_runtime_files(watchlist=watchlist)
+    if created:
+        print_success("Created: " + ", ".join(created))
+    try:
+        from trading.lifecycle.db import get_db
+        get_db().close()
+        print_success("lifecycle.db v2 ready")
+    except Exception as exc:
+        print_info(f"  ⚠ lifecycle.db init failed: {exc}")
+    jobs = seed_desk_crons()
+    for job in jobs.values():
+        print_success(
+            f"cron: {job['name']} ({job['schedule']['expr']})"
+            + (f" — agent {job['agent']}" if job.get("agent") else "")
+        )
 
 
 def _run_quick_setup(config: dict, hermes_home):

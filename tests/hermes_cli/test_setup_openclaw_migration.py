@@ -325,13 +325,17 @@ class TestSetupWizardOpenclawIntegration:
             patch.object(setup_mod, "setup_agent_settings"),
             patch.object(setup_mod, "setup_gateway"),
             patch.object(setup_mod, "setup_tools"),
+            patch.object(setup_mod, "_setup_watchlist"),
+            patch.object(setup_mod, "_setup_hyperliquid_wallets"),
+            patch.object(setup_mod, "_first_boot"),
             patch.object(setup_mod, "save_config"),
             patch.object(setup_mod, "_print_setup_summary"),
             patch.object(setup_mod, "_offer_launch_chat"),
         ):
             setup_mod.run_setup_wizard(args)
 
-        setup_model_provider.assert_called_once_with(reloaded_config)
+        # Single first-time path (rebuild R5): streamlined provider step.
+        setup_model_provider.assert_called_once_with(reloaded_config, quick=True)
 
     def test_migration_not_offered_for_existing_install(self, tmp_path):
         """Returning users should not see the migration prompt."""
@@ -582,63 +586,3 @@ class TestSkipConfiguredSection:
 class TestSetupWizardSkipsConfiguredSections:
     """After migration, already-configured sections should offer skip."""
 
-    def test_sections_skipped_when_migration_imported_settings(self, tmp_path):
-        """When migration ran and API key exists, model section should be skippable.
-
-        Simulates the real flow: get_env_value returns "" during the is_existing
-        check (before migration), then returns a key after migration imported it.
-        """
-        args = _first_time_args()
-
-        # Track whether migration has "run" — after it does, API key is available
-        migration_done = {"value": False}
-
-        def env_side(key):
-            if migration_done["value"] and key == "OPENROUTER_API_KEY":
-                return "sk-xxx"
-            return ""
-
-        def fake_migration(hermes_home):
-            migration_done["value"] = True
-            return True
-
-        reloaded_config = {"model": "openai/gpt-4"}
-
-        with (
-            patch.object(setup_mod, "ensure_hermes_home"),
-            patch.object(
-                setup_mod, "load_config",
-                side_effect=[{}, reloaded_config],
-            ),
-            patch.object(setup_mod, "get_hermes_home", return_value=tmp_path),
-            patch.object(setup_mod, "get_env_value", side_effect=env_side),
-            patch.object(setup_mod, "is_interactive_stdin", return_value=True),
-            patch("harness.cli.auth.get_active_provider", return_value=None),
-            patch("builtins.input", return_value=""),
-            patch.object(setup_mod, "prompt_choice", return_value=1),
-            # Migration succeeds and flips the env_side flag
-            patch.object(
-                setup_mod, "_offer_openclaw_migration",
-                side_effect=fake_migration,
-            ),
-            # User says No to all reconfig prompts
-            patch.object(setup_mod, "prompt_yes_no", return_value=False),
-            patch.object(setup_mod, "setup_model_provider") as mock_model,
-            patch.object(setup_mod, "setup_terminal_backend") as mock_terminal,
-            patch.object(setup_mod, "setup_agent_settings") as mock_agent,
-            patch.object(setup_mod, "setup_gateway") as mock_gateway,
-            patch.object(setup_mod, "setup_tools") as mock_tools,
-            patch.object(setup_mod, "save_config"),
-            patch.object(setup_mod, "_print_setup_summary"),
-        ):
-            setup_mod.run_setup_wizard(args)
-
-        # Model has API key → skip offered, user said No → section NOT called
-        mock_model.assert_not_called()
-        # Terminal/agent always have a summary → skip offered, user said No
-        mock_terminal.assert_not_called()
-        mock_agent.assert_not_called()
-        # Gateway has no tokens (env_side returns "" for gateway keys) → section runs
-        mock_gateway.assert_called_once()
-        # Tools have no keys → section runs
-        mock_tools.assert_called_once()
