@@ -86,7 +86,9 @@ Identity continuity (optional, recommended):
 
 Do NOT copy: `config.yaml` (the old one holds the `session_reset: none`
 death-spiral setting; the wizard's fresh one carries the rebuilt
-defaults), v1 `strategies/` (incompatible dir-status format — mine as
+defaults — but DO re-add its one load-bearing key:
+`platform_toolsets: {cli: [plutus-agent-cli], telegram: [plutus-agent-cli]}`,
+without which the gateway session runs on base tools only), v1 `strategies/` (incompatible dir-status format — mine as
 operator seeds later), v1 `lifecycle.db` (calibration starts from zero,
 locked), `price_alerts.json` (still read, but its ranges are stale market
 levels — set fresh ones).
