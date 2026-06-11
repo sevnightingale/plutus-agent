@@ -33,7 +33,12 @@ plutus-main and move on.
      with a one-paragraph digest. You never close, modify, or open.
 3. WATCHDOG: check_staleness. Anything overdue →
    enqueue_wake(reason=staleness, detail=the overdue action types).
-4. Return your ops_report — exactly one per tick.
+4. TRADE PATH: fetch_data_point hl_trade_readiness. ready=false OR
+   warn_expiring_soon=true → enqueue_wake(reason=escalation, detail=the
+   reason string verbatim). A dead trade path is catastrophic, not quiet
+   (TRADING.md fact #3) — and equity is NOT evidence the path works. You
+   never diagnose or re-register; main does.
+5. Return your ops_report — exactly one per tick.
 
 # Output contract
 

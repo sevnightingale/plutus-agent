@@ -68,7 +68,8 @@ It checks the live Hyperliquid `extraAgents` registration for the master against
 with the exact reason. Exit 0 = ready, 1 = not. Run it:
 - before concluding "Plutus isn't trading" (it's almost always this),
 - after any setup / wallet / ACP change,
-- on a schedule (plutus-ops does this every tick — see below).
+- on a schedule (plutus-ops fetches the same verdict as the `hl_trade_readiness`
+  data point every tick — see below). Plutus itself should use the data point.
 
 ---
 
@@ -170,11 +171,13 @@ the API wallet's HL `role` reads `"missing"`. No registered signer → no trades
 
 ## Monitoring — why this can never silently recur
 
-`plutus-ops` (every 30 min, cheap deepseek-v4-flash) runs the readiness check every tick. If
-the API-wallet registration is missing or expires within 7 days, it writes the escalation
-flag and self-schedules a wake (NEVER an operator ping for the wake itself, per escalation
-doctrine) so plutus-main re-registers or surfaces it. A dead trade path is a
-**catastrophic** condition, not a quiet one. See `agents/plutus-ops/AGENT.md`.
+`plutus-ops` (every 30 min, cheap deepseek-v4-flash) fetches the **`hl_trade_readiness`**
+data point every tick — the same verdict logic as the operator script (shared in
+`trading/integrations/hyperliquid/readiness.py`). If the API-wallet registration is
+missing or expires within 7 days, ops enqueues an escalation wake (NEVER an operator ping
+for the wake itself, per escalation doctrine) so plutus-main re-registers or surfaces it.
+A dead trade path is a **catastrophic** condition, not a quiet one. See
+`agents/plutus-ops/AGENT.md`.
 
 ---
 

@@ -51,7 +51,7 @@ def _import_integration():
     importlib.reload(hl_pkg)
 
 
-def test_all_eight_data_points_registered():
+def test_all_nine_data_points_registered():
     _import_integration()
     names = {e.name for e in data_point_registry.list_all(source="hyperliquid")}
     assert names == {
@@ -63,6 +63,7 @@ def test_all_eight_data_points_registered():
         "hl_holdings",
         "hl_total_equity",
         "hl_drawdown_from_peak",
+        "hl_trade_readiness",
     }
 
 
@@ -85,10 +86,14 @@ def test_hyperliquid_venue_registered():
     assert venue.outcome_compute_fn is not None
 
 
-def test_two_alerts_registered():
+def test_three_alerts_registered():
     _import_integration()
     names = {a.name for a in alert_registry.list_all(source="hyperliquid")}
-    assert names == {"hl_position_status_change", "hl_account_balance_change"}
+    assert names == {
+        "hl_position_status_change",
+        "hl_account_balance_change",
+        "hl_price_range",
+    }
 
 
 # ─── Live HL public endpoint tests ────────────────────────────────────────

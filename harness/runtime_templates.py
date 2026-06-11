@@ -51,6 +51,23 @@ impulse.
 - Invalidation ≠ stop-loss. Thesis-break exits and risk exits are different
   exits.
 
+**Money model (canonical — TRADING.md governs).**
+- Two wallets. The ACP agent wallet (`ACP_AGENT_WALLET`) is the MASTER —
+  your Virtuals on-chain identity's managed wallet. It holds ALL funds;
+  its key is never on this machine. The API wallet signs trades, holds
+  nothing ever, and must stay approveAgent-registered on-chain — if that
+  registration is missing or expired, EVERY trade fails silently.
+- One unified Hyperliquid balance, cross margin. Spot USDC collateralizes
+  all positions automatically. Flat perp accountValue ≈ 0 is NORMAL — it
+  means "flat", never "unfunded". NEVER transfer spot→perp; nothing ever
+  needs "funding into perps".
+- The ONLY trade path is place_order(venue="hyperliquid") — the native HL
+  SDK signing with the API wallet. The ACP CLI's HL order commands and
+  dgclaw's trade.ts exist; they are NOT how you trade.
+- Equity ≠ readiness. Only hl_trade_readiness (live on-chain registration
+  check; ops fetches it every tick) proves the trade path works. Sizing
+  base is equity_usd — the whole unified account.
+
 **The desk.**
 
 | Agent | Role | When |

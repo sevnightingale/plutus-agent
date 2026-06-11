@@ -1,10 +1,11 @@
-"""Hyperliquid data points — eight read-only registrations.
+"""Hyperliquid data points — nine read-only registrations.
 
 Symbol-level data points (``hl_price``, ``hl_candles``, ``hl_orderbook``,
 ``hl_funding_and_oi``, ``hl_universe``) hit public endpoints and need no
 credentials. Account-state data points (``hl_holdings``,
-``hl_total_equity``, ``hl_drawdown_from_peak``) require an address;
-they loud-fail when ``ACP_AGENT_WALLET`` isn't set.
+``hl_total_equity``, ``hl_drawdown_from_peak``, ``hl_trade_readiness``)
+require the wallet env vars; they loud-fail when ``ACP_AGENT_WALLET``
+isn't set.
 
 ``hl_drawdown_from_peak`` is a *derived* data point: it reads from
 ``data_point_snapshots`` rather than fetching from HL. Plutus gets the
@@ -359,3 +360,37 @@ def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[st
         "samples": len(samples),
         "lookback_days": lookback_days,
     }
+
+
+@register_data_point(
+    name="hl_trade_readiness",
+    category="account",
+    source="hyperliquid",
+    description=(
+        "Is the trade path live RIGHT NOW? Live on-chain check that the API "
+        "wallet is approveAgent-registered for the master and unexpired "
+        "(TRADING.md fact #3). ready=false means EVERY trade fails silently "
+        "with 'User or API Wallet does not exist' — escalate; do not "
+        "theorize about filters, spot/perp, or dgclaw. Equity does NOT "
+        "prove readiness."
+    ),
+    params_schema={"warn_days": {"type": "integer", "default": 7}},
+    returns_schema={
+        "ready": "bool", "reason": "string", "days_remaining": "float|null",
+        "valid_until_iso": "string|null", "warn_expiring_soon": "bool",
+    },
+    tags=["account", "readiness", "watchdog", "hyperliquid"],
+)
+def hl_trade_readiness(warn_days: int = 7) -> Dict[str, Any]:
+    import os
+
+    from .readiness import check_registration
+
+    result = check_registration(
+        os.getenv("ACP_AGENT_WALLET") or "",
+        os.getenv("HL_API_WALLET_ADDRESS") or "",
+        os.getenv("HL_API_WALLET_KEY") or "",
+        warn_days=warn_days,
+    )
+    result.pop("_exit", None)
+    return result

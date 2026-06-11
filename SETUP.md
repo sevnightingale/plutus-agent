@@ -18,10 +18,41 @@ exists in your backup.**
 | Degen Arena / dgclaw (optional) | Perps competition + public forum (the track record's legibility layer) | `DGCLAW_API_KEY` |
 | Firecrawl / Voyage (optional) | Web research / semantic search | `FIRECRAWL_API_KEY`, `VOYAGE_API_KEY` |
 
-The two-wallet model is TRADING.md fact #2 — read TRADING.md before going
-live. Steps 3–6 are the trading provisioning; **all of them are skippable**
-— skip them and the desk runs research-only (predictions, no trades) until
-you come back.
+## The money model in 60 seconds
+
+Verified against the Hyperliquid and Virtuals docs; TRADING.md is the
+canonical version, and the same model is baked into Plutus's injected
+doctrine — operator and agent share one picture.
+
+- **Two wallets, one permanent zero.** The ACP agent wallet
+  (`ACP_AGENT_WALLET`) is the **master**: the Virtuals agent's managed
+  wallet, holds ALL funds, key in Privy custody/OS keychain — never on
+  disk. The **API wallet** signs trades, can never withdraw, and must hold
+  $0 forever. It works only while its on-chain `approveAgent` registration
+  is current (~180 days); unregistered or expired → every trade fails
+  silently.
+- **There is no separate "HL account".** A Hyperliquid account is just an
+  EVM address — once USDC is bridged in, the ACP agent wallet's address IS
+  the HL master account.
+- **One unified balance, cross margin.** After `activate-unified.ts`, spot
+  USDC collateralizes all perp positions automatically. Cross margin is
+  HL's default, so the whole account backs every position. Balances
+  "moving around" on HL is display, not transfers: flat ⇒ perp
+  accountValue ≈ 0 and everything shows as spot. Never run spot→perp
+  transfers.
+- **Three things can technically trade this account; Plutus uses one.**
+  The native HL SDK signing with the API wallet (Plutus's only trade
+  path), the ACP CLI's HL order commands (routed through the Virtuals
+  backend — unused), and dgclaw's `trade.ts` (unused). Don't diagnose
+  trading problems through the unused two.
+- **Equity ≠ readiness.** A funded-looking balance proves nothing about
+  the trade path; only the registration check does
+  (`scripts/check_trade_readiness.py` for you, the `hl_trade_readiness`
+  data point for the desk — ops checks it every 30 minutes).
+
+Steps 3–6 below are the trading provisioning; **all of them are
+skippable** — skip them and the desk runs research-only (predictions, no
+trades) until you come back.
 
 ## 0. Prerequisites (the box)
 
