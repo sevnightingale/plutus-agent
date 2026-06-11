@@ -12,7 +12,7 @@ from trading.integrations.hyperliquid import _client, alerts
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch):
     _client.reset_singletons_for_tests()
-    monkeypatch.setenv("HL_PUBLIC_ADDRESS", "0x000000000000000000000000000000000000dead")
+    monkeypatch.setenv("ACP_AGENT_WALLET", "0x000000000000000000000000000000000000dead")
     yield
     _client.reset_singletons_for_tests()
 
@@ -105,7 +105,7 @@ def test_account_balance_change_below_threshold(monkeypatch):
 
 
 def test_alerts_no_address_returns_empty(monkeypatch):
-    monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
+    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
     fired, new_state = alerts.poll_hl_position_status_change(state={"positions": {}})
     assert fired == []
     assert new_state == {"positions": {}}

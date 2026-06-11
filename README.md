@@ -16,7 +16,7 @@ It carries forward a complete agent runtime (agent loop, memory manager, multi-L
 
 ⚠️ **Early-stage software that trades real money.** plutus-agent is functional and runs a live agent today, but it is young and evolving fast. It places live trades on Hyperliquid under the agent's own decisions — start small, read `TRADING.md` before going live, and treat every deployment as production.
 
-See `PLUTUS.md` for the cognitive architecture and **`TRADING.md` for how orders actually reach Hyperliquid (read this before touching anything trade-related).**
+See `agents/README.md` for the desk architecture and **`TRADING.md` for how orders actually reach Hyperliquid (read this before touching anything trade-related).**
 
 ## Vision
 
@@ -53,19 +53,19 @@ python scripts/check_trade_readiness.py
 plutus
 ```
 
-Setup prompts for the LLM provider + API key and the agent's name (default **Plutus**). User data lives at `~/.plutus-agent/` (config, sessions, memories, skills, logs, `.env`) — fully isolated from any other agent install on the machine.
+Setup prompts for the LLM provider + API key, messaging, the watchlist, wallets, and the optional desk integrations. User data lives at `~/.plutus-agent/` (config, sessions, memories, skills, logs, `.env`) — fully isolated from any other agent install on the machine.
 
-### First-run trading setup (agent-driven)
+### First-time trading setup
 
-After install, the agent walks itself through Hyperliquid wallet setup. The operator confirms browser approvals + funds the wallet. Chat with Plutus and say **"set yourself up for trading"** — it loads the `trading/bootstrap-setup` skill and runs through ACP install/configure → agent + signer creation → wallet top-up → dgclaw join → perp deposit → unified-mode activation → API-wallet generation. The final step registers the trading-only **agent wallet** on Hyperliquid (`approveAgent`) — **this registration is what makes trading work; if it lapses, trades fail silently** (see `TRADING.md`). When `python scripts/check_trade_readiness.py` prints **READY**, live trading is unlocked.
+**`SETUP.md` is the complete from-zero walkthrough** — Virtuals ACP agent creation (the master wallet), funding, unified-mode activation, and API-wallet generation, then the wizard and the pm2 fleet. The provisioning's final step registers the trading-only **API wallet** on Hyperliquid (`approveAgent`) — **this registration is what makes trading work; if it lapses, trades fail silently** (see `TRADING.md`). When `python scripts/check_trade_readiness.py` prints **READY**, live trading is unlocked. Prefer to be walked through it? Chat with Plutus and ask it to set itself up for trading — its ACP identity tools and the vendored `skills/dgclaw` skill cover the same steps, with the browser-OAuth ones handed to you as exact commands. Every trading step is skippable; without wallets the desk runs research-only.
 
 Pause execution any time with `touch ~/.plutus-agent/HALT`; resume with `rm ~/.plutus-agent/HALT`.
 
 ## Architecture at a glance
 
-The tool surface is **function-shaped** — `perception`, `execution`, `reflection`, `identity` — fed by **six registries + dispatchers** (data points, events, venues, accounts, alerts, identity). Sources/venues (Hyperliquid, ACP, dgclaw) are *integrations* under `tools/integrations/<name>/` that contribute registry entries; capability scales via registry depth, not tool-count bloat.
+The tool surface is **function-shaped** — `perception`, `execution`, `reflection`, `identity` — fed by **registries + dispatchers** (data points, events, venues, accounts, alerts, identity). Sources/venues (Hyperliquid, ACP, dgclaw) are *integrations* under `trading/integrations/<name>/` that contribute registry entries; capability scales via registry depth, not tool-count bloat.
 
-Execution runs in tiers — **plutus-main** (heavy reasoning + orchestration, 3×/day) spawns **plutus-perception** (wide market sweep) and is deputized by **plutus-ops** (30-min bookkeeping). Conviction is two-dimensional (slow strategy baseline × ephemeral thesis) and drives multiplier-based sizing. See `PLUTUS.md` for the full picture.
+The runtime is a **seven-agent trading desk**: **plutus-main** (PM and operator voice) orchestrates **plutus-perception**, **plutus-regime**, **plutus-predict**, **plutus-trade**, and **plutus-reflect**, with **plutus-ops** running 30-minute bookkeeping ticks. Strategies must graduate on a verified prediction track record before they may trade; conviction then sets position size via leverage bands. See `agents/README.md` for the full picture.
 
 | Layer | Path | Contents |
 |---|---|---|
@@ -84,7 +84,9 @@ Both are optional — the default install does Hyperliquid trading without them.
 
 ## Documentation
 
-- `PLUTUS.md` — the agent's mind: cognitive architecture, lifecycle, perception/action/learning
+- `SETUP.md` — from absolute zero to a running desk (accounts, wallets, wizard, fleet)
+- `DEPLOY.md` — redeploying a fresh runtime when you already have credentials
+- `agents/README.md` — the desk: seven agents, blackboards, spawn recipes
 - `TRADING.md` — **canonical** trade-execution mechanics (wallets, on-chain registration, the silent-failure mode, recovery)
 - `LINEAGE.md` — upstream fork point + attribution
 - `SECURITY.md` — how to report vulnerabilities

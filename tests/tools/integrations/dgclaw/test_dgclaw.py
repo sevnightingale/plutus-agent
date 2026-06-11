@@ -132,7 +132,7 @@ def test_persist_skips_missing_keys(temp_home, fake_dgclaw_root):
 
 
 def test_rank_change_fires_on_diff(mock_dgclaw_runner, fake_dgclaw_root, monkeypatch):
-    monkeypatch.setenv("HL_PUBLIC_ADDRESS", "0xfeedface")
+    monkeypatch.setenv("ACP_AGENT_WALLET", "0xfeedface")
     mock_dgclaw_runner["dgclaw"].return_value = {
         "standings": [
             {"rank": 5, "address": "0xfeedface", "name": "Plutus"},
@@ -147,7 +147,7 @@ def test_rank_change_fires_on_diff(mock_dgclaw_runner, fake_dgclaw_root, monkeyp
 
 
 def test_rank_change_no_fire_on_first_observation(mock_dgclaw_runner, fake_dgclaw_root, monkeypatch):
-    monkeypatch.setenv("HL_PUBLIC_ADDRESS", "0xfeedface")
+    monkeypatch.setenv("ACP_AGENT_WALLET", "0xfeedface")
     mock_dgclaw_runner["dgclaw"].return_value = {
         "standings": [{"rank": 5, "address": "0xfeedface"}]
     }

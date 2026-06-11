@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_address() -> Optional[str]:
-    return os.getenv("HL_PUBLIC_ADDRESS") or None
+    return os.getenv("ACP_AGENT_WALLET") or None
 
 
 @register_alert(

@@ -7,7 +7,7 @@ delete it blind.
 ## 0. Back up the old runtime — DO THIS FIRST
 
 `~/.plutus-agent/.env` contains **`HL_API_WALLET_KEY` — the on-chain-registered
-agent wallet** (TRADING.md fact #3). Wipe it without a backup and every trade
+API wallet** (TRADING.md fact #3). Wipe it without a backup and every trade
 fails silently until the wallet is re-registered via the `approveAgent` flow.
 
 ```bash
@@ -43,27 +43,31 @@ lifecycle.db v2 and seeds the desk crons). The wizard ends with a
 Desk Integrations summary showing what was skipped and what each skip
 costs; re-run any trading-specific step later with `plutus setup trading`.
 
-When prompted for wallet values, restore `HL_PUBLIC_ADDRESS`,
-`HL_API_WALLET_ADDRESS`, `HL_API_WALLET_KEY` from
-`~/plutus-runtime-v1-backup/.env`. If you deliberately want a fully fresh
-wallet instead, that means re-running the `approveAgent` registration —
+When prompted for wallet values, restore them from
+`~/plutus-runtime-v1-backup/.env` — **note the rename**: the backup's
+`HL_PUBLIC_ADDRESS` value goes into the **`ACP_AGENT_WALLET`** prompt (same
+address, new name — it's the ACP agent's managed wallet); `HL_API_WALLET_ADDRESS`
+and `HL_API_WALLET_KEY` carry over unchanged. If you deliberately want a fully
+fresh wallet instead, that means re-running the `approveAgent` registration —
 see TRADING.md's recovery runbook.
 
 Do NOT re-run the Virtuals/ACP provisioning (acp-cli `configure` /
 `agent create` / `add-signer`, `dgclaw.sh join`, `add-api-wallet.ts`).
 That one-time flow is where these keys came from — the ACP agent's
 managed wallet IS the HL master, and `add-api-wallet.ts` generated and
-on-chain-registered the agent wallet — and all of its state survives the
+on-chain-registered the API wallet — and all of its state survives the
 runtime wipe: the ACP agent lives on Virtuals' side, the registration is
 on-chain, and the tooling lives outside the wipe path (`~/acp-cli`,
 `~/.config/acp-cli`, `~/dgclaw-skill`). Re-running `add-api-wallet.ts`
-would register a fresh agent wallet and invalidate the backed-up
+would register a fresh API wallet and invalidate the backed-up
 `HL_API_WALLET_KEY`.
 
 ## 3b. Restore the rest from the backup
 
 After the wizard, merge what's left of the backup `.env` — every key in it
-except `HL_MASTER_ADDRESS` is still read by the rebuilt code. The wizard
+is still read by the rebuilt code except `HL_MASTER_ADDRESS` (dead) and
+`HL_PUBLIC_ADDRESS` (renamed — its value went in as `ACP_AGENT_WALLET`
+during the wizard). The wizard
 now collects the provider key, wallets, and the optional integrations
 (`DGCLAW_API_KEY`, `FIRECRAWL_API_KEY`, `VOYAGE_API_KEY`), so the merge
 remainder is: `TELEGRAM_ALLOWED_USERS` / `TELEGRAM_HOME_CHANNEL` (gate

@@ -9,7 +9,7 @@ instead, with an actionable message.
 Address resolution: every account-state data point takes an
 ``account_name`` argument. We look it up in the account registry; if
 the registry entry's address is empty (e.g. registration ran before
-``HL_PUBLIC_ADDRESS`` was set in ``.env``) we fall back to the env var
+``ACP_AGENT_WALLET`` was set in ``.env``) we fall back to the env var
 on each call, so a single ``pm2 restart`` after the wallet is generated
 is enough to bring everything online.
 """
@@ -81,7 +81,8 @@ def get_exchange() -> Exchange:
     if not key:
         raise HLConfigError(
             "HL_API_WALLET_KEY is not set in ~/.plutus-agent/.env. "
-            "Run dgclaw_add_api_wallet via the bootstrap-setup skill, then "
+            "Generate + register an API wallet via the dgclaw skill's "
+            "add-api-wallet.ts (see SETUP.md / TRADING.md), then "
             "`pm2 restart plutus-gateway`."
         )
     if _exchange is not None and _exchange_addr == key:
@@ -96,7 +97,7 @@ def get_exchange() -> Exchange:
             raise HLConfigError(f"eth_account not available: {exc}") from exc
 
         wallet = Account.from_key(key)
-        master_address = os.getenv("HL_PUBLIC_ADDRESS") or None
+        master_address = os.getenv("ACP_AGENT_WALLET") or None
         _exchange = Exchange(
             wallet,
             constants.MAINNET_API_URL,
@@ -114,7 +115,7 @@ def get_exchange() -> Exchange:
 def resolve_account_address(account_name: str) -> str:
     """Return the on-chain address for ``account_name``.
 
-    Reads from the account registry; falls back to ``HL_PUBLIC_ADDRESS``
+    Reads from the account registry; falls back to ``ACP_AGENT_WALLET``
     env var when the registry entry has no address (the registration
     runs eagerly at import time, possibly before ``.env`` is populated).
     """
@@ -124,11 +125,11 @@ def resolve_account_address(account_name: str) -> str:
         entry = None
     if entry and entry.address:
         return entry.address
-    addr = os.getenv("HL_PUBLIC_ADDRESS")
+    addr = os.getenv("ACP_AGENT_WALLET")
     if not addr:
         raise HLConfigError(
             f"No address known for account '{account_name}'. "
-            f"Set HL_PUBLIC_ADDRESS in ~/.plutus-agent/.env or "
+            f"Set ACP_AGENT_WALLET in ~/.plutus-agent/.env or "
             f"register a Hyperliquid account with a non-empty address."
         )
     return addr

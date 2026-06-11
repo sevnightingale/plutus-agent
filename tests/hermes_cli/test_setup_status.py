@@ -12,7 +12,7 @@ def test_setup_status_runs_without_crash(capsys, monkeypatch):
     """End-to-end smoke: runs the dashboard and prints the readiness line."""
     # Force a clean state so checks behave deterministically
     monkeypatch.delenv("HL_API_WALLET_KEY", raising=False)
-    monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
+    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
 
     from harness.cli.setup_status import setup_status_command
     rc = setup_status_command(None)
@@ -27,7 +27,7 @@ def test_setup_status_runs_without_crash(capsys, monkeypatch):
 
 def test_setup_status_ready_when_keys_present(capsys, monkeypatch):
     monkeypatch.setenv("HL_API_WALLET_KEY", "0xfake")
-    monkeypatch.setenv("HL_PUBLIC_ADDRESS", "0xfeedface")
+    monkeypatch.setenv("ACP_AGENT_WALLET", "0xfeedface")
 
     from harness.cli.setup_status import setup_status_command
     setup_status_command(None)
@@ -45,7 +45,7 @@ def test_individual_check_helpers_return_tuples():
         ss._check_dgclaw_installed,
         ss._check_dgclaw_joined,
         ss._check_hl_api_wallet,
-        ss._check_hl_public_address,
+        ss._check_acp_agent_wallet,
         ss._check_voyage_key,
         ss._check_holographic_memory,
         ss._check_lifecycle_db,

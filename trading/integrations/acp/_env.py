@@ -1,6 +1,6 @@
 """Read/write helpers for ~/.plutus-agent/.env from the ACP integration.
 
-ACP setup writes important values (HL_PUBLIC_ADDRESS from acp_whoami,
+ACP setup writes important values (ACP_AGENT_WALLET from acp_whoami,
 DGCLAW_API_KEY from dgclaw_join, HL_API_WALLET_KEY from
 add-api-wallet.ts) into ~/.plutus-agent/.env. We use python-dotenv's
 set_key for atomic file edits so the operator's existing values stay

@@ -4,7 +4,7 @@ Symbol-level data points (``hl_price``, ``hl_candles``, ``hl_orderbook``,
 ``hl_funding_and_oi``, ``hl_universe``) hit public endpoints and need no
 credentials. Account-state data points (``hl_holdings``,
 ``hl_total_equity``, ``hl_drawdown_from_peak``) require an address;
-they loud-fail when ``HL_PUBLIC_ADDRESS`` isn't set.
+they loud-fail when ``ACP_AGENT_WALLET`` isn't set.
 
 ``hl_drawdown_from_peak`` is a *derived* data point: it reads from
 ``data_point_snapshots`` rather than fetching from HL. Plutus gets the
@@ -181,7 +181,7 @@ def hl_universe() -> Dict[str, Any]:
     return {"count": len(universe), "universe": universe}
 
 
-# ─── Account-state data points (need HL_PUBLIC_ADDRESS) ───────────────────
+# ─── Account-state data points (need ACP_AGENT_WALLET) ───────────────────
 
 
 @register_data_point(

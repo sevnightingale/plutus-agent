@@ -1,7 +1,7 @@
 """Hyperliquid data points — schema + live-endpoint smoke tests.
 
 Symbol-level data points hit live HL public endpoints (no credentials);
-account-state data points loud-fail without HL_PUBLIC_ADDRESS — both
+account-state data points loud-fail without ACP_AGENT_WALLET — both
 cases are exercised so a regression that swallows the failure (e.g. a
 hidden fallback to localhost) shows up here.
 """
@@ -165,12 +165,12 @@ def test_hl_universe_live():
     assert "ETH" in names
 
 
-# ─── Account-state data points need HL_PUBLIC_ADDRESS ──────────────────────
+# ─── Account-state data points need ACP_AGENT_WALLET ──────────────────────
 
 
 def test_hl_holdings_loud_fails_without_address(monkeypatch):
     _import_integration()
-    monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
+    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
     # account_registry's hl_trading registered with empty address; resolve
     # will then read env, fail.
     from trading.integrations.hyperliquid.data_points import hl_holdings
@@ -180,7 +180,7 @@ def test_hl_holdings_loud_fails_without_address(monkeypatch):
 
 def test_hl_total_equity_loud_fails_without_address(monkeypatch):
     _import_integration()
-    monkeypatch.delenv("HL_PUBLIC_ADDRESS", raising=False)
+    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
     from trading.integrations.hyperliquid.data_points import hl_total_equity
     with pytest.raises(_client.HLConfigError):
         hl_total_equity("hl_trading")

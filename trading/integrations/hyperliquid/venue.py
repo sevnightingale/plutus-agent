@@ -5,7 +5,7 @@ Provides ``place_order_fn`` / ``close_position_fn`` /
 ``outcome_compute_fn`` to the dispatchers.
 
 Wallet key (HL_API_WALLET_KEY) is required for any of the write
-functions. Reads (account_state_fn) only need HL_PUBLIC_ADDRESS.
+functions. Reads (account_state_fn) only need ACP_AGENT_WALLET.
 """
 
 from __future__ import annotations

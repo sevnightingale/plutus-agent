@@ -242,7 +242,7 @@ def _acp_agent_add_signer(args: Dict[str, Any]) -> str:
         "verification": (
             "After operator confirms, run `acp agent whoami --json` via "
             "terminal — `signers` should include the new public key. Then "
-            "persist HL_PUBLIC_ADDRESS to ~/.plutus-agent/.env via "
+            "persist ACP_AGENT_WALLET to ~/.plutus-agent/.env via "
             "acp_persist_env tool (or echo manually)."
         ),
     })
@@ -330,7 +330,7 @@ _PERSIST_ENV_SCHEMA = {
     "name": "acp_persist_env_after_setup",
     "description": (
         "After `acp configure` + `acp agent create` + `acp agent add-signer` "
-        "are done by the operator, call this to persist HL_PUBLIC_ADDRESS "
+        "are done by the operator, call this to persist ACP_AGENT_WALLET "
         "into ~/.plutus-agent/.env from `acp agent whoami`. Idempotent."
     ),
     "parameters": {"type": "object", "properties": {}},
@@ -353,10 +353,10 @@ def _acp_persist_env_after_setup(args: Dict[str, Any]) -> str:
         )
 
     from . import _env
-    _env.set_env("HL_PUBLIC_ADDRESS", addr)
+    _env.set_env("ACP_AGENT_WALLET", addr)
     return tool_result({
         "status": "persisted",
-        "HL_PUBLIC_ADDRESS": addr,
+        "ACP_AGENT_WALLET": addr,
         "next_step": (
             "Operator: please run `pm2 restart plutus-gateway` and "
             "`/reset` your Telegram session so HL data points see the new env."
@@ -369,6 +369,6 @@ registry.register(
     toolset="identity",
     schema=_PERSIST_ENV_SCHEMA,
     handler=lambda args, **kw: _acp_persist_env_after_setup(args),
-    description="After operator-run ACP setup, persist HL_PUBLIC_ADDRESS to .env.",
+    description="After operator-run ACP setup, persist ACP_AGENT_WALLET to .env.",
     emoji="💾",
 )

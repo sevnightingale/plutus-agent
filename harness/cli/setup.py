@@ -3292,15 +3292,17 @@ def _setup_hyperliquid_wallets() -> None:
 
     print()
     print_header("Hyperliquid wallets")
-    print_info("Two wallets (TRADING.md): the MASTER holds funds (key never")
-    print_info("on disk) and the AGENT/API wallet signs trades, holds nothing,")
-    print_info("and MUST be registered on-chain via approveAgent — an")
-    print_info("unregistered agent wallet makes every trade fail silently.")
+    print_info("Two wallets (TRADING.md): the ACP AGENT wallet (master) holds")
+    print_info("funds — it's the Virtuals ACP agent's managed wallet, its key is")
+    print_info("never on disk. The API wallet signs trades, holds nothing, and")
+    print_info("MUST be registered on-chain via approveAgent — an unregistered")
+    print_info("API wallet makes every trade fail silently.")
+    print_info("No wallets yet? See SETUP.md for the one-time ACP provisioning.")
     print_info("Press Enter to skip any value (research-only mode works).")
     for var, label in (
-        ("HL_PUBLIC_ADDRESS", "Master wallet address"),
-        ("HL_API_WALLET_ADDRESS", "Agent/API wallet address"),
-        ("HL_API_WALLET_KEY", "Agent/API wallet private key"),
+        ("ACP_AGENT_WALLET", "ACP agent wallet address (master — holds funds)"),
+        ("HL_API_WALLET_ADDRESS", "API wallet address (signer)"),
+        ("HL_API_WALLET_KEY", "API wallet private key"),
     ):
         current = get_env_value(var)
         suffix = " (set — Enter keeps it)" if current else ""
@@ -3311,7 +3313,7 @@ def _setup_hyperliquid_wallets() -> None:
         if value:
             save_env_value(var, value)
     if not get_env_value("HL_API_WALLET_KEY"):
-        print_info("  No agent wallet key — the desk runs research-only until")
+        print_info("  No API wallet key — the desk runs research-only until")
         print_info("  one is configured (predictions, no trades).")
 
 

@@ -30,7 +30,7 @@ def poll_dgclaw_rank_change(
         logger.debug("dgclaw_leaderboard_rank_change poll failed: %s", exc)
         return [], state or {}
 
-    addr = os.getenv("HL_PUBLIC_ADDRESS") or os.getenv("HL_API_WALLET_ADDRESS")
+    addr = os.getenv("ACP_AGENT_WALLET") or os.getenv("HL_API_WALLET_ADDRESS")
     if not addr:
         return [], state or {}
 

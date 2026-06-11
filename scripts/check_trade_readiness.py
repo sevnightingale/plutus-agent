@@ -4,10 +4,11 @@
 THE canonical health check for the trade-execution path. See TRADING.md for the full model.
 
 Trading on plutus-agent goes through the NATIVE path:
-    place_order(venue="hyperliquid") -> tools/integrations/hyperliquid/_client.py -> HL SDK
-signing with the AGENT wallet (HL_API_WALLET_KEY) on behalf of the MASTER (HL_PUBLIC_ADDRESS).
+    place_order(venue="hyperliquid") -> trading/integrations/hyperliquid/_client.py -> HL SDK
+signing with the API wallet (HL_API_WALLET_KEY) on behalf of the MASTER — the ACP agent
+wallet (ACP_AGENT_WALLET).
 
-For that signature to be accepted, the agent wallet must be REGISTERED on Hyperliquid as an
+For that signature to be accepted, the API wallet must be REGISTERED on Hyperliquid as an
 approved agent of the master (an on-chain `approveAgent`, carrying a ~180-day `validUntil`).
 If it is not registered (or expired), EVERY trade fails silently with
 "User or API Wallet does not exist". That is the #1 failure mode (it once silently broke
@@ -42,7 +43,7 @@ def _load_env() -> dict:
                 k, v = s.split("=", 1)
                 env[k.strip()] = v.strip().strip('"').strip("'")
     # process env overrides file (so a running gateway's live values win if invoked in-proc)
-    for k in ("HL_PUBLIC_ADDRESS", "HL_MASTER_ADDRESS", "HL_API_WALLET_ADDRESS", "HL_API_WALLET_KEY"):
+    for k in ("ACP_AGENT_WALLET", "HL_API_WALLET_ADDRESS", "HL_API_WALLET_KEY"):
         if os.environ.get(k):
             env[k] = os.environ[k]
     return env
@@ -51,7 +52,7 @@ def _load_env() -> dict:
 def check(warn_days: int = WARN_DAYS_DEFAULT) -> dict:
     """Return a dict describing trade readiness. Never raises; encodes errors in the dict."""
     env = _load_env()
-    master = (env.get("HL_PUBLIC_ADDRESS") or env.get("HL_MASTER_ADDRESS") or "").lower()
+    master = (env.get("ACP_AGENT_WALLET") or "").lower()
     agent_env = (env.get("HL_API_WALLET_ADDRESS") or "").lower()
     agent_key = env.get("HL_API_WALLET_KEY") or ""
 
@@ -69,7 +70,7 @@ def check(warn_days: int = WARN_DAYS_DEFAULT) -> dict:
     }
 
     if not master:
-        result["reason"] = "HL_PUBLIC_ADDRESS/HL_MASTER_ADDRESS missing from ~/.plutus-agent/.env"
+        result["reason"] = "ACP_AGENT_WALLET missing from ~/.plutus-agent/.env"
         result["_exit"] = 2
         return result
     if not agent_env:

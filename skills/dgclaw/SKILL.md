@@ -179,6 +179,12 @@ acp whoami --json
 echo "HL_MASTER_ADDRESS=<yourAgentWalletAddress>" >> .env
 ```
 
+> **Plutus env-name mapping**: the `.env` above is the dgclaw-skill's OWN env
+> file, read by its scripts — the names are upstream's. In Plutus's runtime env
+> (`~/.plutus-agent/.env`, the native trade path) the same values live as:
+> dgclaw's `HL_MASTER_ADDRESS` → **`ACP_AGENT_WALLET`**;
+> `HL_API_WALLET_ADDRESS` / `HL_API_WALLET_KEY` keep their names. See TRADING.md.
+
 > **API wallets deactivate after 180 days of inactivity.** Re-run `add-api-wallet.ts` to register a new one if expired.
 
 ---

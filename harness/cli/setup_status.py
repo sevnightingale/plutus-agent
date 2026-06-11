@@ -1,10 +1,10 @@
 """plutus-agent setup-status — at-a-glance verification dashboard.
 
-Walks all the checks the bootstrap-setup skill exercises (ACP install,
-ACP configured, signer present, dgclaw-skill installed, dgclaw joined,
-HL API wallet set up, cron jobs seeded, holographic memory enabled)
-and prints a one-screen report. For when the operator wants to see
-status without engaging Plutus.
+Walks all the checks the from-zero setup exercises (SETUP.md: ACP
+install, ACP configured, signer present, dgclaw-skill installed,
+dgclaw joined, HL API wallet set up, desk crons seeded, holographic
+memory enabled) and prints a one-screen report. For when the operator
+wants to see status without engaging Plutus.
 """
 
 from __future__ import annotations
@@ -114,7 +114,7 @@ def _check_dgclaw_installed() -> Tuple[bool, str]:
     from trading.integrations.dgclaw import _cli
     if _cli.is_installed():
         return True, str(_cli.get_root())
-    return False, f"missing at {_cli.get_root()} — run `dgclaw_install`"
+    return False, f"missing at {_cli.get_root()} — clone Virtual-Protocol/dgclaw-skill there (SETUP.md)"
 
 
 def _check_dgclaw_joined() -> Tuple[bool, str]:
@@ -122,7 +122,7 @@ def _check_dgclaw_joined() -> Tuple[bool, str]:
     val = _env.read_dgclaw_env("DGCLAW_API_KEY")
     if val:
         return True, "DGCLAW_API_KEY set in dgclaw-skill .env"
-    return False, "run `dgclaw_join`"
+    return False, "run `./dgclaw.sh join` in the dgclaw-skill clone (SETUP.md)"
 
 
 def _check_hl_api_wallet() -> Tuple[bool, str]:
@@ -130,14 +130,14 @@ def _check_hl_api_wallet() -> Tuple[bool, str]:
     if val:
         addr = os.getenv("HL_API_WALLET_ADDRESS", "")
         return True, f"HL_API_WALLET_KEY set" + (f" (addr={addr[:10]}…)" if addr else "")
-    return False, "run `dgclaw_add_api_wallet`, then `pm2 restart plutus-gateway`"
+    return False, "generate via the dgclaw skill's add-api-wallet.ts (SETUP.md), then `pm2 restart plutus-gateway`"
 
 
-def _check_hl_public_address() -> Tuple[bool, str]:
-    val = os.getenv("HL_PUBLIC_ADDRESS")
+def _check_acp_agent_wallet() -> Tuple[bool, str]:
+    val = os.getenv("ACP_AGENT_WALLET")
     if val:
         return True, val
-    return False, "auto-set after `acp_agent_add_signer_status` succeeds"
+    return False, "persist via acp_persist_env_after_setup once ACP setup is done (SETUP.md)"
 
 
 def _check_voyage_key() -> Tuple[bool, str]:
@@ -149,15 +149,14 @@ def _check_cron_jobs() -> Tuple[Optional[bool], str]:
         from harness.cron.jobs import list_jobs
         jobs = list_jobs()
         names = {j.get("name") for j in jobs}
-        hb = "plutus-heartbeat" in names
-        wr = "plutus-weekly-review" in names
-        if hb and wr:
-            return True, "plutus-heartbeat + plutus-weekly-review"
-        if hb:
-            return False, "weekly-review missing — run `plutus-agent cron seed-weekly-review`"
-        if wr:
-            return False, "heartbeat missing — run `plutus-agent cron seed-heartbeat`"
-        return False, "neither seeded — run `plutus-agent cron seed-heartbeat` + `seed-weekly-review`"
+        ops = "plutus-ops-tick" in names
+        eod = "plutus-eod" in names
+        if ops and eod:
+            return True, "plutus-ops-tick + plutus-eod"
+        return False, (
+            f"ops-tick={ops}, eod={eod} — run `plutus-agent cron seed-desk` "
+            "(the setup wizard's first boot also seeds these)"
+        )
     except Exception as exc:
         return None, str(exc)
 
@@ -226,8 +225,8 @@ def setup_status_command(args=None) -> int:
     ok, detail = _check_acp_wallet_balance()
     checks.append(_check("ACP wallet funded", ok, detail))
 
-    ok, detail = _check_hl_public_address()
-    checks.append(_check("HL_PUBLIC_ADDRESS set", ok, detail))
+    ok, detail = _check_acp_agent_wallet()
+    checks.append(_check("ACP_AGENT_WALLET set", ok, detail))
 
     # dgclaw
     ok, detail = _check_dgclaw_installed()
@@ -261,7 +260,7 @@ def setup_status_command(args=None) -> int:
     # Live trading readiness summary
     ready = (
         os.getenv("HL_API_WALLET_KEY") and
-        os.getenv("HL_PUBLIC_ADDRESS")
+        os.getenv("ACP_AGENT_WALLET")
     )
     print("─" * 60)
     if ready:

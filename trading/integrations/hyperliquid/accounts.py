@@ -2,7 +2,7 @@
 
 Currently one: ``hl_trading`` — Plutus's primary trading account on
 Hyperliquid (perps + spot, unified). Address pulled from
-``HL_PUBLIC_ADDRESS`` env var; may be empty at registration time and
+``ACP_AGENT_WALLET`` env var; may be empty at registration time and
 lazy-resolved by ``_client.resolve_account_address`` on each call.
 """
 
@@ -22,7 +22,7 @@ try:
         purpose="trading_capital",
         venue="hyperliquid",
         chain="hyperliquid",
-        address=os.getenv("HL_PUBLIC_ADDRESS") or None,
+        address=os.getenv("ACP_AGENT_WALLET") or None,
         description="Plutus's Hyperliquid trading account (perps + spot, unified).",
     )
 except RegistryError:
