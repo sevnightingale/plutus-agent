@@ -128,3 +128,6 @@ MAP.md
 .plans/
 
 .mcp.json
+
+# Rebuild working doc — design authority lives at repo root, untracked (see CLAUDE.md)
+rebuild-architecture.md
