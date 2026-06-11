@@ -624,9 +624,13 @@ def hl_cancel_order(
 def hl_account_state(account_name: str = "hl_trading", **_extra: Any) -> Dict[str, Any]:
     """Composite state: equity + positions + open orders + drawdown.
 
-    Equity reuses ``hl_total_equity`` so spot USDC is included (HL's
-    ``user_state.marginSummary.accountValue`` only sees margin-allocated
-    funds; with unified mode operators usually keep most balance in spot).
+    Measures (TRADING.md money glossary): ``equity_usd`` reuses
+    ``hl_total_equity`` = spot USDC + perp ``accountValue`` — the whole
+    unified cross-margin account, and the desk's sizing base. The split
+    is reported so the display semantics stay legible: ``spot_usdc`` is
+    where idle funds show, ``perp_account_value`` ≈ 0 when flat (normal —
+    margin is drawn from the unified balance only while positions are
+    open), ``withdrawable_usd`` is what could leave the venue right now.
     """
     info = get_info()
     addr = resolve_account_address(account_name)

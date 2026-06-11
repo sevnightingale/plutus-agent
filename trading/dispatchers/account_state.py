@@ -21,7 +21,14 @@ SCHEMA = {
         "Read the current account state at a trading venue (positions, "
         "open orders, balances). Pass venue='hyperliquid' for a specific "
         "venue, or omit to aggregate across all registered venues. "
-        "Returns a snapshot dict; does not auto-record any lifecycle events."
+        "Returns a snapshot dict; does not auto-record any lifecycle events. "
+        "How to read the numbers (unified account, TRADING.md money "
+        "glossary): equity_usd = spot_usdc + perp_account_value and is THE "
+        "account-worth number — sizing, snapshots, and drawdown all use it. "
+        "perp_account_value ≈ 0 when flat is NORMAL (display, not missing "
+        "funds; never transfer spot→perp). withdrawable_usd is what could "
+        "leave the venue right now. A healthy equity does NOT prove trading "
+        "works — only hl_trade_readiness does."
     ),
     "parameters": {
         "type": "object",

@@ -191,7 +191,10 @@ def hl_universe() -> Dict[str, Any]:
     source="hyperliquid",
     description=(
         "Composite holdings for a Hyperliquid account: open perp positions + "
-        "spot balances + USDC margin."
+        "spot balances + USDC margin. NOTE: account_value here is the "
+        "perp-side marginSummary.accountValue — ≈ 0 when flat under unified "
+        "mode. For account worth, use hl_total_equity's equity_usd "
+        "(TRADING.md money glossary)."
     ),
     params_schema={"account_name": {"type": "string", "required": True}},
     returns_schema={"perp_positions": "list", "spot_balances": "list", "usdc_withdrawable": "float"},
@@ -274,8 +277,21 @@ def hl_holdings(account_name: str) -> Dict[str, Any]:
     tags=["account", "equity", "hyperliquid"],
 )
 def hl_total_equity(account_name: str) -> Dict[str, Any]:
-    info = get_info()
     addr = resolve_account_address(account_name)
+    return {"account_name": account_name, "address": addr,
+            **equity_breakdown(addr)}
+
+
+def equity_breakdown(addr: str) -> Dict[str, float]:
+    """THE equity measure (TRADING.md money glossary), for one address.
+
+    ``equity_usd = spot_usdc + perp_account_value``. Anything that needs
+    "how much is this account worth" — sizing, snapshots, drawdown, the
+    balance-change alert — uses THIS, never ``marginSummary.accountValue``
+    alone: under unified mode that perp-side number is ≈0 when flat and
+    only shows margin-allocated funds.
+    """
+    info = get_info()
     state = info.user_state(addr)
     spot = info.spot_user_state(addr)
     margin_summary = state.get("marginSummary", {}) or {}
@@ -290,8 +306,6 @@ def hl_total_equity(account_name: str) -> Dict[str, Any]:
                 continue
 
     return {
-        "account_name": account_name,
-        "address": addr,
         "equity_usd": spot_usdc + perp_account_value,
         "spot_usdc": spot_usdc,
         "perp_account_value": perp_account_value,

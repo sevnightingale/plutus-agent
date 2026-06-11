@@ -77,31 +77,54 @@ def test_position_status_change_no_diff(monkeypatch):
     assert fired == []
 
 
-def test_account_balance_change_above_threshold(monkeypatch):
+def _equity_info_mock(monkeypatch, spot_usdc: str, perp_account_value: str):
+    """Mock the SDK for the balance alert's TOTAL-equity measure."""
+    from trading.integrations.hyperliquid import data_points
+
     info_mock = MagicMock()
     info_mock.user_state.return_value = {
-        "marginSummary": {"accountValue": "100.0"}
+        "marginSummary": {"accountValue": perp_account_value},
+        "withdrawable": "0",
     }
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    info_mock.spot_user_state.return_value = {
+        "balances": [{"coin": "USDC", "total": spot_usdc}]
+    }
+    monkeypatch.setattr(_client, "get_info", lambda: info_mock)
+    monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    monkeypatch.setattr(data_points, "get_info", lambda: info_mock)
+    return info_mock
+
+
+def test_account_balance_change_above_threshold(monkeypatch):
+    # Deposit landed in SPOT (unified mode) — perp side still 0.
+    _equity_info_mock(monkeypatch, spot_usdc="100.0", perp_account_value="0")
 
     fired, new_state = alerts.poll_hl_account_balance_change(
-        state={"account_value": 50.0},
+        state={"equity_usd": 50.0},
     )
     assert len(fired) == 1
     assert fired[0]["delta"] == pytest.approx(50.0)
-    assert new_state["account_value"] == 100.0
+    assert new_state["equity_usd"] == 100.0
 
 
 def test_account_balance_change_below_threshold(monkeypatch):
-    info_mock = MagicMock()
-    info_mock.user_state.return_value = {
-        "marginSummary": {"accountValue": "100.10"}
-    }
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    _equity_info_mock(monkeypatch, spot_usdc="100.10", perp_account_value="0")
 
     # delta=0.10, threshold=max(0.50, 1.00) = 1.00 → below
-    fired, _ = alerts.poll_hl_account_balance_change(state={"account_value": 100.0})
+    fired, _ = alerts.poll_hl_account_balance_change(state={"equity_usd": 100.0})
     assert fired == []
+
+
+def test_account_balance_change_ignores_margin_display_shift(monkeypatch):
+    # Opening a position moves margin INSIDE the unified balance:
+    # spot 100→60, perp 0→40. Total equity unchanged — must NOT fire.
+    _equity_info_mock(monkeypatch, spot_usdc="60.0", perp_account_value="40.0")
+
+    fired, new_state = alerts.poll_hl_account_balance_change(
+        state={"equity_usd": 100.0},
+    )
+    assert fired == []
+    assert new_state["equity_usd"] == 100.0
 
 
 def test_alerts_no_address_returns_empty(monkeypatch):

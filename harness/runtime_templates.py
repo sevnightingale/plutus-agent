@@ -89,7 +89,8 @@ is the floor, not the plan.
 ## Live State
 
 <!-- TOOL-REWRITTEN ONLY. Do not edit by hand. -->
-- account: (not yet snapshotted)
+- equity_usd: (not yet snapshotted — the unified-account measure, see
+  Money model above)
 - snapshot_at: —
 - regime: see REGIME.md
 - open_position: none

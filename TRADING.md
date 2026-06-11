@@ -98,6 +98,29 @@ ACP/Privy. Never hardcode either anywhere; never commit either.
 
 ---
 
+## The money measures (glossary — canonical definitions)
+
+Every number the codebase reports about money is one of these. Code computes them in
+ONE place (`equity_breakdown` in `trading/integrations/hyperliquid/data_points.py`);
+everything else reuses it.
+
+| Measure | Definition | Used by |
+|---|---|---|
+| `equity_usd` | `spot_usdc + perp_account_value` — **THE account-worth number** for the whole unified cross-margin account | sizing base (leverage bands), Live State snapshot, drawdown, the balance-change alert |
+| `spot_usdc` | spot clearinghouse USDC total — where idle funds *display* under unified mode | legibility split in account_state |
+| `perp_account_value` | perp-side `marginSummary.accountValue` (margin in use + unrealized PnL) — **≈ 0 when flat is NORMAL** | legibility split; never used alone for account worth |
+| `withdrawable_usd` | what could leave the venue right now | operator info |
+| `entry_account_value` | `equity_usd` measured at fill time, written on the position row | denominator for realized leverage; reflect's sizing review |
+| `leverage` (realized) | `notional / entry_account_value`, measured post-fill — bands are doctrine, code measures | positions table, `sizing_performance` |
+| drawdown | current `equity_usd` vs its peak over snapshot history | `hl_drawdown_from_peak` |
+
+Anti-confusions, permanently settled: "balance moved" on a position open/close is margin
+*display* shifting inside the one unified balance, not a transfer; `hl_holdings`'
+`account_value` is the perp-side number, not account worth; and no equity figure, however
+healthy, says anything about whether trading *works* (that's `hl_trade_readiness`).
+
+---
+
 ## How a trade actually executes (the happy path)
 
 1. Plutus calls `place_order(venue="hyperliquid", thesis_id=..., conviction=..., side=...,

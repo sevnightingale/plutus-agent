@@ -20,8 +20,9 @@ from typing import Any, Dict
 
 OPS_TICK_PROMPT = (
     "30-minute ops tick. Run your Procedure: resolve due predictions, "
-    "evaluate the open position (if any), check staleness floors, enqueue "
-    "wakes where needed, return your ops_report."
+    "evaluate the open position (if any), check staleness floors, verify "
+    "the trade path (hl_trade_readiness), enqueue wakes where needed, "
+    "return your ops_report."
 )
 
 EOD_PROMPT = (

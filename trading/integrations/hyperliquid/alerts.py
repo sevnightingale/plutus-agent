@@ -5,15 +5,14 @@ emits each as a wake event into ``~/.plutus-agent/wake_events.ndjson``;
 the gateway tails that file and turns wake events into messages routed
 to Plutus.
 
-State (last-seen position set, last-seen account value) lives in
+State (last-seen position set, last-seen equity) lives in
 ``watchers/state.py`` (``~/.plutus-agent/watcher_state.json``). The
 poll fn is given the previous state in ``state`` and returns a tuple
 ``(events, new_state)`` so the watcher can persist on success.
 
-We register two alerts in v1: position-status-change and
-account-balance-change. More alerts (price-threshold-breach,
-funding-spike, etc.) Plutus can author later as it learns what's
-worth watching.
+Three alerts: position-status-change, account-balance-change (on TOTAL
+equity — the unified-account measure), and price-range. More alerts
+Plutus can author later as it learns what's worth watching.
 """
 
 from __future__ import annotations
@@ -108,9 +107,12 @@ def poll_hl_position_status_change(
     source="hyperliquid",
     throttle_seconds=300,
     description=(
-        "Fires when the Hyperliquid account value changes by more than 1% "
-        "or $0.50, whichever is larger. Used to surface deposits, "
-        "withdrawals, and material PnL swings."
+        "Fires when TOTAL equity (equity_usd = spot USDC + perp "
+        "accountValue — the unified-account measure, TRADING.md money "
+        "glossary) changes by more than 1% or $0.50, whichever is larger. "
+        "Surfaces deposits, withdrawals, and material PnL swings. Watching "
+        "the perp-side accountValue alone would miss spot deposits and "
+        "fire on margin display moves at every open/close."
     ),
 )
 def poll_hl_account_balance_change(
@@ -120,13 +122,13 @@ def poll_hl_account_balance_change(
     if not addr:
         return [], state or {}
     try:
-        s = get_info().user_state(addr)
+        from .data_points import equity_breakdown
+        current = equity_breakdown(addr)["equity_usd"]
     except Exception as exc:
         logger.warning("hl_account_balance_change poll failed: %s", exc)
         return [], state or {}
 
-    current = float(s.get("marginSummary", {}).get("accountValue", 0))
-    prev = (state or {}).get("account_value")
+    prev = (state or {}).get("equity_usd")
     fired: List[Dict[str, Any]] = []
 
     if prev is not None:
@@ -135,12 +137,12 @@ def poll_hl_account_balance_change(
         if abs(delta) >= threshold_abs:
             fired.append({
                 "alert": "hl_account_balance_change",
-                "previous_account_value": prev,
-                "current_account_value": current,
+                "previous_equity_usd": prev,
+                "current_equity_usd": current,
                 "delta": delta,
             })
 
-    return fired, {"account_value": current}
+    return fired, {"equity_usd": current}
 
 
 @register_alert(
