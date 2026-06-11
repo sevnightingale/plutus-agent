@@ -1,6 +1,6 @@
 ---
 name: plutus-ops
-model: deepseek-v4-flash
+model: light
 toolsets: [perception, resolution, lifecycle-read]
 reads:
   - PLUTUS.md#doctrine

@@ -1,6 +1,6 @@
 ---
 name: plutus-main
-model: deepseek-v4-pro
+model: standard
 toolsets: [spawn, record, perception, lifecycle-read, strategy-write, cronjob, file, web, skills]
 reads:
   - PLUTUS.md

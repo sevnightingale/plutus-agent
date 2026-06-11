@@ -66,16 +66,27 @@ def load_agent(name: str, agents_dir: Optional[Path] = None) -> AgentSpec:
         raise ValueError(f"{path}: frontmatter name {meta.get('name')!r} != dir {name!r}")
     spec = AgentSpec(name, meta, text[m.end():])
 
-    # Operator override: config.yaml `desk_models: {<agent-name>: <model>}`
-    # wins over the AGENT.md frontmatter model. The recipe stays the
-    # default; the operator retunes models without editing recipes.
+    # Model resolution, in priority order:
+    #   1. config.yaml `desk_models: {<agent-name>: <model>}` — operator pin.
+    #   2. Recipe tier sentinel — recipes say "standard" (heavy reasoning)
+    #      or "light" (cheap/fast); resolved against the USER'S provider so
+    #      a fresh install works on any provider:
+    #        standard → config model.default
+    #        light    → config model.light, else model.default
+    #   3. A literal model name in the recipe is used as-is.
     try:
         from harness.cli.config import load_config
-        override = (load_config().get("desk_models") or {}).get(name)
+        cfg = load_config()
+        override = (cfg.get("desk_models") or {}).get(name)
         if override:
             spec.model = str(override)
+        elif spec.model in ("standard", "light"):
+            model_cfg = cfg.get("model") or {}
+            default = model_cfg.get("default") or ""
+            light = model_cfg.get("light") or default
+            spec.model = (light if spec.model == "light" else default) or spec.model
     except Exception:
-        pass  # config unavailable (e.g. isolated tests) — recipe model stands
+        pass  # config unavailable (e.g. isolated tests) — recipe value stands
     return spec
 
 

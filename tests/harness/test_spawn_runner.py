@@ -53,7 +53,9 @@ def test_real_roster_dry_run(home, mock_agent):
     assert result["payload"]["updated"] == ["hl_price"]
 
     init = mock_agent["init"]
-    assert init["model"] == "deepseek-v4-flash"
+    # Recipe says "light"; in this hermetic env no model.light/default is
+    # configured, so the sentinel passes through unresolved.
+    assert init["model"] == "light"
     assert init["enabled_toolsets"] == ["perception", "web", "search", "file"]
     assert "spawn" in init["disabled_toolsets"]
     assert init["skip_context_files"] is True

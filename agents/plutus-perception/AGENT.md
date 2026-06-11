@@ -1,6 +1,6 @@
 ---
 name: plutus-perception
-model: deepseek-v4-flash
+model: light
 toolsets: [perception, web, search, file]
 reads:
   - PLUTUS.md#doctrine

@@ -1,6 +1,6 @@
 ---
 name: plutus-predict
-model: deepseek-v4-pro
+model: standard
 toolsets: [perception, prediction-write, strategy-write, lifecycle-read]
 reads:
   - PLUTUS.md#doctrine

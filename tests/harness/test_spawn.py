@@ -141,3 +141,21 @@ def test_desk_models_config_overrides_recipe_model(tmp_path, monkeypatch):
     assert load_agent("plutus-x", agents_dir=tmp_path).model == "override-model"
     monkeypatch.setattr(cfg, "load_config", lambda: {})
     assert load_agent("plutus-x", agents_dir=tmp_path).model == "recipe-model"
+
+
+def test_tier_sentinels_resolve_against_user_config(tmp_path, monkeypatch):
+    """standard → model.default; light → model.light (else default)."""
+    for agent, tier in (("plutus-s", "standard"), ("plutus-l", "light")):
+        d = tmp_path / agent
+        d.mkdir()
+        (d / "AGENT.md").write_text(
+            f"---\nname: {agent}\nmodel: {tier}\ntoolsets: [perception]\n---\nbody\n"
+        )
+    import harness.cli.config as cfg
+    from harness.spawn import load_agent
+    monkeypatch.setattr(cfg, "load_config", lambda: {
+        "model": {"default": "user-model", "light": "user-cheap"}})
+    assert load_agent("plutus-s", agents_dir=tmp_path).model == "user-model"
+    assert load_agent("plutus-l", agents_dir=tmp_path).model == "user-cheap"
+    monkeypatch.setattr(cfg, "load_config", lambda: {"model": {"default": "user-model"}})
+    assert load_agent("plutus-l", agents_dir=tmp_path).model == "user-model"

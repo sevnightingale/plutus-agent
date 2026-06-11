@@ -1,6 +1,6 @@
 ---
 name: plutus-reflect
-model: deepseek-v4-pro
+model: standard
 toolsets: [lifecycle-read, strategy-write, file]
 reads:
   - PLUTUS.md#doctrine

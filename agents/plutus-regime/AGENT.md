@@ -1,6 +1,6 @@
 ---
 name: plutus-regime
-model: deepseek-v4-flash
+model: light
 toolsets: [file]
 reads:
   - PLUTUS.md#doctrine

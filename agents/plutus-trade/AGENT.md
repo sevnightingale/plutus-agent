@@ -1,6 +1,6 @@
 ---
 name: plutus-trade
-model: deepseek-v4-flash
+model: light
 toolsets: [perception, desk-execution]
 reads:
   - PLUTUS.md#doctrine
