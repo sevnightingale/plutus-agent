@@ -16,7 +16,7 @@ It carries forward a complete agent runtime (agent loop, memory manager, multi-L
 
 ⚠️ **Early-stage software that trades real money.** plutus-agent is functional and runs a live agent today, but it is young and evolving fast. It places live trades on Hyperliquid under the agent's own decisions — start small, read `TRADING.md` before going live, and treat every deployment as production.
 
-See `agents/README.md` for the desk architecture and **`TRADING.md` for how orders actually reach Hyperliquid (read this before touching anything trade-related).**
+See `ARCHITECTURE.md` for the full architecture and **`TRADING.md` for how orders actually reach Hyperliquid (read this before touching anything trade-related).**
 
 ## Vision
 
@@ -65,7 +65,7 @@ Pause execution any time with `touch ~/.plutus-agent/HALT`; resume with `rm ~/.p
 
 The tool surface is **function-shaped** — `perception`, `execution`, `reflection`, `identity` — fed by **registries + dispatchers** (data points, events, venues, accounts, alerts, identity). Sources/venues (Hyperliquid, ACP, dgclaw) are *integrations* under `trading/integrations/<name>/` that contribute registry entries; capability scales via registry depth, not tool-count bloat.
 
-The runtime is a **seven-agent trading desk**: **plutus-main** (PM and operator voice) orchestrates **plutus-perception**, **plutus-regime**, **plutus-predict**, **plutus-trade**, and **plutus-reflect**, with **plutus-ops** running 30-minute bookkeeping ticks. Strategies must graduate on a verified prediction track record before they may trade; conviction then sets position size via leverage bands. See `agents/README.md` for the full picture.
+The runtime is a **seven-agent trading desk**: **plutus-main** (PM and operator voice) orchestrates **plutus-perception**, **plutus-regime**, **plutus-predict**, **plutus-trade**, and **plutus-reflect**, with **plutus-ops** running 30-minute bookkeeping ticks. Strategies must graduate on a verified prediction track record before they may trade; conviction then sets position size via leverage bands. See `ARCHITECTURE.md` for the full picture.
 
 | Layer | Path | Contents |
 |---|---|---|
@@ -84,6 +84,7 @@ Both are optional — the default install does Hyperliquid trading without them.
 
 ## Documentation
 
+- `ARCHITECTURE.md` — **the master doc**: the seven-agent desk, blackboards, the loop, the strategy lifecycle, plumbing
 - `SETUP.md` — from absolute zero to a running desk (accounts, wallets, wizard, fleet)
 - `DEPLOY.md` — redeploying a fresh runtime when you already have credentials
 - `agents/README.md` — the desk: seven agents, blackboards, spawn recipes
