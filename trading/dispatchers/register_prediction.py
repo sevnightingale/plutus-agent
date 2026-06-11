@@ -25,8 +25,13 @@ SCHEMA = {
         "data points are refused here, at write time. "
         "horizon_hours ≤ 720 (30d hard cap). kind='strategy' (default) "
         "requires strategy_name (file-at-birth); 'stress'/'adhoc' don't. "
-        "support_scores record the conviction inputs — narrative entries "
-        "REQUIRE reasoning_md (the recorded reasoning IS the audit trail)."
+        "Max 3 OPEN predictions per strategy — more are correlated trials "
+        "that inflate N toward graduation without independent evidence; "
+        "wait for resolutions. Every success returns the slot ecology "
+        "(open totals by timescale and strategy) — check it against your "
+        "quota targets. support_scores record the conviction inputs — "
+        "narrative entries REQUIRE reasoning_md (the recorded reasoning IS "
+        "the audit trail)."
     ),
     "parameters": {
         "type": "object",
@@ -67,7 +72,7 @@ SCHEMA = {
 
 def _register_prediction(args: Dict[str, Any]) -> str:
     from trading.dispatchers._helpers import session_id_from_context
-    from trading.lifecycle import write
+    from trading.lifecycle import queries, write
     from trading.lifecycle.db import get_db
     from trading.perception.core import data_point_registry
 
@@ -104,12 +109,14 @@ def _register_prediction(args: Dict[str, Any]) -> str:
         )
         known = {e.name for e in data_point_registry.list_all()} or None
         resolvable = data_point_registry.resolvable_names() if known else None
+        conn = get_db()
         prediction_id = write.record_prediction(
-            get_db(), draft, known_data_points=known,
+            conn, draft, known_data_points=known,
             resolvable_data_points=resolvable)
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
-    return tool_result({"prediction_id": prediction_id, "ok": True})
+    return tool_result({"prediction_id": prediction_id, "ok": True,
+                        "slots": queries.open_slot_counts(conn)})
 
 
 registry.register(

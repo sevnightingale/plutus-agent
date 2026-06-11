@@ -25,6 +25,28 @@ def open_predictions(conn: sqlite3.Connection, limit: int = 50) -> list:
            ORDER BY horizon_ts ASC LIMIT ?""", (limit,)))
 
 
+def open_slot_counts(conn: sqlite3.Connection) -> dict:
+    """The slot ecology at a glance: open predictions by timescale + strategy.
+
+    Returned by register_prediction so predict sees the budget as it spends
+    it (the 10-slot target and per-timescale quotas live in its recipe).
+    """
+    total = conn.execute(
+        "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
+    ).fetchone()[0]
+    by_timescale = dict(conn.execute(
+        "SELECT timescale, COUNT(*) FROM predictions "
+        "WHERE resolved_at IS NULL GROUP BY timescale"
+    ).fetchall())
+    by_strategy = dict(conn.execute(
+        "SELECT strategy_name, COUNT(*) FROM predictions "
+        "WHERE resolved_at IS NULL AND strategy_name IS NOT NULL "
+        "GROUP BY strategy_name"
+    ).fetchall())
+    return {"open_total": total, "by_timescale": by_timescale,
+            "by_strategy": by_strategy}
+
+
 def due_predictions(conn: sqlite3.Connection, now: Optional[float] = None) -> list:
     now = now if now is not None else time.time()
     return _rows(conn.execute(

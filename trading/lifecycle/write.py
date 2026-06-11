@@ -21,6 +21,13 @@ VALID_RISK = ("low", "med", "high")
 VALID_KINDS = ("strategy", "stress", "adhoc")
 VALID_OUTCOMES = ("correct", "wrong", "ambiguous", "expired_unresolvable")
 
+# Max OPEN predictions per strategy. Simultaneous predictions from one
+# strategy in one regime window are correlated trials — they resolve off the
+# same conditions, inflating N toward the graduation bar (N>=15, >=2/3)
+# without independent evidence. Three allows an honest spread (e.g. a level
+# ladder) while keeping the track record statistically meaningful.
+MAX_OPEN_PER_STRATEGY = 3
+
 
 @dataclass
 class SupportScore:
@@ -67,6 +74,8 @@ def record_prediction(
       data points, or perception-only ones without a numeric_path)
     - horizon beyond the 30d cap / not after ts
     - kind='strategy' without a strategy_name (file-at-birth doctrine)
+    - strategy already at MAX_OPEN_PER_STRATEGY open predictions
+      (correlated trials inflate N without independent evidence)
     - narrative support scores without recorded reasoning
     """
     ts = draft.ts if draft.ts is not None else time.time()
@@ -100,6 +109,21 @@ def record_prediction(
             "kind='strategy' requires strategy_name (file-at-birth: every "
             "hypothesis has a strategy file; use kind='stress'/'adhoc' otherwise)"
         )
+    if draft.strategy_name:
+        open_count = conn.execute(
+            "SELECT COUNT(*) FROM predictions "
+            "WHERE strategy_name = ? AND resolved_at IS NULL",
+            (draft.strategy_name,),
+        ).fetchone()[0]
+        if open_count >= MAX_OPEN_PER_STRATEGY:
+            raise ValueError(
+                f"strategy {draft.strategy_name!r} already has {open_count} "
+                f"open predictions (cap {MAX_OPEN_PER_STRATEGY}) — refused. "
+                f"Simultaneous predictions from one strategy in one regime "
+                f"window are correlated trials: they resolve together and "
+                f"inflate N toward graduation without independent evidence. "
+                f"Wait for resolutions, or register for a different strategy."
+            )
     if draft.risk_tolerance is not None and draft.risk_tolerance not in VALID_RISK:
         raise ValueError(f"risk_tolerance must be one of {VALID_RISK}")
     if not 0.0 <= draft.conviction <= 1.0:

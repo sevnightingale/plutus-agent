@@ -104,6 +104,35 @@ class TestRecordPrediction:
             conn, _draft(strategy_name=None, kind="stress"))
         assert queries.prediction(conn, pid)["kind"] == "stress"
 
+    def test_open_predictions_per_strategy_capped(self, conn):
+        for _ in range(write.MAX_OPEN_PER_STRATEGY):
+            write.record_prediction(conn, _draft())
+        with pytest.raises(ValueError, match="open predictions"):
+            write.record_prediction(conn, _draft())
+        # a different strategy is unaffected
+        write.record_prediction(conn, _draft(strategy_name="other-strategy"))
+        # strategyless kinds are outside the cap
+        write.record_prediction(
+            conn, _draft(kind="stress", strategy_name=None))
+
+    def test_resolution_frees_strategy_capacity(self, conn):
+        ids = [write.record_prediction(conn, _draft())
+               for _ in range(write.MAX_OPEN_PER_STRATEGY)]
+        with pytest.raises(ValueError, match="open predictions"):
+            write.record_prediction(conn, _draft())
+        write.resolve_prediction(conn, ids[0], "correct",
+                                 resolved_by="plutus-ops")
+        write.record_prediction(conn, _draft())  # capacity freed
+
+    def test_open_slot_counts_shape(self, conn):
+        write.record_prediction(conn, _draft())
+        write.record_prediction(conn, _draft(strategy_name="other-strategy"))
+        counts = queries.open_slot_counts(conn)
+        assert counts["open_total"] == 2
+        assert sum(counts["by_timescale"].values()) == 2
+        assert counts["by_strategy"] == {
+            "funding-flush-reversal": 1, "other-strategy": 1}
+
     def test_refuses_unreasoned_narrative_score(self, conn):
         with pytest.raises(ValueError, match="reasoning"):
             write.record_prediction(conn, _draft(support_scores=[

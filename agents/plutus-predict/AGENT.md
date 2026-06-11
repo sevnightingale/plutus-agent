@@ -40,11 +40,17 @@ decide funding (main's call).
    perception-only points (orderbook, trending, macro blueprints) belong in
    support_scores, not criteria. Strong invalidation criteria (thesis-break,
    not price wiggle), risk_tolerance, timescale-true horizon (≤ 720h hard
-   cap). Out-of-regime
+   cap). Max 3 OPEN predictions per strategy (tool-enforced) — concurrent
+   predictions from one strategy are correlated trials, not extra evidence;
+   prefer breadth across strategies over depth in one. Out-of-regime
    strategies get NO prediction this beat. Minimum 3 predictions per beat
    across existing / experimental / regime-stress kinds.
 3. QUOTAS: check the slot ecology — 10 live slots target: ≥4 intraday,
    ≥3 swing, ≥1 position; no mechanism family holds >4; ≥3 families present.
+   Every register_prediction success returns the live counts (open_total,
+   by_timescale, by_strategy) — read them as you register; when open_total
+   is well past 10, registering more needs a reason (a regime flip opening
+   new setups), not momentum.
 4. GENERATE when slots are empty, the regime flipped, or the task says so.
    Draw on the six sources: variation of winners, reflect's seed report,
    anomaly-driven, event templates, hybrid combination search, operator
