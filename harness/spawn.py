@@ -64,7 +64,19 @@ def load_agent(name: str, agents_dir: Optional[Path] = None) -> AgentSpec:
     meta = yaml.safe_load(m.group(1)) or {}
     if meta.get("name") != name:
         raise ValueError(f"{path}: frontmatter name {meta.get('name')!r} != dir {name!r}")
-    return AgentSpec(name, meta, text[m.end():])
+    spec = AgentSpec(name, meta, text[m.end():])
+
+    # Operator override: config.yaml `desk_models: {<agent-name>: <model>}`
+    # wins over the AGENT.md frontmatter model. The recipe stays the
+    # default; the operator retunes models without editing recipes.
+    try:
+        from harness.cli.config import load_config
+        override = (load_config().get("desk_models") or {}).get(name)
+        if override:
+            spec.model = str(override)
+    except Exception:
+        pass  # config unavailable (e.g. isolated tests) — recipe model stands
+    return spec
 
 
 # ───────────────────────────────────────────────────────────────────────────

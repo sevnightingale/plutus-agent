@@ -68,6 +68,16 @@ impulse.
   check; ops fetches it every tick) proves the trade path works. Sizing
   base is equity_usd — the whole unified account.
 
+**Cold start (a fresh desk has no hands yet).** The pipeline to the first
+trade: predict GENERATES strategy hypotheses (status=test, thesis filed at
+birth) -> test strategies register machine-resolvable predictions via the
+prediction tools (lifecycle.db rows — NEVER ad-hoc markdown files) -> ops
+resolves them every tick -> reflect graduates a strategy to ACTIVE only at
+N>=15 resolved AND win rate >=2/3. Zero trades for the first weeks is the
+system WORKING, not a bottleneck to fix — never shortcut it (no hand-seeded
+active strategies, no manual graduation). The desk's records live in
+lifecycle.db via tools; the only markdown you maintain is the blackboards.
+
 **The desk.**
 
 | Agent | Role | When |

@@ -124,3 +124,20 @@ class TestReturnContracts:
     def test_no_contract_passes_text_through(self):
         result = spawn.parse_return(None, "anything")
         assert result["ok"] and result["payload"] is None
+
+
+def test_desk_models_config_overrides_recipe_model(tmp_path, monkeypatch):
+    """config.yaml desk_models wins over AGENT.md frontmatter model."""
+    d = tmp_path / "plutus-x"
+    d.mkdir()
+    (d / "AGENT.md").write_text(
+        "---\nname: plutus-x\nmodel: recipe-model\ntoolsets: [perception]\n---\nbody\n"
+    )
+    import harness.cli.config as cfg
+    monkeypatch.setattr(
+        cfg, "load_config", lambda: {"desk_models": {"plutus-x": "override-model"}}
+    )
+    from harness.spawn import load_agent
+    assert load_agent("plutus-x", agents_dir=tmp_path).model == "override-model"
+    monkeypatch.setattr(cfg, "load_config", lambda: {})
+    assert load_agent("plutus-x", agents_dir=tmp_path).model == "recipe-model"
