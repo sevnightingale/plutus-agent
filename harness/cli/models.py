@@ -703,7 +703,10 @@ CANONICAL_PROVIDERS: list[ProviderEntry] = [
     ProviderEntry("google-gemini-cli", "Google Gemini (OAuth)",   "Google Gemini via OAuth + Code Assist (free tier supported; no API key needed)"),
     ProviderEntry("xai",            "xAI",                      "xAI (Grok models — direct API)"),
     ProviderEntry("zai",            "Z.AI / GLM",               "Z.AI / GLM (Zhipu AI direct API)"),
-    ProviderEntry("nous",           "Nous Portal",              "Nous Portal (Nous Research subscription)"),
+    # "nous" (Nous Portal) is deliberately NOT offered in the picker —
+    # plutus-agent doesn't surface upstream's Hermes models. The auth/
+    # client plumbing remains so an explicitly configured nous provider
+    # still resolves; full removal is tracked as a future cleanup.
     ProviderEntry("nvidia",         "NVIDIA NIM",               "NVIDIA NIM (Nemotron models — build.nvidia.com or local NIM)"),
     ProviderEntry("qwen-oauth",     "Qwen OAuth (Portal)",      "Qwen OAuth (reuses local Qwen CLI login)"),
     ProviderEntry("copilot",        "GitHub Copilot",           "GitHub Copilot (uses GITHUB_TOKEN or gh auth token)"),
