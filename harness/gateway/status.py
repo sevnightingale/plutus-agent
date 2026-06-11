@@ -141,7 +141,7 @@ def _looks_like_gateway_process(pid: int) -> bool:
         "harness.cli.main gateway",
         "harness/cli/main.py gateway",
         "plutus gateway",
-        "hermes gateway",
+        "plutus gateway",
         "hermes-gateway",
         "harness/gateway/run.py",
     )
@@ -162,7 +162,7 @@ def _record_looks_like_gateway(record: dict[str, Any]) -> bool:
         "harness.cli.main gateway",
         "harness/cli/main.py gateway",
         "plutus gateway",
-        "hermes gateway",
+        "plutus gateway",
         "harness/gateway/run.py",
     )
     return any(pattern in cmdline for pattern in patterns)

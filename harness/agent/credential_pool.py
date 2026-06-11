@@ -984,7 +984,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
     auth_store = _load_auth_store()
 
     # Shared suppression gate — used at every upsert site so
-    # `hermes auth remove <provider> <N>` is stable across all source types.
+    # `plutus auth remove <provider> <N>` is stable across all source types.
     try:
         from harness.cli.auth import is_source_suppressed as _is_suppressed
     except ImportError:
@@ -1033,7 +1033,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
             active_sources.add("device_code")
             # Prefer a user-supplied label embedded in the singleton state
             # (set by persist_nous_credentials(label=...) when the user ran
-            # `hermes auth add nous --label <name>`).  Fall back to the
+            # `plutus auth add nous --label <name>`).  Fall back to the
             # auto-derived token fingerprint for logins that didn't supply one.
             custom_label = str(state.get("label") or "").strip()
             seeded_label = custom_label or label_from_token(
@@ -1119,7 +1119,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
             logger.debug("Qwen OAuth token seed failed: %s", exc)
 
     elif provider == "openai-codex":
-        # Respect user suppression — `hermes auth remove openai-codex` marks
+        # Respect user suppression — `plutus auth remove openai-codex` marks
         # the device_code source as suppressed so it won't be re-seeded from
         # the Hermes auth store.  Without this gate the removal is instantly
         # undone on the next load_pool() call.
@@ -1133,7 +1133,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
         # single-use, so sharing them with Codex CLI / VS Code causes
         # refresh_token_reused race failures.  Users who want to adopt
         # existing Codex CLI credentials get a one-time, explicit prompt
-        # via `hermes auth openai-codex`.
+        # via `plutus auth openai-codex`.
         if isinstance(tokens, dict) and tokens.get("access_token"):
             active_sources.add("device_code")
             changed |= _upsert_entry(
@@ -1157,7 +1157,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
 def _seed_from_env(provider: str, entries: List[PooledCredential]) -> Tuple[bool, Set[str]]:
     changed = False
     active_sources: Set[str] = set()
-    # Honour user suppression — `hermes auth remove <provider> <N>` for an
+    # Honour user suppression — `plutus auth remove <provider> <N>` for an
     # env-seeded credential marks the env:<VAR> source as suppressed so it
     # won't be re-seeded from the user's shell environment or ~/.plutus-agent/.env.
     # Without this gate the removal is silently undone on the next

@@ -2516,7 +2516,7 @@ def get_mcp_status() -> List[dict]:
 def probe_mcp_server_tools() -> Dict[str, List[tuple]]:
     """Temporarily connect to configured MCP servers and list their tools.
 
-    Designed for ``hermes tools`` interactive configuration — connects to each
+    Designed for ``plutus tools`` interactive configuration — connects to each
     enabled server, grabs tool names and descriptions, then disconnects.
     Does NOT register tools in the Hermes registry.
 

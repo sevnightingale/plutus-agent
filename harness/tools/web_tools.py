@@ -3,7 +3,7 @@
 Standalone Web Tools Module
 
 This module provides generic web tools that work with multiple backend providers.
-Backend is selected during ``hermes tools`` setup (web.backend in config.yaml).
+Backend is selected during ``plutus tools`` setup (web.backend in config.yaml).
 When available, Hermes can route Firecrawl calls through a Nous-hosted tool-gateway
 for Nous Subscribers only.
 
@@ -83,7 +83,7 @@ def _load_web_config() -> dict:
 def _get_backend() -> str:
     """Determine which web backend to use.
 
-    Reads ``web.backend`` from config.yaml (set by ``hermes tools``).
+    Reads ``web.backend`` from config.yaml (set by ``plutus tools``).
     Falls back to whichever API key is present for users who configured
     keys manually without running setup.
     """
@@ -166,7 +166,7 @@ def _raise_web_backend_configuration_error() -> None:
     if managed_nous_tools_enabled():
         message += (
             " With your Nous subscription you can also use the Tool Gateway — "
-            "run `hermes tools` and select Nous Subscription as the web provider."
+            "run `plutus tools` and select Nous Subscription as the web provider."
         )
     raise ValueError(message)
 

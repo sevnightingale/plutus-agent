@@ -1,4 +1,4 @@
-"""``hermes debug`` — debug tools for plutus-agent.
+"""``plutus debug`` — debug tools for plutus-agent.
 
 Currently supports:
     hermes debug share    Upload debug report (system info + logs) to a
@@ -106,7 +106,7 @@ def _sweep_expired_pastes(now: Optional[float] = None) -> tuple[int, int]:
 
     Returns ``(deleted, remaining)``.  Best-effort: failed deletes stay in
     the pending file and will be retried on the next sweep.  Silent —
-    intended to be called from every ``hermes debug`` invocation with
+    intended to be called from every ``plutus debug`` invocation with
     minimal noise.
     """
     entries = _load_pending()
@@ -224,7 +224,7 @@ def _schedule_auto_delete(urls: list[str], delay_seconds: int = _AUTO_DELETE_SEC
 
     The replacement is stateless: we append to ``~/.plutus-agent/pastes/pending.json``
     and rely on opportunistic sweeps (``_sweep_expired_pastes``) called from
-    every ``hermes debug`` invocation.  If the user never runs ``hermes debug``
+    every ``plutus debug`` invocation.  If the user never runs ``plutus debug``
     again, paste.rs's own retention policy handles cleanup.
     """
     _record_pending(urls, delay_seconds=delay_seconds)
@@ -452,7 +452,7 @@ def _capture_default_log_snapshots(log_lines: int) -> dict[str, LogSnapshot]:
 # ---------------------------------------------------------------------------
 
 def _capture_dump() -> str:
-    """Run ``hermes dump`` and return its stdout as a string."""
+    """Run ``plutus dump`` and return its stdout as a string."""
     from harness.cli.dump import run_dump
 
     class _FakeArgs:
@@ -483,7 +483,7 @@ def collect_debug_report(
     log_lines
         Number of recent lines to include per log file.
     dump_text
-        Pre-captured dump output.  If empty, ``hermes dump`` is run
+        Pre-captured dump output.  If empty, ``plutus dump`` is run
         internally.
 
     Returns the report as a plain-text string ready for upload.
@@ -633,10 +633,10 @@ def run_debug_delete(args):
 
 def run_debug(args):
     """Route debug subcommands."""
-    # Opportunistic sweep of expired pastes on every ``hermes debug`` call.
+    # Opportunistic sweep of expired pastes on every ``plutus debug`` call.
     # Replaces the old per-paste sleeping subprocess that used to leak as
     # one orphaned Python interpreter per scheduled deletion.  Silent and
-    # best-effort — any failure is swallowed so ``hermes debug`` stays
+    # best-effort — any failure is swallowed so ``plutus debug`` stays
     # reliable even when offline.
     try:
         _sweep_expired_pastes()

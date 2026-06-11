@@ -246,7 +246,7 @@ def auth_add_command(args) -> None:
         return
 
     if provider == "openai-codex":
-        # Clear any existing suppression marker so a re-link after `hermes auth
+        # Clear any existing suppression marker so a re-link after `plutus auth
         # remove openai-codex` works without the new tokens being skipped.
         auth_mod.unsuppress_credential_source(provider, "device_code")
         creds = auth_mod._codex_device_code_login()
@@ -311,7 +311,7 @@ def auth_add_command(args) -> None:
         print(f'Added {provider} OAuth credential #{len(pool.entries())}: "{entry.label}"')
         return
 
-    raise SystemExit(f"`hermes auth add {provider}` is not implemented for auth type {requested_type} yet.")
+    raise SystemExit(f"`plutus auth add {provider}` is not implemented for auth type {requested_type} yet.")
 
 
 def auth_list_command(args) -> None:
@@ -387,7 +387,7 @@ def auth_reset_command(args) -> None:
 
 
 def _interactive_auth() -> None:
-    """Interactive credential pool management when `hermes auth` is called bare."""
+    """Interactive credential pool management when `plutus auth` is called bare."""
     # Show current pool status first
     print("Credential Pool Status")
     print("=" * 50)

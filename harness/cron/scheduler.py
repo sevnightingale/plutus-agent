@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import List, Optional
 
 # Add parent directory to path for imports BEFORE repo-level imports.
-# Without this, standalone invocations (e.g. after `hermes update` reloads
+# Without this, standalone invocations (e.g. after `plutus update` reloads
 # the module) fail with ModuleNotFoundError for plutus_time et al.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

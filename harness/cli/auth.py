@@ -1394,7 +1394,7 @@ def resolve_gemini_oauth_runtime_credentials(
 
 
 def get_gemini_oauth_auth_status() -> Dict[str, Any]:
-    """Return a status dict for `hermes auth list` / `plutus status`."""
+    """Return a status dict for `plutus auth list` / `plutus status`."""
     try:
         from harness.agent.google_oauth import _credentials_path, load_credentials
     except ImportError:
@@ -1450,7 +1450,7 @@ def _read_codex_tokens(*, _lock: bool = True) -> Dict[str, Any]:
     state = _load_provider_state(auth_store, "openai-codex")
     if not state:
         raise AuthError(
-            "No Codex credentials stored. Run `hermes auth` to authenticate.",
+            "No Codex credentials stored. Run `plutus auth` to authenticate.",
             provider="openai-codex",
             code="codex_auth_missing",
             relogin_required=True,
@@ -1458,7 +1458,7 @@ def _read_codex_tokens(*, _lock: bool = True) -> Dict[str, Any]:
     tokens = state.get("tokens")
     if not isinstance(tokens, dict):
         raise AuthError(
-            "Codex auth state is missing tokens. Run `hermes auth` to re-authenticate.",
+            "Codex auth state is missing tokens. Run `plutus auth` to re-authenticate.",
             provider="openai-codex",
             code="codex_auth_invalid_shape",
             relogin_required=True,
@@ -1467,14 +1467,14 @@ def _read_codex_tokens(*, _lock: bool = True) -> Dict[str, Any]:
     refresh_token = tokens.get("refresh_token")
     if not isinstance(access_token, str) or not access_token.strip():
         raise AuthError(
-            "Codex auth is missing access_token. Run `hermes auth` to re-authenticate.",
+            "Codex auth is missing access_token. Run `plutus auth` to re-authenticate.",
             provider="openai-codex",
             code="codex_auth_missing_access_token",
             relogin_required=True,
         )
     if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise AuthError(
-            "Codex auth is missing refresh_token. Run `hermes auth` to re-authenticate.",
+            "Codex auth is missing refresh_token. Run `plutus auth` to re-authenticate.",
             provider="openai-codex",
             code="codex_auth_missing_refresh_token",
             relogin_required=True,
@@ -1509,7 +1509,7 @@ def refresh_codex_oauth_pure(
     del access_token  # Access token is only used by callers to decide whether to refresh.
     if not isinstance(refresh_token, str) or not refresh_token.strip():
         raise AuthError(
-            "Codex auth is missing refresh_token. Run `hermes auth` to re-authenticate.",
+            "Codex auth is missing refresh_token. Run `plutus auth` to re-authenticate.",
             provider="openai-codex",
             code="codex_auth_missing_refresh_token",
             relogin_required=True,
@@ -1549,7 +1549,7 @@ def refresh_codex_oauth_pure(
                 "Codex refresh token was already consumed by another client "
                 "(e.g. Codex CLI or VS Code extension). "
                 "Run `codex` in your terminal to generate fresh tokens, "
-                "then run `hermes auth` to re-authenticate."
+                "then run `plutus auth` to re-authenticate."
             )
             relogin_required = True
         # A 401/403 from the token endpoint always means the refresh token
@@ -2165,7 +2165,7 @@ def persist_nous_credentials(
       ``_seed_from_singletons()`` during pool load.
     - ``credential_pool.nous``: used by the runtime ``pool.select()`` path.
 
-    Historically ``hermes auth add nous`` wrote a ``manual:device_code`` pool
+    Historically ``plutus auth add nous`` wrote a ``manual:device_code`` pool
     entry only, skipping ``providers.nous``.  When the 24h agent_key TTL
     expired, the recovery path read the empty singleton state and raised
     ``AuthError`` silently (``logger.debug`` at INFO level).
@@ -2176,7 +2176,7 @@ def persist_nous_credentials(
     place; the pool never accumulates duplicate device_code rows.
 
     ``label`` is an optional user-chosen display name (from
-    ``hermes auth add nous --label <name>``).  It gets embedded in the
+    ``plutus auth add nous --label <name>``).  It gets embedded in the
     singleton state so that ``_seed_from_singletons`` uses it as the pool
     entry's label on every subsequent ``load_pool("nous")`` instead of the
     auto-derived token fingerprint.  When ``None``, the auto-derived label
@@ -2460,7 +2460,7 @@ def get_nous_auth_status() -> Dict[str, Any]:
     """Status snapshot for `plutus status` output.
 
     Checks the credential pool first (where the dashboard device-code flow
-    and ``hermes auth`` store credentials), then falls back to the legacy
+    and ``plutus auth`` store credentials), then falls back to the legacy
     auth-store provider state.
     """
     # Check credential pool first — the dashboard device-code flow saves
@@ -2514,10 +2514,10 @@ def get_nous_auth_status() -> Dict[str, Any]:
 def get_codex_auth_status() -> Dict[str, Any]:
     """Status snapshot for Codex auth.
     
-    Checks the credential pool first (where `hermes auth` stores credentials),
+    Checks the credential pool first (where `plutus auth` stores credentials),
     then falls back to the legacy provider state.
     """
-    # Check credential pool first — this is where `hermes auth` and
+    # Check credential pool first — this is where `plutus auth` and
     # `plutus model` store device_code tokens.
     try:
         from harness.agent.credential_pool import load_pool
@@ -3010,8 +3010,8 @@ def _save_model_choice(model_id: str) -> None:
 
 def login_command(args) -> None:
     """Deprecated: use 'plutus model' or 'plutus setup' instead."""
-    print("The 'hermes login' command has been removed.")
-    print("Use 'hermes auth' to manage credentials,")
+    print("The 'plutus login' command has been removed.")
+    print("Use 'plutus auth' to manage credentials,")
     print("'plutus model' to select a provider, or 'plutus setup' for full setup.")
     raise SystemExit(0)
 

@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 
 def hooks_command(args) -> None:
-    """Entry point for ``hermes hooks`` — dispatches to the requested action."""
+    """Entry point for ``plutus hooks`` — dispatches to the requested action."""
     sub = getattr(args, "hooks_action", None)
 
     if not sub:

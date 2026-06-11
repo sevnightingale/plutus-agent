@@ -3,7 +3,7 @@
 Image Generation Tools Module
 
 Provides image generation via FAL.ai. Multiple FAL models are supported and
-selectable via ``hermes tools`` → Image Generation; the active model is
+selectable via ``plutus tools`` → Image Generation; the active model is
 persisted to ``image_gen.model`` in ``config.yaml``.
 
 Architecture:
@@ -459,7 +459,7 @@ def _submit_fal_request(model: str, arguments: Dict[str, Any]):
                 f"(HTTP {status}). This model may not yet be enabled on "
                 f"the Nous Portal's FAL proxy. Either:\n"
                 f"  • Set FAL_KEY in your environment to use FAL.ai directly, or\n"
-                f"  • Pick a different model via `hermes tools` → Image Generation."
+                f"  • Pick a different model via `plutus tools` → Image Generation."
             ) from exc
         raise
 

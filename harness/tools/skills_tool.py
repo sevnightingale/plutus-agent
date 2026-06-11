@@ -548,7 +548,7 @@ def _find_all_skills(*, skip_disabled: bool = False) -> List[Dict[str, Any]]:
 
     Args:
         skip_disabled: If True, return ALL skills regardless of disabled
-            state (used by ``hermes skills`` config UI). Default False
+            state (used by ``plutus skills`` config UI). Default False
             filters out disabled skills.
 
     Returns:
@@ -1028,7 +1028,7 @@ def skill_view(name: str, file_path: str = None, task_id: str = None) -> str:
                     "success": False,
                     "error": (
                         f"Skill '{resolved_name}' is disabled. "
-                        "Enable it with `hermes skills` or inspect the files directly on disk."
+                        "Enable it with `plutus skills` or inspect the files directly on disk."
                     ),
                 },
                 ensure_ascii=False,

@@ -1227,12 +1227,12 @@ class AIAgent:
                         raise RuntimeError(
                             f"Provider '{_explicit}' is set in config.yaml but no API key "
                             f"was found. Set the {_env_hint} environment "
-                            f"variable, or switch to a different provider with `hermes model`."
+                            f"variable, or switch to a different provider with `plutus model`."
                         )
                     # No provider configured — reject with a clear message.
                     raise RuntimeError(
-                        "No LLM provider configured. Run `hermes model` to "
-                        "select a provider, or run `hermes setup` for first-time "
+                        "No LLM provider configured. Run `plutus model` to "
+                        "select a provider, or run `plutus setup` for first-time "
                         "configuration."
                     )
             
@@ -1638,7 +1638,7 @@ class AIAgent:
             raise ValueError(
                 f"Model {self.model} has a context window of {_ctx:,} tokens, "
                 f"which is below the minimum {MINIMUM_CONTEXT_LENGTH:,} required "
-                f"by Hermes Agent.  Choose a model with at least "
+                f"by Plutus.  Choose a model with at least "
                 f"{MINIMUM_CONTEXT_LENGTH // 1000}K context, or set "
                 f"model.context_length in config.yaml to override."
             )
@@ -1995,7 +1995,7 @@ class AIAgent:
         all non-forced output is suppressed.
 
         ``suppress_status_output`` is a stricter CLI automation mode used by
-        parseable single-query flows such as ``hermes chat -q``. In that mode,
+        parseable single-query flows such as ``plutus chat -q``. In that mode,
         all status/diagnostic prints routed through ``_vprint`` are suppressed
         so stdout stays machine-readable.
         """
@@ -2101,7 +2101,7 @@ class AIAgent:
                 msg = (
                     "⚠ No auxiliary LLM provider configured — context "
                     "compression will drop middle turns without a summary. "
-                    "Run `hermes setup` or set OPENROUTER_API_KEY."
+                    "Run `plutus setup` or set OPENROUTER_API_KEY."
                 )
                 self._compression_warning = msg
                 self._emit_status(msg)
@@ -4064,7 +4064,7 @@ class AIAgent:
             # unset or a placeholder ('.', 'auto', 'cwd'), fall back to
             # HERMES_HOME — the data dir, which holds no dev context files —
             # NOT os.getcwd(). os.getcwd() is the install/repo dir, so it would
-            # inject the harness's own AGENTS.md ("Hermes Agent - Development
+            # inject the harness's own AGENTS.md ("Plutus - Development
             # Guide") into the identity slot and make the agent introduce
             # itself as Hermes (real bug, 2026-06-03), besides wasting ~10k
             # tokens on dev docs of no use to the trading agent.
@@ -10048,7 +10048,7 @@ class AIAgent:
                             print(f"{self.log_prefix}   Response: {_body_text}")
                         print(f"{self.log_prefix}   Most likely: Portal OAuth expired, account out of credits, or agent key revoked.")
                         print(f"{self.log_prefix}   Troubleshooting:")
-                        print(f"{self.log_prefix}     • Re-authenticate: hermes login --provider nous")
+                        print(f"{self.log_prefix}     • Re-authenticate: plutus login --provider nous")
                         print(f"{self.log_prefix}     • Check credits / billing: https://portal.nousresearch.com")
                         print(f"{self.log_prefix}     • Verify stored credentials: {_dhh}/auth.json")
                         print(f"{self.log_prefix}     • Switch providers temporarily: /model <model> --provider openrouter")
@@ -10076,8 +10076,8 @@ class AIAgent:
                         print(f"{self.log_prefix}     • Check ANTHROPIC_API_KEY in {_dhh}/.env for API keys or legacy token values")
                         print(f"{self.log_prefix}     • For API keys: verify at https://platform.claude.com/settings/keys")
                         print(f"{self.log_prefix}     • For Claude Code: run 'claude /login' to refresh, then retry")
-                        print(f"{self.log_prefix}     • Legacy cleanup: hermes config set ANTHROPIC_TOKEN \"\"")
-                        print(f"{self.log_prefix}     • Clear stale keys: hermes config set ANTHROPIC_API_KEY \"\"")
+                        print(f"{self.log_prefix}     • Legacy cleanup: plutus config set ANTHROPIC_TOKEN \"\"")
+                        print(f"{self.log_prefix}     • Clear stale keys: plutus config set ANTHROPIC_API_KEY \"\"")
 
                     # ── Thinking block signature recovery ─────────────────
                     # Anthropic signs thinking blocks against the full turn
@@ -10558,10 +10558,10 @@ class AIAgent:
                                 self._vprint(f"{self.log_prefix}   💡 Codex OAuth token was rejected (HTTP 401). Your token may have been", force=True)
                                 self._vprint(f"{self.log_prefix}      refreshed by another client (Codex CLI, VS Code). To fix:", force=True)
                                 self._vprint(f"{self.log_prefix}      1. Run `codex` in your terminal to generate fresh tokens.", force=True)
-                                self._vprint(f"{self.log_prefix}      2. Then run `hermes auth` to re-authenticate.", force=True)
+                                self._vprint(f"{self.log_prefix}      2. Then run `plutus auth` to re-authenticate.", force=True)
                             else:
                                 self._vprint(f"{self.log_prefix}   💡 Your API key was rejected by the provider. Check:", force=True)
-                                self._vprint(f"{self.log_prefix}      • Is the key valid? Run: hermes setup", force=True)
+                                self._vprint(f"{self.log_prefix}      • Is the key valid? Run: plutus setup", force=True)
                                 self._vprint(f"{self.log_prefix}      • Does your account have access to {_model}?", force=True)
                                 if base_url_host_matches(str(_base), "openrouter.ai"):
                                     self._vprint(f"{self.log_prefix}      • Check credits: https://openrouter.ai/settings/credits", force=True)

@@ -1127,7 +1127,7 @@ def get_plugin_commands() -> Dict[str, dict]:
 def get_plugin_toolsets() -> List[tuple]:
     """Return plugin toolsets as ``(key, label, description)`` tuples.
 
-    Used by the ``hermes tools`` TUI so plugin-provided toolsets appear
+    Used by the ``plutus tools`` TUI so plugin-provided toolsets appear
     alongside the built-in ones and can be toggled on/off per platform.
     """
     manager = get_plugin_manager()

@@ -863,7 +863,7 @@ def _gemini_http_error(response: httpx.Response) -> CodeAssistError:
         target = model_hint or "this Gemini model"
         message = (
             f"Gemini capacity exhausted for {target} (Google-side throttle, "
-            f"not a Hermes issue). Try a different Gemini model or set a "
+            f"not a Plutus issue). Try a different Gemini model or set a "
             f"fallback_providers entry to a non-Gemini provider."
         )
         if retry_delay_seconds is not None:

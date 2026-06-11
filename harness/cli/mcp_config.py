@@ -1,5 +1,5 @@
 """
-MCP Server Management CLI — ``hermes mcp`` subcommand.
+MCP Server Management CLI — ``plutus mcp`` subcommand.
 
 Implements ``hermes mcp add/remove/list/test/configure`` for interactive
 MCP server lifecycle management (issue #690 Phase 2).
@@ -738,7 +738,7 @@ def cmd_mcp_configure(args):
 # ─── Dispatcher ───────────────────────────────────────────────────────────────
 
 def mcp_command(args):
-    """Main dispatcher for ``hermes mcp`` subcommands."""
+    """Main dispatcher for ``plutus mcp`` subcommands."""
     action = getattr(args, "mcp_action", None)
 
     handlers = {

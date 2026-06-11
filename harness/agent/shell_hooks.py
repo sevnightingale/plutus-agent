@@ -758,7 +758,7 @@ def _resolve_effective_accept(
 
 
 # ---------------------------------------------------------------------------
-# Introspection (used by `hermes hooks` CLI)
+# Introspection (used by `plutus hooks` CLI)
 # ---------------------------------------------------------------------------
 
 def allowlist_entry_for(event: str, command: str) -> Optional[Dict[str, Any]]:

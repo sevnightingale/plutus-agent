@@ -2276,7 +2276,7 @@ class DiscordAdapter(BasePlatformAdapter):
         async def slash_voice(interaction: discord.Interaction, mode: str = ""):
             await self._run_simple_slash(interaction, f"/voice {mode}".strip())
 
-        @tree.command(name="update", description="Update Hermes Agent to the latest version")
+        @tree.command(name="update", description="Update Plutus to the latest version")
         async def slash_update(interaction: discord.Interaction):
             await self._run_simple_slash(interaction, "/update", "Update initiated~")
 
@@ -2918,7 +2918,7 @@ class DiscordAdapter(BasePlatformAdapter):
     ) -> SendResult:
         """Send an interactive button-based update prompt (Yes / No).
 
-        Used by the gateway ``/update`` watcher when ``hermes update --gateway``
+        Used by the gateway ``/update`` watcher when ``plutus update --gateway``
         needs user input (stash restore, config migration).
         """
         if not self._client or not DISCORD_AVAILABLE:
@@ -3637,7 +3637,7 @@ if DISCORD_AVAILABLE:
                 child.disabled = True
 
     class UpdatePromptView(discord.ui.View):
-        """Interactive Yes/No buttons for ``hermes update`` prompts.
+        """Interactive Yes/No buttons for ``plutus update`` prompts.
 
         Clicking a button writes the answer to ``.update_response`` so the
         detached update process can pick it up.  Only authorized users can

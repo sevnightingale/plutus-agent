@@ -6,10 +6,10 @@ Config files are stored in ~/.plutus-agent/ for easy access:
 - ~/.plutus-agent/.env         - API keys and secrets
 
 This module provides:
-- hermes config          - Show current configuration
-- hermes config edit     - Open config in editor
-- hermes config set      - Set a specific value
-- hermes config wizard   - Re-run setup wizard
+- plutus config          - Show current configuration
+- plutus config edit     - Open config in editor
+- plutus config set      - Set a specific value
+- plutus config wizard   - Re-run setup wizard
 """
 
 import copy
@@ -960,7 +960,7 @@ DEFAULT_CONFIG = {
         # silently deleting it could surprise users.  Opt in explicitly.
         "auto_prune": False,
         # How many days of ended-session history to keep.  Matches the
-        # default of ``hermes sessions prune``.
+        # default of ``plutus sessions prune``.
         "retention_days": 90,
         # VACUUM after a prune that actually deleted rows.  SQLite does not
         # reclaim disk space on DELETE — freed pages are just reused on
@@ -2842,7 +2842,7 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                         print(f"  ✓ Saved {name}")
                     print()
             else:
-                print("  Set later with: hermes config set <key> <value>")
+                print("  Set later with: plutus config set <key> <value>")
     
     # Check for missing config fields
     missing_config = get_missing_config_fields()
@@ -2909,7 +2909,7 @@ def migrate_config(interactive: bool = True, quiet: bool = False) -> Dict[str, A
                 print()
             save_config(config)
         else:
-            print("  Set later with: hermes config set <key> <value>")
+            print("  Set later with: plutus config set <key> <value>")
 
     return results
 
@@ -3151,8 +3151,8 @@ _FALLBACK_COMMENT = """
 #
 # Supported providers:
 #   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
+#   openai-codex (OAuth — plutus auth) — OpenAI Codex
+#   nous         (OAuth — plutus auth) — Nous Portal
 #   zai          (ZAI_API_KEY)         — Z.AI / GLM
 #   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
 #   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
@@ -3182,8 +3182,8 @@ _COMMENTED_SECTIONS = """
 #
 # Supported providers:
 #   openrouter   (OPENROUTER_API_KEY)  — routes to any model
-#   openai-codex (OAuth — hermes auth) — OpenAI Codex
-#   nous         (OAuth — hermes auth) — Nous Portal
+#   openai-codex (OAuth — plutus auth) — OpenAI Codex
+#   nous         (OAuth — plutus auth) — Nous Portal
 #   zai          (ZAI_API_KEY)         — Z.AI / GLM
 #   kimi-coding  (KIMI_API_KEY)        — Kimi / Moonshot
 #   kimi-coding-cn (KIMI_CN_API_KEY)   — Kimi / Moonshot (China)
@@ -3562,7 +3562,7 @@ def reload_env() -> int:
     """Re-read ~/.plutus-agent/.env into os.environ. Returns count of vars updated.
 
     Adds/updates vars that changed and removes vars that were deleted from
-    the .env file (but only vars known to Hermes — OPTIONAL_ENV_VARS and
+    the .env file (but only vars known to Plutus — OPTIONAL_ENV_VARS and
     _EXTRA_ENV_KEYS — to avoid clobbering unrelated environment).
     """
     env_vars = load_env()
@@ -3572,11 +3572,14 @@ def reload_env() -> int:
         if os.environ.get(key) != value:
             os.environ[key] = value
             count += 1
-    # Remove known Hermes vars that are no longer in .env
+    # Remove known vars that are no longer in .env
     for key in known_keys:
         if key not in env_vars and key in os.environ:
             del os.environ[key]
             count += 1
+    # Re-bridge PLUTUS_* → HERMES_* for vars that arrived via .env.
+    from harness.constants import alias_plutus_env
+    alias_plutus_env()
     return count
 
 
@@ -3764,8 +3767,8 @@ def show_config():
 
     print()
     print(color("─" * 60, Colors.DIM))
-    print(color("  hermes config edit     # Edit config file", Colors.DIM))
-    print(color("  hermes config set <key> <value>", Colors.DIM))
+    print(color("  plutus config edit     # Edit config file", Colors.DIM))
+    print(color("  plutus config set <key> <value>", Colors.DIM))
     print(color("  plutus setup           # Run setup wizard", Colors.DIM))
     print()
 
@@ -3907,12 +3910,12 @@ def config_command(args):
         key = getattr(args, 'key', None)
         value = getattr(args, 'value', None)
         if not key or value is None:
-            print("Usage: hermes config set <key> <value>")
+            print("Usage: plutus config set <key> <value>")
             print()
             print("Examples:")
-            print("  hermes config set model anthropic/claude-sonnet-4")
-            print("  hermes config set terminal.backend docker")
-            print("  hermes config set OPENROUTER_API_KEY sk-or-...")
+            print("  plutus config set model anthropic/claude-sonnet-4")
+            print("  plutus config set terminal.backend docker")
+            print("  plutus config set OPENROUTER_API_KEY sk-or-...")
             sys.exit(1)
         set_config_value(key, value)
     
@@ -4012,7 +4015,7 @@ def config_command(args):
         if missing_config:
             print()
             print(color(f"  {len(missing_config)} new config option(s) available", Colors.YELLOW))
-            print("    Run 'hermes config migrate' to add them")
+            print("    Run 'plutus config migrate' to add them")
         
         print()
     
@@ -4020,11 +4023,11 @@ def config_command(args):
         print(f"Unknown config command: {subcmd}")
         print()
         print("Available commands:")
-        print("  hermes config           Show current configuration")
-        print("  hermes config edit      Open config in editor")
-        print("  hermes config set <key> <value>   Set a config value")
-        print("  hermes config check     Check for missing/outdated config")
-        print("  hermes config migrate   Update config with new options")
-        print("  hermes config path      Show config file path")
-        print("  hermes config env-path  Show .env file path")
+        print("  plutus config           Show current configuration")
+        print("  plutus config edit      Open config in editor")
+        print("  plutus config set <key> <value>   Set a config value")
+        print("  plutus config check     Check for missing/outdated config")
+        print("  plutus config migrate   Update config with new options")
+        print("  plutus config path      Show config file path")
+        print("  plutus config env-path  Show .env file path")
         sys.exit(1)

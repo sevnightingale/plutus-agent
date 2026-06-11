@@ -1,7 +1,7 @@
 """
 Unified tool configuration for plutus-agent.
 
-`hermes tools` and `plutus setup tools` both enter this module.
+`plutus tools` and `plutus setup tools` both enter this module.
 Select a platform → toggle toolsets on/off → for newly enabled tools
 that need API keys, run through provider-aware configuration.
 
@@ -528,7 +528,7 @@ def _get_platform_tools(
         enabled_toolsets -= default_off
 
     # Plugin toolsets: enabled by default unless explicitly disabled.
-    # A plugin toolset is "known" for a platform once `hermes tools`
+    # A plugin toolset is "known" for a platform once `plutus tools`
     # has been saved for that platform (tracked via known_plugin_toolsets).
     # Unknown plugins default to enabled; known-but-absent = disabled.
     plugin_ts_keys = _get_plugin_toolset_keys()
@@ -540,7 +540,7 @@ def _get_platform_tools(
                 # Explicitly listed in config — enabled
                 enabled_toolsets.add(pts)
             elif pts not in known_for_platform:
-                # New plugin not yet seen by hermes tools — default enabled
+                # New plugin not yet seen by plutus tools — default enabled
                 enabled_toolsets.add(pts)
             # else: known but not in config = user disabled it
 
@@ -1591,7 +1591,7 @@ def _reconfigure_simple_requirements(ts_key: str):
 # ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 def tools_command(args=None, first_install: bool = False, config: dict = None):
-    """Entry point for `hermes tools` and `plutus setup tools`.
+    """Entry point for `plutus tools` and `plutus setup tools`.
 
     Args:
         first_install: When True (set by the setup wizard on fresh installs),

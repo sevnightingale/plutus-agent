@@ -798,7 +798,7 @@ def get_default_model_for_provider(provider: str) -> str:
     model a user would be offered first in the ``plutus model`` picker.
 
     Used as a fallback when the user has configured a provider but never
-    selected a model (e.g. ``hermes auth add openai-codex`` without
+    selected a model (e.g. ``plutus auth add openai-codex`` without
     ``plutus model``).
     """
     models = _PROVIDER_MODELS.get(provider, [])

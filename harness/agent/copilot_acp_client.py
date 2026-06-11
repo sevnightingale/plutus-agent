@@ -82,7 +82,7 @@ def _format_messages_as_prompt(
         "If no tool is needed, answer normally.",
     ]
     if model:
-        sections.append(f"Hermes requested model hint: {model}")
+        sections.append(f"Plutus requested model hint: {model}")
 
     if isinstance(tools, list) and tools:
         tool_specs: list[dict[str, Any]] = []
@@ -480,7 +480,7 @@ class CopilotACPClient:
                     },
                     "clientInfo": {
                         "name": "hermes-agent",
-                        "title": "Hermes Agent",
+                        "title": "Plutus",
                         "version": "0.0.0",
                     },
                 },
@@ -596,7 +596,7 @@ class CopilotACPClient:
             response = _jsonrpc_error(
                 message_id,
                 -32601,
-                f"ACP client method '{method}' is not supported by Hermes yet.",
+                f"ACP client method '{method}' is not supported by Plutus yet.",
             )
 
         process.stdin.write(json.dumps(response) + "\n")

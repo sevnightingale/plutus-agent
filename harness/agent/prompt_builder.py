@@ -907,7 +907,7 @@ def build_nous_subscription_prompt(valid_tool_names: "set[str] | None" = None) -
             "When a Nous-managed feature is active, do not ask the user for Firecrawl, FAL, OpenAI TTS, or Browser-Use API keys.",
             "If the user is not subscribed and asks for a capability that Nous subscription would unlock or simplify, suggest Nous subscription as one option alongside direct setup or local alternatives.",
             "Do not mention subscription unless the user asks about it or it directly solves the current missing capability.",
-            "Useful commands: hermes setup, hermes setup tools, hermes setup terminal, hermes status.",
+            "Useful commands: plutus setup, plutus setup tools, plutus setup terminal, plutus status.",
         ]
     )
     return "\n".join(lines)

@@ -1,10 +1,10 @@
-"""hermes webhook — manage dynamic webhook subscriptions from the CLI.
+"""plutus webhook — manage dynamic webhook subscriptions from the CLI.
 
 Usage:
-    hermes webhook subscribe <name> [options]
-    hermes webhook list
-    hermes webhook remove <name>
-    hermes webhook test <name> [--payload '{"key": "value"}']
+    plutus webhook subscribe <name> [options]
+    plutus webhook list
+    plutus webhook remove <name>
+    plutus webhook test <name> [--payload '{"key": "value"}']
 
 Subscriptions persist to ~/.plutus-agent/webhook_subscriptions.json and are
 hot-reloaded by the webhook adapter without a gateway restart.
@@ -112,12 +112,12 @@ def _require_webhook_enabled() -> bool:
 
 
 def webhook_command(args):
-    """Entry point for 'hermes webhook' subcommand."""
+    """Entry point for 'plutus webhook' subcommand."""
     sub = getattr(args, "webhook_action", None)
 
     if not sub:
-        print("Usage: hermes webhook {subscribe|list|remove|test}")
-        print("Run 'hermes webhook --help' for details.")
+        print("Usage: plutus webhook {subscribe|list|remove|test}")
+        print("Run 'plutus webhook --help' for details.")
         return
 
     if not _require_webhook_enabled():
@@ -196,7 +196,7 @@ def _cmd_list(args):
     subs = _load_subscriptions()
     if not subs:
         print("  No dynamic webhook subscriptions.")
-        print("  Create one with: hermes webhook subscribe <name>")
+        print("  Create one with: plutus webhook subscribe <name>")
         return
 
     base_url = _get_webhook_base_url()
@@ -244,7 +244,7 @@ def _cmd_test(args):
     base_url = _get_webhook_base_url()
     url = f"{base_url}/webhooks/{name}"
 
-    payload = args.payload or '{"test": true, "event_type": "test", "message": "Hello from hermes webhook test"}'
+    payload = args.payload or '{"test": true, "event_type": "test", "message": "Hello from plutus webhook test"}'
 
     import hmac
     import hashlib

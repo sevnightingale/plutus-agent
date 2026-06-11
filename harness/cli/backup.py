@@ -1,10 +1,10 @@
 """
 Backup and import commands for hermes CLI.
 
-`hermes backup` creates a zip archive of the entire ~/.plutus-agent/ directory
+`plutus backup` creates a zip archive of the entire ~/.plutus-agent/ directory
 (excluding the hermes-agent repo and transient files).
 
-`hermes import` restores from a backup zip, overlaying onto the current
+`plutus import` restores from a backup zip, overlaying onto the current
 HERMES_HOME root.
 """
 

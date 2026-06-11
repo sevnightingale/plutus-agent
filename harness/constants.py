@@ -1,4 +1,4 @@
-"""Shared constants for Hermes Agent.
+"""Shared constants for Plutus.
 
 Import-safe module with no dependencies — can be imported from anywhere
 without risk of circular imports.
@@ -8,30 +8,28 @@ import os
 from pathlib import Path
 
 
-def _alias_plutus_env() -> None:
-    """Copy renamed PLUTUS_* env vars into their legacy HERMES_* names.
+def alias_plutus_env() -> None:
+    """Copy every ``PLUTUS_*`` env var into its legacy ``HERMES_*`` name.
 
-    The 5 operator-facing env vars were renamed ``HERMES_* -> PLUTUS_*`` in the
-    plutus-agent fork.  Rather than touch the ~150 internal HERMES_* read sites,
-    we alias the renamed vars into their legacy names at import time: if the
-    operator set ``PLUTUS_X`` and ``HERMES_X`` is unset, copy it across so every
-    existing ``os.environ["HERMES_X"]`` reader transparently sees the new value.
-    Legacy ``HERMES_X`` still works unchanged (back-compat + migration bridge).
-    Vars loaded later from ``.env`` (safe roots, home mode) are additionally
-    dual-read at their call sites for cases where .env loads after this import.
+    The operator-facing env vocabulary is ``PLUTUS_*`` — that is what the
+    docs and ``.env.example`` show. Internally, ~150 read sites still use
+    the ``HERMES_*`` names inherited from the upstream fork. Rather than
+    touch them all, alias generically: for any ``PLUTUS_X`` set, copy its
+    value to ``HERMES_X`` unless ``HERMES_X`` was set explicitly (legacy
+    names keep working). Runs at import time, and again whenever ``.env``
+    is (re)applied to the process env (``reload_env``).
     """
-    for new, old in (
-        ("PLUTUS_HOME", "HERMES_HOME"),
-        ("PLUTUS_HOME_MODE", "HERMES_HOME_MODE"),
-        ("PLUTUS_READ_SAFE_ROOT", "HERMES_READ_SAFE_ROOT"),
-        ("PLUTUS_WRITE_SAFE_ROOT", "HERMES_WRITE_SAFE_ROOT"),
-    ):
-        val = os.environ.get(new)
-        if val is not None and not os.environ.get(old):
-            os.environ[old] = val
+    for key, val in list(os.environ.items()):
+        if key.startswith("PLUTUS_"):
+            legacy = "HERMES_" + key[len("PLUTUS_"):]
+            if not os.environ.get(legacy):
+                os.environ[legacy] = val
 
 
-_alias_plutus_env()
+# Back-compat alias for the old private name.
+_alias_plutus_env = alias_plutus_env
+
+alias_plutus_env()
 
 
 # Single source of truth for the user data dir name. ``plutus-agent`` uses
@@ -51,7 +49,7 @@ def get_hermes_home() -> Path:
     to keep state fully isolated from upstream Hermes (which defaults to
     ``~/.plutus-agent/``). Users running both can do so without collision.
     """
-    val = os.environ.get("HERMES_HOME", "").strip()
+    val = (os.environ.get("PLUTUS_HOME") or os.environ.get("HERMES_HOME") or "").strip()
     return Path(val) if val else Path.home() / HERMES_HOME_DIR_NAME
 
 

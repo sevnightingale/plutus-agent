@@ -1037,8 +1037,8 @@ _LEGACY_UNIT_EXECSTART_MARKERS: tuple[str, ...] = (
     "/plutus gateway ",
     # Upstream-era units invoked the `hermes` binary; the rebrand sweep once
     # rewrote these to "plutus" and silently broke true-legacy detection.
-    " hermes gateway ",
-    "/hermes gateway ",
+    " plutus gateway ",
+    "/plutus gateway ",
 )
 
 

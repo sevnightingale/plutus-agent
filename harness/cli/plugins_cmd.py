@@ -1,4 +1,4 @@
-"""``hermes plugins`` CLI subcommand — install, update, remove, and list plugins.
+"""``plutus plugins`` CLI subcommand — install, update, remove, and list plugins.
 
 Plugins are installed from Git repositories into ``~/.plutus-agent/plugins/``.
 Supports full URLs and ``owner/repo`` shorthand (resolves to GitHub).

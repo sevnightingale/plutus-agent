@@ -22,7 +22,7 @@ Usage:
     plutus update              Update to latest version
     hermes uninstall           Uninstall plutus-agent
     plutus acp                 Run as an ACP server for editor integration
-    hermes sessions browse     Interactive session picker with search
+    plutus sessions browse     Interactive session picker with search
 
     hermes claw migrate --dry-run  # Preview migration without changes
 """
@@ -52,7 +52,7 @@ def _add_accept_hooks_flag(parser) -> None:
 def _require_tty(command_name: str) -> None:
     """Exit with a clear error if stdin is not a terminal.
 
-    Interactive TUI commands (hermes tools, plutus setup, plutus model) use
+    Interactive TUI commands (plutus tools, plutus setup, plutus model) use
     curses or input() prompts that spin at 100% CPU when stdin is a pipe.
     This guard prevents accidental non-interactive invocation.
     """
@@ -1056,7 +1056,7 @@ def cmd_chat(args):
                 args.resume = resolved
             else:
                 print(f"No session found matching '{continue_val}'.")
-                print("Use 'hermes sessions list' to see available sessions.")
+                print("Use 'plutus sessions list' to see available sessions.")
                 sys.exit(1)
         else:
             # -c with no argument — continue the most recent session
@@ -1207,7 +1207,7 @@ def cmd_whatsapp(args):
     current_mode = get_env_value("WHATSAPP_MODE") or ""
     if not current_mode:
         print()
-        print("How will you use WhatsApp with Hermes?")
+        print("How will you use WhatsApp with Plutus?")
         print()
         print("  1. Separate bot number (recommended)")
         print("     People message the bot's number directly — cleanest experience.")
@@ -1396,7 +1396,7 @@ def cmd_whatsapp(args):
         print()
         print("  Or install as a service: plutus gateway install")
     else:
-        print("⚠ Pairing may not have completed. Run 'hermes whatsapp' to try again.")
+        print("⚠ Pairing may not have completed. Run 'plutus whatsapp' to try again.")
 
 
 def cmd_setup(args):
@@ -1772,7 +1772,7 @@ def _aux_config_menu() -> None:
         print()
         print("  Side tasks (vision, compression, web extraction, etc.) default")
         print("  to your main chat model.  \"auto\" means \"use my main model\" —")
-        print("  Hermes only falls back to a lightweight backend (OpenRouter,")
+        print("  Plutus only falls back to a lightweight backend (OpenRouter,")
         print("  Nous Portal) if the main model is unavailable.  Override a")
         print("  task below if you want it pinned to a specific provider/model.")
         print()
@@ -2326,7 +2326,7 @@ def _model_flow_openai_codex(config, current_model=""):
             return
 
     _codex_token = None
-    # Prefer credential pool (where `hermes auth` stores device_code tokens),
+    # Prefer credential pool (where `plutus auth` stores device_code tokens),
     # fall back to legacy provider state.
     try:
         _codex_status = get_codex_auth_status()
@@ -4512,7 +4512,7 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
     Args:
         web_dir: Path to the ``web/`` source directory.
         fatal: If True, print error guidance and return False on failure
-               instead of a soft warning (used by ``hermes web``).
+               instead of a soft warning (used by ``plutus web``).
 
     Returns True if the build succeeded or was skipped (no package.json).
     """
@@ -5826,7 +5826,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             elif not (sys.stdin.isatty() and sys.stdout.isatty()):
                 print("  ℹ Non-interactive session — skipping config migration prompt.")
                 print(
-                    "    Run 'hermes config migrate' later to apply any new config/env options."
+                    "    Run 'plutus config migrate' later to apply any new config/env options."
                 )
                 response = "n"
             else:
@@ -5849,10 +5849,10 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     print()
                     print("✓ Configuration updated!")
                 if gateway_mode and missing_env:
-                    print("  ℹ API keys require manual entry: hermes config migrate")
+                    print("  ℹ API keys require manual entry: plutus config migrate")
             else:
                 print()
-                print("Skipped. Run 'hermes config migrate' later to configure.")
+                print("Skipped. Run 'plutus config migrate' later to configure.")
         else:
             print("  ✓ Configuration is up to date")
 
@@ -6189,7 +6189,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
 def _coalesce_session_name_args(argv: list) -> list:
     """Join unquoted multi-word session names after -c/--continue and -r/--resume.
 
-    When a user types ``hermes -c Pokemon Agent Dev`` without quoting the
+    When a user types ``plutus -c Pokemon Agent Dev`` without quoting the
     session name, argparse sees three separate tokens.  This function merges
     them into a single argument so argparse receives
     ``['-c', 'Pokemon Agent Dev']`` instead.
@@ -6279,7 +6279,7 @@ def cmd_profile(args):
     action = getattr(args, "profile_action", None)
 
     if action is None:
-        # Bare `hermes profile` — show current profile status
+        # Bare `plutus profile` — show current profile status
         profile_name = get_active_profile_name()
         dhh = display_hermes_home()
         print(f"\nActive profile: {profile_name}")
@@ -6610,33 +6610,33 @@ def cmd_logs(args):
 def main():
     """Main entry point for hermes CLI."""
     parser = argparse.ArgumentParser(
-        prog="hermes",
+        prog="plutus",
         description="plutus-agent - AI assistant with tool-calling capabilities",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
     hermes                        Start interactive chat
     plutus chat -q "Hello"        Single query mode
-    hermes -c                     Resume the most recent session
-    hermes -c "my project"        Resume a session by name (latest in lineage)
-    hermes --resume <session_id>  Resume a specific session by ID
+    plutus -c                     Resume the most recent session
+    plutus -c "my project"        Resume a session by name (latest in lineage)
+    plutus --resume <session_id>  Resume a specific session by ID
     plutus setup                  Run setup wizard
     plutus logout                 Clear stored authentication
-    hermes auth add <provider>    Add a pooled credential
-    hermes auth list              List pooled credentials
-    hermes auth remove <p> <t>    Remove pooled credential by index, id, or label
-    hermes auth reset <provider>  Clear exhaustion status for a provider
+    plutus auth add <provider>    Add a pooled credential
+    plutus auth list              List pooled credentials
+    plutus auth remove <p> <t>    Remove pooled credential by index, id, or label
+    plutus auth reset <provider>  Clear exhaustion status for a provider
     plutus model                  Select default model
-    hermes config                 View configuration
-    hermes config edit            Edit config in $EDITOR
-    hermes config set model gpt-4 Set a config value
+    plutus config                 View configuration
+    plutus config edit            Edit config in $EDITOR
+    plutus config set model gpt-4 Set a config value
     plutus gateway                Run messaging gateway
     hermes -s hermes-agent-dev,github-auth
-    hermes -w                     Start in isolated git worktree
+    plutus -w                     Start in isolated git worktree
     plutus gateway install        Install gateway background service
-    hermes sessions list          List past sessions
-    hermes sessions browse        Interactive session picker
-    hermes sessions rename ID T   Rename/title a session
+    plutus sessions list          List past sessions
+    plutus sessions browse        Interactive session picker
+    plutus sessions rename ID T   Rename/title a session
     hermes logs                   View agent.log (last 50 lines)
     hermes logs -f                Follow agent.log in real time
     hermes logs errors            View errors.log
@@ -8040,7 +8040,7 @@ Examples:
             "Enable, disable, or list tools for CLI, Telegram, Discord, etc.\n\n"
             "Built-in toolsets use plain names (e.g. web, memory).\n"
             "MCP tools use server:tool notation (e.g. github:create_issue).\n\n"
-            "Run 'hermes tools' with no subcommand for the interactive configuration UI."
+            "Run 'plutus tools' with no subcommand for the interactive configuration UI."
         ),
     )
     tools_parser.add_argument(
@@ -8050,7 +8050,7 @@ Examples:
     )
     tools_sub = tools_parser.add_subparsers(dest="tools_action")
 
-    # hermes tools list [--platform cli]
+    # plutus tools list [--platform cli]
     tools_list_p = tools_sub.add_parser(
         "list",
         help="Show all tools and their enabled/disabled status",
@@ -8061,7 +8061,7 @@ Examples:
         help="Platform to show (default: cli)",
     )
 
-    # hermes tools disable <name...> [--platform cli]
+    # plutus tools disable <name...> [--platform cli]
     tools_disable_p = tools_sub.add_parser(
         "disable",
         help="Disable toolsets or MCP tools",
@@ -8078,7 +8078,7 @@ Examples:
         help="Platform to apply to (default: cli)",
     )
 
-    # hermes tools enable <name...> [--platform cli]
+    # plutus tools enable <name...> [--platform cli]
     tools_enable_p = tools_sub.add_parser(
         "enable",
         help="Enable toolsets or MCP tools",
@@ -8376,7 +8376,7 @@ Examples:
                 print("Cancelled.")
                 return
 
-            # Launch hermes --resume <id> by replacing the current process
+            # Launch plutus --resume <id> by replacing the current process
             print(f"Resuming session: {selected_id}")
             hermes_bin = shutil.which("hermes")
             if hermes_bin:
@@ -8756,7 +8756,7 @@ Examples:
     # =========================================================================
     # Pre-process argv so unquoted multi-word session names after -c / -r
     # are merged into a single token before argparse sees them.
-    # e.g. ``hermes -c Pokemon Agent Dev`` → ``hermes -c 'Pokemon Agent Dev'``
+    # e.g. ``plutus -c Pokemon Agent Dev`` → ``plutus -c 'Pokemon Agent Dev'``
     # ── Container-aware routing ────────────────────────────────────────
     # When NixOS container mode is active, route ALL subcommands into
     # the managed container.  This MUST run before parse_args() so that
@@ -8781,7 +8781,7 @@ Examples:
     #
     # Fix: when argv contains a token matching a known subcommand, set
     # subparsers.required=True to force deterministic routing.  If that
-    # fails (e.g. 'hermes -c model' where 'model' is consumed as the
+    # fails (e.g. 'plutus -c model' where 'model' is consumed as the
     # session name for --continue), fall back to the default behaviour.
     import io as _io
 

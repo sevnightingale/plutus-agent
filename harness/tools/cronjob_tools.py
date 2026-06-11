@@ -1,5 +1,5 @@
 """
-Cron job management tools for Hermes Agent.
+Cron job management tools for Plutus.
 
 Expose a single compressed action-oriented tool to avoid schema/context bloat.
 Compatibility wrappers remain for direct Python callers and legacy tests.
@@ -120,7 +120,7 @@ def _resolve_model_override(model_obj: Optional[Dict[str, Any]]) -> tuple:
     """Resolve a model override object into (provider, model) for job storage.
 
     If provider is omitted, pins the current main provider from config so the
-    job doesn't drift when the user later changes their default via hermes model.
+    job doesn't drift when the user later changes their default via plutus model.
 
     Returns (provider_str_or_none, model_str_or_none).
     """

@@ -10,13 +10,13 @@ Hermes seeds its credential pool from many places:
     gh_cli        — gh auth token
     config:<name> — custom_providers config entry
     model_config  — model.api_key when model.provider == "custom"
-    manual        — user ran `hermes auth add`
+    manual        — user ran `plutus auth add`
 
 Each source has its own reader inside ``agent.credential_pool._seed_from_*``
 (which keep their existing shape — we haven't restructured them).  What we
 unify here is **removal**:
 
-    ``hermes auth remove <provider> <N>`` must make the pool entry stay gone.
+    ``plutus auth remove <provider> <N>`` must make the pool entry stay gone.
 
 Before this module, every source had an ad-hoc removal branch in
 ``auth_remove_command``, and several sources had no branch at all — so
@@ -181,8 +181,8 @@ def _remove_env_source(provider: str, removed) -> RemovalResult:
             f"(not in ~/.plutus-agent/.env).",
             "  Unset it there (shell profile, systemd EnvironmentFile, "
             "launchd plist, etc.) or it will keep being visible to Hermes.",
-            f"  The pool entry is now suppressed — Hermes will ignore "
-            f"{env_var} until you run `hermes auth add {provider}`.",
+            f"  The pool entry is now suppressed — Plutus will ignore "
+            f"{env_var} until you run `plutus auth add {provider}`.",
         ])
     else:
         result.hints.append(
@@ -201,7 +201,7 @@ def _remove_claude_code(provider: str, removed) -> RemovalResult:
     return RemovalResult(hints=[
         "Suppressed claude_code credential — it will not be re-seeded.",
         "Note: Claude Code credentials still live in ~/.claude/.credentials.json",
-        "Run `hermes auth add anthropic` to re-enable if needed.",
+        "Run `plutus auth add anthropic` to re-enable if needed.",
     ])
 
 
@@ -242,9 +242,9 @@ def _remove_nous_device_code(provider: str, removed) -> RemovalResult:
     """Nous OAuth lives in auth.json providers.nous — clear it and suppress.
 
     We suppress in addition to clearing because nothing else stops the
-    user's next `hermes login` run from writing providers.nous again
+    user's next `plutus login` run from writing providers.nous again
     before they decide to.  Suppression forces them to go through
-    `hermes auth add nous` to re-engage, which is the documented re-add
+    `plutus auth add nous` to re-engage, which is the documented re-add
     path and clears the suppression atomically.
     """
     result = RemovalResult()
@@ -265,7 +265,7 @@ def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
     The canonical source name in ``_seed_from_singletons`` is
     ``"device_code"`` (no prefix).  Entries may show up in the pool as
     either ``"device_code"`` (seeded) or ``"manual:device_code"`` (added
-    via ``hermes auth add openai-codex``), but in both cases the re-seed
+    via ``plutus auth add openai-codex``), but in both cases the re-seed
     gate lives at the ``"device_code"`` suppression key.  We suppress
     that canonical key here; the central dispatcher also suppresses
     ``removed.source`` which is fine — belt-and-suspenders, idempotent.
@@ -282,7 +282,7 @@ def _remove_codex_device_code(provider: str, removed) -> RemovalResult:
     result.hints.extend([
         "Suppressed openai-codex device_code source — it will not be re-seeded.",
         "Note: Codex CLI credentials still live in ~/.codex/auth.json",
-        "Run `hermes auth add openai-codex` to re-enable if needed.",
+        "Run `plutus auth add openai-codex` to re-enable if needed.",
     ])
     return result
 
@@ -296,7 +296,7 @@ def _remove_qwen_cli(provider: str, removed) -> RemovalResult:
     return RemovalResult(hints=[
         "Suppressed qwen-cli credential — it will not be re-seeded.",
         "Note: Qwen CLI credentials still live in ~/.qwen/oauth_creds.json",
-        "Run `hermes auth add qwen-oauth` to re-enable if needed.",
+        "Run `plutus auth add qwen-oauth` to re-enable if needed.",
     ])
 
 
@@ -325,7 +325,7 @@ def _remove_copilot_gh(provider: str, removed) -> RemovalResult:
     return RemovalResult(hints=[
         "Suppressed all copilot token sources (gh_cli + env vars) — they will not be re-seeded.",
         "Note: Your gh CLI / shell environment is unchanged.",
-        "Run `hermes auth add copilot` to re-enable if needed.",
+        "Run `plutus auth add copilot` to re-enable if needed.",
     ])
 
 

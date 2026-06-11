@@ -59,7 +59,7 @@ def _guard_agent_created_enabled() -> bool:
     Off by default because the agent can already execute the same code
     paths via terminal() with no gate, so the scan adds friction without
     meaningful security.  Users who want belt-and-suspenders can turn it
-    on via `hermes config set skills.guard_agent_created true`.
+    on via `plutus config set skills.guard_agent_created true`.
     """
     try:
         from harness.cli.config import load_config

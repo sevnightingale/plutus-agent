@@ -414,7 +414,7 @@ def _check_unavailable_skill(command_name: str) -> str | None:
                 if name == normalized and name in disabled:
                     return (
                         f"The **{command_name}** skill is installed but disabled.\n"
-                        f"Enable it with: `hermes skills config`"
+                        f"Enable it with: `plutus skills config`"
                     )
 
         # Check optional skills (shipped with repo but not installed)
@@ -431,7 +431,7 @@ def _check_unavailable_skill(command_name: str) -> str | None:
                     install_path = f"official/{'/'.join(parts)}"
                     return (
                         f"The **{command_name}** skill is available but not installed.\n"
-                        f"Install it with: `hermes skills install {install_path}`"
+                        f"Install it with: `plutus skills install {install_path}`"
                     )
     except Exception:
         pass
@@ -1062,7 +1062,7 @@ class GatewayRunner:
             )
 
         # When the config has no model.default but a provider was resolved
-        # (e.g. user ran `hermes auth add openai-codex` without `hermes model`),
+        # (e.g. user ran `plutus auth add openai-codex` without `plutus model`),
         # fall back to the provider's first catalog model so the API call
         # doesn't fail with "model must be a non-empty string".
         if not model and runtime_kwargs.get("provider"):
@@ -2145,8 +2145,8 @@ class GatewayRunner:
         #
         # SKIP suspension after a clean (graceful) shutdown — the previous
         # process already drained active agents, so sessions aren't stuck.
-        # This prevents unwanted auto-resets after `hermes update`,
-        # `hermes gateway restart`, or `/restart`.
+        # This prevents unwanted auto-resets after `plutus update`,
+        # `plutus gateway restart`, or `/restart`.
         _clean_marker = _hermes_home / ".clean_shutdown"
         if _clean_marker.exists():
             logger.info("Previous gateway exited cleanly — skipping session suspension")
@@ -3765,7 +3765,7 @@ class GatewayRunner:
                         if _skill_name in _get_plat_disabled(platform=_plat):
                             return (
                                 f"The **{_skill_name}** skill is disabled for {_plat}.\n"
-                                f"Enable it with: `hermes skills config`"
+                                f"Enable it with: `plutus skills config`"
                             )
                     user_instruction = event.get_command_args().strip()
                     msg = build_skill_invocation_message(
@@ -5313,7 +5313,7 @@ class GatewayRunner:
             self.request_restart(detached=True, via_service=False)
         if active_agents:
             return f"⏳ Draining {active_agents} active agent(s) before restart..."
-        return "♻ Restarting gateway. If you aren't notified within 60 seconds, restart from the console with `hermes gateway restart`."
+        return "♻ Restarting gateway. If you aren't notified within 60 seconds, restart from the console with `plutus gateway restart`."
 
     def _is_stale_restart_redelivery(self, event: MessageEvent) -> bool:
         """Return True if this /restart is a Telegram re-delivery we already handled.
@@ -5823,7 +5823,7 @@ class GatewayRunner:
 
         lines.append("")
         lines.append("Switch: `/model provider:model-name`")
-        lines.append("Setup: `hermes setup`")
+        lines.append("Setup: `plutus setup`")
         return "\n".join(lines)
     
     async def _handle_personality_command(self, event: MessageEvent) -> str:
@@ -7763,10 +7763,10 @@ class GatewayRunner:
         return await loop.run_in_executor(None, _collect_and_upload)
 
     async def _handle_update_command(self, event: MessageEvent) -> str:
-        """Handle /update command — update Hermes Agent to the latest version.
+        """Handle /update command — update Plutus to the latest version.
 
-        Spawns ``hermes update`` in a detached session (via ``setsid``) so it
-        survives the gateway restart that ``hermes update`` may trigger. Marker
+        Spawns ``plutus update`` in a detached session (via ``setsid``) so it
+        survives the gateway restart that ``plutus update`` may trigger. Marker
         files are written so either the current gateway process or the next one
         can notify the user when the update finishes.
         """
@@ -7779,10 +7779,10 @@ class GatewayRunner:
         # Block non-messaging platforms (API server, webhooks, ACP)
         platform = event.source.platform
         if platform not in self._UPDATE_ALLOWED_PLATFORMS:
-            return "✗ /update is only available from messaging platforms. Run `hermes update` from the terminal."
+            return "✗ /update is only available from messaging platforms. Run `plutus update` from the terminal."
 
         if is_managed():
-            return f"✗ {format_managed_message('update Hermes Agent')}"
+            return f"✗ {format_managed_message('update Plutus')}"
 
         project_root = Path(__file__).parent.parent.parent.resolve()
         git_dir = project_root / '.git'
@@ -7796,7 +7796,7 @@ class GatewayRunner:
                 "✗ Could not locate the `hermes` command. "
                 "Hermes is running, but the update command could not find the "
                 "executable on PATH or via the current Python interpreter. "
-                "Try running `hermes update` manually in your terminal."
+                "Try running `plutus update` manually in your terminal."
             )
 
         pending_path = _hermes_home / ".update_pending.json"
@@ -7815,7 +7815,7 @@ class GatewayRunner:
         _tmp_pending.replace(pending_path)
         exit_code_path.unlink(missing_ok=True)
 
-        # Spawn `hermes update --gateway` detached so it survives gateway restart.
+        # Spawn `plutus update --gateway` detached so it survives gateway restart.
         # --gateway enables file-based IPC for interactive prompts (stash
         # restore, config migration) so the gateway can forward them to the
         # user instead of silently skipping them.
@@ -7874,7 +7874,7 @@ class GatewayRunner:
         stream_interval: float = 4.0,
         timeout: float = 1800.0,
     ) -> None:
-        """Watch ``hermes update --gateway``, streaming output + forwarding prompts.
+        """Watch ``plutus update --gateway``, streaming output + forwarding prompts.
 
         Polls ``.update_output.txt`` for new content and sends chunks to the
         user periodically.  Detects ``.update_prompt.json`` (written by the
@@ -8131,7 +8131,7 @@ class GatewayRunner:
                     if exit_code == 0:
                         msg = "✅ Hermes update finished successfully."
                     else:
-                        msg = "❌ Hermes update failed. Check the gateway logs or run `hermes update` manually for details."
+                        msg = "❌ Hermes update failed. Check the gateway logs or run `plutus update` manually for details."
                 await adapter.send(chat_id, msg)
                 logger.info(
                     "Sent post-update notification to %s:%s (exit=%s)",
@@ -10928,7 +10928,7 @@ def _start_cron_ticker(
     Background thread that ticks the cron scheduler at a regular interval.
 
     Runs inside the gateway process so cronjobs fire automatically without
-    needing a separate `hermes cron daemon` or system cron entry.
+    needing a separate `plutus cron daemon` or system cron entry.
 
     When ``adapters`` and ``loop`` are provided, passes them through to the
     cron delivery path so live adapters can be used for E2EE rooms.
@@ -11107,14 +11107,14 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             hermes_home = str(get_hermes_home())
             logger.error(
                 "Another gateway instance is already running (PID %d, HERMES_HOME=%s). "
-                "Use 'hermes gateway restart' to replace it, or 'hermes gateway stop' first.",
+                "Use 'plutus gateway restart' to replace it, or 'plutus gateway stop' first.",
                 existing_pid, hermes_home,
             )
             print(
                 f"\n❌ Gateway already running (PID {existing_pid}).\n"
-                f"   Use 'hermes gateway restart' to replace it,\n"
-                f"   or 'hermes gateway stop' to kill it first.\n"
-                f"   Or use 'hermes gateway run --replace' to auto-replace.\n"
+                f"   Use 'plutus gateway restart' to replace it,\n"
+                f"   or 'plutus gateway stop' to kill it first.\n"
+                f"   Or use 'plutus gateway run --replace' to auto-replace.\n"
             )
             return False
 
@@ -11187,7 +11187,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
             _signal_initiated_shutdown = True
             logger.info("Received SIGTERM/SIGINT — initiating shutdown")
         # Diagnostic: log all hermes-related processes so we can identify
-        # what triggered the signal (hermes update, hermes gateway restart,
+        # what triggered the signal (plutus update, plutus gateway restart,
         # a stale detached subprocess, etc.).
         try:
             import subprocess as _sp
@@ -11318,7 +11318,7 @@ async def start_gateway(config: Optional[GatewayConfig] = None, replace: bool = 
     # When a signal (SIGTERM/SIGINT) caused the shutdown and it wasn't a
     # planned restart (/restart, /update, SIGUSR1), exit non-zero so
     # systemd's Restart=on-failure revives the process.  This covers:
-    #   - hermes update killing the gateway mid-work
+    #   - plutus update killing the gateway mid-work
     #   - External kill commands
     #   - WSL2/container runtime sending unexpected signals
     # systemctl stop is safe: systemd tracks "stop requested" state
