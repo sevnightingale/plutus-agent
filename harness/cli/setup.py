@@ -3169,14 +3169,14 @@ def run_setup_wizard(args):
     _offer_launch_chat()
 
 
-def _resolve_hermes_chat_argv() -> Optional[list[str]]:
+def _resolve_plutus_chat_argv() -> Optional[list[str]]:
     """Resolve argv for launching ``plutus chat`` in a fresh process."""
-    hermes_bin = shutil.which("plutus")
-    if hermes_bin:
-        return [hermes_bin, "chat"]
+    plutus_bin = shutil.which("plutus")
+    if plutus_bin:
+        return [plutus_bin, "chat"]
 
     try:
-        if importlib.util.find_spec("plutus_cli") is not None:
+        if importlib.util.find_spec("harness.cli") is not None:
             return [sys.executable, "-m", "harness.cli.main", "chat"]
     except Exception:
         pass
@@ -3190,7 +3190,7 @@ def _offer_launch_chat():
     if not prompt_yes_no("Launch plutus chat now?", True):
         return
 
-    chat_argv = _resolve_hermes_chat_argv()
+    chat_argv = _resolve_plutus_chat_argv()
     if not chat_argv:
         print_info("Could not relaunch Plutus automatically. Run 'plutus chat' manually.")
         return

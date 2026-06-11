@@ -178,7 +178,7 @@ def test_setup_gateway_skips_service_install_when_systemctl_missing(monkeypatch,
     out = capsys.readouterr().out
     assert "Messaging platforms configured!" in out
     assert "Start the gateway to bring your bots online:" in out
-    assert "hermes gateway" in out
+    assert "plutus gateway" in out
 
 
 def test_setup_gateway_in_container_shows_docker_guidance(monkeypatch, capsys):
@@ -445,28 +445,28 @@ def test_modal_setup_persists_direct_mode_when_user_chooses_their_own_account(tm
     assert config["terminal"]["modal_mode"] == "direct"
 
 
-def test_resolve_hermes_chat_argv_prefers_which(monkeypatch):
+def test_resolve_plutus_chat_argv_prefers_which(monkeypatch):
     from harness.cli import setup as setup_mod
 
-    monkeypatch.setattr(setup_mod.shutil, "which", lambda name: "/usr/local/bin/hermes" if name == "hermes" else None)
+    monkeypatch.setattr(setup_mod.shutil, "which", lambda name: "/usr/local/bin/plutus" if name == "plutus" else None)
 
-    assert setup_mod._resolve_hermes_chat_argv() == ["/usr/local/bin/hermes", "chat"]
+    assert setup_mod._resolve_plutus_chat_argv() == ["/usr/local/bin/plutus", "chat"]
 
 
-def test_resolve_hermes_chat_argv_falls_back_to_module(monkeypatch):
+def test_resolve_plutus_chat_argv_falls_back_to_module(monkeypatch):
     from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod.shutil, "which", lambda _name: None)
-    monkeypatch.setattr(setup_mod.importlib.util, "find_spec", lambda name: object() if name == "plutus_cli" else None)
+    monkeypatch.setattr(setup_mod.importlib.util, "find_spec", lambda name: object() if name == "harness.cli" else None)
 
-    assert setup_mod._resolve_hermes_chat_argv() == [sys.executable, "-m", "harness.cli.main", "chat"]
+    assert setup_mod._resolve_plutus_chat_argv() == [sys.executable, "-m", "harness.cli.main", "chat"]
 
 
 def test_offer_launch_chat_execs_fresh_process(monkeypatch):
     from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(setup_mod, "_resolve_hermes_chat_argv", lambda: ["/usr/local/bin/hermes", "chat"])
+    monkeypatch.setattr(setup_mod, "_resolve_plutus_chat_argv", lambda: ["/usr/local/bin/plutus", "chat"])
 
     exec_calls = []
 
@@ -479,19 +479,19 @@ def test_offer_launch_chat_execs_fresh_process(monkeypatch):
     with pytest.raises(SystemExit):
         setup_mod._offer_launch_chat()
 
-    assert exec_calls == [("/usr/local/bin/hermes", ["/usr/local/bin/hermes", "chat"])]
+    assert exec_calls == [("/usr/local/bin/plutus", ["/usr/local/bin/plutus", "chat"])]
 
 
 def test_offer_launch_chat_manual_fallback_when_unresolvable(monkeypatch, capsys):
     from harness.cli import setup as setup_mod
 
     monkeypatch.setattr(setup_mod, "prompt_yes_no", lambda *_args, **_kwargs: True)
-    monkeypatch.setattr(setup_mod, "_resolve_hermes_chat_argv", lambda: None)
+    monkeypatch.setattr(setup_mod, "_resolve_plutus_chat_argv", lambda: None)
 
     setup_mod._offer_launch_chat()
 
     captured = capsys.readouterr()
-    assert "Run 'hermes chat' manually" in captured.out
+    assert "Run 'plutus chat' manually" in captured.out
 
 
 class TestOptionalIntegrations:

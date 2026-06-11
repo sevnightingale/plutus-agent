@@ -81,7 +81,7 @@ class TestNonInteractiveSetup:
             run_setup_wizard(args)
 
         out = capsys.readouterr().out
-        assert "hermes config set model.provider custom" in out
+        assert "plutus config set model.provider custom" in out
 
     def test_no_tty_skips_wizard(self, capsys):
         """When stdin has no TTY, the setup wizard should print guidance and return."""
@@ -101,7 +101,7 @@ class TestNonInteractiveSetup:
             run_setup_wizard(args)
 
         out = capsys.readouterr().out
-        assert "hermes config set model.provider custom" in out
+        assert "plutus config set model.provider custom" in out
 
     def test_reset_flag_rewrites_config_before_noninteractive_exit(self, tmp_path, monkeypatch, capsys):
         """--reset should rewrite config.yaml even when the wizard cannot run interactively."""
@@ -142,7 +142,7 @@ class TestNonInteractiveSetup:
         assert exc.value.code == 1
         mock_setup.assert_not_called()
         out = capsys.readouterr().out
-        assert "hermes config set model.provider custom" in out
+        assert "plutus config set model.provider custom" in out
 
     def test_returning_user_terminal_menu_choice_dispatches_terminal_section(self, tmp_path):
         """Returning-user menu should map Terminal Backend to the terminal setup, not TTS."""

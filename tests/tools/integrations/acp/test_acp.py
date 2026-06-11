@@ -67,7 +67,10 @@ def test_acp_wallet_balance_calls_correct_args(mock_acp):
 def test_acp_browse_offerings(mock_acp):
     mock_acp.return_value = {"offerings": []}
     data_points.acp_browse_offerings("research", top_k=5, sort_by="price")
-    mock_acp.assert_called_once_with("browse", "research", "--top-k", "5", "--sort-by", "price")
+    mock_acp.assert_called_once_with(
+        "browse", "research", "--top-k", "5", "--chain-ids", "8453",
+        "--sort-by", "price",
+    )
 
 
 def test_acp_chain_list(mock_acp):
