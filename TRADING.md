@@ -16,6 +16,10 @@
    **dgclaw is NOT the trade path.** dgclaw is an opt-in leaderboard/competition and is
    dormant. `dgclaw_trade_*` tools exist but are not how Plutus executes. dgclaw's `.env`,
    dgclaw's `trade.ts`, dgclaw's anything are **irrelevant** to whether Plutus can trade.
+   **The ACP CLI is NOT the trade path either** — `acp` does have HL perp/spot order
+   commands, but they route through the Virtuals backend (it builds the tx, the
+   keychain signer signs). Capable, unused: a third-party backend on the money path,
+   policy-gated signing, and no atomic SL/TP brackets. Plutus signs orders itself.
 
 2. **Two wallets, distinct jobs.**
    - **ACP agent wallet — the MASTER** (`ACP_AGENT_WALLET`) — the Virtuals ACP agent's
