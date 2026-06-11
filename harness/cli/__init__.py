@@ -11,5 +11,5 @@ Provides subcommands for:
 - plutus cron          - Manage cron jobs
 """
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __release_date__ = "2026.6.11"

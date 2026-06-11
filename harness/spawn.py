@@ -408,4 +408,46 @@ def spawn_agent(
         logger.error("transcript write failed for %s: %s", name, exc)
         parsed["transcript"] = None
 
+    _record_action_run_for_spawn(name, sub_session, parsed)
     return parsed
+
+
+# Spawned agent → the action type the ops staleness watchdog tracks.
+# (resolution is recorded by ops itself; generation rides on predict's
+# slots.generated.)
+_ACTION_TYPES = {
+    "plutus-perception": "perception",
+    "plutus-regime": "regime",
+    "plutus-predict": "predict",
+    "plutus-reflect": "reflect",
+}
+
+
+def _record_action_run_for_spawn(name: str, sub_session: str,
+                                 parsed: Dict[str, Any]) -> None:
+    """A specialist run IS the action the staleness floors track.
+
+    Recorded here — not by each agent — so the floors stay truthful no
+    matter who spawned or what the agent forgot. Failures are recorded
+    with ok=0 (history), but only ok=1 rows satisfy a floor
+    (queries.last_action_runs filters).
+    """
+    action = _ACTION_TYPES.get(name)
+    if not action:
+        return
+    try:
+        from trading.lifecycle.db import get_db
+        from trading.lifecycle.write import record_action_run
+
+        payload = parsed.get("payload") if isinstance(parsed.get("payload"), dict) else None
+        notes = json.dumps(payload, default=str)[:400] if payload else None
+        ok = bool(parsed.get("ok"))
+        record_action_run(get_db(), action_type=action, agent=name,
+                          ok=ok, session_name=sub_session, notes_md=notes)
+        if (action == "predict" and ok and payload
+                and (payload.get("slots") or {}).get("generated")):
+            record_action_run(get_db(), action_type="generation", agent=name,
+                              ok=True, session_name=sub_session,
+                              notes_md=json.dumps(payload["slots"]["generated"]))
+    except Exception as exc:
+        logger.error("action_run record failed for %s: %s", name, exc)

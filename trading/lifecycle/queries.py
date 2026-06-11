@@ -204,10 +204,12 @@ def support_score_performance(
 
 
 def last_action_runs(conn: sqlite3.Connection) -> dict:
-    """Latest run per action type — the staleness watchdog's source."""
+    """Latest SUCCESSFUL run per action type — the staleness watchdog's
+    source. ok=0 rows are history, not floor satisfaction: a failed
+    perception run must not silence the perception floor."""
     rows = conn.execute(
         """SELECT action_type, MAX(ts) AS last_ts
-           FROM action_runs GROUP BY action_type""").fetchall()
+           FROM action_runs WHERE ok = 1 GROUP BY action_type""").fetchall()
     return {r["action_type"]: r["last_ts"] for r in rows}
 
 

@@ -70,6 +70,12 @@ def test_real_roster_dry_run(home, mock_agent):
     text = open(tpath).read()
     assert "## Conversation" in text and "done" in text
 
+    # Staleness accounting: the successful run satisfied the perception floor.
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle.queries import last_action_runs
+    runs = last_action_runs(get_db())
+    assert "perception" in runs and runs["perception"] is not None
+
 
 def test_contract_violation_reported(home, mock_agent, monkeypatch):
     class BadAgent:
@@ -85,3 +91,25 @@ def test_contract_violation_reported(home, mock_agent, monkeypatch):
     result = spawn.spawn_agent("plutus-perception", "x", session_name="s")
     assert not result["ok"]
     assert any("not JSON" in p for p in result["problems"])
+
+
+def test_failed_spawn_recorded_but_does_not_satisfy_floor(home, mock_agent, monkeypatch):
+    """ok=0 rows are history; last_action_runs only honors ok=1."""
+    class BadAgent:
+        def __init__(self, **kw): pass
+        def run_conversation(self, prompt):
+            return {"final_response": "not json at all", "messages": []}
+    import harness.run_agent
+    monkeypatch.setattr(harness.run_agent, "AIAgent", BadAgent)
+
+    result = spawn.spawn_agent("plutus-perception", "refresh",
+                               session_name="2026-6-15-b")
+    assert not result["ok"]
+
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle.queries import last_action_runs
+    db = get_db()
+    rows = db.execute(
+        "SELECT ok FROM action_runs WHERE action_type='perception'").fetchall()
+    assert any(r[0] == 0 for r in rows)
+    assert "perception" not in last_action_runs(db)

@@ -93,8 +93,18 @@ lifecycle.db via tools; the only markdown you maintain is the blackboards.
 weekly or 3 unreflected closes · generation 7d. Ops enforces the floor;
 schedule ahead of it.
 
-**Scheduling.** Before ending any turn: schedule the next wake. The watchdog
-is the floor, not the plan.
+**Scheduling — judgment, not metronome.** The cadence is your call, made
+fresh every time you're awake: run perception twice in an hour when CVD
+just flipped; let predict coast when the book hasn't changed. You drive
+from your plan for the day and from changing conditions (watchers,
+escalations, your own readings) — never from pre-scheduled rotations.
+Fixed specialist crons remove the judgment that is the point of you.
+Self-schedule a one-off wake ONLY when the plan needs a specific future
+moment (an event window, a prediction horizon, a level being watched).
+Spawn specialists yourself and CONSUME their returns (funding calls,
+escalations, weight changes) — specialists never self-schedule, and a
+run nobody consumes is wasted. The ops staleness floors are the safety
+net UNDER your judgment, not your calendar.
 
 ## Live State
 
