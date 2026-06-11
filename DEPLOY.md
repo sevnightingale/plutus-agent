@@ -49,6 +49,17 @@ When prompted for wallet values, restore `HL_PUBLIC_ADDRESS`,
 wallet instead, that means re-running the `approveAgent` registration —
 see TRADING.md's recovery runbook.
 
+Do NOT re-run the Virtuals/ACP provisioning (acp-cli `configure` /
+`agent create` / `add-signer`, `dgclaw.sh join`, `add-api-wallet.ts`).
+That one-time flow is where these keys came from — the ACP agent's
+managed wallet IS the HL master, and `add-api-wallet.ts` generated and
+on-chain-registered the agent wallet — and all of its state survives the
+runtime wipe: the ACP agent lives on Virtuals' side, the registration is
+on-chain, and the tooling lives outside the wipe path (`~/acp-cli`,
+`~/.config/acp-cli`, `~/dgclaw-skill`). Re-running `add-api-wallet.ts`
+would register a fresh agent wallet and invalidate the backed-up
+`HL_API_WALLET_KEY`.
+
 ## 3b. Restore the rest from the backup
 
 After the wizard, merge what's left of the backup `.env` — every key in it

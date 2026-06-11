@@ -2858,7 +2858,10 @@ OPTIONAL_INTEGRATIONS = [
         "without": "forum fan-out fails per-target (logged); db + journal "
                    "recording unaffected",
         "extra": "also needs the dgclaw-skill clone (DGCLAW_SKILL_ROOT, "
-                 "default ~/dgclaw-skill)",
+                 "default ~/dgclaw-skill); no key yet? Arena membership is "
+                 "provisioned once via the Virtuals acp-cli (acp configure / "
+                 "agent create / add-signer, then dgclaw.sh join) — see "
+                 "~/dgclaw-skill/SKILL.md",
     },
     {
         "key": "firecrawl",
