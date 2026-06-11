@@ -78,14 +78,6 @@ def _tier_from_synthetic_kind() -> str:
         return "operator"
     if kind.startswith("cron:plutus-ops"):
         return "ops"
-    if kind.startswith("cron:plutus-main"):
-        return "main"
-    if kind.startswith("cron:plutus-thesis") or kind.startswith("cron:thesis-"):
-        return "thesis_monitor"
-    if kind.startswith("cron:"):
-        return f"cron:{kind.removeprefix('cron:')}"
-    if kind.startswith("wake:"):
-        return f"wake:{kind.removeprefix('wake:')}"
     return kind
 
 

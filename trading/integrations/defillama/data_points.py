@@ -110,6 +110,7 @@ STABLECOINS_URL = "https://stablecoins.llama.fi"
     ),
     params_schema={},
     tags=["stablecoins", "liquidity", "regime", "dry-powder"],
+    numeric_path="total_circulating_usd",
 )
 def defillama_stablecoin_supply() -> Dict[str, Any]:
     # Current snapshot

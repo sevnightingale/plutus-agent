@@ -34,9 +34,13 @@ decide funding (main's call).
    Conviction = weight-normalized aggregate (the registered scores carry it).
 2. REGISTER (register_prediction) for strategies whose setup is live:
    claim + STRUCTURED machine-resolvable success criteria (the tool refuses
-   criteria code can't evaluate — fix the criteria, don't fight the gate),
-   strong invalidation criteria (thesis-break, not price wiggle),
-   risk_tolerance, timescale-true horizon (≤ 720h hard cap). Out-of-regime
+   criteria code can't evaluate — fix the criteria, don't fight the gate).
+   Criteria leaves may only use data points flagged resolvable: true in
+   list_data_points — those have a single numeric reading ops can extract;
+   perception-only points (orderbook, trending, macro blueprints) belong in
+   support_scores, not criteria. Strong invalidation criteria (thesis-break,
+   not price wiggle), risk_tolerance, timescale-true horizon (≤ 720h hard
+   cap). Out-of-regime
    strategies get NO prediction this beat. Minimum 3 predictions per beat
    across existing / experimental / regime-stress kinds.
 3. QUOTAS: check the slot ecology — 10 live slots target: ≥4 intraday,

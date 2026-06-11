@@ -109,11 +109,11 @@ def calc_aroon(df: pd.DataFrame, length: int = 14) -> dict:
                                                  length=length)
 
 
-def calc_trix(df: pd.DataFrame, length: int = 14) -> dict:
-    result = ta.trix(df["close"], length=length)
-    # pandas_ta returns DataFrame with TRIX and TRIXs (signal) columns
-    trix_series = result[f"TRIX_{length}"]
-    trix_signal = result.get(f"TRIXs_{length}")  # signal line, optional
+def calc_trix(df: pd.DataFrame, length: int = 14, signal: int = 9) -> dict:
+    result = ta.trix(df["close"], length=length, signal=signal)
+    # pandas_ta column names carry BOTH params: TRIX_14_9 / TRIXs_14_9
+    trix_series = result[f"TRIX_{length}_{signal}"]
+    trix_signal = result.get(f"TRIXs_{length}_{signal}")  # signal line, optional
     return get_preprocessor("trix").preprocess(trix_series, trix_signal,
                                                prices=df["close"],
                                                length=length)
@@ -144,8 +144,12 @@ def calc_ema(df: pd.DataFrame, length: int = 20) -> dict:
                                               length=length)
 
 
-def calc_vwap(df: pd.DataFrame) -> dict:
-    series = ta.vwap(df["high"], df["low"], df["close"], df["volume"])
+def calc_vwap(df: pd.DataFrame, anchor: str = "D") -> dict:
+    # anchor is a pandas offset alias ("D" daily, "W" weekly, "M" monthly) —
+    # VWAP resets at each anchor boundary. With the daily default, intervals
+    # of 1d or above degenerate to ≈ typical price (each bar its own anchor).
+    series = ta.vwap(df["high"], df["low"], df["close"], df["volume"],
+                     anchor=anchor)
     return get_preprocessor("vwap").preprocess(series, prices=df["close"])
 
 
@@ -208,8 +212,16 @@ def calc_psar(df: pd.DataFrame, af_start: float = 0.02,
               af_increment: float = 0.02, af_max: float = 0.2) -> dict:
     result = ta.psar(df["high"], df["low"], df["close"],
                      af0=af_start, af=af_increment, max_af=af_max)
-    # pandas_ta returns DataFrame with PSARl, PSARs, PSARaf, PSARr columns
-    psar_series = result["PSARl_0.02_0.2"]  # long psar
+    # pandas_ta splits the SAR across PSARl_<af0>_<max_af> (long regime) and
+    # PSARs_<af0>_<max_af> (short regime); each is NaN while the other is
+    # active. The indicator's value at any bar is whichever side is set —
+    # combine them, or downtrends vanish and the analysis fabricates an
+    # uninterrupted uptrend out of the surviving long-side bars.
+    long_col = next((c for c in result.columns if c.startswith("PSARl_")), None)
+    short_col = next((c for c in result.columns if c.startswith("PSARs_")), None)
+    if long_col is None or short_col is None:
+        raise ValueError(f"unexpected pandas_ta psar columns: {list(result.columns)}")
+    psar_series = result[long_col].combine_first(result[short_col])
     return get_preprocessor("psar").preprocess(psar_series,
                                                prices=df["close"],
                                                af_start=af_start,

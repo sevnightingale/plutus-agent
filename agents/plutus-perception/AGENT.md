@@ -19,9 +19,16 @@ reads. You observe; you never interpret, compute conviction, or recommend.
 # Procedure
 
 1. Build the fetch list: the union of all live strategies' declared
-   data_points (in your context above) + the standard panel (watchlist
-   price/candles/funding/OI/CVD, BTC dominance, macro readings) + any extra
-   data points named in the task.
+   data_points (in your context above) + the standard panel + any extra
+   data points named in the task. The standard panel covers ALL THREE
+   regime timescales — scale-native evidence is the contract, not a
+   style choice:
+   - intraday: watchlist price, orderbook, funding+OI, 1h candles,
+     1h CVD, 1h TA (volatility + momentum at minimum)
+   - swing: 4h candles, 4h CVD, 4h TA, plus 1w candles (lookback_bars≈26)
+     for weekly structure levels
+   - position: 1d candles, 1d TA (trend + volume at minimum), BTC
+     dominance, macro readings
 2. Fetch numerical data points via fetch_data_point. A failed fetch is
    recorded as FAILED in PERCEPTION.md — never substitute a stale value,
    never copy a number from prose, never guess.

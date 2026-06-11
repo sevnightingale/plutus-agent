@@ -28,8 +28,11 @@ def _get_df(symbol: str, interval: str, lookback_bars: int):
         "Cumulative Volume Delta — estimates buying vs selling pressure from "
         "candles using the close-vs-midpoint rule. Bullish CVD (rising) = "
         "accumulation, bears being absorbed. Bearish CVD = distribution. "
-        "Divergences (price up + CVD fading) are classic reversal signals. "
-        "Includes CVD trend, buy/sell pressure %, and recent momentum shift."
+        "The divergence flag compares price direction vs net flow over the "
+        "RECENT bars (last ~20% of the window); cvd_current and the "
+        "percentile are relative to the lookback window, so keep params "
+        "consistent when comparing reads. Includes CVD trend, buy/sell "
+        "pressure %, and per-bar delta rates."
     ),
     params_schema={
         "symbol": {"type": "string", "required": True},
@@ -37,6 +40,7 @@ def _get_df(symbol: str, interval: str, lookback_bars: int):
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["order-flow", "volume", "divergence", "smart-money"],
+    numeric_path="cvd_current",
 )
 def hl_cvd(
     symbol: str,

@@ -20,6 +20,9 @@ SCHEMA = {
         "resolvable: a leaf {data_point, params?, op: gte|lte|crosses_above|"
         "crosses_below|within_range|outside_range, threshold|range, baseline "
         "{value,ts} for crosses_*} or {all:[...]}/{any:[...]} combinators. "
+        "Criteria leaves may only use data points flagged resolvable: true "
+        "in list_data_points (those with a numeric value) — perception-only "
+        "data points are refused here, at write time. "
         "horizon_hours ≤ 720 (30d hard cap). kind='strategy' (default) "
         "requires strategy_name (file-at-birth); 'stress'/'adhoc' don't. "
         "support_scores record the conviction inputs — narrative entries "
@@ -100,8 +103,10 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             ts=now,
         )
         known = {e.name for e in data_point_registry.list_all()} or None
+        resolvable = data_point_registry.resolvable_names() if known else None
         prediction_id = write.record_prediction(
-            get_db(), draft, known_data_points=known)
+            get_db(), draft, known_data_points=known,
+            resolvable_data_points=resolvable)
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
     return tool_result({"prediction_id": prediction_id, "ok": True})

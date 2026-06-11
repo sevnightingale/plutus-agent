@@ -58,11 +58,13 @@ def record_prediction(
     draft: PredictionDraft,
     *,
     known_data_points: Optional[set] = None,
+    resolvable_data_points: Optional[set] = None,
 ) -> int:
     """Validate and insert a prediction (+ its support scores). Returns id.
 
     Refusals (raise ValueError):
-    - success criteria that fail the machine-resolvable contract
+    - success criteria that fail the machine-resolvable contract (unknown
+      data points, or perception-only ones without a numeric_path)
     - horizon beyond the 30d cap / not after ts
     - kind='strategy' without a strategy_name (file-at-birth doctrine)
     - narrative support scores without recorded reasoning
@@ -70,7 +72,8 @@ def record_prediction(
     ts = draft.ts if draft.ts is not None else time.time()
 
     problems = criteria_mod.validate(
-        draft.success_criteria, known_data_points=known_data_points
+        draft.success_criteria, known_data_points=known_data_points,
+        resolvable_data_points=resolvable_data_points,
     )
     if problems:
         raise ValueError(
@@ -79,7 +82,8 @@ def record_prediction(
         )
     if draft.failure_criteria is not None:
         problems = criteria_mod.validate(
-            draft.failure_criteria, known_data_points=known_data_points
+            draft.failure_criteria, known_data_points=known_data_points,
+            resolvable_data_points=resolvable_data_points,
         )
         if problems:
             raise ValueError(

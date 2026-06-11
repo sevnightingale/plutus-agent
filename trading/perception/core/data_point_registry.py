@@ -31,6 +31,13 @@ class DataPointEntry:
     returns_schema: Dict[str, Any]
     tags: tuple = field(default_factory=tuple)
     fn: Optional[Callable[..., Any]] = None
+    # Dotted path to THE numeric reading inside the return value (e.g.
+    # "price", "current.value", "funding"). A data point with a numeric_path
+    # is machine-resolvable: prediction criteria may reference it, and ops
+    # resolution extracts the number deterministically. Without one, the
+    # data point is perception-only — register_prediction refuses criteria
+    # leaves on it AT WRITE TIME (never a silent expired_unresolvable later).
+    numeric_path: Optional[str] = None
 
 
 _REGISTRY: Dict[str, DataPointEntry] = {}
@@ -45,6 +52,7 @@ def register_data_point(
     params_schema: Optional[Dict[str, Any]] = None,
     returns_schema: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
+    numeric_path: Optional[str] = None,
 ):
     """Decorator: register a function as a data-point fetcher.
 
@@ -74,9 +82,39 @@ def register_data_point(
             returns_schema=returns_schema or {},
             tags=tuple(tags or ()),
             fn=fn,
+            numeric_path=numeric_path,
         )
         return fn
     return _decorator
+
+
+def extract_numeric(value: Any, numeric_path: Optional[str]) -> Optional[float]:
+    """Extract THE numeric reading from a fetch result via its numeric_path.
+
+    A bare int/float result is returned as-is (path not needed). Dict results
+    are traversed along the dotted path. Returns None when the path is absent,
+    the traversal fails, or the leaf isn't a number — callers treat None as
+    'unresolvable', never as a value.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not numeric_path or not isinstance(value, dict):
+        return None
+    node: Any = value
+    for part in numeric_path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    if isinstance(node, bool) or not isinstance(node, (int, float)):
+        return None
+    return float(node)
+
+
+def resolvable_names() -> set:
+    """Names of data points usable as prediction-criteria leaves."""
+    return {e.name for e in _REGISTRY.values() if e.numeric_path}
 
 
 def lookup(name: str) -> DataPointEntry:

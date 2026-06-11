@@ -35,7 +35,7 @@ def macro_vix() -> Dict[str, Any]:
     return {
         "_type": "agentic_query",
         "description": "CBOE Volatility Index — measures expected S&P 500 volatility via options prices.",
-        "search": "current VIX level today 2026",
+        "search": "current VIX level today",
         "primary_source": "https://www.marketwatch.com/investing/index/vix",
         "fallback_sources": [
             "https://www.cnbc.com/quotes/.VIX",
@@ -84,7 +84,7 @@ def macro_dxy() -> Dict[str, Any]:
         ],
         "extract_hint": "Look for 'Last Price' followed by a number like 98.45.",
         "classify": {
-            "field": "trend",
+            "field": "strength",
             "buckets": [
                 {"range": [0, 95], "label": "weak", "narrative": "USD weak — risk-on tailwind for crypto."},
                 {"range": [95, 100], "label": "neutral", "narrative": "USD in normal range. No directional signal."},
@@ -118,7 +118,7 @@ def macro_cpi() -> Dict[str, Any]:
     return {
         "_type": "agentic_query",
         "description": "US Consumer Price Index — headline year-over-year inflation rate.",
-        "search": "latest CPI inflation rate United States 2026",
+        "search": "latest CPI inflation rate United States",
         "primary_source": "https://www.bls.gov/news.release/cpi.nr0.htm",
         "fallback_sources": [
             "https://tradingeconomics.com/united-states/inflation-cpi",
@@ -131,8 +131,8 @@ def macro_cpi() -> Dict[str, Any]:
         "classify": {
             "field": "regime",
             "buckets": [
-                {"range": [0, 2.4], "label": "low", "narrative": "Below Fed target range. Dovish — rate cuts likely. Risk-on."},
-                {"range": [2.5, 3.4], "label": "moderate", "narrative": "Near Fed target. Neutral — data-dependent. Watch labor market."},
+                {"range": [0, 2.5], "label": "low", "narrative": "Below Fed target range. Dovish — rate cuts likely. Risk-on."},
+                {"range": [2.5, 3.5], "label": "moderate", "narrative": "Near Fed target. Neutral — data-dependent. Watch labor market."},
                 {"range": [3.5, 5.0], "label": "elevated", "narrative": "Above target. Hawkish — rates higher for longer. Risk-off pressure."},
                 {"range": [5.0, 100], "label": "extreme", "narrative": "Inflation crisis. Aggressive tightening. Severe risk-off."},
             ],

@@ -82,6 +82,7 @@ def _ta_fetch(
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum", "oscillator", "overbought-oversold", "divergence"],
+    numeric_path="current.value",
 )
 def ta_rsi(symbol: str, interval: str = "1h", length: int = 14,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -106,6 +107,7 @@ def ta_rsi(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum", "oscillator", "overbought-oversold"],
+    numeric_path="current.k_percent",
 )
 def ta_stochastic(symbol: str, interval: str = "1h", k: int = 14,
                   d: int = 3, lookback_bars: int = 200) -> Dict[str, Any]:
@@ -128,6 +130,7 @@ def ta_stochastic(symbol: str, interval: str = "1h", k: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum", "oscillator", "overbought-oversold"],
+    numeric_path="current.value",
 )
 def ta_williams_r(symbol: str, interval: str = "1h", length: int = 14,
                   lookback_bars: int = 200) -> Dict[str, Any]:
@@ -150,6 +153,7 @@ def ta_williams_r(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum", "oscillator"],
+    numeric_path="current.value",
 )
 def ta_cci(symbol: str, interval: str = "1h", length: int = 20,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -172,6 +176,7 @@ def ta_cci(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum", "volume", "overbought-oversold"],
+    numeric_path="current.value",
 )
 def ta_mfi(symbol: str, interval: str = "1h", length: int = 14,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -194,6 +199,7 @@ def ta_mfi(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["momentum"],
+    numeric_path="current.value",
 )
 def ta_roc(symbol: str, interval: str = "1h", length: int = 10,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -221,6 +227,7 @@ def ta_roc(symbol: str, interval: str = "1h", length: int = 10,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend", "momentum", "divergence"],
+    numeric_path="current.macd",
 )
 def ta_macd(symbol: str, interval: str = "1h", fast: int = 12,
             slow: int = 26, signal: int = 9,
@@ -244,6 +251,7 @@ def ta_macd(symbol: str, interval: str = "1h", fast: int = 12,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend", "strength"],
+    numeric_path="current.adx",
 )
 def ta_adx(symbol: str, interval: str = "1h", length: int = 14,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -266,6 +274,7 @@ def ta_adx(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend"],
+    numeric_path="current.oscillator",
 )
 def ta_aroon(symbol: str, interval: str = "1h", length: int = 14,
              lookback_bars: int = 200) -> Dict[str, Any]:
@@ -285,14 +294,16 @@ def ta_aroon(symbol: str, interval: str = "1h", length: int = 14,
         "symbol":        {"type": "string", "required": True},
         "interval":      {"type": "string", "default": "1h"},
         "length":        {"type": "integer", "default": 14},
+        "signal":        {"type": "integer", "default": 9, "description": "Signal smoothing"},
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend", "momentum"],
+    numeric_path="current.trix",
 )
 def ta_trix(symbol: str, interval: str = "1h", length: int = 14,
-            lookback_bars: int = 200) -> Dict[str, Any]:
+            signal: int = 9, lookback_bars: int = 200) -> Dict[str, Any]:
     return _ta_fetch(symbol, interval, lookback_bars,
-                     _calc.calc_trix, length=length)
+                     _calc.calc_trix, length=length, signal=signal)
 
 
 @register_data_point(
@@ -310,6 +321,7 @@ def ta_trix(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend", "directional"],
+    numeric_path="current.spread",
 )
 def ta_vortex(symbol: str, interval: str = "1h", length: int = 14,
               lookback_bars: int = 200) -> Dict[str, Any]:
@@ -325,8 +337,9 @@ def ta_vortex(symbol: str, interval: str = "1h", length: int = 14,
     category="ta",
     source="hyperliquid",
     description=(
-        "Simple Moving Average with multi-period analysis (20/50/200). "
-        "Price vs SMA positioning, trend, slope, crossover detection, summary."
+        "Simple Moving Average for ONE period (default 20; pass length=50 or "
+        "200 for slower MAs — call once per period needed). Price vs SMA "
+        "positioning, trend, slope, price/MA crossover detection, summary."
     ),
     params_schema={
         "symbol":        {"type": "string", "required": True},
@@ -335,6 +348,7 @@ def ta_vortex(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 500},
     },
     tags=["moving-average", "trend"],
+    numeric_path="current.sma_value",
 )
 def ta_sma(symbol: str, interval: str = "1h", length: int = 20,
            lookback_bars: int = 500) -> Dict[str, Any]:
@@ -347,8 +361,10 @@ def ta_sma(symbol: str, interval: str = "1h", length: int = 20,
     category="ta",
     source="hyperliquid",
     description=(
-        "Exponential Moving Average with multi-period analysis (20/50/200). "
-        "Price vs EMA positioning, trend, slope, crossover detection, summary."
+        "Exponential Moving Average for ONE period (default 20; pass "
+        "length=50 or 200 for slower MAs — call once per period needed). "
+        "Price vs EMA positioning, trend, slope, price/MA crossover "
+        "detection, summary."
     ),
     params_schema={
         "symbol":        {"type": "string", "required": True},
@@ -357,6 +373,7 @@ def ta_sma(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 500},
     },
     tags=["moving-average", "trend"],
+    numeric_path="current.ema_value",
 )
 def ta_ema(symbol: str, interval: str = "1h", length: int = 20,
            lookback_bars: int = 500) -> Dict[str, Any]:
@@ -369,19 +386,26 @@ def ta_ema(symbol: str, interval: str = "1h", length: int = 20,
     category="ta",
     source="hyperliquid",
     description=(
-        "Volume-Weighted Average Price — institutional benchmark. "
-        "Price vs VWAP positioning, deviation analysis, trend, summary."
+        "Volume-Weighted Average Price — institutional benchmark, anchored "
+        "per period (default 'D' = resets daily). Price vs VWAP positioning, "
+        "deviation analysis, trend, summary. Meaningful on INTRADAY intervals "
+        "(1m–4h); on 1d+ each bar is its own daily anchor and VWAP "
+        "degenerates to ≈ typical price — use anchor='W' or 'M' there."
     ),
     params_schema={
         "symbol":        {"type": "string", "required": True},
         "interval":      {"type": "string", "default": "1h"},
+        "anchor":        {"type": "string", "default": "D",
+                          "description": "VWAP reset boundary: D, W, or M"},
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["moving-average", "volume"],
+    numeric_path="current.vwap_value",
 )
-def ta_vwap(symbol: str, interval: str = "1h",
+def ta_vwap(symbol: str, interval: str = "1h", anchor: str = "D",
             lookback_bars: int = 200) -> Dict[str, Any]:
-    return _ta_fetch(symbol, interval, lookback_bars, _calc.calc_vwap)
+    return _ta_fetch(symbol, interval, lookback_bars, _calc.calc_vwap,
+                     anchor=anchor)
 
 
 # ── volatility (5) ─────────────────────────────────────────────────────────
@@ -403,6 +427,7 @@ def ta_vwap(symbol: str, interval: str = "1h",
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volatility", "envelope"],
+    numeric_path="current.percent_b",
 )
 def ta_bbands(symbol: str, interval: str = "1h", length: int = 20,
               std: float = 2.0, lookback_bars: int = 200) -> Dict[str, Any]:
@@ -426,6 +451,7 @@ def ta_bbands(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volatility", "squeeze"],
+    numeric_path="current.width",
 )
 def ta_bbwidth(symbol: str, interval: str = "1h", length: int = 20,
                std: float = 2.0, lookback_bars: int = 200) -> Dict[str, Any]:
@@ -449,6 +475,7 @@ def ta_bbwidth(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volatility", "envelope"],
+    numeric_path="current.price_position_pct",
 )
 def ta_keltner(symbol: str, interval: str = "1h", length: int = 20,
                multiplier: float = 2.0,
@@ -472,6 +499,7 @@ def ta_keltner(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volatility", "breakout"],
+    numeric_path="current.price_position_pct",
 )
 def ta_donchian(symbol: str, interval: str = "1h", length: int = 20,
                 lookback_bars: int = 200) -> Dict[str, Any]:
@@ -495,6 +523,7 @@ def ta_donchian(symbol: str, interval: str = "1h", length: int = 20,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volatility", "risk-management"],
+    numeric_path="current.value",
 )
 def ta_atr(symbol: str, interval: str = "1h", length: int = 14,
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -519,6 +548,7 @@ def ta_atr(symbol: str, interval: str = "1h", length: int = 14,
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["volume", "divergence"],
+    numeric_path="current.value",
 )
 def ta_obv(symbol: str, interval: str = "1h",
            lookback_bars: int = 200) -> Dict[str, Any]:
@@ -543,6 +573,7 @@ def ta_obv(symbol: str, interval: str = "1h",
         "lookback_bars": {"type": "integer", "default": 200},
     },
     tags=["trend", "stop-and-reverse"],
+    numeric_path="current.psar_value",
 )
 def ta_psar(symbol: str, interval: str = "1h", af_start: float = 0.02,
             af_increment: float = 0.02, af_max: float = 0.2,

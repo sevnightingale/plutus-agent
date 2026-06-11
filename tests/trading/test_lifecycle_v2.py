@@ -241,6 +241,35 @@ class TestCriteria:
         crit = {"any": [_criteria(threshold=200_000.0), _criteria(op="lte", threshold=120_000.0)]}
         assert criteria.resolve(crit, lambda dp, p: 111_000.0) == "correct"
 
+    def test_validate_refuses_perception_only_data_point(self):
+        # hl_orderbook is registered but has no numeric_path — resolution
+        # could never extract a number, so the leaf must be refused at
+        # write time, not discovered as expired_unresolvable weeks later.
+        bad = {"data_point": "hl_orderbook", "op": "gte", "threshold": 5.0}
+        probs = criteria.validate(
+            bad,
+            known_data_points={"hl_orderbook", "hl_price"},
+            resolvable_data_points={"hl_price"},
+        )
+        assert any("perception-only" in p for p in probs)
+
+    def test_validate_accepts_resolvable_data_point(self):
+        probs = criteria.validate(
+            _criteria(),
+            known_data_points={"hl_price"},
+            resolvable_data_points={"hl_price"},
+        )
+        assert probs == []
+
+    def test_record_prediction_enforces_resolvable_gate(self, conn):
+        bad = {"data_point": "hl_orderbook", "op": "gte", "threshold": 5.0}
+        with pytest.raises(ValueError, match="perception-only"):
+            write.record_prediction(
+                conn, _draft(success_criteria=bad),
+                known_data_points={"hl_orderbook", "hl_price"},
+                resolvable_data_points={"hl_price"},
+            )
+
 
 class TestWatchdogSource:
     def test_last_action_runs(self, conn):

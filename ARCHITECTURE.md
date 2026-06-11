@@ -128,8 +128,12 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    registers predictions via `register_prediction`: a claim plus
    **machine-resolvable** success/failure/invalidation criteria (structured
    leaves over data points — `gte`/`lte`/`crosses_*`/range ops — with
-   combinators; horizon ≤ 720h). The tool refuses what code can't evaluate.
-   Ten slots; out-of-regime strategies get no prediction that beat.
+   combinators; horizon ≤ 720h). Criteria leaves may only use data points
+   that declare a `numeric_path` (flagged `resolvable: true` in
+   `list_data_points`) — the dotted path resolution uses to extract THE
+   number from the fetch. The tool refuses what code can't evaluate, at
+   write time. Ten slots; out-of-regime strategies get no prediction that
+   beat.
 3. **Resolve.** Ops resolves due predictions every tick — pure machine
    evaluation of the recorded criteria. Outcomes accrue to the strategy.
 4. **Graduate.** plutus-reflect promotes test → **active** only at **N≥15

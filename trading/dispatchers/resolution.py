@@ -19,20 +19,19 @@ from harness.tools.registry import registry, tool_error, tool_result
 
 
 def _fetch(name: str, params: Optional[dict]) -> Optional[float]:
-    """Numeric reading for a leaf criteria check. None on any failure."""
+    """Numeric reading for a leaf criteria check. None on any failure.
+
+    Extraction follows the data point's declared ``numeric_path`` — the same
+    contract register_prediction enforces at write time, so a prediction that
+    was accepted can always be resolved (barring a live fetch failure).
+    """
     from trading.perception.core import data_point_registry
     try:
         entry = data_point_registry.lookup(name)
         value = entry.fn(**(params or {})) if entry.fn else None
     except Exception:
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, dict):
-        for key in ("value", "price", "equity_usd", "rate"):
-            if isinstance(value.get(key), (int, float)):
-                return float(value[key])
-    return None
+    return data_point_registry.extract_numeric(value, entry.numeric_path)
 
 
 def _fetch_extreme(name: str, params: Optional[dict], since_ts: float):

@@ -33,18 +33,28 @@ _RANGE_OPS = ("within_range", "outside_range")
 _CROSS_OPS = ("crosses_above", "crosses_below")
 
 
-def validate(criteria: Any, *, known_data_points: Optional[set] = None) -> list:
+def validate(
+    criteria: Any,
+    *,
+    known_data_points: Optional[set] = None,
+    resolvable_data_points: Optional[set] = None,
+) -> list:
     """Return a list of problems (empty = valid).
 
     ``known_data_points``: registered DP names; when provided, unknown names
     are rejected (the wiring passes the live registry's names).
+    ``resolvable_data_points``: the subset with a declared numeric_path; when
+    provided, criteria leaves on perception-only data points are rejected —
+    resolution could never extract a number from them, so accepting the
+    prediction would only manufacture an expired_unresolvable weeks later.
     """
     problems: list = []
-    _validate_node(criteria, problems, known_data_points, path="criteria")
+    _validate_node(criteria, problems, known_data_points,
+                   resolvable_data_points, path="criteria")
     return problems
 
 
-def _validate_node(node, problems, known_dps, path):
+def _validate_node(node, problems, known_dps, resolvable_dps, path):
     if not isinstance(node, dict):
         problems.append(f"{path}: must be an object, got {type(node).__name__}")
         return
@@ -58,7 +68,8 @@ def _validate_node(node, problems, known_dps, path):
             problems.append(f"{path}.{key}: must be a non-empty list")
             return
         for i, child in enumerate(children):
-            _validate_node(child, problems, known_dps, f"{path}.{key}[{i}]")
+            _validate_node(child, problems, known_dps, resolvable_dps,
+                           f"{path}.{key}[{i}]")
         return
 
     dp = node.get("data_point")
@@ -66,6 +77,12 @@ def _validate_node(node, problems, known_dps, path):
         problems.append(f"{path}: missing data_point")
     elif known_dps is not None and dp not in known_dps:
         problems.append(f"{path}: unknown data_point {dp!r} (not registered)")
+    elif resolvable_dps is not None and dp not in resolvable_dps:
+        problems.append(
+            f"{path}: data_point {dp!r} is perception-only (no numeric_path) — "
+            f"resolution cannot extract a number from it; pick a resolvable "
+            f"data point (list_data_points shows resolvable: true)"
+        )
 
     op = node.get("op")
     if op not in _OPS:

@@ -15,8 +15,10 @@ SCHEMA = {
         "List registered data points. Optionally filter by category "
         "(market | on_chain | social | account | derived | ...) or source "
         "(hyperliquid | acp | dgclaw | coingecko | ...). Returns name, "
-        "category, source, description, params/returns schema, and tags for "
-        "each entry — use this to pick a name for fetch_data_point."
+        "category, source, description, params/returns schema, tags, and "
+        "resolvable (true = has a numeric value, usable as a prediction-"
+        "criteria leaf) for each entry — use this to pick a name for "
+        "fetch_data_point or register_prediction criteria."
     ),
     "parameters": {
         "type": "object",
@@ -36,7 +38,8 @@ def _list_data_points(args: Dict[str, Any]) -> str:
     return tool_result({
         "count": len(entries),
         "entries": [
-            {k: v for k, v in asdict(e).items() if k != "fn"}
+            {**{k: v for k, v in asdict(e).items() if k != "fn"},
+             "resolvable": bool(e.numeric_path)}
             for e in entries
         ],
     })

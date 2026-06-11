@@ -59,9 +59,10 @@ def coingecko_global() -> Dict[str, Any]:
     category="social",
     source="coingecko",
     description=(
-        "Top trending coins on CoinGecko (searches + views). Returns top-7 "
-        "with name, symbol, market cap rank, and score. Sentiment pulse — "
-        "meme dominance = euphoria, top-10 trending = conviction."
+        "Top trending coins on CoinGecko (searches + views), up to 10, with "
+        "name, symbol, market cap rank, and trending score (0 = hottest). "
+        "Sentiment pulse — meme dominance = euphoria, majors trending = "
+        "broad conviction."
     ),
     params_schema={},
     tags=["sentiment", "trending", "momentum"],
@@ -75,8 +76,43 @@ def coingecko_trending() -> Dict[str, Any]:
             "name": item.get("name"),
             "symbol": item.get("symbol"),
             "market_cap_rank": item.get("market_cap_rank"),
+            "score": item.get("score"),
         })
     return {"count": len(coins), "trending": coins}
+
+
+def _historical_dominance(lookback_days: float, tolerance_days: float = 2.0):
+    """BTC.D as of ~lookback_days ago, from our own data_point_snapshots.
+
+    CoinGecko's free tier has no historical-dominance endpoint, but every
+    coingecko_global / btc_dominance_velocity fetch is auto-snapshotted —
+    the desk accumulates its own history just by perceiving. Returns the
+    reading closest to the target time (within ±tolerance_days), or None
+    when history doesn't reach back that far yet.
+    """
+    import time as _time
+
+    from trading.lifecycle.db import get_db
+
+    target = _time.time() - lookback_days * 86400
+    lo = target - tolerance_days * 86400
+    hi = target + tolerance_days * 86400
+    rows = get_db().execute(
+        "SELECT ts, value_json FROM data_point_snapshots "
+        "WHERE name IN ('coingecko_global', 'btc_dominance_velocity') "
+        "AND ts BETWEEN ? AND ? ORDER BY ABS(ts - ?) LIMIT 5",
+        (lo, hi, target),
+    ).fetchall()
+    for ts, value_json in rows:
+        try:
+            value = json.loads(value_json)
+            btc_d = value.get("btc_dominance_pct")
+            if isinstance(btc_d, (int, float)):
+                return {"btc_dominance_pct": float(btc_d),
+                        "age_days": round((_time.time() - ts) / 86400, 1)}
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 @register_data_point(
@@ -84,50 +120,43 @@ def coingecko_trending() -> Dict[str, Any]:
     category="market",
     source="coingecko",
     description=(
-        "BTC dominance momentum: current BTC.D, 7d and 30d change in percentage "
-        "points (not percent change). Rising BTC.D = risk-off / flight to safety. "
-        "Falling BTC.D = risk-on / altcoin rotation. +2pp in 7d is a sharp regime "
-        "shift; -3pp in 30d signals alt season building."
+        "BTC dominance momentum: current BTC.D plus 7d and 30d change in "
+        "percentage points (computed from the desk's own snapshot history; "
+        "null with an honest note until enough history accumulates). Rising "
+        "BTC.D = risk-off / flight to safety. Falling BTC.D = risk-on / "
+        "altcoin rotation. +2pp in 7d is a sharp regime shift; -3pp in 30d "
+        "signals alt season building."
     ),
     params_schema={},
     tags=["dominance", "regime", "risk-appetite", "btc"],
+    numeric_path="btc_dominance_pct",
 )
 def btc_dominance_velocity() -> Dict[str, Any]:
-    # Need current + historical. CoinGecko /global only gives current.
-    # Use their coins/markets endpoint for BTC + total market cap, or
-    # we can use the global endpoint and approximate from BTC price vs total MC.
-    # Better: use CoinGecko /global for BTC.D snapshot + /coins/bitcoin/market_chart
-    # for historical BTC price/DOM to compute prior dominance.
-    from datetime import datetime, timedelta
-
-    # Current dominance
     req = urllib.request.Request(
         f"{BASE_URL}/global", headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=15) as resp:
         global_data = json.loads(resp.read())["data"]
     current_btc_d = float(global_data["market_cap_percentage"]["btc"])
 
-    # Historical: get BTC market cap + total market cap at 7d and 30d ago
-    # CoinGecko doesn't have a direct historical dominance endpoint on free tier.
-    # Strategy: get BTC market chart (price + market cap) and global MC chart.
-    # But the free /global doesn't have historical.
-    #
-    # Alternative: Use the /coins/bitcoin/market_chart for BTC mc history,
-    # and approximate total mc from BTC.D * historical BTC mc / current ratio.
-    # This is fragile. Better: use coingecko_global snapshots from our own
-    # lifecycle DB (data_point_snapshots).
-    #
-    # For now: return current + note that historical needs DB snapshots.
-    # The heartbeat skill can maintain this by comparing snapshots.
-
-    return {
+    out: Dict[str, Any] = {
         "btc_dominance_pct": current_btc_d,
         "eth_dominance_pct": float(global_data["market_cap_percentage"]["eth"]),
         "total_market_cap_usd": global_data["total_market_cap"]["usd"],
-        "note": (
-            "Historical BTC.D change requires lifecycle DB snapshots of "
-            "coingecko_global. The heartbeat skill maintains this. For now, "
-            "compare the current BTC.D against your WORLDVIEW.md's last noted "
-            "value to estimate velocity."
-        ),
     }
+    missing = []
+    for label, days in (("7d", 7), ("30d", 30)):
+        past = _historical_dominance(days)
+        if past is None:
+            out[f"change_{label}_pp"] = None
+            missing.append(label)
+        else:
+            out[f"change_{label}_pp"] = round(
+                current_btc_d - past["btc_dominance_pct"], 2)
+            out[f"baseline_{label}_age_days"] = past["age_days"]
+    if missing:
+        out["note"] = (
+            f"no snapshot history yet for {'/'.join(missing)} baselines — "
+            f"velocity fills in as the desk keeps perceiving (snapshots "
+            f"accumulate automatically)"
+        )
+    return out

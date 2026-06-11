@@ -40,8 +40,9 @@ logger = logging.getLogger(__name__)
     source="hyperliquid",
     description="Latest mark price for a Hyperliquid perp symbol (e.g. BTC, ETH).",
     params_schema={"symbol": {"type": "string", "required": True}},
-    returns_schema={"symbol": "string", "price": "float", "ts": "iso8601"},
+    returns_schema={"symbol": "string", "price": "float", "ts_ms": "int (unix ms)"},
     tags=["market", "price", "hyperliquid"],
+    numeric_path="price",
 )
 def hl_price(symbol: str) -> Dict[str, Any]:
     info = get_info()
@@ -136,6 +137,7 @@ def hl_orderbook(symbol: str, depth: int = 10) -> Dict[str, Any]:
         "mark_px": "float", "open_interest": "float",
     },
     tags=["market", "funding", "open_interest", "hyperliquid"],
+    numeric_path="funding",
 )
 def hl_funding_and_oi(symbol: str) -> Dict[str, Any]:
     info = get_info()
@@ -275,6 +277,7 @@ def hl_holdings(account_name: str) -> Dict[str, Any]:
         "withdrawable_usd": "float",
     },
     tags=["account", "equity", "hyperliquid"],
+    numeric_path="equity_usd",
 )
 def hl_total_equity(account_name: str) -> Dict[str, Any]:
     addr = resolve_account_address(account_name)
@@ -331,6 +334,7 @@ def equity_breakdown(addr: str) -> Dict[str, float]:
         "samples": "int",
     },
     tags=["account", "equity", "drawdown", "derived"],
+    numeric_path="drawdown_pct",
 )
 def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[str, Any]:
     from trading.lifecycle.db import get_db

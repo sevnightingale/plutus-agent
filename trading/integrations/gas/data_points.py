@@ -48,6 +48,7 @@ def _classify_gas(base_fee: float) -> Dict[str, Any]:
     ),
     params_schema={},
     tags=["gas", "ethereum", "on-chain", "network-activity", "regime"],
+    numeric_path="base_fee_gwei",
 )
 def eth_gas() -> Dict[str, Any]:
     req = urllib.request.Request(API)

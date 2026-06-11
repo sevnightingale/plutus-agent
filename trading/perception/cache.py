@@ -1,27 +1,23 @@
 """Perception state cache — `~/.plutus-agent/perception_state.json`.
 
-V2 Stratum 1.7 (per PLUTUS.md). The cache holds the most recent reading of
-every data point Plutus has fetched, with a per-DP staleness budget. All
-three tiers (plutus-main, plutus-ops, plutus-thesis) populate it
-opportunistically based on what they fetch for their own purposes:
-
-- plutus-ops refreshes its narrow set every 30 min (predictions due,
-  open-position data points, equity)
-- plutus-main reads the cache to know current state across wide perception;
-  refetches stale entries
-- plutus-thesis monitors refresh their declared `data_points_to_watch` at
-  their cadence
+The cache holds the most recent reading of every data point the desk has
+fetched, with a per-DP staleness budget. Every agent that fetches populates
+it opportunistically: plutus-ops refreshes its narrow set each 30-min tick
+(predictions due, open-position data points, equity); plutus-perception
+fills the wide panel on its runs; plutus-main's reads between spawns hit
+the cache instead of refetching.
 
 The cache is a fail-safe optimization. Staleness budgets per DP type ensure
 freshness where freshness matters (price=60s) and accept staleness where it
-doesn't (macro=4h). V1's "no caching at fetch layer" doctrine turned out to
-be wrong at 4 main beats/day — refetching every passive watchlist asset
-every beat is wasteful.
+doesn't (macro=4h). Candle-derived entries (ta_*, hl_candles, hl_cvd) scale
+their budget with the bar interval — a 1d indicator doesn't go stale in the
+5 minutes a 1m one does. `force_fresh: true` on fetch_data_point bypasses
+the cache entirely when judgment needs the live number.
 
 Reads return None on cache miss or stale entry. Writes are atomic via
 tempfile + os.replace. Last writer wins per key — acceptable because each
-tier writes only the entries it fetched in this tick, and cross-tier writes
-to the same key in the same tick are rare.
+agent writes only the entries it fetched in this tick, and cross-agent
+writes to the same key in the same tick are rare.
 """
 
 from __future__ import annotations
@@ -50,8 +46,8 @@ _PREFIX_STALENESS_BUDGETS = {
     "hl_total_equity": 60.0,
     "hl_drawdown_from_peak": 60.0,
     "hl_holdings": 60.0,
-    # OHLC and TA — 5 min (assumes 1m-15m timeframes; agent can force_fresh
-    # for higher-frequency needs).
+    # OHLC and TA — 5 min base; interval-scaled upward for slower bars
+    # (see get_staleness_budget). force_fresh bypasses entirely.
     "hl_candles": 300.0,
     "ta_": 300.0,
     # Funding + OI — change slowly.
@@ -65,7 +61,7 @@ _PREFIX_STALENESS_BUDGETS = {
     "coingecko_": 1800.0,
     "defillama_": 1800.0,
     "btc_dominance_velocity": 1800.0,
-    # Macro — pre-cached separately by plutus-macro-cache cron at 4h cadence.
+    # Macro — slow-moving context; 4h matches the perception staleness floor.
     "macro_": 14400.0,
     # Competition state — 1 hour.
     "dgclaw_": 3600.0,
@@ -86,30 +82,66 @@ def _cache_path() -> Path:
     return _hermes_home() / "perception_state.json"
 
 
+# Candle-derived data points whose staleness should scale with bar interval.
+_INTERVAL_SCALED_PREFIXES = ("ta_", "hl_candles", "hl_cvd")
+
+# Cap for interval-scaled budgets: never let a slow bar excuse data older
+# than the perception staleness floor (4h).
+_INTERVAL_BUDGET_CAP_S = 14400.0
+
+_INTERVAL_UNIT_S = {"m": 60.0, "h": 3600.0, "d": 86400.0, "w": 604800.0}
+
+
+def _interval_seconds(interval: str) -> Optional[float]:
+    """'15m'/'4h'/'1d'/'1w' → seconds; None when unparseable."""
+    if not isinstance(interval, str) or len(interval) < 2:
+        return None
+    unit = _INTERVAL_UNIT_S.get(interval[-1])
+    if unit is None:
+        return None
+    try:
+        return float(interval[:-1]) * unit
+    except ValueError:
+        return None
+
+
 def get_staleness_budget(dp_name: str) -> float:
     """Return the staleness budget in seconds for a given data point.
 
-    Lookup order: exact name match → longest matching prefix → DEFAULT_STALENESS_S.
+    Lookup order: exact name match → longest matching prefix →
+    DEFAULT_STALENESS_S. For candle-derived entries (ta_*, hl_candles,
+    hl_cvd) whose cache key carries an interval param, the budget scales
+    to half the bar interval (floored at the base budget, capped at 4h):
+    a 1d RSI is not stale after 5 minutes, a 1m one is.
 
     Args:
-        dp_name: The cache key (e.g., "hl_price:BTC") or bare data point
-            name (e.g., "hl_price"). The colon and anything after is stripped
-            for matching.
+        dp_name: The cache key (e.g., 'hl_price:{"symbol":"BTC"}') or bare
+            data point name (e.g., "hl_price").
 
     Returns:
         Staleness budget in seconds. Always positive.
     """
-    bare = dp_name.split(":", 1)[0] if ":" in dp_name else dp_name
-    # Exact match wins.
+    bare, _, params_part = dp_name.partition(":")
+    budget: Optional[float] = None
     if bare in _PREFIX_STALENESS_BUDGETS:
-        return _PREFIX_STALENESS_BUDGETS[bare]
-    # Longest matching prefix wins.
-    best: Optional[tuple[int, float]] = None
-    for prefix, budget in _PREFIX_STALENESS_BUDGETS.items():
-        if bare.startswith(prefix):
-            if best is None or len(prefix) > best[0]:
-                best = (len(prefix), budget)
-    return best[1] if best else DEFAULT_STALENESS_S
+        budget = _PREFIX_STALENESS_BUDGETS[bare]
+    else:
+        best: Optional[tuple[int, float]] = None
+        for prefix, b in _PREFIX_STALENESS_BUDGETS.items():
+            if bare.startswith(prefix):
+                if best is None or len(prefix) > best[0]:
+                    best = (len(prefix), b)
+        budget = best[1] if best else DEFAULT_STALENESS_S
+
+    if params_part and bare.startswith(_INTERVAL_SCALED_PREFIXES):
+        try:
+            interval = (json.loads(params_part) or {}).get("interval")
+        except (TypeError, json.JSONDecodeError):
+            interval = None
+        interval_s = _interval_seconds(interval) if interval else None
+        if interval_s:
+            budget = min(max(budget, interval_s / 2.0), _INTERVAL_BUDGET_CAP_S)
+    return budget
 
 
 def _canonical_key(name: str, params: Optional[Dict[str, Any]] = None) -> str:
@@ -177,7 +209,7 @@ def read_data_point(
     fetched_at = entry.get("fetched_at")
     if not isinstance(fetched_at, (int, float)):
         return None
-    budget = max_age_s if max_age_s is not None else get_staleness_budget(name)
+    budget = max_age_s if max_age_s is not None else get_staleness_budget(key)
     age = time.time() - float(fetched_at)
     if age > budget:
         return None
@@ -218,7 +250,7 @@ def write_data_point(
         "source": source,
         "fetched_at": now,
         "fetched_by_tier": fetched_by_tier or "unknown",
-        "ttl_s": float(ttl_s) if ttl_s is not None else get_staleness_budget(name),
+        "ttl_s": float(ttl_s) if ttl_s is not None else get_staleness_budget(key),
     }
     state["updated_at"] = now
     state["version"] = PERCEPTION_CACHE_VERSION

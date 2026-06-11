@@ -69,10 +69,15 @@ def calc_cvd(df: pd.DataFrame) -> Dict[str, Any]:
     total_vol = total_buy + total_sell
     buy_pct = (total_buy / total_vol * 100) if total_vol > 0 else 50.0
 
-    # Recent momentum (last 20% of bars vs first 80%)
+    # Recent momentum (last 20% of bars vs first 80%), compared as PER-BAR
+    # rates so the two windows' different lengths don't skew the comparison.
     split = int(n * 0.8)
     recent_delta = float(np.sum(delta[split:])) if split < n else 0.0
     prior_delta = float(np.sum(delta[:split])) if split > 0 else 0.0
+    n_recent = max(1, n - split)
+    n_prior = max(1, split)
+    recent_rate = recent_delta / n_recent
+    prior_rate = prior_delta / n_prior
 
     # CVD trend classification
     cvd_current = float(cvd[-1])
@@ -96,14 +101,20 @@ def calc_cvd(df: pd.DataFrame) -> Dict[str, Any]:
     else:
         trend = "strong_selling"
 
-    # Divergence detection: price up but CVD momentum down (or vice versa)
-    price_change = float(close[-1] - close[0])
+    # Divergence detection over the RECENT window only — price direction and
+    # flow direction must cover the same bars, or the label lies (a week-old
+    # downtrend would tag today's rally "bullish divergence"). Sign-based:
+    # price moving one way while net flow runs the other way IS the
+    # divergence; no multiplicative thresholds (they invert on negative
+    # deltas). A 0.1% price-move floor filters flat-market noise.
+    price_change_recent = float(close[-1] - close[split if split < n else 0])
+    price_move_floor = 0.001 * float(close[-1])
     cvd_change = cvd_current - cvd[0]
     divergence = None
-    if price_change > 0 and recent_delta < prior_delta * 0.3:
-        divergence = "bearish — price rising but buying pressure fading (distribution)"
-    elif price_change < 0 and recent_delta > prior_delta * 1.5:
-        divergence = "bullish — price falling but buying pressure accelerating (accumulation)"
+    if price_change_recent > price_move_floor and recent_rate < 0:
+        divergence = "bearish — price rising but net flow selling (distribution)"
+    elif price_change_recent < -price_move_floor and recent_rate > 0:
+        divergence = "bullish — price falling but net flow buying (accumulation/absorption)"
 
     # Pressure ratio
     pressure_ratio = buy_pct / (100 - buy_pct) if buy_pct != 100 else 999.0
@@ -121,8 +132,12 @@ def calc_cvd(df: pd.DataFrame) -> Dict[str, Any]:
         "buy_sell_ratio": round(pressure_ratio, 2),
         "recent_delta": recent_delta,
         "prior_delta": prior_delta,
+        "recent_delta_per_bar": round(recent_rate, 2),
+        "prior_delta_per_bar": round(prior_rate, 2),
+        "recent_bars": n_recent,
         "cvd_trend": trend,
         "divergence": divergence,
-        "price_change_pct": round(float((close[-1] / close[0] - 1) * 100), 2),
+        "price_change_pct_recent": round(float(price_change_recent / close[split if split < n else 0] * 100), 2),
+        "price_change_pct_window": round(float((close[-1] / close[0] - 1) * 100), 2),
         "cvd_change": cvd_change,
     })
