@@ -171,7 +171,13 @@ class AnthropicTransport(ProviderTransport):
         return self._STOP_REASON_MAP.get(raw_reason, "stop")
 
 
-# Auto-register on import
+# Declarative registration surface — _discover_transports() reads these,
+# so registration survives a re-imported (fresh) registry even when this
+# module stays cached in sys.modules. The import-time call below covers
+# direct imports of this module.
+API_MODE = "anthropic_messages"
+TRANSPORT_CLS = AnthropicTransport
+
 from harness.agent.transports import register_transport  # noqa: E402
 
-register_transport("anthropic_messages", AnthropicTransport)
+register_transport(API_MODE, TRANSPORT_CLS)

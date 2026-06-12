@@ -80,6 +80,28 @@ class TestTransportRegistry:
         # Cleanup
         _REGISTRY.pop("dummy_test", None)
 
+    def test_registry_survives_package_reimport(self):
+        """A fresh registry (package re-imported, submodules still cached)
+        must re-register every transport on the next get_transport call.
+
+        Regression: conftest sys.modules hygiene can pop the package while
+        leaving submodules cached; bare imports in discovery then no-op and
+        the worker permanently loses modes ('NoneType' has no build_kwargs).
+        """
+        import sys
+
+        import harness.agent.transports as pkg
+
+        pkg.get_transport("chat_completions")  # ensure populated
+        saved = sys.modules.pop("harness.agent.transports")
+        try:
+            import harness.agent.transports as fresh
+            assert fresh is not pkg
+            assert fresh.get_transport("codex_responses") is not None
+            assert fresh.get_transport("chat_completions") is not None
+        finally:
+            sys.modules["harness.agent.transports"] = saved
+
 
 # ── AnthropicTransport tests ────────────────────────────────────────────
 

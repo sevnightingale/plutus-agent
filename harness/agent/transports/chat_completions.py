@@ -381,7 +381,13 @@ class ChatCompletionsTransport(ProviderTransport):
         return None
 
 
-# Auto-register on import
+# Declarative registration surface — _discover_transports() reads these,
+# so registration survives a re-imported (fresh) registry even when this
+# module stays cached in sys.modules. The import-time call below covers
+# direct imports of this module.
+API_MODE = "chat_completions"
+TRANSPORT_CLS = ChatCompletionsTransport
+
 from harness.agent.transports import register_transport  # noqa: E402
 
-register_transport("chat_completions", ChatCompletionsTransport)
+register_transport(API_MODE, TRANSPORT_CLS)

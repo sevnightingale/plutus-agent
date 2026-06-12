@@ -211,7 +211,13 @@ class ResponsesApiTransport(ProviderTransport):
         return _MAP.get(raw_reason, "stop")
 
 
-# Auto-register on import
+# Declarative registration surface — _discover_transports() reads these,
+# so registration survives a re-imported (fresh) registry even when this
+# module stays cached in sys.modules. The import-time call below covers
+# direct imports of this module.
+API_MODE = "codex_responses"
+TRANSPORT_CLS = ResponsesApiTransport
+
 from harness.agent.transports import register_transport  # noqa: E402
 
-register_transport("codex_responses", ResponsesApiTransport)
+register_transport(API_MODE, TRANSPORT_CLS)
