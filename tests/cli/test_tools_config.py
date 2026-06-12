@@ -305,12 +305,12 @@ def test_save_platform_tools_does_not_preserve_hermes_telegram():
 
 
 def test_save_platform_tools_still_preserves_mcp_with_platform_default_present():
-    """MCP server names must still be preserved even when platform defaults
-    are being stripped out."""
+    """MCP server names must still be preserved even when legacy super
+    toolsets are being stripped out."""
     config = {
         "platform_toolsets": {
             "cli": [
-                "web", "terminal", "plutus-agent-cli", "my-mcp-server", "github-tools",
+                "web", "terminal", "hermes-cli", "my-mcp-server", "github-tools",
             ]
         }
     }
@@ -326,8 +326,8 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
     assert "my-mcp-server" in saved
     assert "github-tools" in saved
 
-    # Platform default stripped
-    assert "plutus-agent-cli" not in saved
+    # Legacy super toolset stripped
+    assert "hermes-cli" not in saved
 
     # User selections present
     assert "web" in saved
@@ -335,6 +335,32 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
 
     # Deselected configurable toolset removed
     assert "terminal" not in saved
+
+
+def test_save_platform_tools_preserves_desk_surface():
+    """plutus-agent-cli is the desk surface, NOT a legacy super toolset —
+    it must survive a `plutus tools` save or the gateway Plutus loses
+    spawn/perception/strategy tools on the next session."""
+    config = {"platform_toolsets": {"telegram": ["plutus-agent-cli", "web"]}}
+
+    with patch("harness.cli.tools_config.save_config"):
+        _save_platform_tools(config, "telegram", {"web"})
+
+    assert "plutus-agent-cli" in config["platform_toolsets"]["telegram"]
+
+
+def test_get_platform_tools_desk_surface_passes_through():
+    """The desk composite reaches the session on BOTH paths: explicit
+    config entry, and the platform-default fallback for fresh installs.
+
+    Regression: stripping plutus-agent-cli from read-path passthrough gave
+    the live gateway a desk-toolless Plutus (no spawn_desk_agent)."""
+    explicit = {"platform_toolsets": {"telegram": ["plutus-agent-cli"]}}
+    assert "plutus-agent-cli" in _get_platform_tools(explicit, "telegram")
+
+    fresh = {}  # no platform_toolsets at all — wizard-fresh install
+    assert "plutus-agent-cli" in _get_platform_tools(fresh, "telegram")
+    assert "plutus-agent-cli" in _get_platform_tools(fresh, "cli")
 
 
 def test_visible_providers_include_nous_subscription_when_logged_in(monkeypatch):

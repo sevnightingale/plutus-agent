@@ -109,21 +109,22 @@ PLATFORMS = {
 
 
 def _super_toolset_keys() -> Set[str]:
-    """Composite "super" toolsets that must never survive a per-platform save.
+    """LEGACY composite "super" toolsets that must never survive a save.
 
-    These resolve to (nearly) all tools, so a stale entry in
-    platform_toolsets silently re-enables every tool the user unchecked.
-    Covers the CURRENT platform defaults plus every legacy upstream
-    platform composite (hermes-*) that configs written by older versions
-    may still carry.
+    The hermes-* composites resolve to (nearly) all upstream tools, so a
+    stale entry in platform_toolsets silently re-enables every tool the
+    user unchecked. Strip them on save and exclude them from read-path
+    passthrough.
+
+    `plutus-agent-cli` is deliberately NOT in this set: it is the desk
+    surface (spawn / perception / strategy tools — none of which are
+    user-configurable keys), and it must pass through _get_platform_tools
+    intact whether it appears explicitly in config or as the platform
+    default. Stripping it gives the gateway session a desk-toolless Plutus.
     """
     from harness.toolsets import TOOLSETS
 
-    return (
-        {p["default_toolset"] for p in PLATFORMS.values()}
-        | {name for name in TOOLSETS if name.startswith("hermes-")}
-        | {"plutus-agent-cli"}
-    )
+    return {name for name in TOOLSETS if name.startswith("hermes-")}
 
 
 # ─── Tool Categories (provider-aware configuration) ──────────────────────────
