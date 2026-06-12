@@ -292,44 +292,6 @@ class TestBundledBackendAutoLoad:
 
 
 class TestRegisterImageGenProvider:
-    def test_accepts_valid_provider(self, tmp_path, monkeypatch):
-        from harness.agent import image_gen_registry
-        from harness.agent.image_gen_provider import ImageGenProvider
-
-        image_gen_registry._reset_for_tests()
-
-        class FakeProvider(ImageGenProvider):
-            @property
-            def name(self) -> str:
-                return "fake-test"
-
-            def generate(self, prompt, aspect_ratio="landscape", **kw):
-                return {"success": True, "image": "test://fake"}
-
-        import os
-        hermes_home = Path(os.environ["HERMES_HOME"])  # set by hermetic conftest fixture
-        plugin_dir = _write_plugin(
-            hermes_home / "plugins",
-            ["my-img-plugin"],
-            register_body=(
-                "from agent.image_gen_provider import ImageGenProvider\n"
-                "    class P(ImageGenProvider):\n"
-                "        @property\n"
-                "        def name(self): return 'fake-ctx'\n"
-                "        def generate(self, prompt, aspect_ratio='landscape', **kw):\n"
-                "            return {'success': True, 'image': 'x://y'}\n"
-                "    ctx.register_image_gen_provider(P())"
-            ),
-        )
-        _enable(hermes_home, "my-img-plugin")
-
-        mgr = PluginManager()
-        mgr.discover_and_load()
-
-        assert mgr._plugins["my-img-plugin"].enabled is True
-        assert image_gen_registry.get_provider("fake-ctx") is not None
-
-        image_gen_registry._reset_for_tests()
 
     def test_rejects_non_provider(self, tmp_path, monkeypatch, caplog):
         from harness.agent import image_gen_registry

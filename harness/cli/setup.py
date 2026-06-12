@@ -3246,7 +3246,7 @@ def _run_first_time_setup(config: dict, hermes_home, is_existing: bool):
     print()
     print_success("Setup complete! You're ready to go.")
     print()
-    print_info("  Start the fleet:           see DEPLOY.md (pm2 start ...)")
+    print_info("  Start the fleet:           see SETUP.md §10 (pm2 start ...)")
     print_info("  Configure all settings:    plutus setup")
     if gateway_choice != 0:
         print_info("  Connect Telegram/Discord:  plutus setup gateway")

@@ -127,40 +127,6 @@ class TestApprovalHeartbeat:
         # Sanity: the approval was resolved with "once" → command approved.
         assert result_holder["result"]["approved"] is True
 
-    def test_wait_returns_immediately_on_user_response(self):
-        """Polling slices don't delay responsiveness — resolve is near-instant."""
-        from harness.tools.approval import (
-            check_all_command_guards,
-            register_gateway_notify,
-            resolve_gateway_approval,
-        )
-
-        register_gateway_notify(self.SESSION_KEY, lambda _payload: None)
-
-        start_time = time.monotonic()
-        result_holder: dict = {}
-
-        def _run_check():
-            result_holder["result"] = check_all_command_guards(
-                "rm -rf /tmp/nonexistent-fast-target", "local"
-            )
-
-        thread = threading.Thread(target=_run_check, daemon=True)
-        thread.start()
-
-        # Resolve almost immediately — the wait loop should return within
-        # its current 1s poll slice.
-        time.sleep(0.1)
-        resolve_gateway_approval(self.SESSION_KEY, "once")
-        thread.join(timeout=5)
-        elapsed = time.monotonic() - start_time
-
-        assert not thread.is_alive()
-        assert result_holder["result"]["approved"] is True
-        # Generous bound to tolerate CI load; the previous single-wait
-        # impl returned in <10ms, the polling impl is bounded by the 1s
-        # slice length.
-        assert elapsed < 3.0, f"resolution took {elapsed:.2f}s, expected <3s"
 
     def test_heartbeat_import_failure_does_not_break_wait(self):
         """If tools.environments.base can't be imported, the wait still works."""

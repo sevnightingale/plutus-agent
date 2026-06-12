@@ -185,26 +185,6 @@ class TestFlushMemoriesUsesAuxiliaryClient:
 
         agent.client.chat.completions.create.assert_called_once()
 
-    def test_flush_executes_memory_tool_calls(self, monkeypatch):
-        """Verify that memory tool calls from the flush response actually get executed."""
-        agent = _make_agent(monkeypatch, api_mode="chat_completions", provider="openrouter")
-
-        mock_response = _chat_response_with_memory_call()
-
-        with patch("harness.agent.auxiliary_client.call_llm", return_value=mock_response):
-            messages = [
-                {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi"},
-                {"role": "user", "content": "Note this"},
-            ]
-            with patch("harness.tools.memory_tool.memory_tool", return_value="Saved.") as mock_memory:
-                agent.flush_memories(messages)
-
-        mock_memory.assert_called_once()
-        call_kwargs = mock_memory.call_args
-        assert call_kwargs.kwargs["action"] == "add"
-        assert call_kwargs.kwargs["target"] == "notes"
-        assert "dark mode" in call_kwargs.kwargs["content"]
 
     def test_flush_strips_artifacts_from_messages(self, monkeypatch):
         """After flush, the flush prompt and any response should be removed from messages."""

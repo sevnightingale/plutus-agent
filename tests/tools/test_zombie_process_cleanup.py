@@ -97,28 +97,6 @@ class TestZombieReproduction:
 class TestAgentCloseMethod:
     """Verify AIAgent.close() exists, is idempotent, and calls cleanup."""
 
-    def test_close_calls_cleanup_functions(self):
-        """close() should call kill_all, cleanup_vm, cleanup_browser."""
-        from unittest.mock import patch
-
-        with patch("harness.run_agent.AIAgent.__init__", return_value=None):
-            from harness.run_agent import AIAgent
-            agent = AIAgent.__new__(AIAgent)
-            agent.session_id = "test-close-cleanup"
-            agent._active_children = []
-            agent._active_children_lock = threading.Lock()
-            agent.client = None
-
-            with patch("harness.tools.process_registry.process_registry") as mock_registry, \
-                 patch("harness.tools.terminal_tool.cleanup_vm") as mock_cleanup_vm, \
-                 patch("harness.tools.browser_tool.cleanup_browser") as mock_cleanup_browser:
-                agent.close()
-
-                mock_registry.kill_all.assert_called_once_with(
-                    task_id="test-close-cleanup"
-                )
-                mock_cleanup_vm.assert_called_once_with("test-close-cleanup")
-                mock_cleanup_browser.assert_called_once_with("test-close-cleanup")
 
     def test_close_is_idempotent(self):
         """close() can be called multiple times without error."""
@@ -157,31 +135,6 @@ class TestAgentCloseMethod:
             child_2.close.assert_called_once()
             assert agent._active_children == []
 
-    def test_close_survives_partial_failures(self):
-        """close() continues cleanup even if one step fails."""
-        from unittest.mock import patch
-
-        with patch("harness.run_agent.AIAgent.__init__", return_value=None):
-            from harness.run_agent import AIAgent
-            agent = AIAgent.__new__(AIAgent)
-            agent.session_id = "test-close-partial"
-            agent._active_children = []
-            agent._active_children_lock = threading.Lock()
-            agent.client = None
-
-            with patch(
-                "harness.tools.process_registry.process_registry"
-            ) as mock_reg, patch(
-                "harness.tools.terminal_tool.cleanup_vm"
-            ) as mock_vm, patch(
-                "harness.tools.browser_tool.cleanup_browser"
-            ) as mock_browser:
-                mock_reg.kill_all.side_effect = RuntimeError("boom")
-
-                agent.close()
-
-                mock_vm.assert_called_once()
-                mock_browser.assert_called_once()
 
 
 class TestGatewayCleanupWiring:

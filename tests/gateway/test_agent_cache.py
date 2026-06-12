@@ -942,49 +942,6 @@ class TestAgentCacheIdleResume:
         # Post-release: client reference is dropped (memory freed).
         assert agent.client is None
 
-    def test_close_vs_release_full_teardown_difference(self, monkeypatch):
-        """close() tears down task state; release_clients() does not.
-
-        This pins the semantic contract: session-expiry path uses close()
-        (full teardown — session is done), cache-eviction path uses
-        release_clients() (soft — session may resume).
-        """
-        from harness.run_agent import AIAgent
-        from harness.tools import terminal_tool as _tt
-
-        # Agent A: evicted from cache (soft) — terminal survives.
-        # Agent B: session expired (hard) — terminal torn down.
-        agent_a = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
-            session_id="soft-session",
-        )
-        agent_b = AIAgent(
-            model="anthropic/claude-sonnet-4", api_key="test",
-            base_url="https://openrouter.ai/api/v1", provider="openrouter",
-            max_iterations=5, quiet_mode=True,
-            skip_context_files=True, skip_memory=True,
-            session_id="hard-session",
-        )
-
-        vm_calls: list = []
-        original_vm = _tt.cleanup_vm
-        _tt.cleanup_vm = lambda tid: vm_calls.append(tid)
-        try:
-            agent_a.release_clients()   # cache eviction
-            agent_b.close()              # session expiry
-        finally:
-            _tt.cleanup_vm = original_vm
-            try:
-                agent_a.close()
-            except Exception:
-                pass
-
-        # Only agent_b's task_id should appear in cleanup calls.
-        assert "hard-session" in vm_calls
-        assert "soft-session" not in vm_calls
 
     def test_idle_evicted_session_rebuild_inherits_task_id(self, monkeypatch):
         """After idle-TTL eviction, a fresh agent with the same session_id

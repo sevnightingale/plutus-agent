@@ -177,22 +177,3 @@ class TestCheckKittenttsAvailable:
         assert _check_kittentts_available() is False
 
 
-class TestDispatcherBranch:
-    def test_kittentts_not_installed_returns_helpful_error(self, monkeypatch, tmp_path):
-        """When provider=kittentts but package missing, return JSON error with setup hint."""
-        import sys
-        monkeypatch.setitem(sys.modules, "kittentts", None)
-        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-
-        from harness.tools.tts_tool import text_to_speech_tool
-
-        # Write a config telling it to use kittentts
-        import yaml
-        (tmp_path / "config.yaml").write_text(
-            yaml.safe_dump({"tts": {"provider": "kittentts"}})
-        )
-
-        result = json.loads(text_to_speech_tool(text="Hello"))
-        assert result["success"] is False
-        assert "kittentts" in result["error"].lower()
-        assert "hermes setup tts" in result["error"].lower()

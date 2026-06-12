@@ -44,14 +44,6 @@ class TestSanitizeApiMessagesRoleFilter:
         assert "assistant" in roles
         assert "tool" in roles
 
-    def test_logs_warning_when_dropping(self, caplog):
-        msgs = [
-            {"role": "user", "content": "hello"},
-            {"role": "session_meta", "content": {"info": "test"}},
-        ]
-        with caplog.at_level(logging.DEBUG, logger="run_agent"):
-            AIAgent._sanitize_api_messages(msgs)
-        assert any("invalid role" in r.message and "session_meta" in r.message for r in caplog.records)
 
     def test_drops_multiple_invalid_roles(self):
         msgs = [

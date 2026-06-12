@@ -348,8 +348,9 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
             conn.close()
             raise RuntimeError(
                 f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
-                "lifecycle.db v2 is fresh-create only — the rebuild does not migrate. "
-                "Back up and remove the old file (see DEPLOY.md), then rerun."
+                "lifecycle.db v2 is fresh-create only — there is no migration. "
+                "Back up and remove the old file (see SETUP.md, 'Redeploying "
+                "a fresh runtime'), then rerun."
             )
         return conn
 

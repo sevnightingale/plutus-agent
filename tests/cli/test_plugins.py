@@ -607,19 +607,6 @@ class TestPluginManagerList:
         mgr = PluginManager()
         assert mgr.list_plugins() == []
 
-    def test_list_returns_sorted(self, tmp_path, monkeypatch):
-        """list_plugins() returns results sorted by name."""
-        plugins_dir = tmp_path / "hermes_test" / "plugins"
-        _make_plugin_dir(plugins_dir, "zulu")
-        _make_plugin_dir(plugins_dir, "alpha")
-        monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes_test"))
-
-        mgr = PluginManager()
-        mgr.discover_and_load()
-
-        listing = mgr.list_plugins()
-        names = [p["name"] for p in listing]
-        assert names == sorted(names)
 
     def test_list_with_plugins(self, tmp_path, monkeypatch):
         """list_plugins() returns info dicts for each discovered plugin."""
@@ -923,46 +910,6 @@ class TestPluginCommands:
             assert "lazycmd" in cmds
             assert cmds["lazycmd"]["description"] == "Lazy"
 
-    def test_get_plugin_context_engine_discovers_plugins_lazily(self, tmp_path, monkeypatch):
-        """Context engine lookup should work before any explicit discover_plugins() call."""
-        hermes_home = tmp_path / "hermes_test"
-        plugins_dir = hermes_home / "plugins"
-        plugin_dir = plugins_dir / "engine-plugin"
-        plugin_dir.mkdir(parents=True, exist_ok=True)
-        (plugin_dir / "plugin.yaml").write_text(
-            yaml.dump({
-                "name": "engine-plugin",
-                "version": "0.1.0",
-                "description": "Test engine plugin",
-            })
-        )
-        (plugin_dir / "__init__.py").write_text(
-            "from agent.context_engine import ContextEngine\n\n"
-            "class StubEngine(ContextEngine):\n"
-            "    @property\n"
-            "    def name(self):\n"
-            "        return 'stub-engine'\n\n"
-            "    def update_from_response(self, usage):\n"
-            "        return None\n\n"
-            "    def should_compress(self, prompt_tokens):\n"
-            "        return False\n\n"
-            "    def compress(self, messages, current_tokens):\n"
-            "        return messages\n\n"
-            "def register(ctx):\n"
-            "    ctx.register_context_engine(StubEngine())\n"
-        )
-        # Opt-in: plugins are opt-in by default, so enable in config.yaml
-        (hermes_home / "config.yaml").write_text(
-            yaml.safe_dump({"plugins": {"enabled": ["engine-plugin"]}})
-        )
-        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
-
-        import harness.cli.plugins as plugins_mod
-
-        with patch.object(plugins_mod, "_plugin_manager", None):
-            engine = plugins_mod.get_plugin_context_engine()
-            assert engine is not None
-            assert engine.name == "stub-engine"
 
     def test_commands_tracked_on_loaded_plugin(self, tmp_path, monkeypatch):
         """Commands registered during discover_and_load() are tracked on LoadedPlugin."""

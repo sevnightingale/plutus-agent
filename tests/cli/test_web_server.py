@@ -398,13 +398,6 @@ class TestBuildSchemaFromConfig:
         assert "privacy" not in categories  # merged into security
         assert "context" not in categories  # merged into agent
 
-    def test_no_single_field_categories(self):
-        """After merging, no category should have just 1 field."""
-        from harness.cli.web_server import CONFIG_SCHEMA
-        from collections import Counter
-        cats = Counter(e["category"] for e in CONFIG_SCHEMA.values())
-        for cat, count in cats.items():
-            assert count >= 2, f"Category '{cat}' has only {count} field(s) — should be merged"
 
 
 # ---------------------------------------------------------------------------

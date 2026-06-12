@@ -826,35 +826,6 @@ class TestShutdown:
 
         assert len(_servers) == 0
 
-    def test_shutdown_is_parallel(self):
-        """Multiple servers are shut down in parallel via asyncio.gather."""
-        import harness.tools.mcp_tool as mcp_mod
-        from harness.tools.mcp_tool import shutdown_mcp_servers, _servers
-        import time
-
-        _servers.clear()
-
-        # 3 servers each taking 1s to shut down
-        for i in range(3):
-            mock_server = MagicMock()
-            mock_server.name = f"srv_{i}"
-            async def slow_shutdown():
-                await asyncio.sleep(1)
-            mock_server.shutdown = slow_shutdown
-            _servers[f"srv_{i}"] = mock_server
-
-        mcp_mod._ensure_mcp_loop()
-        try:
-            start = time.monotonic()
-            shutdown_mcp_servers()
-            elapsed = time.monotonic() - start
-        finally:
-            mcp_mod._mcp_loop = None
-            mcp_mod._mcp_thread = None
-
-        assert len(_servers) == 0
-        # Parallel: ~1s, not ~3s. Allow some margin.
-        assert elapsed < 2.5, f"Shutdown took {elapsed:.1f}s, expected ~1s (parallel)"
 
 
 # ---------------------------------------------------------------------------

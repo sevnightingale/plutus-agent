@@ -108,6 +108,24 @@ PLATFORMS = {
 }
 
 
+def _super_toolset_keys() -> Set[str]:
+    """Composite "super" toolsets that must never survive a per-platform save.
+
+    These resolve to (nearly) all tools, so a stale entry in
+    platform_toolsets silently re-enables every tool the user unchecked.
+    Covers the CURRENT platform defaults plus every legacy upstream
+    platform composite (hermes-*) that configs written by older versions
+    may still carry.
+    """
+    from harness.toolsets import TOOLSETS
+
+    return (
+        {p["default_toolset"] for p in PLATFORMS.values()}
+        | {name for name in TOOLSETS if name.startswith("hermes-")}
+        | {"plutus-agent-cli"}
+    )
+
+
 # ─── Tool Categories (provider-aware configuration) ──────────────────────────
 # Maps toolset keys to their provider options. When a toolset is newly enabled,
 # we use this to show provider selection and prompt for the right API keys.
@@ -546,7 +564,7 @@ def _get_platform_tools(
 
     # Preserve any explicit non-configurable toolset entries (for example,
     # custom toolsets or MCP server names saved in platform_toolsets).
-    platform_default_keys = {p["default_toolset"] for p in PLATFORMS.values()}
+    platform_default_keys = _super_toolset_keys()
     explicit_passthrough = {
         ts
         for ts in toolset_names
@@ -600,7 +618,7 @@ def _save_platform_tools(config: dict, platform: str, enabled_toolset_keys: Set[
     # Also exclude platform default toolsets (hermes-cli, hermes-telegram, etc.)
     # These are "super" toolsets that resolve to ALL tools, so preserving them
     # would silently override the user's unchecked selections on the next read.
-    platform_default_keys = {p["default_toolset"] for p in PLATFORMS.values()}
+    platform_default_keys = _super_toolset_keys()
 
     # Get existing toolsets for this platform
     existing_toolsets = config.get("platform_toolsets", {}).get(platform, [])

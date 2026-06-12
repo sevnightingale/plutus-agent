@@ -2,9 +2,9 @@
 
 The complete path for a brand-new operator: no repo, no accounts, no wallets,
 nothing. Each step says what it creates and which credential falls out of it;
-the wizard at the end collects those credentials. **Migrating an existing
-runtime instead? Use `DEPLOY.md` — same wizard, but every credential already
-exists in your backup.**
+the wizard at the end collects those credentials. **Redeploying with
+credentials you already have? Jump to [Redeploying a fresh runtime](#redeploying-a-fresh-runtime)
+— same wizard, you just paste instead of provision.**
 
 ## The pieces (and why each exists)
 
@@ -186,10 +186,64 @@ pm2 start ecosystem.config.js --only plutus-watchers
 pm2 save
 ```
 
-Then run the first-hour smoke checklist in `DEPLOY.md` §6. Expect **zero
-trades** at first: no strategy has graduated yet, so predictions-only is
-correct behavior, not a fault. Pause execution any time with
-`touch ~/.plutus-agent/HALT`.
+## 11. First-hour smoke checklist
+
+- [ ] Message Plutus (Telegram or `plutus`) → coherent reply that cites its
+      doctrine (PLUTUS.md).
+- [ ] `pm2 logs plutus-gateway --nostream --lines 40` — no errors; the
+      runtime bootstrap logged the blackboard files it created.
+- [ ] One ops tick lands within 30 min (`plutus-agent cron list` shows
+      `plutus-ops-tick`; `~/.plutus-agent/ledger/<today>/` gains a
+      `cron-…-plutus-ops-…` transcript).
+- [ ] `~/.plutus-agent/PERCEPTION.md` fills after you ask Plutus to refresh
+      perception once.
+- [ ] **Zero trades** — no strategy has graduated yet, so predictions-only
+      is CORRECT behavior, not a fault.
+
+Pause execution any time with `touch ~/.plutus-agent/HALT`; resume with
+`rm ~/.plutus-agent/HALT`.
+
+**What the desk does from here:** ops ticks every 30 minutes (resolve
+predictions / evaluate positions / watchdog); main wakes on the queue
+(watchers, escalations, your messages) and orchestrates perception → regime
+→ predict on its own judgment; predict files strategy hypotheses and
+registers machine-resolvable predictions; reflect graduates a strategy to
+ACTIVE only past the statistical bar (≥15 resolved predictions AND ≥2/3 win
+rate). The first trade happens when a strategy earns it — patience is
+structural, expect weeks.
+
+## Redeploying a fresh runtime
+
+For starting over on a box that already ran Plutus (the calibration record
+resets; your credentials and on-chain state survive).
+
+**Back up first — non-negotiable.** `~/.plutus-agent/.env` holds
+`HL_API_WALLET_KEY`, the on-chain-registered trade signer. Wipe it without
+a backup and every trade fails silently until you re-register a new API
+wallet via `approveAgent` (see TRADING.md's recovery runbook).
+
+```bash
+cp -a ~/.plutus-agent ~/plutus-runtime-backup-$(date +%Y%m%d)
+pm2 delete plutus-gateway plutus-watchers
+rm -rf ~/.plutus-agent
+cd ~/plutus-agent && git pull && uv pip install -e '.[all]' --python .venv/bin/python
+.venv/bin/plutus-agent setup        # paste wallet/provider keys from the backup .env
+```
+
+Notes for the re-run:
+
+- **Do NOT re-run the Virtuals/ACP provisioning** (steps 3–6 above). The
+  ACP agent lives on Virtuals' side, the `approveAgent` registration is
+  on-chain, and the tooling (`~/.config/acp-cli`, `~/dgclaw-skill`) sits
+  outside the wipe path — all of it survives. Re-running `add-api-wallet.ts`
+  would register a NEW API wallet and invalidate your backed-up key.
+- Optionally restore identity continuity from the backup: `memories/`
+  (copy as-is) and `auth.json` (skips provider re-auth). Do not copy back
+  the old `config.yaml`, `lifecycle.db`, or `strategies/` — the desk earns
+  its track record fresh, and stale market levels in old strategy files
+  are worse than empty ones.
+- Finish with `scripts/check_trade_readiness.py` (§9) and the smoke
+  checklist (§11).
 
 ---
 

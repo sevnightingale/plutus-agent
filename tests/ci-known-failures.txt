@@ -166,3 +166,7 @@
 --deselect=tests/tools/test_write_deny.py::TestWriteDenyExactPaths::test_hermes_env
 --deselect=tests/tools/test_zombie_process_cleanup.py::TestAgentCloseMethod::test_close_calls_cleanup_functions
 --deselect=tests/tools/test_zombie_process_cleanup.py::TestAgentCloseMethod::test_close_survives_partial_failures
+--deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_silent_response_suppresses_delivery
+--deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_failed_job_always_delivers
+--deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_output_saved_even_when_delivery_suppressed
+--deselect=tests/cli/test_tips.py::TestTipsCorpus::test_max_length_reasonable

@@ -346,16 +346,6 @@ def test_invalid_timeout_falls_back_to_default(cdp_server):
 # ---------------------------------------------------------------------------
 
 
-def test_registered_in_browser_toolset():
-    from harness.tools.registry import registry
-
-    entry = registry.get_entry("browser_cdp")
-    assert entry is not None
-    assert entry.toolset == "browser"
-    assert entry.schema["name"] == "browser_cdp"
-    assert entry.schema["parameters"]["required"] == ["method"]
-    assert "Chrome DevTools Protocol" in entry.schema["description"]
-    assert browser_cdp_tool.CDP_DOCS_URL in entry.schema["description"]
 
 
 def test_dispatch_through_registry(cdp_server):

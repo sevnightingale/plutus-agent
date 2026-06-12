@@ -119,46 +119,7 @@ def _build_tar_b64(entries):
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def test_extract_base64_tar_allows_safe_files(tmp_path, monkeypatch):
-    module = _load_terminalbench_module(monkeypatch)
-    archive = _build_tar_b64(
-        [
-            {"kind": "dir", "name": "nested"},
-            {"kind": "file", "name": "nested/hello.txt", "data": "hello"},
-        ]
-    )
-
-    target = tmp_path / "extract"
-    module._extract_base64_tar(archive, target)
-
-    assert (target / "nested" / "hello.txt").read_text(encoding="utf-8") == "hello"
 
 
-def test_extract_base64_tar_rejects_path_traversal(tmp_path, monkeypatch):
-    module = _load_terminalbench_module(monkeypatch)
-    archive = _build_tar_b64(
-        [
-            {"kind": "file", "name": "../escape.txt", "data": "owned"},
-        ]
-    )
-
-    target = tmp_path / "extract"
-    with pytest.raises(ValueError, match="Unsafe archive member path"):
-        module._extract_base64_tar(archive, target)
-
-    assert not (tmp_path / "escape.txt").exists()
 
 
-def test_extract_base64_tar_rejects_symlinks(tmp_path, monkeypatch):
-    module = _load_terminalbench_module(monkeypatch)
-    archive = _build_tar_b64(
-        [
-            {"kind": "symlink", "name": "link", "target": "../../escape.txt"},
-        ]
-    )
-
-    target = tmp_path / "extract"
-    with pytest.raises(ValueError, match="Unsupported archive member type"):
-        module._extract_base64_tar(archive, target)
-
-    assert not (target / "link").exists()

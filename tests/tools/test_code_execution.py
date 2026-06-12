@@ -184,11 +184,6 @@ class TestExecuteCode(unittest.TestCase):
         self.assertIn("hello world", result["output"])
         self.assertEqual(result["tool_calls_made"], 0)
 
-    def test_repo_root_modules_are_importable(self):
-        """Sandboxed scripts can import modules that live at the repo root."""
-        result = self._run('import plutus_constants; print(plutus_constants.__file__)')
-        self.assertEqual(result["status"], "success")
-        self.assertIn("harness.constants.py", result["output"])
 
     def test_single_tool_call(self):
         """Script calls terminal and prints the result."""

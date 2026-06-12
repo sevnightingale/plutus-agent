@@ -310,7 +310,7 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
     config = {
         "platform_toolsets": {
             "cli": [
-                "web", "terminal", "hermes-cli", "my-mcp-server", "github-tools",
+                "web", "terminal", "plutus-agent-cli", "my-mcp-server", "github-tools",
             ]
         }
     }
@@ -327,7 +327,7 @@ def test_save_platform_tools_still_preserves_mcp_with_platform_default_present()
     assert "github-tools" in saved
 
     # Platform default stripped
-    assert "hermes-cli" not in saved
+    assert "plutus-agent-cli" not in saved
 
     # User selections present
     assert "web" in saved

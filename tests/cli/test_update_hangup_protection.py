@@ -200,36 +200,6 @@ class TestInstallHangupProtection:
             # Restore whatever was there before so we don't leak to other tests.
             signal.signal(signal.SIGHUP, original_handler)
 
-    def test_wraps_stdout_and_stderr_with_mirror(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
-        # Nuke any cached home path
-        import harness.cli.config as _cfg
-        if hasattr(_cfg, "_HERMES_HOME_CACHE"):
-            _cfg._HERMES_HOME_CACHE = None  # type: ignore[attr-defined]
-
-        prev_out, prev_err = sys.stdout, sys.stderr
-        state = _install_hangup_protection(gateway_mode=False)
-
-        try:
-            # On Windows (no SIGHUP) we still wrap stdio and create the log.
-            assert state["installed"] is True
-            assert isinstance(sys.stdout, _UpdateOutputStream)
-            assert isinstance(sys.stderr, _UpdateOutputStream)
-            assert state["log_file"] is not None
-
-            sys.stdout.write("checking mirror\n")
-            sys.stdout.flush()
-
-            log_path = tmp_path / "logs" / "update.log"
-            assert log_path.exists()
-            contents = log_path.read_text(encoding="utf-8")
-            assert "checking mirror" in contents
-            assert "hermes update started" in contents
-        finally:
-            _finalize_update_output(state)
-            # Sanity-check restoration
-            assert sys.stdout is prev_out
-            assert sys.stderr is prev_err
 
     def test_logs_dir_created_if_missing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))

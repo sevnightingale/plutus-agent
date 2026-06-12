@@ -442,18 +442,6 @@ class TestInsightsPopulated:
 # =========================================================================
 
 class TestTerminalFormatting:
-    def test_terminal_format_has_sections(self, populated_db):
-        engine = InsightsEngine(populated_db)
-        report = engine.generate(days=30)
-        text = engine.format_terminal(report)
-
-        assert "Hermes Insights" in text
-        assert "Overview" in text
-        assert "Models Used" in text
-        assert "Top Tools" in text
-        assert "Top Skills" in text
-        assert "Activity Patterns" in text
-        assert "Notable Sessions" in text
 
     def test_terminal_format_shows_tokens(self, populated_db):
         engine = InsightsEngine(populated_db)

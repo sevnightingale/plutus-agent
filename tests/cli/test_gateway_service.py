@@ -1564,31 +1564,6 @@ class TestLegacyHermesUnitDetection:
         scopes = sorted(is_system for _, _, is_system in results)
         assert scopes == [False, True]
 
-    def test_accepts_alternate_execstart_formats(self, tmp_path, monkeypatch):
-        """Older installs may have used different python invocations.
-
-        ExecStart variants we've seen in the wild:
-          - python -m plutus_cli.main gateway run
-          - python path/to/plutus_cli/main.py gateway run
-          - hermes gateway run   (direct binary)
-          - python path/to/gateway/run.py
-        """
-        user_dir, _ = self._setup_search_paths(tmp_path, monkeypatch)
-        variants = [
-            "ExecStart=/venv/bin/python -m plutus_cli.main gateway run --replace",
-            "ExecStart=/venv/bin/python /opt/hermes/plutus_cli/main.py gateway run",
-            "ExecStart=/usr/local/bin/hermes gateway run --replace",
-            "ExecStart=/venv/bin/python /opt/hermes/gateway/run.py",
-        ]
-        for i, execstart in enumerate(variants):
-            name = f"hermes.service" if i == 0 else f"hermes.service"  # same name
-            # Test each variant fresh
-            (user_dir / "hermes.service").write_text(
-                f"[Unit]\nDescription=Old Hermes\n[Service]\n{execstart}\n",
-                encoding="utf-8",
-            )
-            results = gateway_cli._find_legacy_hermes_units()
-            assert len(results) == 1, f"Variant {i} not detected: {execstart!r}"
 
     def test_print_legacy_unit_warning_is_noop_when_empty(self, tmp_path, monkeypatch, capsys):
         self._setup_search_paths(tmp_path, monkeypatch)

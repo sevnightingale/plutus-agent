@@ -46,7 +46,8 @@ ln -sf "$(pwd)/.venv/bin/plutus" ~/.local/bin/plutus
 # Run setup wizard (configure model, API keys, agent identity)
 plutus setup
 
-# Confirm the trade path is live
+# Confirm the trade path is live (skip if you set up without wallets —
+# the desk runs research-only: predictions and analysis, no trades)
 python scripts/check_trade_readiness.py
 
 # Start chatting
@@ -85,13 +86,12 @@ Both are optional — the default install does Hyperliquid trading without them.
 ## Documentation
 
 - `ARCHITECTURE.md` — **the master doc**: the seven-agent desk, blackboards, the loop, the strategy lifecycle, plumbing
-- `SETUP.md` — from absolute zero to a running desk (accounts, wallets, wizard, fleet)
-- `DEPLOY.md` — redeploying a fresh runtime when you already have credentials
+- `SETUP.md` — from absolute zero to a running desk (accounts, wallets, wizard, fleet) — includes the redeploy/start-over runbook
 - `agents/README.md` — the desk: seven agents, blackboards, spawn recipes
 - `TRADING.md` — **canonical** trade-execution mechanics (wallets, on-chain registration, the silent-failure mode, recovery)
 - `LINEAGE.md` — upstream fork point + attribution
 - `SECURITY.md` — how to report vulnerabilities
-- `docs/legacy/` — pre-rebuild docs (developer guide, contributing) — stale during the rebuild
+- `docs/legacy/` — pre-rebuild upstream docs (developer guide, contributing) — historical reference only
 
 ## License
 

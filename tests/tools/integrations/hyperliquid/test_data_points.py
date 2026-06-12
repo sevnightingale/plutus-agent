@@ -173,11 +173,23 @@ def test_hl_universe_live():
 # ─── Account-state data points need ACP_AGENT_WALLET ──────────────────────
 
 
+def _force_no_registered_address(monkeypatch):
+    """Make resolve_account_address see neither a registry address nor env.
+
+    Another test on the same worker may have registered hl_trading WITH an
+    address (the account registry is module-level state) — clearing only the
+    env var isn't enough to exercise the loud-fail path.
+    """
+    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
+    monkeypatch.setattr(
+        _client, "lookup_account",
+        lambda name: (_ for _ in ()).throw(KeyError(name)),
+    )
+
+
 def test_hl_holdings_loud_fails_without_address(monkeypatch):
     _import_integration()
-    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
-    # account_registry's hl_trading registered with empty address; resolve
-    # will then read env, fail.
+    _force_no_registered_address(monkeypatch)
     from trading.integrations.hyperliquid.data_points import hl_holdings
     with pytest.raises(_client.HLConfigError):
         hl_holdings("hl_trading")
@@ -185,7 +197,7 @@ def test_hl_holdings_loud_fails_without_address(monkeypatch):
 
 def test_hl_total_equity_loud_fails_without_address(monkeypatch):
     _import_integration()
-    monkeypatch.delenv("ACP_AGENT_WALLET", raising=False)
+    _force_no_registered_address(monkeypatch)
     from trading.integrations.hyperliquid.data_points import hl_total_equity
     with pytest.raises(_client.HLConfigError):
         hl_total_equity("hl_trading")

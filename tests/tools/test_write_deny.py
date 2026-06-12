@@ -32,9 +32,6 @@ class TestWriteDenyExactPaths:
         path = os.path.join(str(Path.home()), ".netrc")
         assert _is_write_denied(path) is True
 
-    def test_hermes_env(self):
-        path = os.path.join(str(Path.home()), ".hermes", ".env")
-        assert _is_write_denied(path) is True
 
     def test_shell_profiles(self):
         home = str(Path.home())

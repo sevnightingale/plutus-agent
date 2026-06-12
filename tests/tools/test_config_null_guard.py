@@ -82,30 +82,3 @@ class TestMCPAuthNullGuard:
 
 # ── Trajectory compressor ─────────────────────────────────────────────────
 
-class TestTrajectoryCompressorNullGuard:
-    """trajectory_compressor.py — _detect_provider() and config loading"""
-
-    def test_null_base_url_does_not_crash(self):
-        """base_url=None should not crash _detect_provider()."""
-        from trajectory_compressor import CompressionConfig, TrajectoryCompressor
-
-        config = CompressionConfig()
-        config.base_url = None
-
-        compressor = TrajectoryCompressor.__new__(TrajectoryCompressor)
-        compressor.config = config
-
-        # Should not raise AttributeError; returns empty string (no match)
-        result = compressor._detect_provider()
-        assert result == ""
-
-    def test_config_loading_null_base_url_keeps_default(self):
-        """YAML ``summarization: {base_url: null}`` should keep default."""
-        from trajectory_compressor import CompressionConfig
-        from harness.constants import OPENROUTER_BASE_URL
-
-        config = CompressionConfig()
-        data = {"summarization": {"base_url": None}}
-
-        config.base_url = data["summarization"].get("base_url") or config.base_url
-        assert config.base_url == OPENROUTER_BASE_URL

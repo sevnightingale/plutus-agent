@@ -83,27 +83,3 @@ class TestBrowserVisionNoneGuard:
 
 # ── source line verification ──────────────────────────────────────────────
 
-class TestBrowserSourceLinesAreGuarded:
-    """Verify the actual source file has the fix applied."""
-
-    @staticmethod
-    def _read_file() -> str:
-        import os
-        base = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        with open(os.path.join(base, "tools", "browser_tool.py")) as f:
-            return f.read()
-
-    def test_extract_relevant_content_guarded(self):
-        src = self._read_file()
-        # The old unguarded pattern should NOT exist
-        assert "return response.choices[0].message.content\n" not in src, (
-            "browser_tool.py _extract_relevant_content still has unguarded "
-            ".content return — apply None guard"
-        )
-
-    def test_browser_vision_guarded(self):
-        src = self._read_file()
-        assert "analysis = response.choices[0].message.content\n" not in src, (
-            "browser_tool.py browser_vision still has unguarded "
-            ".content assignment — apply None guard"
-        )

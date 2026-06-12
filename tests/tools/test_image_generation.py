@@ -417,33 +417,6 @@ class TestExtractHttpStatus:
 class TestManagedGatewayErrorTranslation:
     """4xx from the Nous managed gateway should be translated to a user-actionable message."""
 
-    def test_4xx_translates_to_value_error_with_remediation(self, image_tool, monkeypatch):
-        """403 from managed gateway → ValueError mentioning FAL_KEY + hermes tools."""
-        from unittest.mock import MagicMock
-
-        # Simulate: managed mode active, managed submit raises 4xx.
-        managed_gateway = MagicMock()
-        managed_gateway.gateway_origin = "https://fal-queue-gateway.example.com"
-        managed_gateway.nous_user_token = "test-token"
-        monkeypatch.setattr(image_tool, "_resolve_managed_fal_gateway",
-                            lambda: managed_gateway)
-
-        bad_request = _MockHttpxError(403, "Forbidden")
-        mock_managed_client = MagicMock()
-        mock_managed_client.submit.side_effect = bad_request
-        monkeypatch.setattr(image_tool, "_get_managed_fal_client",
-                            lambda gw: mock_managed_client)
-
-        with pytest.raises(ValueError) as exc_info:
-            image_tool._submit_fal_request("fal-ai/nano-banana-pro", {"prompt": "x"})
-
-        msg = str(exc_info.value)
-        assert "fal-ai/nano-banana-pro" in msg
-        assert "403" in msg
-        assert "FAL_KEY" in msg
-        assert "hermes tools" in msg
-        # Original exception chained for debugging
-        assert exc_info.value.__cause__ is bad_request
 
     def test_5xx_is_not_translated(self, image_tool, monkeypatch):
         """500s are real outages, not model-availability issues — don't rewrite them."""

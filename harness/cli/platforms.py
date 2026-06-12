@@ -18,12 +18,16 @@ class PlatformInfo(NamedTuple):
 
 
 # Ordered so that TUI menus are deterministic.
+# plutus-agent-cli is the desk surface — the gateway session IS plutus-main,
+# so every operator-facing platform defaults to it (a config.yaml
+# `platform_toolsets` entry still overrides per platform). api_server keeps
+# its curated upstream set (deliberately restricted — no interactive tools).
 PLATFORMS: OrderedDict[str, PlatformInfo] = OrderedDict([
-    ("cli",            PlatformInfo(label="🖥️  CLI",            default_toolset="hermes-cli")),
-    ("telegram",       PlatformInfo(label="📱 Telegram",        default_toolset="hermes-telegram")),
-    ("discord",        PlatformInfo(label="💬 Discord",         default_toolset="hermes-discord")),
-    ("slack",          PlatformInfo(label="💼 Slack",           default_toolset="hermes-slack")),
-    ("webhook",        PlatformInfo(label="🔗 Webhook",         default_toolset="hermes-webhook")),
+    ("cli",            PlatformInfo(label="🖥️  CLI",            default_toolset="plutus-agent-cli")),
+    ("telegram",       PlatformInfo(label="📱 Telegram",        default_toolset="plutus-agent-cli")),
+    ("discord",        PlatformInfo(label="💬 Discord",         default_toolset="plutus-agent-cli")),
+    ("slack",          PlatformInfo(label="💼 Slack",           default_toolset="plutus-agent-cli")),
+    ("webhook",        PlatformInfo(label="🔗 Webhook",         default_toolset="plutus-agent-cli")),
     ("api_server",     PlatformInfo(label="🌐 API Server",      default_toolset="hermes-api-server")),
 ])
 

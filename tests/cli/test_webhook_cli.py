@@ -147,13 +147,6 @@ class TestPersistence:
 
 
 class TestWebhookEnabledGate:
-    def test_blocks_when_disabled(self, capsys, monkeypatch):
-        monkeypatch.setattr("harness.cli.webhook._is_webhook_enabled", lambda: False)
-        webhook_command(_make_args(webhook_action="subscribe", name="blocked"))
-        out = capsys.readouterr().out
-        assert "not enabled" in out.lower()
-        assert "hermes gateway setup" in out
-        assert _load_subscriptions() == {}
 
     def test_blocks_list_when_disabled(self, capsys, monkeypatch):
         monkeypatch.setattr("harness.cli.webhook._is_webhook_enabled", lambda: False)

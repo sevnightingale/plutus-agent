@@ -193,9 +193,18 @@ class TestToolsetConsistency:
             assert "includes" in ts, f"{name} missing includes"
 
     def test_all_includes_reference_existing_toolsets(self):
+        # Includes may name a static TOOLSETS entry OR a registry-backed
+        # toolset (spawn, record, lifecycle-read, ... register dynamically
+        # via registry.register(toolset=...)); both resolve via get_toolset.
+        from harness.tools.registry import discover_builtin_tools
+        from harness.toolsets import get_toolset
+
+        discover_builtin_tools()
         for name, ts in TOOLSETS.items():
             for inc in ts["includes"]:
-                assert inc in TOOLSETS, f"{name} includes unknown toolset '{inc}'"
+                assert inc in TOOLSETS or get_toolset(inc) is not None, (
+                    f"{name} includes unknown toolset '{inc}'"
+                )
 
     def test_hermes_platforms_share_core_tools(self):
         """All hermes-* platform toolsets share the same core tools.
