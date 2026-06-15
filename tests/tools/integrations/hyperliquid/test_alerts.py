@@ -132,3 +132,72 @@ def test_alerts_no_address_returns_empty(monkeypatch):
     fired, new_state = alerts.poll_hl_position_status_change(state={"positions": {}})
     assert fired == []
     assert new_state == {"positions": {}}
+
+
+# ── prediction-resolution alert (event-driven resolver) ──────────────────────
+
+def _zone_draft(**over):
+    import time
+    from trading.lifecycle import write
+    base = dict(
+        claim_md="zone", horizon_ts=time.time() + 3600, entry_ref_price=100_000.0,
+        near_edge_pct=5.0, far_edge_pct=10.0, conviction=0.7,
+        agent="plutus-predict", symbol="BTC", strategy_name=None, kind="adhoc",
+    )
+    base.update(over)
+    return write.PredictionDraft(**base)
+
+
+def test_prediction_resolution_paper_is_silent(monkeypatch):
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle import write, queries
+    from trading.integrations.hyperliquid import outcomes
+
+    conn = get_db()
+    pid = write.record_prediction(conn, _zone_draft())  # near +5% of 100k = 105k
+    info = MagicMock()
+    info.all_mids.return_value = {"BTC": "106000"}  # above the near edge
+    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(outcomes, "path_stats",
+                        lambda *a, **k: {"mfe_pct": 6.0, "mae_pct": -1.0})
+
+    fired, _ = alerts.poll_hl_prediction_resolution(state={})
+    assert fired == []  # routine paper resolution does not wake main
+    assert queries.prediction(conn, pid)["outcome"] == "correct"
+
+
+def test_prediction_resolution_funded_wakes(monkeypatch):
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle import write
+    from trading.integrations.hyperliquid import outcomes
+
+    conn = get_db()
+    pid = write.record_prediction(conn, _zone_draft())
+    tid = write.record_thesis(conn, prediction_id=pid, symbol="BTC",
+                              text_md="t", agent="plutus-trade")
+    did = write.record_decision(conn, thesis_id=tid, action="open_long",
+                                agent="plutus-main")
+    trid = write.record_trade(conn, decision_id=did, venue="hyperliquid",
+                              symbol="BTC", side="long", size=0.001, fill_price=100_000.0)
+    write.open_position(conn, venue="hyperliquid", symbol="BTC", side="long",
+                        size=0.001, opening_trade_id=trid)
+
+    info = MagicMock()
+    info.all_mids.return_value = {"BTC": "106000"}
+    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(outcomes, "path_stats", lambda *a, **k: {"mfe_pct": 6.0})
+
+    fired, _ = alerts.poll_hl_prediction_resolution(state={})
+    assert len(fired) == 1
+    assert fired[0]["funded"] and fired[0]["prediction_id"] == pid
+    assert fired[0]["kind"] == "correct" and fired[0]["mode"] == "touch"
+
+
+def test_prediction_resolution_no_open_skips_network(monkeypatch):
+    from trading.lifecycle.db import get_db
+    get_db()  # fresh, no predictions
+    info = MagicMock()
+    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    fired, _ = alerts.poll_hl_prediction_resolution(state={})
+    assert fired == []
+    info.all_mids.assert_not_called()  # no open predictions → no price fetch

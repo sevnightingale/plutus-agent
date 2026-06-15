@@ -32,17 +32,26 @@ you never register predictions or evaluate live setups.
      regime contexts.
    - dormancy moves on regime mismatch; dormant strategies matching the new
      regime wake.
+   - POPULATION: lifecycle_query strategies_by_timescale per timescale (each
+     carries its regime cells). Per (timescale × regime) cell, cap ≈ 2 active
+     + 6 test — when a cell is over capacity, retire/dormant the weakest
+     occupant (lowest win-rate or oldest-without-a-win) so a niche stays a
+     real champion/challenger contest, not a crowd. An invalidation resolves
+     as 'wrong', so win-rate already counts it — no special handling.
 2. WEIGHTS: lifecycle_query support_score_performance per strategy →
    strategy_update_weights with the signed per-DP edge (avg score on
    correct − avg score on wrong). Narrative data points retune like any
    other — their recorded reasoning is your evidence.
-3. SIZING: lifecycle_query sizing_performance — PnL, R-multiples, worst-R,
-   and MAE per conviction band against the leverage actually taken. The
-   conviction→leverage bands (2X/5X/7X/10X, trade's procedure) are
-   operator-set priors: report whether realized risk per band matches
-   intent (watch leverage × stop-distance = equity risk per trade) and
-   propose band retunes with evidence. Proposals go in the reflect_report;
-   the operator changes the bands.
+3. SIZING + STOPS: lifecycle_query sizing_performance — PnL, R-multiples,
+   worst-R, and MAE per conviction band against the leverage actually taken.
+   The conviction→leverage bands (2X/5X/7X/10X, trade's procedure) are
+   operator-set priors: report whether realized risk per band matches intent
+   (watch leverage × stop-distance = equity risk per trade) and propose band
+   retunes with evidence. Also review the STOP envelope: trade sizes its SL
+   off mae_envelope (the percentile MAE of winning setups). If winners are
+   being stopped out (closed losers whose MFE later reached the zone), the
+   envelope percentile is too tight — flag it. Proposals go in the
+   reflect_report; the operator changes the bands/percentile.
 4. ERROR CLASS: every losing outcome gets a reflection with error_class ∈
    forecast | execution | sizing | regime | variance | process_violation.
    Different classes drive different responses: forecast → strategy update;

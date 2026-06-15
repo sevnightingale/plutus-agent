@@ -146,6 +146,72 @@ def poll_hl_account_balance_change(
 
 
 @register_alert(
+    name="hl_prediction_resolution",
+    source="hyperliquid",
+    throttle_seconds=5,
+    description=(
+        "Event-driven prediction resolution. Every tick: read open price-zone "
+        "predictions, fetch all_mids once, and deterministically resolve any "
+        "whose favorable move touched the near edge (correct), whose "
+        "invalidation tripped (wrong), or whose horizon expired (wrong) — "
+        "writing path stats and bumping strategy counters. Candles are pulled "
+        "only at the moment of resolution. Wakes main ONLY when the prediction "
+        "backing the OPEN position resolves (a take-profit or exit signal); "
+        "routine paper resolutions are silent (ops reports them on its tick)."
+    ),
+)
+def poll_hl_prediction_resolution(
+    state: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    try:
+        from trading.lifecycle import resolver
+        from trading.lifecycle.db import get_db
+        from trading.dispatchers.resolution import _fetch, _fetch_extreme
+        from .outcomes import path_stats
+
+        conn = get_db()
+        n_open = conn.execute(
+            "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
+        ).fetchone()[0]
+        if not n_open:
+            return [], state or {}
+
+        # The prediction backing the open position — the only resolution main
+        # needs woken for (take-profit reached, or thesis broken → exit).
+        funded = conn.execute(
+            """SELECT t.prediction_id FROM theses t
+               JOIN decisions d ON d.thesis_id = t.id
+               JOIN trades tr ON tr.decision_id = d.id
+               JOIN positions p ON p.opening_trade_id = tr.id
+               WHERE p.status = 'open' LIMIT 1"""
+        ).fetchone()
+        funded_pid = funded["prediction_id"] if funded else None
+
+        raw = get_info().all_mids()
+        mids = {k: float(v) for k, v in raw.items()}
+        res = resolver.resolve_open_predictions(
+            conn, mids=mids, path_stats_fn=path_stats,
+            fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
+    except Exception as exc:
+        logger.warning("hl_prediction_resolution poll failed: %s", exc)
+        return [], state or {}
+
+    fired: List[Dict[str, Any]] = []
+    for r in res["resolved"]:
+        if r["prediction_id"] == funded_pid:
+            fired.append({
+                "alert": "hl_prediction_resolution",
+                "kind": r["outcome"],            # correct | wrong
+                "mode": r["mode"],               # touch | expired | invalidated
+                "coin": r["symbol"],
+                "prediction_id": r["prediction_id"],
+                "strategy_name": r.get("strategy_name"),
+                "funded": True,
+            })
+    return fired, state or {}
+
+
+@register_alert(
     name="hl_price_range",
     source="hyperliquid",
     throttle_seconds=300,

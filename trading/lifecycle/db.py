@@ -1,4 +1,4 @@
-"""lifecycle.db v2 — the prediction-first event log (PLUTUS rebuild, R1).
+"""lifecycle.db v3 — the prediction-first event log (PLUTUS rebuild, R1).
 
 The lifecycle of PREDICTIONS, some of which become trades. The chain:
 prediction → (funding) → thesis (cites prediction_id) → decision → trade →
@@ -6,8 +6,12 @@ position → outcome. Resolution and calibration happen uniformly at the
 prediction level; support_scores records the per-(prediction, data point)
 conviction inputs including narrative LLM reasoning.
 
-Fresh-create only — calibration starts from zero (locked). A v1 database is
-refused, never migrated; the old runtime's file stays preserved as reference.
+Fresh-create starts calibration from zero. A v2 file is migrated in place to
+v3 (price-zone predictions): the migration expires all open predictions and
+resets the strategy mirror counters — a deliberate clean slate, because the
+old counts measured forecast-accuracy and graduation now measures the price-
+zone metric. A pre-v2 (v1) file is still refused, never migrated; the old
+runtime's file stays preserved as reference.
 
 Write ownership (doctrine): plutus-main writes events from subagents'
 structured returns; plutus-predict writes predictions; plutus-ops resolves
@@ -26,7 +30,7 @@ from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # ───────────────────────────────────────────────────────────────────────────
 # Schema
@@ -84,9 +88,12 @@ CREATE TABLE IF NOT EXISTS predictions (
     timescale TEXT NOT NULL,              -- derived bucket, stored for quotas/slicing
     symbol TEXT,
     claim_md TEXT NOT NULL,
-    success_criteria_json TEXT NOT NULL,  -- structured, validated at write
+    entry_ref_price REAL,                 -- spot captured at registration; the % zone is relative to this
+    near_edge_pct REAL,                   -- correctness floor: signed % move (bullish +, bearish -)
+    far_edge_pct REAL,                    -- optimistic target: signed % move, |far| > |near|
+    success_criteria_json TEXT NOT NULL,  -- serialized price zone (the explicit *_pct cols are truth)
     failure_criteria_json TEXT,
-    invalidation_criteria_json TEXT,      -- thesis-break criteria (strong, fundamental)
+    invalidation_criteria_json TEXT,      -- optional machine-resolvable thesis-break (resolvable DP leaves)
     risk_tolerance TEXT,                  -- 'low' | 'med' | 'high'
     conviction REAL NOT NULL,             -- normalized 0-1 support-score aggregate
     strategy_name TEXT,                   -- NOT NULL unless kind in ('stress','adhoc')
@@ -94,7 +101,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     regime_tag TEXT,                      -- regime at THIS prediction's timescale
     snapshot_ids_json TEXT,
     resolved_at REAL,
-    outcome TEXT,                         -- 'correct'|'wrong'|'ambiguous'|'expired_unresolvable'
+    outcome TEXT,                         -- 'correct'|'wrong'|'ambiguous'|'expired_unresolvable' (invalidation → 'wrong' + realized_value_json.resolution_mode)
     resolved_by TEXT,
     resolution_notes_md TEXT,
     resolution_snapshot_ids_json TEXT,
@@ -116,6 +123,21 @@ CREATE TABLE IF NOT EXISTS support_scores (
     reasoning_md TEXT,                    -- REQUIRED for narrative kind
     ts REAL NOT NULL,
     UNIQUE (prediction_id, data_point)
+);
+
+-- Conviction trajectory: ops re-scores each OPEN prediction on a timescale-
+-- aware cadence via the cheap conviction_score tool. One row per re-score —
+-- the curve reflect mines for entry-timing, invalidation-by-decay, and
+-- calibration-v2 (does trajectory shape predict outcome better than level?).
+CREATE TABLE IF NOT EXISTS prediction_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    prediction_id INTEGER NOT NULL REFERENCES predictions(id),
+    session_name TEXT,
+    agent TEXT,
+    ts REAL NOT NULL,
+    conviction REAL NOT NULL,
+    support_scores_json TEXT,             -- the per-DP scores behind this re-score
+    regime_tag TEXT                       -- regime at re-score time (may differ from birth)
 );
 
 -- A thesis is a FUNDED PREDICTION
@@ -289,6 +311,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_thesis ON decisions(thesis_id);
 CREATE INDEX IF NOT EXISTS idx_trades_decision ON trades(decision_id);
 CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
 CREATE INDEX IF NOT EXISTS idx_evals_position_ts ON position_evaluations(position_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_pred_evals_pred_ts ON prediction_evaluations(prediction_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_reflections_kind_ts ON reflections(reflection_kind, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_observations_kind_ts ON observations(kind, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_action_runs_type_ts ON action_runs(action_type, ts DESC);
@@ -344,15 +367,19 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
             "SELECT version FROM schema_version LIMIT 1"
         ).fetchone() if _has_table(conn, "schema_version") else None
         version = row["version"] if row else None
-        if version != SCHEMA_VERSION:
-            conn.close()
-            raise RuntimeError(
-                f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
-                "lifecycle.db v2 is fresh-create only — there is no migration. "
-                "Back up and remove the old file (see SETUP.md, 'Redeploying "
-                "a fresh runtime'), then rerun."
-            )
-        return conn
+        if version == SCHEMA_VERSION:
+            return conn
+        if version == 2:
+            _migrate_v2_to_v3(conn)
+            logger.info("Migrated lifecycle.db v2 → v3 (price-zone) at %s", db_path)
+            return conn
+        conn.close()
+        raise RuntimeError(
+            f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
+            "Only v2 → v3 is migrated; a pre-v2 (v1) file is fresh-create only. "
+            "Back up and remove the old file (see SETUP.md, 'Redeploying "
+            "a fresh runtime'), then rerun."
+        )
 
     _create_fresh(conn)
     logger.info("Created fresh lifecycle.db v%s at %s", SCHEMA_VERSION, db_path)
@@ -375,6 +402,76 @@ def _create_fresh(conn: sqlite3.Connection) -> None:
         logger.warning("FTS5 unavailable (%s) — full-text search disabled.", exc)
     conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
     conn.commit()
+
+
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """In-place v2 → v3: price-zone predictions.
+
+    Adds the explicit zone columns + the conviction-trajectory table, then
+    CLEAN-SLATES — expires every open prediction (except any backing the open
+    position) and zeroes the strategy mirror counters, because the old
+    forecast-accuracy track record does not transfer to the price-zone metric.
+
+    Idempotent (re-running on a partial file is a no-op) and serialized with
+    ``BEGIN IMMEDIATE`` so a watcher/ops race on first open can't double-apply.
+    """
+    import time
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for col in ("entry_ref_price", "near_edge_pct", "far_edge_pct"):
+            try:
+                conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
+            except sqlite3.OperationalError:
+                pass  # column already present — idempotent
+
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS prediction_evaluations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prediction_id INTEGER NOT NULL REFERENCES predictions(id),
+                session_name TEXT,
+                agent TEXT,
+                ts REAL NOT NULL,
+                conviction REAL NOT NULL,
+                support_scores_json TEXT,
+                regime_tag TEXT
+            )"""
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pred_evals_pred_ts "
+            "ON prediction_evaluations(prediction_id, ts DESC)"
+        )
+
+        # Clean-slate: expire open predictions (keep any backing the open
+        # position) WITHOUT bumping counters — these forecasts are discarded.
+        conn.execute(
+            """UPDATE predictions
+                  SET resolved_at = ?, outcome = 'expired_unresolvable',
+                      resolved_by = 'migration',
+                      resolution_notes_md = 'clean-slate: price-zone (v3) migration'
+                WHERE resolved_at IS NULL
+                  AND id NOT IN (
+                      SELECT t.prediction_id FROM theses t
+                      JOIN decisions d ON d.thesis_id = t.id
+                      JOIN trades tr ON tr.decision_id = d.id
+                      JOIN positions p ON p.opening_trade_id = tr.id
+                      WHERE p.status = 'open'
+                  )""",
+            (time.time(),),
+        )
+
+        # Reset strategy mirror counters — graduation re-measures on the new
+        # metric. Strategy .md files are untouched; only the DB mirror resets.
+        conn.execute(
+            "UPDATE strategies SET n_resolved = 0, n_correct = 0, "
+            "n_wrong = 0, n_ambiguous = 0, last_resolved_at = NULL"
+        )
+
+        conn.execute("UPDATE schema_version SET version = 3")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 # Timescale derivation (locked taxonomy)

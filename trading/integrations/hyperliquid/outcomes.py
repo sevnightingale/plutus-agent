@@ -45,6 +45,53 @@ def _select_interval(holding_seconds: float) -> str:
     return "4h"
 
 
+def path_stats(
+    symbol: str, start_ts: float, end_ts: float, ref_price: float, direction: float
+) -> Dict[str, Any]:
+    """Windowed MAE/MFE/range over ``[start_ts, end_ts]`` vs ``ref_price``.
+
+    The shared candle-path primitive: ``compute_outcome`` uses it for closed
+    positions, the prediction resolver for price-zone resolution. ``direction``
+    is +1 (long/bullish) or -1 (short/bearish).
+
+    Returns ``{mae_pct (≤0 adverse), mfe_pct (≥0 favorable), range_pct, low_px,
+    high_px, n_bars}`` — or ``{}`` if candles are unavailable (network failure
+    or empty window), which the caller treats as "could not measure", never a
+    fabricated zero.
+    """
+    if ref_price is None or ref_price <= 0:
+        return {}
+    holding_seconds = max(0.0, float(end_ts) - float(start_ts))
+    try:
+        interval = _select_interval(holding_seconds)
+        bar_ms = interval_to_ms(interval)
+        start_ms = int(float(start_ts) * 1000) - bar_ms
+        end_ms = int(float(end_ts) * 1000) + bar_ms
+        candles = get_info().candles_snapshot(symbol, interval, start_ms, end_ms)
+    except Exception as exc:  # pragma: no cover — network errors are real but rare
+        logger.warning("path_stats candle fetch failed for %s: %s", symbol, exc)
+        return {}
+    if not candles:
+        return {}
+    highs = [float(c["h"]) for c in candles]
+    lows = [float(c["l"]) for c in candles]
+    low_px, high_px = min(lows), max(highs)
+    low_pct = 100.0 * (low_px - ref_price) / ref_price
+    high_pct = 100.0 * (high_px - ref_price) / ref_price
+    if direction > 0:
+        mfe_pct, mae_pct = high_pct, low_pct
+    else:
+        mfe_pct, mae_pct = -low_pct, -high_pct
+    return {
+        "mae_pct": mae_pct,
+        "mfe_pct": mfe_pct,
+        "range_pct": high_pct - low_pct,
+        "low_px": low_px,
+        "high_px": high_px,
+        "n_bars": len(candles),
+    }
+
+
 def compute_outcome(position_id: int) -> Dict[str, Any]:
     conn = get_db()
 
@@ -98,42 +145,20 @@ def compute_outcome(position_id: int) -> Dict[str, Any]:
         (float(open_trade["slippage_bp"] or 0)) + (float(close_trade["slippage_bp"] or 0))
     )
 
-    # MAE / MFE from candle high/low over holding window
+    # MAE / MFE from candle high/low over holding window (shared primitive).
     mae_pct: Optional[float] = None
     mfe_pct: Optional[float] = None
     entry_efficiency: Optional[float] = None
     exit_efficiency: Optional[float] = None
-    try:
-        interval = _select_interval(holding_seconds)
-        bar_ms = interval_to_ms(interval)
-        start_ms = int(open_trade["ts"] * 1000) - bar_ms
-        end_ms = int(close_trade["ts"] * 1000) + bar_ms
-        candles = get_info().candles_snapshot(pos["symbol"], interval, start_ms, end_ms)
-    except Exception as exc:  # pragma: no cover — network errors are real but rare
-        logger.warning(
-            "candle fetch failed for outcome of position %s: %s",
-            position_id, exc,
-        )
-        candles = []
-
-    if candles:
-        highs = [float(c["h"]) for c in candles]
-        lows = [float(c["l"]) for c in candles]
-        if side == "long":
-            adverse = min(lows)
-            favorable = max(highs)
-        else:
-            adverse = max(highs)
-            favorable = min(lows)
-        if entry_px > 0:
-            mae_pct = 100.0 * direction * (adverse - entry_px) / entry_px
-            mfe_pct = 100.0 * direction * (favorable - entry_px) / entry_px
-
+    stats = path_stats(pos["symbol"], open_trade["ts"], close_trade["ts"], entry_px, direction)
+    if stats:
+        mae_pct = stats["mae_pct"]
+        mfe_pct = stats["mfe_pct"]
         # Efficiencies: how much of the favorable range did we capture?
         # entry_efficiency: 0 if entered at worst price, 1 if entered at best
         # exit_efficiency:  0 if exited at worst, 1 if exited at best
-        bar_extreme_low = min(lows)
-        bar_extreme_high = max(highs)
+        bar_extreme_low = stats["low_px"]
+        bar_extreme_high = stats["high_px"]
         rng = bar_extreme_high - bar_extreme_low
         if rng > 0:
             if side == "long":

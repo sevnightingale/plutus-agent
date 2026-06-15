@@ -330,6 +330,7 @@ class TestBuiltinDiscovery:
             "trading.dispatchers.strategy_tools",
             "trading.dispatchers.wake",
             "trading.dispatchers.register_prediction",
+            "trading.dispatchers.predict_tools",
             "trading.dispatchers.record_data_point_observation",
 
 

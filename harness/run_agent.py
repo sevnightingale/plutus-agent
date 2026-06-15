@@ -249,6 +249,10 @@ _PARALLEL_SAFE_TOOLS = frozenset({
     "vision_analyze",
     "web_extract",
     "web_search",
+    # plutus cheap scoring tools — read-only (fetch + cheap LLM, no DB writes),
+    # so predict can batch one per strategy in a single turn (run_agent loop).
+    "predict_draft",
+    "conviction_score",
 })
 
 # File tools can run concurrently when they target independent paths.

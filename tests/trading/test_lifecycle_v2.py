@@ -5,7 +5,7 @@ import time
 import pytest
 
 from trading.lifecycle import criteria, queries, write
-from trading.lifecycle.db import SCHEMA_VERSION, derive_timescale, get_db
+from trading.lifecycle.db import SCHEMA_VERSION, _has_table, derive_timescale, get_db
 
 
 @pytest.fixture()
@@ -22,9 +22,11 @@ def _criteria(threshold=110_000.0, op="gte"):
 
 def _draft(**over):
     base = dict(
-        claim_md="BTC reaches 110k within 24h",
+        claim_md="BTC reaches +5% within 24h",
         horizon_ts=time.time() + 12 * 3600,
-        success_criteria=_criteria(),
+        entry_ref_price=100_000.0,
+        near_edge_pct=5.0,
+        far_edge_pct=10.0,
         conviction=0.7,
         agent="plutus-predict",
         symbol="BTC",
@@ -85,14 +87,22 @@ class TestRecordPrediction:
         narrative = [s for s in got["support_scores"] if s["kind"] == "narrative"][0]
         assert "ETF inflow" in narrative["reasoning_md"]
 
-    def test_refuses_unresolvable_criteria(self, conn):
+    def test_refuses_invalid_zone(self, conn):
+        # |far| must exceed |near| — a target beyond the correctness floor.
         with pytest.raises(ValueError, match="refused"):
-            write.record_prediction(conn, _draft(success_criteria={"op": "gte"}))
+            write.record_prediction(conn, _draft(near_edge_pct=5.0, far_edge_pct=5.0))
 
-    def test_refuses_unknown_data_point_when_registry_given(self, conn):
+    def test_refuses_mismatched_zone_direction(self, conn):
+        with pytest.raises(ValueError, match="refused"):
+            write.record_prediction(conn, _draft(near_edge_pct=5.0, far_edge_pct=-10.0))
+
+    def test_refuses_unknown_invalidation_data_point(self, conn):
         with pytest.raises(ValueError, match="not registered"):
             write.record_prediction(
-                conn, _draft(), known_data_points={"something_else"}
+                conn,
+                _draft(invalidation_criteria={"data_point": "hl_price",
+                                              "op": "gte", "threshold": 1.0}),
+                known_data_points={"something_else"},
             )
 
     def test_refuses_strategyless_strategy_kind(self, conn):
@@ -159,11 +169,15 @@ class TestResolvePrediction:
         assert stats["n_resolved"] == 1 and stats["n_correct"] == 1
         assert stats["win_rate"] == 1.0
 
-    def test_double_resolution_refused(self, conn):
+    def test_double_resolution_is_noop(self, conn):
         pid = write.record_prediction(conn, _draft())
-        write.resolve_prediction(conn, pid, "wrong", resolved_by="plutus-ops")
-        with pytest.raises(ValueError, match="already resolved"):
-            write.resolve_prediction(conn, pid, "correct", resolved_by="plutus-ops")
+        assert write.resolve_prediction(
+            conn, pid, "wrong", resolved_by="plutus-ops") is True
+        # A second resolver (watcher vs ops sweep) loses the race — no raise,
+        # no double counter-bump; the first outcome stands.
+        assert write.resolve_prediction(
+            conn, pid, "correct", resolved_by="plutus-ops") is False
+        assert queries.prediction(conn, pid)["outcome"] == "wrong"
 
     def test_due_listing(self, conn):
         past = write.record_prediction(
@@ -291,13 +305,217 @@ class TestCriteria:
         assert probs == []
 
     def test_record_prediction_enforces_resolvable_gate(self, conn):
+        # invalidation criteria are still gated to resolvable data points.
         bad = {"data_point": "hl_orderbook", "op": "gte", "threshold": 5.0}
         with pytest.raises(ValueError, match="perception-only"):
             write.record_prediction(
-                conn, _draft(success_criteria=bad),
+                conn, _draft(invalidation_criteria=bad),
                 known_data_points={"hl_orderbook", "hl_price"},
                 resolvable_data_points={"hl_price"},
             )
+
+
+def _make_v2_db(path, *, open_pred=True, backed_pred=False):
+    """Hand-build a minimal v2 lifecycle.db (no price-zone columns, no
+    prediction_evaluations) with the tables the migration touches."""
+    import sqlite3
+    c = sqlite3.connect(str(path))
+    c.executescript(
+        """
+        CREATE TABLE schema_version (version INTEGER NOT NULL);
+        INSERT INTO schema_version VALUES (2);
+        CREATE TABLE predictions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts REAL, horizon_ts REAL, timescale TEXT, symbol TEXT,
+            claim_md TEXT, success_criteria_json TEXT, conviction REAL,
+            strategy_name TEXT, kind TEXT,
+            resolved_at REAL, outcome TEXT, resolved_by TEXT,
+            resolution_notes_md TEXT
+        );
+        CREATE TABLE strategies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, file_path TEXT,
+            status TEXT, timescale TEXT, mechanism_family TEXT,
+            created_at REAL, updated_at REAL,
+            n_resolved INTEGER DEFAULT 0, n_correct INTEGER DEFAULT 0,
+            n_wrong INTEGER DEFAULT 0, n_ambiguous INTEGER DEFAULT 0,
+            last_resolved_at REAL
+        );
+        CREATE TABLE theses (id INTEGER PRIMARY KEY AUTOINCREMENT, prediction_id INTEGER);
+        CREATE TABLE decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, thesis_id INTEGER);
+        CREATE TABLE trades (id INTEGER PRIMARY KEY AUTOINCREMENT, decision_id INTEGER);
+        CREATE TABLE positions (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                opening_trade_id INTEGER, status TEXT);
+        """
+    )
+    c.execute(
+        "INSERT INTO strategies (name, file_path, status, timescale, "
+        "mechanism_family, created_at, updated_at, n_resolved, n_correct, n_wrong) "
+        "VALUES ('s','s.md','test','intraday','flow',0,0,9,6,3)")
+    if open_pred:
+        c.execute(
+            "INSERT INTO predictions (ts, horizon_ts, timescale, symbol, claim_md, "
+            "success_criteria_json, conviction, strategy_name, kind) "
+            "VALUES (0, 9e9, 'intraday','BTC','old','{}',0.7,'s','strategy')")
+    if backed_pred:
+        c.execute(
+            "INSERT INTO predictions (ts, horizon_ts, timescale, symbol, claim_md, "
+            "success_criteria_json, conviction, strategy_name, kind) "
+            "VALUES (0, 9e9, 'intraday','BTC','backed','{}',0.8,'s','strategy')")
+        bpid = c.execute("SELECT id FROM predictions WHERE claim_md='backed'").fetchone()[0]
+        c.execute("INSERT INTO theses (prediction_id) VALUES (?)", (bpid,))
+        thid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        c.execute("INSERT INTO decisions (thesis_id) VALUES (?)", (thid,))
+        did = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        c.execute("INSERT INTO trades (decision_id) VALUES (?)", (did,))
+        trid = c.execute("SELECT last_insert_rowid()").fetchone()[0]
+        c.execute("INSERT INTO positions (opening_trade_id, status) VALUES (?, 'open')", (trid,))
+    c.commit()
+    c.close()
+
+
+class TestMigration:
+    def test_v2_migrates_to_v3(self, tmp_path):
+        p = tmp_path / "lifecycle.db"
+        _make_v2_db(p, open_pred=True, backed_pred=True)
+        c = get_db(p)
+        try:
+            assert c.execute("SELECT version FROM schema_version").fetchone()["version"] == 3
+            cols = {r[1] for r in c.execute("PRAGMA table_info(predictions)")}
+            assert {"entry_ref_price", "near_edge_pct", "far_edge_pct"} <= cols
+            assert _has_table(c, "prediction_evaluations")
+            # open (unbacked) prediction was clean-slate expired
+            row = c.execute(
+                "SELECT resolved_at, outcome FROM predictions WHERE claim_md='old'").fetchone()
+            assert row["resolved_at"] is not None
+            assert row["outcome"] == "expired_unresolvable"
+            # the prediction backing the open position survives (still open)
+            backed = c.execute(
+                "SELECT resolved_at FROM predictions WHERE claim_md='backed'").fetchone()
+            assert backed["resolved_at"] is None
+            # strategy mirror counters zeroed
+            s = c.execute(
+                "SELECT n_resolved, n_correct, n_wrong FROM strategies WHERE name='s'").fetchone()
+            assert (s["n_resolved"], s["n_correct"], s["n_wrong"]) == (0, 0, 0)
+        finally:
+            c.close()
+
+    def test_migration_idempotent_under_concurrent_open(self, tmp_path):
+        import threading
+        p = tmp_path / "lifecycle.db"
+        _make_v2_db(p)
+        errors = []
+
+        def open_it():
+            try:
+                cc = get_db(p)
+                cc.close()
+            except Exception as exc:  # noqa: BLE001
+                errors.append(exc)
+
+        threads = [threading.Thread(target=open_it) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert not errors, errors
+        c = get_db(p)
+        try:
+            assert c.execute("SELECT version FROM schema_version").fetchone()["version"] == 3
+        finally:
+            c.close()
+
+
+class TestPopulationQueries:
+    def test_strategies_by_timescale(self, conn):
+        conn.execute(
+            "INSERT INTO strategies (name, file_path, status, timescale, "
+            "mechanism_family, regime_applicability_json, created_at, updated_at, "
+            "n_correct, n_wrong) VALUES "
+            "('a','a.md','test','intraday','flow','{\"trending-up\": true}',0,0,6,3)")
+        conn.execute(
+            "INSERT INTO strategies (name, file_path, status, timescale, "
+            "mechanism_family, created_at, updated_at) VALUES "
+            "('b','b.md','active','swing','momentum',0,0)")
+        conn.commit()
+        rows = queries.strategies_by_timescale(conn, "intraday")
+        assert [r["name"] for r in rows] == ["a"]
+        assert rows[0]["regime_applicability"] == {"trending-up": True}
+        assert rows[0]["win_rate"] == round(6 / 9, 3)
+        # swing strategy not returned at the intraday timescale
+        assert queries.strategies_by_timescale(conn, "swing")[0]["name"] == "b"
+
+    def test_open_predictions_by_cell(self, conn):
+        write.record_prediction(conn, _draft(regime_tag="trending-up/normal"))
+        write.record_prediction(conn, _draft(strategy_name="other",
+                                             regime_tag="ranging/compressed"))
+        by = {(c["timescale"], c["regime_tag"]): c["n"]
+              for c in queries.open_predictions_by_cell(conn)}
+        assert by[("intraday", "trending-up/normal")] == 1
+        assert by[("intraday", "ranging/compressed")] == 1
+
+    def test_dispatcher_exposes_cell_query(self):
+        import json as _json
+        from trading.dispatchers.lifecycle_query import _run_query
+        from trading.lifecycle.db import get_db
+        conn = get_db()  # the conftest-isolated default db the dispatcher also opens
+        write.record_prediction(conn, _draft(regime_tag="trending-up/normal"))
+        out = _json.loads(_run_query({"query": "open_predictions_by_cell"}))
+        assert out["query"] == "open_predictions_by_cell"
+        assert out["result"][0]["n"] == 1
+
+
+class TestMaeEnvelope:
+    def test_envelope_from_resolved_correct_predictions(self, conn):
+        for mae in [-1.0, -2.0, -3.0, -4.0, -5.0]:
+            pid = write.record_prediction(conn, _draft())  # resolved each loop → no cap
+            write.resolve_prediction(
+                conn, pid, "correct", resolved_by="resolver",
+                realized_value={"mae_pct": mae, "resolution_mode": "touch"})
+        env = queries.mae_envelope(conn, percentile=0.8)
+        assert env["n"] == 5
+        assert env["suggested_sl_pct"] == 5.0   # p80 of magnitudes [1,2,3,4,5]
+        assert env["p50_mae_pct"] == 3.0
+        assert env["max_mae_pct"] == 5.0
+
+    def test_wrong_outcomes_excluded(self, conn):
+        pid = write.record_prediction(conn, _draft())
+        write.resolve_prediction(conn, pid, "wrong", resolved_by="resolver",
+                                 realized_value={"mae_pct": -9.0})
+        assert queries.mae_envelope(conn)["n"] == 0  # only CORRECT setups inform the stop
+
+    def test_empty_envelope_is_none_not_zero(self, conn):
+        env = queries.mae_envelope(conn)
+        assert env["n"] == 0 and env["suggested_sl_pct"] is None
+
+
+class TestRescoreTrajectory:
+    def test_due_for_rescore_schedule(self, conn):
+        pid = write.record_prediction(conn, _draft())  # intraday → 30m cadence
+        assert [d["id"] for d in queries.predictions_due_for_rescore(conn)] == [pid]
+        # a trajectory point now → not due within the cadence...
+        write.record_prediction_evaluation(
+            conn, prediction_id=pid, conviction=0.6, agent="plutus-ops")
+        assert queries.predictions_due_for_rescore(conn) == []
+        # ...due again once the intraday cadence (1800s) elapses
+        later = time.time() + 1801
+        assert [d["id"] for d in queries.predictions_due_for_rescore(conn, now=later)] == [pid]
+
+    def test_evaluation_round_trip(self, conn):
+        pid = write.record_prediction(conn, _draft())
+        eid = write.record_prediction_evaluation(
+            conn, prediction_id=pid, conviction=0.55, support_scores_json="[]",
+            regime_tag="ranging/normal", agent="plutus-ops")
+        row = conn.execute(
+            "SELECT prediction_id, conviction, regime_tag FROM "
+            "prediction_evaluations WHERE id=?", (eid,)).fetchone()
+        assert row["prediction_id"] == pid
+        assert row["conviction"] == 0.55
+        assert row["regime_tag"] == "ranging/normal"
+
+    def test_strategyless_excluded(self, conn):
+        # stress/adhoc predictions with no strategy have no conviction model
+        write.record_prediction(conn, _draft(strategy_name=None, kind="stress"))
+        assert queries.predictions_due_for_rescore(conn) == []
 
 
 class TestWatchdogSource:

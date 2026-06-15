@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Sequence
 
 from trading.lifecycle import criteria as criteria_mod
+from trading.lifecycle import price_zone
 from trading.lifecycle.db import derive_timescale
 
 VALID_RISK = ("low", "med", "high")
@@ -44,12 +45,13 @@ class SupportScore:
 class PredictionDraft:
     claim_md: str
     horizon_ts: float
-    success_criteria: dict
+    entry_ref_price: float          # spot at registration; the % zone is relative to this
+    near_edge_pct: float            # correctness floor — signed % move (bullish +, bearish -)
+    far_edge_pct: float             # optimistic target — signed % move, |far| > |near|
     conviction: float
     agent: str
     session_name: Optional[str] = None
     symbol: Optional[str] = None
-    failure_criteria: Optional[dict] = None
     invalidation_criteria: Optional[dict] = None
     risk_tolerance: Optional[str] = None
     strategy_name: Optional[str] = None
@@ -69,9 +71,15 @@ def record_prediction(
 ) -> int:
     """Validate and insert a prediction (+ its support scores). Returns id.
 
+    A prediction is a PRICE ZONE: a near edge (correctness floor) and far edge
+    (target), both signed % moves from ``entry_ref_price`` (spot captured at
+    registration by the caller, never the LLM). Direction is implied by sign.
+
     Refusals (raise ValueError):
-    - success criteria that fail the machine-resolvable contract (unknown
-      data points, or perception-only ones without a numeric_path)
+    - a malformed price zone (zero/mismatched-sign edges, |far| ≤ |near|)
+    - missing/non-positive entry_ref_price (the % zone is meaningless without it)
+    - invalidation criteria that fail the machine-resolvable contract (unknown
+      or perception-only data points)
     - horizon beyond the 30d cap / not after ts
     - kind='strategy' without a strategy_name (file-at-birth doctrine)
     - strategy already at MAX_OPEN_PER_STRATEGY open predictions
@@ -80,23 +88,25 @@ def record_prediction(
     """
     ts = draft.ts if draft.ts is not None else time.time()
 
-    problems = criteria_mod.validate(
-        draft.success_criteria, known_data_points=known_data_points,
-        resolvable_data_points=resolvable_data_points,
-    )
-    if problems:
+    zone_problems = price_zone.validate_zone(draft.near_edge_pct, draft.far_edge_pct)
+    if zone_problems:
         raise ValueError(
-            "unresolvable success criteria — prediction refused:\n  "
-            + "\n  ".join(problems)
+            "invalid price zone — prediction refused:\n  " + "\n  ".join(zone_problems)
         )
-    if draft.failure_criteria is not None:
+    if draft.entry_ref_price is None or float(draft.entry_ref_price) <= 0:
+        raise ValueError(
+            "entry_ref_price (spot at registration) is required and must be > 0 "
+            "— the % zone is meaningless without it"
+        )
+
+    if draft.invalidation_criteria is not None:
         problems = criteria_mod.validate(
-            draft.failure_criteria, known_data_points=known_data_points,
+            draft.invalidation_criteria, known_data_points=known_data_points,
             resolvable_data_points=resolvable_data_points,
         )
         if problems:
             raise ValueError(
-                "unresolvable failure criteria — prediction refused:\n  "
+                "unresolvable invalidation criteria — prediction refused:\n  "
                 + "\n  ".join(problems)
             )
 
@@ -138,18 +148,24 @@ def record_prediction(
         if not 0.0 <= s.score <= 1.0:
             raise ValueError(f"support score for {s.data_point!r} outside [0, 1]")
 
+    zone_json = json.dumps({
+        "entry_ref_price": float(draft.entry_ref_price),
+        "near_edge_pct": float(draft.near_edge_pct),
+        "far_edge_pct": float(draft.far_edge_pct),
+    })
     cur = conn.execute(
         """INSERT INTO predictions (
             session_name, agent, ts, horizon_ts, timescale, symbol, claim_md,
-            success_criteria_json, failure_criteria_json,
-            invalidation_criteria_json, risk_tolerance, conviction,
-            strategy_name, kind, regime_tag, snapshot_ids_json
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            entry_ref_price, near_edge_pct, far_edge_pct,
+            success_criteria_json, invalidation_criteria_json, risk_tolerance,
+            conviction, strategy_name, kind, regime_tag, snapshot_ids_json
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             draft.session_name, draft.agent, ts, draft.horizon_ts, timescale,
             draft.symbol, draft.claim_md,
-            json.dumps(draft.success_criteria),
-            json.dumps(draft.failure_criteria) if draft.failure_criteria else None,
+            float(draft.entry_ref_price), float(draft.near_edge_pct),
+            float(draft.far_edge_pct),
+            zone_json,
             json.dumps(draft.invalidation_criteria) if draft.invalidation_criteria else None,
             draft.risk_tolerance, draft.conviction,
             draft.strategy_name, draft.kind, draft.regime_tag,
@@ -182,25 +198,32 @@ def resolve_prediction(
     realized_value: Optional[dict] = None,
     snapshot_ids: Sequence[int] = (),
     ts: Optional[float] = None,
-) -> None:
-    """Record a resolution and bump the strategy mirror counters atomically."""
+) -> bool:
+    """Record a resolution and bump strategy mirror counters — race-safe.
+
+    Returns True if THIS call resolved the prediction, False if it was already
+    resolved (the conditional UPDATE matched 0 rows). Two resolvers — the
+    watcher alert and the ops safety-net sweep — can race; only the winner's
+    UPDATE matches, so counters bump exactly once. An invalidation is recorded
+    as ``outcome='wrong'`` with ``realized_value['resolution_mode']='invalidated'``
+    (so every existing win-rate query keeps working).
+    """
     if outcome not in VALID_OUTCOMES:
         raise ValueError(f"outcome must be one of {VALID_OUTCOMES}")
     ts = ts if ts is not None else time.time()
 
     row = conn.execute(
-        "SELECT strategy_name, resolved_at FROM predictions WHERE id=?",
+        "SELECT strategy_name FROM predictions WHERE id=?",
         (prediction_id,),
     ).fetchone()
     if row is None:
         raise ValueError(f"prediction {prediction_id} does not exist")
-    if row["resolved_at"] is not None:
-        raise ValueError(f"prediction {prediction_id} is already resolved")
 
-    conn.execute(
+    cur = conn.execute(
         """UPDATE predictions SET resolved_at=?, outcome=?, resolved_by=?,
            resolution_notes_md=?, realized_value_json=?,
-           resolution_snapshot_ids_json=? WHERE id=?""",
+           resolution_snapshot_ids_json=?
+           WHERE id=? AND resolved_at IS NULL""",
         (
             ts, outcome, resolved_by, notes_md,
             json.dumps(realized_value) if realized_value else None,
@@ -208,6 +231,10 @@ def resolve_prediction(
             prediction_id,
         ),
     )
+    if cur.rowcount != 1:
+        # Another resolver already won (or the row vanished) — no double-count.
+        conn.commit()
+        return False
     if row["strategy_name"]:
         col = {
             "correct": "n_correct",
@@ -221,6 +248,38 @@ def resolve_prediction(
             (ts, row["strategy_name"]),
         )
     conn.commit()
+    return True
+
+
+def record_prediction_evaluation(
+    conn: sqlite3.Connection,
+    *,
+    prediction_id: int,
+    conviction: float,
+    support_scores_json: Optional[str] = None,
+    regime_tag: Optional[str] = None,
+    agent: Optional[str] = None,
+    session_name: Optional[str] = None,
+    ts: Optional[float] = None,
+) -> int:
+    """Append a conviction-trajectory point for an OPEN prediction.
+
+    Written by ops each re-score (the cheap conviction_score tool). The curve
+    is reflect's raw material for entry-timing and calibration-v2.
+    """
+    cur = conn.execute(
+        """INSERT INTO prediction_evaluations (
+            prediction_id, session_name, agent, ts, conviction,
+            support_scores_json, regime_tag
+        ) VALUES (?,?,?,?,?,?,?)""",
+        (
+            prediction_id, session_name, agent,
+            ts if ts is not None else time.time(),
+            conviction, support_scores_json, regime_tag,
+        ),
+    )
+    conn.commit()
+    return cur.lastrowid
 
 
 def record_thesis(

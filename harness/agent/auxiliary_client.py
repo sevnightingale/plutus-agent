@@ -2608,6 +2608,7 @@ def _build_call_kwargs(
     timeout: float = 30.0,
     extra_body: Optional[dict] = None,
     base_url: Optional[str] = None,
+    tool_choice: Optional[Any] = None,
 ) -> dict:
     """Build kwargs for .chat.completions.create() with model/provider adjustments."""
     kwargs: Dict[str, Any] = {
@@ -2648,6 +2649,11 @@ def _build_call_kwargs(
 
     if tools:
         kwargs["tools"] = tools
+        # tool_choice forces structured output where the provider supports it
+        # (Anthropic / Gemini / OpenAI-compatible). Codex ignores it — callers
+        # that need a guarantee there fall back to strict-JSON parsing.
+        if tool_choice is not None:
+            kwargs["tool_choice"] = tool_choice
 
     # Provider-specific extra_body
     merged_extra = dict(extra_body or {})
@@ -2704,6 +2710,7 @@ def call_llm(
     tools: list = None,
     timeout: float = None,
     extra_body: dict = None,
+    tool_choice: Any = None,
 ) -> Any:
     """Centralized synchronous LLM call.
 
@@ -2808,7 +2815,7 @@ def call_llm(
         resolved_provider, final_model, messages,
         temperature=temperature, max_tokens=max_tokens,
         tools=tools, timeout=effective_timeout, extra_body=effective_extra_body,
-        base_url=_base_info or resolved_base_url)
+        base_url=_base_info or resolved_base_url, tool_choice=tool_choice)
 
     # Convert image blocks for Anthropic-compatible endpoints (e.g. MiniMax)
     _client_base = str(getattr(client, "base_url", "") or "")

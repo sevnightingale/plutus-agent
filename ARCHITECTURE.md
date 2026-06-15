@@ -96,10 +96,12 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    23:55 plutus-eod: journal close; session rolls lazily on the next event
 ```
 
-- **plutus-ops** ticks every 30 minutes on the cheapest model: resolves due
-  predictions (machine evaluation only), evaluates the open position against
-  its thesis's numerical invalidation, checks staleness floors, and fetches
-  `hl_trade_readiness`. Anything needing judgment becomes an
+- **plutus-ops** ticks every 30 minutes on the cheapest model: a safety-net
+  resolution sweep (the live watcher resolves price-zone predictions
+  event-driven; ops catches anything it missed), a conviction re-score of the
+  open predictions due per their timescale (the trajectory reflect mines),
+  evaluates the open position against its thesis, checks staleness floors, and
+  fetches `hl_trade_readiness`. Anything needing judgment becomes an
   `enqueue_wake(reason=…)` — ops never interprets, trades, or messages.
 - **plutus-main** has *no standing cron*. It wakes when the queue has
   something (ops staleness/escalations, watcher alerts, your messages),
@@ -122,20 +124,28 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    **self-extension hook**: sourcing that data point becomes a perception
    task. Operators can seed hypotheses through the same tool on the same
    terms (a good first conversation with Plutus).
-2. **Predict.** For each strategy whose regime matches at its own timescale,
-   predict scores the declared data points from PERCEPTION.md (numerical via
-   stated normalizers; narrative scores *require* recorded reasoning) and
-   registers predictions via `register_prediction`: a claim plus
-   **machine-resolvable** success/failure/invalidation criteria (structured
-   leaves over data points — `gte`/`lte`/`crosses_*`/range ops — with
-   combinators; horizon ≤ 720h). Criteria leaves may only use data points
-   that declare a `numeric_path` (flagged `resolvable: true` in
-   `list_data_points`) — the dotted path resolution uses to extract THE
-   number from the fetch. The tool refuses what code can't evaluate, at
-   write time. Ten slots; out-of-regime strategies get no prediction that
-   beat.
-3. **Resolve.** Ops resolves due predictions every tick — pure machine
-   evaluation of the recorded criteria. Outcomes accrue to the strategy.
+2. **Predict.** predict runs on the heavy model as an ORCHESTRATOR: it spends
+   its reasoning on STRATEGY GENERATION (filling gaps in the regime × timescale
+   matrix) and offloads per-strategy work to cheap scoped tools. For each
+   regime-matched strategy below its open cap, `predict_draft` (light model)
+   proposes a **price zone** — a signed % move from the current price with a
+   near edge (correctness floor) and a far edge (target), plus a horizon ≤ 720h
+   — and `conviction_score` (light model, self-fetching the strategy's declared
+   data points) returns the conviction + per-DP support scores, aggregated
+   deterministically by the engine. `register_prediction` captures the entry
+   price server-side, validates the zone, and accepts an optional
+   machine-resolvable **invalidation** (resolvable-data-point leaves — the
+   thesis breaking, never a price wiggle). Price alone defines correct; data
+   points live in conviction and invalidation, never in success. The limiting
+   factor is the per-(timescale × regime) strategy population (≈ 2 active +
+   6 test per cell), not a slot budget — prediction volume is cheap.
+3. **Resolve.** Resolution is EARLY and CONTINUOUS: a prediction is CORRECT the
+   moment price touches its near edge — the live watcher detects this within
+   seconds and resolves deterministically — WRONG at the horizon otherwise, or
+   WRONG early if invalidation trips. The ops sweep is a race-safe safety net.
+   On resolution the price path over [birth, now] is measured (MAE / MFE /
+   profit-score → `realized_value_json`) and the outcome accrues to the
+   strategy; MAE-on-correct later sets stops (see Execute).
 4. **Graduate.** plutus-reflect promotes test → **active** only at **N≥15
    resolved AND win rate ≥ 2/3** (checkpoint every 10: ≥50%; revoke at N≥20
    below 40% across ≥2 regimes). No manual graduation, no hand-seeded
@@ -146,18 +156,23 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    0.50–0.60 → 2X · 0.60–0.70 → 5X · 0.70–0.80 → 7X · 0.80–1.00 → 10X of
    unified account value — capped by main's budget and venue max, never
    exceeded from below.
-6. **Execute.** plutus-trade derives a volatility stop (ATR at the
-   prediction's timescale), places via `desk_open_position` →
+6. **Execute.** plutus-trade sets the stop from the strategy's empirical risk
+   envelope — `mae_envelope` gives the percentile MAE of *winning* setups, so
+   the SL sits just beyond a typical winner's retrace (ATR is the fallback
+   while the envelope is still thin); the target is the prediction's far edge.
+   It places via `desk_open_position` →
    `place_order(venue="hyperliquid")` (the native SDK path, API-wallet
    signed) with on-venue SL/TP brackets, then **post-entry verifies**
    on-chain — a naked position is closed immediately as a critical failure.
    The fill is *measured*: realized leverage and `entry_account_value` are
    recorded on the position row (code measures; doctrine bounds).
 7. **Reflect.** Weekly (or after 3 unreflected closes): updates data-point
-   weights from outcomes, runs graduation/revocation checkpoints, reviews
-   sizing via `sizing_performance` (outcomes grouped by conviction band —
-   proposes band retunes, operator decides), curates the 12-lesson cap, and
-   seeds next-generation hypotheses.
+   weights from outcomes and the conviction trajectory, runs
+   graduation/revocation checkpoints, prunes over-full (timescale × regime)
+   cells so each niche stays a real champion/challenger contest, reviews sizing
+   and the stop envelope via `sizing_performance` (proposes band/percentile
+   retunes, operator decides), curates the 12-lesson cap, and seeds
+   next-generation hypotheses.
 
 One position at a time (cross-margin law). Invalidation ≠ stop-loss: thesis
 breaks and risk exits are recorded as different exits.

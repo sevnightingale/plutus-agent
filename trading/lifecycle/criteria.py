@@ -1,10 +1,12 @@
-"""Structured prediction criteria — validation and deterministic resolution.
+"""Structured INVALIDATION criteria — validation and deterministic resolution.
 
-The §17 contract: the entire learning loop rests on resolution ground truth,
-and resolution belongs to the cheapest mind on the desk (ops). So success
-criteria are STRUCTURED and machine-resolvable; prose claims are commentary.
-``validate()`` is enforced at write time — a prediction whose criteria can't
-be evaluated by code is refused, full stop.
+Prediction SUCCESS is a price zone (see ``price_zone.py``). This module's
+leaf/combinator grammar lives on for the optional, machine-resolvable
+INVALIDATION criteria — the thesis-break condition that can resolve a
+prediction WRONG early. ``validate()`` is enforced at write time over the
+resolvable-data-point gate (a leaf code can't evaluate is refused, full stop);
+``resolve()`` returns 'correct' when the invalidation condition is MET (the
+thesis is broken), 'wrong' when it isn't, 'unresolvable' when a leaf won't read.
 
 Grammar:
     criteria := leaf | {"all": [criteria, ...]} | {"any": [criteria, ...]}

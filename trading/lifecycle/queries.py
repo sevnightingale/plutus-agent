@@ -17,6 +17,14 @@ def _rows(cur) -> list:
     return [dict(r) for r in cur.fetchall()]
 
 
+def _percentile(sorted_vals: list, q: float):
+    """Nearest-rank percentile of a pre-sorted list (no numpy)."""
+    if not sorted_vals:
+        return None
+    idx = min(len(sorted_vals) - 1, max(0, int(q * len(sorted_vals))))
+    return round(sorted_vals[idx], 4)
+
+
 def open_predictions(conn: sqlite3.Connection, limit: int = 50) -> list:
     return _rows(conn.execute(
         """SELECT id, ts, horizon_ts, timescale, symbol, claim_md, conviction,
@@ -26,10 +34,12 @@ def open_predictions(conn: sqlite3.Connection, limit: int = 50) -> list:
 
 
 def open_slot_counts(conn: sqlite3.Connection) -> dict:
-    """The slot ecology at a glance: open predictions by timescale + strategy.
+    """Open predictions by timescale + strategy — population at a glance.
 
-    Returned by register_prediction so predict sees the budget as it spends
-    it (the 10-slot target and per-timescale quotas live in its recipe).
+    Returned by register_prediction so predict sees the live counts as it
+    registers. The population is governed by per-(timescale × regime) strategy
+    cell caps (see ``strategies_by_timescale``) plus the per-strategy open cap,
+    NOT a global prediction budget — prediction volume is deliberately cheap.
     """
     total = conn.execute(
         "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
@@ -45,6 +55,65 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
     ).fetchall())
     return {"open_total": total, "by_timescale": by_timescale,
             "by_strategy": by_strategy}
+
+
+def strategies_by_timescale(
+    conn: sqlite3.Connection,
+    timescale: str,
+    statuses: tuple = ("test", "active"),
+) -> list:
+    """Strategies at a timescale, with their regime cells + counters — the
+    population-visibility query behind the per-(timescale × regime) cell cap
+    that predict/reflect enforce as a reasoning guardrail (a strategy is
+    applicable in the SET of regime labels it declares)."""
+    marks = ",".join("?" * len(statuses))
+    rows = _rows(conn.execute(
+        f"""SELECT name, status, timescale, mechanism_family,
+                   regime_applicability_json, n_resolved, n_correct, n_wrong
+            FROM strategies WHERE timescale = ? AND status IN ({marks})
+            ORDER BY status, name""", [timescale, *statuses]))
+    for r in rows:
+        decided = r["n_correct"] + r["n_wrong"]
+        r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
+        raw = r.pop("regime_applicability_json", None)
+        r["regime_applicability"] = json.loads(raw) if raw else {}
+    return rows
+
+
+def open_predictions_by_cell(conn: sqlite3.Connection) -> list:
+    """Open prediction counts per (timescale, regime_tag) — cell occupancy
+    predict reads alongside the strategy population."""
+    rows = conn.execute(
+        """SELECT timescale, regime_tag, COUNT(*) AS n FROM predictions
+           WHERE resolved_at IS NULL
+           GROUP BY timescale, regime_tag ORDER BY timescale, regime_tag""").fetchall()
+    return [{"timescale": r["timescale"], "regime_tag": r["regime_tag"], "n": r["n"]}
+            for r in rows]
+
+
+def predictions_due_for_rescore(
+    conn: sqlite3.Connection, now: Optional[float] = None
+) -> list:
+    """Open predictions whose last conviction re-score is older than their
+    timescale's cadence — the conviction-trajectory schedule ops reads each
+    tick. intraday 30m · swing 4h · position 1d. Strategyless predictions
+    (stress/adhoc) have no conviction model and are excluded.
+    """
+    now = now if now is not None else time.time()
+    cadence = {"intraday": 1800.0, "swing": 14400.0, "position": 86400.0}
+    rows = _rows(conn.execute(
+        """SELECT p.id, p.strategy_name, p.timescale, p.regime_tag,
+                  (SELECT MAX(e.ts) FROM prediction_evaluations e
+                   WHERE e.prediction_id = p.id) AS last_eval_ts
+           FROM predictions p
+           WHERE p.resolved_at IS NULL AND p.strategy_name IS NOT NULL"""))
+    due = []
+    for r in rows:
+        interval = cadence.get(r["timescale"], 1800.0)
+        last = r["last_eval_ts"]
+        if last is None or (now - float(last)) >= interval:
+            due.append(r)
+    return due
 
 
 def due_predictions(conn: sqlite3.Connection, now: Optional[float] = None) -> list:
@@ -170,6 +239,77 @@ def calibration(
             "regime_tag": regime_tag,
             "timescale": timescale,
         },
+    }
+
+
+def mae_envelope(
+    conn: sqlite3.Connection,
+    *,
+    strategy_name: Optional[str] = None,
+    timescale: Optional[str] = None,
+    regime_tag: Optional[str] = None,
+    percentile: float = 0.8,
+) -> dict:
+    """Empirical adverse-excursion envelope for STOP placement.
+
+    The magnitude of MAE among CORRECT outcomes — how far a *winning* setup
+    typically retraced before reaching its target. The trade agent sets the SL
+    just beyond a high percentile so a typical winner isn't stopped out, then
+    floors/caps with the venue. Replaces the old ATR-times-a-vibe guess with
+    evidence specific to the strategy/timescale/regime.
+
+    Two sources, same filter: resolved price-zone predictions
+    (``realized_value_json.mae_pct``) and closed winning positions
+    (``outcomes.mae_pct``). All magnitudes are positive %; ``suggested_sl_pct``
+    is the percentile (None until evidence exists — never fabricated)."""
+    pred_where = ["p.resolved_at IS NOT NULL", "p.outcome='correct'",
+                  "p.realized_value_json IS NOT NULL"]
+    pos_where = ["po.status='closed'", "o.realized_pnl_usd > 0", "o.mae_pct IS NOT NULL"]
+    pred_args: list = []
+    pos_args: list = []
+    for col, val in (("strategy_name", strategy_name), ("timescale", timescale),
+                     ("regime_tag", regime_tag)):
+        if val is not None:
+            pred_where.append(f"p.{col}=?")
+            pred_args.append(val)
+            pos_where.append(f"pr.{col}=?")
+            pos_args.append(val)
+
+    mags: list = []
+    n_pred = 0
+    for r in conn.execute(
+            f"SELECT realized_value_json AS rv FROM predictions p "
+            f"WHERE {' AND '.join(pred_where)}", pred_args).fetchall():
+        try:
+            m = json.loads(r["rv"]).get("mae_pct")
+        except Exception:
+            m = None
+        if m is not None:
+            mags.append(abs(float(m)))
+            n_pred += 1
+
+    n_pos = 0
+    for r in conn.execute(
+            f"""SELECT o.mae_pct AS m FROM positions po
+                JOIN outcomes o ON o.position_id = po.id
+                LEFT JOIN trades tr ON tr.id = po.opening_trade_id
+                LEFT JOIN decisions d ON d.id = tr.decision_id
+                LEFT JOIN theses t ON t.id = d.thesis_id
+                LEFT JOIN predictions pr ON pr.id = t.prediction_id
+                WHERE {' AND '.join(pos_where)}""", pos_args).fetchall():
+        if r["m"] is not None:
+            mags.append(abs(float(r["m"])))
+            n_pos += 1
+
+    mags.sort()
+    return {
+        "n": len(mags), "n_predictions": n_pred, "n_positions": n_pos,
+        "percentile": percentile,
+        "suggested_sl_pct": _percentile(mags, percentile),
+        "p50_mae_pct": _percentile(mags, 0.5),
+        "max_mae_pct": round(mags[-1], 4) if mags else None,
+        "filters": {"strategy_name": strategy_name, "timescale": timescale,
+                    "regime_tag": regime_tag},
     }
 
 

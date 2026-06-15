@@ -86,13 +86,14 @@ def test_hyperliquid_venue_registered():
     assert venue.outcome_compute_fn is not None
 
 
-def test_three_alerts_registered():
+def test_alerts_registered():
     _import_integration()
     names = {a.name for a in alert_registry.list_all(source="hyperliquid")}
     assert names == {
         "hl_position_status_change",
         "hl_account_balance_change",
         "hl_price_range",
+        "hl_prediction_resolution",
     }
 
 

@@ -1,9 +1,11 @@
 """Ops resolution tools (toolset: resolution) — deterministic, cheap, loud.
 
-resolve_due_predictions: machine-evaluates every due prediction's structured
-criteria against fresh registry fetches. Ops never interprets — a criteria
-set that won't evaluate becomes expired_unresolvable plus a wake for main
-(that's a predict bug, not a judgment call).
+resolve_due_predictions: the SAFETY-NET sweep. The live watcher daemon resolves
+price-zone predictions event-driven (a touch fires within seconds); this sweep
+runs on the ops cadence and catches anything the watcher missed (daemon down,
+horizon expiry between ticks). Both call the SAME shared resolver
+(``trading.lifecycle.resolver``), which is race-safe, so a prediction the
+watcher already resolved is a no-op here.
 
 record_evaluation: one position_evaluations row per ops look at the open
 position. enqueue_wake lives in wake.py (same toolset).
@@ -11,7 +13,6 @@ position. enqueue_wake lives in wake.py (same toolset).
 
 from __future__ import annotations
 
-import json
 import time
 from typing import Any, Dict, Optional
 
@@ -63,31 +64,66 @@ def _fetch_extreme(name: str, params: Optional[dict], since_ts: float):
 
 def _resolve_due(args: Dict[str, Any]) -> str:
     from trading.dispatchers._helpers import session_id_from_context
-    from trading.lifecycle import criteria as criteria_mod
+    from trading.lifecycle import resolver, write
+    from trading.lifecycle.db import get_db
+    from trading.integrations.hyperliquid._client import get_info
+    from trading.integrations.hyperliquid.outcomes import path_stats
+
+    conn = get_db()
+    try:
+        raw = get_info().all_mids()
+        mids = {k: float(v) for k, v in raw.items()}
+    except Exception as exc:
+        return tool_error(f"could not fetch prices (all_mids): {exc}")
+
+    res = resolver.resolve_open_predictions(
+        conn, mids=mids, path_stats_fn=path_stats,
+        fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
+    write.record_action_run(
+        conn, action_type="resolution", agent="plutus-ops",
+        session_name=session_id_from_context(),
+        notes_md=f"{len(res['resolved'])} resolved of {res['open_count']} open")
+    return tool_result({"resolved": res["resolved"], "open_count": res["open_count"]})
+
+
+def _rescore_open(args: Dict[str, Any]) -> str:
+    import json
+    from trading.dispatchers._helpers import session_id_from_context
+    from trading.dispatchers.predict_tools import score_strategy
     from trading.lifecycle import queries, write
     from trading.lifecycle.db import get_db
 
     conn = get_db()
-    due = queries.due_predictions(conn)
-    resolved = []
-    unresolvable = []
+    due = queries.predictions_due_for_rescore(conn)
+    by_strat: Dict[str, list] = {}
     for p in due:
-        crit = json.loads(p["success_criteria_json"])
-        verdict = criteria_mod.resolve(crit, _fetch, _fetch_extreme)
-        outcome = {"correct": "correct", "wrong": "wrong",
-                   "unresolvable": "expired_unresolvable"}[verdict]
-        write.resolve_prediction(
-            conn, p["id"], outcome, resolved_by="plutus-ops",
-            notes_md=None if verdict != "unresolvable" else
-            "criteria did not evaluate (fetch failed or DP gone) — predict bug?",
-        )
-        (unresolvable if verdict == "unresolvable" else resolved).append(
-            {"prediction_id": p["id"], "outcome": outcome,
-             "strategy_name": p.get("strategy_name")})
-    write.record_action_run(conn, action_type="resolution", agent="plutus-ops",
-                            session_name=session_id_from_context(),
-                            notes_md=f"{len(resolved)} resolved, {len(unresolvable)} unresolvable")
-    return tool_result({"resolved": resolved, "unresolvable": unresolvable,
+        by_strat.setdefault(p["strategy_name"], []).append(p)
+
+    rescored, failures = [], []
+    for strat, preds in by_strat.items():
+        try:
+            result = score_strategy(strat)
+        except Exception as exc:  # noqa: BLE001 — skip this strategy, keep going
+            failures.append({"strategy_name": strat, "error": str(exc)})
+            continue
+        conv = result.get("conviction")
+        if conv is None:
+            failures.append({"strategy_name": strat, "error": "no conviction (all DPs missing)"})
+            continue
+        ss_json = json.dumps(result.get("support_scores"))
+        for p in preds:
+            write.record_prediction_evaluation(
+                conn, prediction_id=p["id"], conviction=conv,
+                support_scores_json=ss_json, regime_tag=p.get("regime_tag"),
+                agent="plutus-ops", session_name=session_id_from_context())
+        rescored.append({"strategy_name": strat, "conviction": conv,
+                         "n_predictions": len(preds)})
+
+    write.record_action_run(
+        conn, action_type="rescore", agent="plutus-ops",
+        session_name=session_id_from_context(),
+        notes_md=f"{len(rescored)} strategies rescored, {len(failures)} failed")
+    return tool_result({"rescored": rescored, "failures": failures,
                         "due_count": len(due)})
 
 
@@ -119,16 +155,38 @@ registry.register(
     schema={
         "name": "resolve_due_predictions",
         "description": (
-            "Machine-resolve every prediction past its horizon: each leaf of "
-            "its structured criteria is fetched fresh and evaluated "
-            "deterministically. Unresolvable criteria become "
-            "expired_unresolvable (report them to main — that's a predict bug)."
+            "Safety-net sweep: deterministically resolve every open price-zone "
+            "prediction whose terms are met — favorable move touched the near "
+            "edge (correct), invalidation criteria tripped (wrong), or the "
+            "horizon expired (wrong). The live watcher resolves these "
+            "event-driven; this catches anything it missed. Race-safe (no "
+            "double-count). Returns the predictions resolved this pass."
         ),
         "parameters": {"type": "object", "properties": {}},
     },
     handler=lambda args, **kw: _resolve_due(args),
     description="Deterministically resolve all due predictions.",
     emoji="⚖️",
+)
+
+registry.register(
+    name="rescore_open_predictions",
+    toolset="resolution",
+    schema={
+        "name": "rescore_open_predictions",
+        "description": (
+            "Re-score conviction for every OPEN prediction due per its timescale "
+            "cadence (intraday 30m, swing 4h, position 1d), appending a "
+            "conviction-trajectory point. Groups by strategy — one cheap scoring "
+            "pass per strategy — and writes one trajectory row per open "
+            "prediction. The curve feeds reflect's calibration and "
+            "invalidation-by-decay. Run it once per ops tick."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    handler=lambda args, **kw: _rescore_open(args),
+    description="Re-score conviction for due open predictions (trajectory).",
+    emoji="📉",
 )
 
 registry.register(

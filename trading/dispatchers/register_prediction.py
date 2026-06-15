@@ -1,9 +1,15 @@
 """register_prediction — plutus-predict's write surface (toolset: prediction-write).
 
-Thin handler over trading.lifecycle.write.record_prediction: all refusal
-logic (machine-resolvable criteria, 30d horizon cap, file-at-birth strategy
-requirement, reasoned narrative scores) lives in the writer. The registered
-data-point names are passed in so unknown DPs are refused at the gate.
+A prediction is a PRICE ZONE: a near edge (correctness floor) and a far edge
+(target), both signed % moves from the spot price captured HERE at registration
+(``entry_ref_price`` — never supplied by the LLM, whose price view is stale).
+Direction is implied by the sign. Resolution is early + continuous: correct the
+moment price touches the near edge, wrong at horizon otherwise. Optional
+machine-resolvable invalidation criteria can resolve it wrong early.
+
+All refusal logic (zone validity, 30d horizon cap, file-at-birth strategy
+requirement, per-strategy open cap, reasoned narrative scores) lives in
+trading.lifecycle.write.record_prediction.
 """
 
 from __future__ import annotations
@@ -16,34 +22,41 @@ from harness.tools.registry import registry, tool_error, tool_result
 SCHEMA = {
     "name": "register_prediction",
     "description": (
-        "Register a falsifiable prediction. success_criteria MUST be machine-"
-        "resolvable: a leaf {data_point, params?, op: gte|lte|crosses_above|"
-        "crosses_below|within_range|outside_range, threshold|range, baseline "
-        "{value,ts} for crosses_*} or {all:[...]}/{any:[...]} combinators. "
-        "Criteria leaves may only use data points flagged resolvable: true "
-        "in list_data_points (those with a numeric value) — perception-only "
-        "data points are refused here, at write time. "
-        "horizon_hours ≤ 720 (30d hard cap). kind='strategy' (default) "
-        "requires strategy_name (file-at-birth); 'stress'/'adhoc' don't. "
-        "Max 3 OPEN predictions per strategy — more are correlated trials "
-        "that inflate N toward graduation without independent evidence; "
-        "wait for resolutions. Every success returns the slot ecology "
-        "(open totals by timescale and strategy) — check it against your "
-        "quota targets. support_scores record the conviction inputs — "
-        "narrative entries REQUIRE reasoning_md (the recorded reasoning IS "
-        "the audit trail)."
+        "Register a falsifiable PRICE-ZONE prediction. A prediction is a target "
+        "zone expressed as a signed % move from the current price: near_edge_pct "
+        "is the correctness floor (the smallest move that still counts as right) "
+        "and far_edge_pct is the optimistic target — both same sign (bullish +, "
+        "bearish -), with |far| > |near|. Direction is implied by the sign; you "
+        "do NOT set a stop (that is the trade agent's job once a strategy is "
+        "graduated). The entry reference price is captured server-side at "
+        "registration. Resolution is early and continuous: CORRECT the moment "
+        "price touches near_edge_pct before the horizon, WRONG at the horizon "
+        "otherwise. invalidation_criteria (optional) is a machine-resolvable "
+        "thesis-break over resolvable data points (leaf {data_point, params?, "
+        "op, threshold|range} or all/any) that resolves the prediction WRONG "
+        "early. horizon_hours ≤ 720 (30d hard cap). kind='strategy' (default) "
+        "requires strategy_name (file-at-birth). Max 3 OPEN predictions per "
+        "strategy — concurrent predictions from one strategy are correlated "
+        "trials, not independent evidence. support_scores record the conviction "
+        "inputs — narrative entries REQUIRE reasoning_md (the audit trail)."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "claim": {"type": "string"},
-            "horizon_hours": {"type": "number"},
-            "success_criteria": {"type": "object"},
-            "failure_criteria": {"type": "object"},
-            "invalidation_criteria": {"type": "object"},
-            "conviction": {"type": "number"},
-            "risk_tolerance": {"type": "string", "enum": ["low", "med", "high"]},
             "symbol": {"type": "string"},
+            "horizon_hours": {"type": "number"},
+            "near_edge_pct": {
+                "type": "number",
+                "description": "Correctness floor: signed % move (bullish +, bearish -).",
+            },
+            "far_edge_pct": {
+                "type": "number",
+                "description": "Target: signed % move, same sign as near, |far| > |near|.",
+            },
+            "conviction": {"type": "number"},
+            "invalidation_criteria": {"type": "object"},
+            "risk_tolerance": {"type": "string", "enum": ["low", "med", "high"]},
             "strategy_name": {"type": "string"},
             "kind": {"type": "string", "enum": ["strategy", "stress", "adhoc"]},
             "regime_tag": {"type": "string"},
@@ -65,9 +78,18 @@ SCHEMA = {
                 },
             },
         },
-        "required": ["claim", "horizon_hours", "success_criteria", "conviction"],
+        "required": ["claim", "symbol", "horizon_hours", "near_edge_pct",
+                     "far_edge_pct", "conviction"],
     },
 }
+
+
+def _capture_entry_ref(symbol: str):
+    """Spot at registration, fetched fresh server-side (not from the LLM)."""
+    from trading.perception.core import data_point_registry
+    entry = data_point_registry.lookup("hl_price")
+    value = entry.fn(symbol=symbol) if entry.fn else None
+    return data_point_registry.extract_numeric(value, entry.numeric_path)
 
 
 def _register_prediction(args: Dict[str, Any]) -> str:
@@ -75,6 +97,18 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     from trading.lifecycle import queries, write
     from trading.lifecycle.db import get_db
     from trading.perception.core import data_point_registry
+
+    symbol = args.get("symbol")
+    if not symbol:
+        return tool_error("symbol is required — a price zone needs a symbol to price")
+    try:
+        entry_ref_price = _capture_entry_ref(symbol)
+    except Exception as exc:
+        return tool_error(f"could not capture entry reference price for {symbol}: {exc}")
+    if not entry_ref_price or entry_ref_price <= 0:
+        return tool_error(
+            f"entry reference price for {symbol} is unavailable — refusing to "
+            "register a price zone with no anchor")
 
     try:
         horizon_hours = float(args["horizon_hours"])
@@ -92,12 +126,13 @@ def _register_prediction(args: Dict[str, Any]) -> str:
         draft = write.PredictionDraft(
             claim_md=args["claim"],
             horizon_ts=now + horizon_hours * 3600.0,
-            success_criteria=args["success_criteria"],
-            failure_criteria=args.get("failure_criteria"),
+            entry_ref_price=float(entry_ref_price),
+            near_edge_pct=float(args["near_edge_pct"]),
+            far_edge_pct=float(args["far_edge_pct"]),
             invalidation_criteria=args.get("invalidation_criteria"),
             conviction=float(args["conviction"]),
             risk_tolerance=args.get("risk_tolerance"),
-            symbol=args.get("symbol"),
+            symbol=symbol,
             strategy_name=args.get("strategy_name"),
             kind=args.get("kind", "strategy"),
             regime_tag=args.get("regime_tag"),
@@ -116,6 +151,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
     return tool_result({"prediction_id": prediction_id, "ok": True,
+                        "entry_ref_price": float(entry_ref_price),
                         "slots": queries.open_slot_counts(conn)})
 
 
@@ -124,6 +160,6 @@ registry.register(
     toolset="prediction-write",
     schema=SCHEMA,
     handler=lambda args, **kw: _register_prediction(args),
-    description="Register a machine-resolvable prediction (refuses invalid criteria).",
+    description="Register a machine-resolvable price-zone prediction.",
     emoji="🔮",
 )
