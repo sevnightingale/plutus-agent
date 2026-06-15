@@ -175,7 +175,7 @@ def assemble_context(spec: AgentSpec, task_md: str) -> str:
 RETURN_CONTRACTS: Dict[str, List[str]] = {
     "perception_report": ["updated", "failed", "notable"],
     "regime_report": ["rows", "flips"],
-    "prediction_batch": ["predictions", "actionable", "slots"],
+    "prediction_batch": ["predictions", "actionable"],
     "trade_report": ["ok", "fill", "sl", "verify"],
     "ops_report": ["resolved", "wakes_enqueued"],
     "reflect_report": ["status_changes", "weight_updates", "sizing_review",
@@ -445,9 +445,9 @@ def _record_action_run_for_spawn(name: str, sub_session: str,
         record_action_run(get_db(), action_type=action, agent=name,
                           ok=ok, session_name=sub_session, notes_md=notes)
         if (action == "predict" and ok and payload
-                and (payload.get("slots") or {}).get("generated")):
+                and payload.get("generated")):
             record_action_run(get_db(), action_type="generation", agent=name,
                               ok=True, session_name=sub_session,
-                              notes_md=json.dumps(payload["slots"]["generated"]))
+                              notes_md=json.dumps(payload["generated"]))
     except Exception as exc:
         logger.error("action_run record failed for %s: %s", name, exc)
