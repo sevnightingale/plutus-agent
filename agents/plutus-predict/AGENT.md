@@ -49,11 +49,15 @@ graduates. Price alone defines correct; data points belong in conviction
    support_scores). Batch the calls — they run concurrently.
 4. REGISTER: `register_prediction` for each live setup — the zone (near_edge_pct,
    far_edge_pct, horizon_hours), conviction + support_scores from
-   conviction_score, regime_tag, and STRONG invalidation_criteria (a
-   machine-resolvable thesis-break over resolvable data points — the mechanism
-   failing, NOT a price wiggle; the price target IS the success test). The
-   entry price is captured server-side; the tool refuses a malformed zone or a
-   strategy already at 3 open. Out-of-regime strategies get no prediction this
+   conviction_score, regime_tag. `invalidation_criteria` is OPTIONAL: include
+   it ONLY if a RESOLVABLE data point (resolvable: true in list_data_points)
+   cleanly captures the thesis breaking — a `{data_point, op: gte|lte,
+   threshold}` leaf (perception-only points like hl_candles/macro_vix are
+   refused; crosses_* needs a `{value, ts}` baseline, so prefer gte/lte). If no
+   clean resolvable trigger fits, OMIT it — the horizon already bounds the
+   prediction; never force a bad one and retry. The entry price is captured
+   server-side; the tool refuses a malformed zone or a strategy already at 3
+   open. Out-of-regime strategies get no prediction this
    beat. Prediction volume is cheap — the limiting factor is the strategy
    population, not a slot budget; spread across strategies for independent
    trials rather than stacking one.

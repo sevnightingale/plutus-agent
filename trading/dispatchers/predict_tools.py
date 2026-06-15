@@ -61,38 +61,41 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
                      max_tokens: int = 1200) -> dict:
     """One light-model completion returning a JSON object matching ``schema``.
 
-    Forces a single function tool where supported; falls back to parsing the
-    text content (strict-JSON) for providers that won't force (e.g. Codex).
+    Uses strict-JSON prompting + content parsing — NOT forced tool calls. The
+    light tier is a thinking-mode model and providers like DeepSeek reject
+    ``tool_choice`` in thinking mode ("Thinking mode does not support this
+    tool_choice"), which would 400 the whole call. The schema is communicated
+    in-prompt; if a provider happens to emit a tool call anyway we accept it.
     """
     from harness.agent.auxiliary_client import call_llm
 
-    tool = {
-        "type": "function",
-        "function": {
-            "name": "emit",
-            "description": "Return the structured result.",
-            "parameters": schema,
-        },
-    }
+    sys_full = (
+        system + "\n\nReturn ONLY a single JSON object — no prose, no markdown "
+        "code fences — matching this JSON schema:\n" + json.dumps(schema)
+    )
     resp = call_llm(
         task=task, model=_light_model(),
-        messages=[{"role": "system", "content": system},
+        messages=[{"role": "system", "content": sys_full},
                   {"role": "user", "content": user}],
-        tools=[tool],
-        tool_choice={"type": "function", "function": {"name": "emit"}},
         max_tokens=max_tokens, temperature=0,
     )
     msg = resp.choices[0].message
     tcs = getattr(msg, "tool_calls", None)
     if tcs:
         try:
-            return json.loads(tcs[0].function.arguments)
+            out = json.loads(tcs[0].function.arguments)
+            if isinstance(out, dict):
+                return out
         except Exception:
             pass
     content = getattr(msg, "content", None)
-    if content:
-        return _parse_json_loose(content)
-    raise ValueError("structured call returned neither a tool call nor parseable content")
+    if not content:
+        raise ValueError("structured call returned no content")
+    out = _parse_json_loose(content)
+    if not isinstance(out, dict):
+        raise ValueError(
+            f"structured call did not return a JSON object (got {type(out).__name__})")
+    return out
 
 
 def _load_strategy(name: str):

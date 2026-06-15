@@ -62,6 +62,22 @@ class TestStructuredCall:
             task="t", system="s", user="u", schema={"type": "object"})
         assert out == {"near_pct": 4.0}
 
+    def test_never_sends_tool_choice(self, monkeypatch):
+        # DeepSeek thinking mode 400s on tool_choice — structured output must
+        # use strict-JSON-in-prompt + content parsing, never forced tool calls.
+        captured = {}
+        import harness.agent.auxiliary_client as aux
+
+        def fake(**kw):
+            captured.update(kw)
+            return _resp_content('{"x": 1}')
+
+        monkeypatch.setattr(aux, "call_llm", fake)
+        predict_tools._structured_call(
+            task="t", system="s", user="u", schema={"type": "object"})
+        assert "tool_choice" not in captured
+        assert not captured.get("tools")
+
 
 # ── predict_draft ────────────────────────────────────────────────────────────
 
