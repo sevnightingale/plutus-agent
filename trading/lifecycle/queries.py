@@ -25,6 +25,48 @@ def _percentile(sorted_vals: list, q: float):
     return round(sorted_vals[idx], 4)
 
 
+def _median(vals: list):
+    """Median of an unsorted list (no numpy). None on empty."""
+    if not vals:
+        return None
+    s = sorted(vals)
+    n = len(s)
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2.0
+
+
+def strategy_rr(conn: sqlite3.Connection, name: str):
+    """Reward:risk among a strategy's WINS — the graduation trade-worthiness gate.
+
+    ``median(mfe) / median(|mae|)`` over the strategy's resolved CORRECT
+    price-zone predictions: the favorable excursion the strategy produces vs the
+    adverse excursion the stop must survive. RR > 1 means that when the strategy
+    is right, the move pays more than the stop distance we'd actually risk — so
+    ``win_rate × RR`` is positive expectancy. Ratio of medians (not mean of
+    per-prediction ratios) so a single near-zero MAE can't blow it up. ``None``
+    until there's a win with path stats (or, in the degenerate case, a zero
+    median adverse move) — never fabricated."""
+    rows = conn.execute(
+        """SELECT realized_value_json AS rv FROM predictions
+           WHERE strategy_name=? AND outcome='correct'
+             AND resolved_at IS NOT NULL AND realized_value_json IS NOT NULL""",
+        (name,)).fetchall()
+    mfes, maes = [], []
+    for r in rows:
+        try:
+            d = json.loads(r["rv"])
+        except Exception:
+            continue
+        if d.get("mfe_pct") is not None:
+            mfes.append(abs(float(d["mfe_pct"])))
+        if d.get("mae_pct") is not None:
+            maes.append(abs(float(d["mae_pct"])))
+    med_mfe, med_mae = _median(mfes), _median(maes)
+    if med_mfe is None or not med_mae:
+        return None
+    return round(med_mfe / med_mae, 2)
+
+
 def open_predictions(conn: sqlite3.Connection, limit: int = 50) -> list:
     return _rows(conn.execute(
         """SELECT id, ts, horizon_ts, timescale, symbol, claim_md, conviction,
@@ -75,6 +117,7 @@ def strategies_by_timescale(
     for r in rows:
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
+        r["rr"] = strategy_rr(conn, r["name"])
         raw = r.pop("regime_applicability_json", None)
         r["regime_applicability"] = json.loads(raw) if raw else {}
     return rows
@@ -129,7 +172,9 @@ def due_predictions(conn: sqlite3.Connection, now: Optional[float] = None) -> li
 def prediction(conn: sqlite3.Connection, prediction_id: int) -> Optional[dict]:
     row = conn.execute(
         """SELECT id, session_name, agent, ts, horizon_ts, timescale, symbol,
-                  claim_md, success_criteria_json, failure_criteria_json,
+                  claim_md, entry_ref_price, near_edge_pct, far_edge_pct,
+                  reached_near_at, reached_far_at,
+                  success_criteria_json, failure_criteria_json,
                   invalidation_criteria_json, risk_tolerance, conviction,
                   strategy_name, kind, regime_tag, resolved_at, outcome,
                   resolved_by, resolution_notes_md, realized_value_json
@@ -324,6 +369,7 @@ def strategy_stats(conn: sqlite3.Connection, name: str) -> Optional[dict]:
     out = dict(row)
     decided = out["n_correct"] + out["n_wrong"]
     out["win_rate"] = round(out["n_correct"] / decided, 3) if decided else None
+    out["rr"] = strategy_rr(conn, name)
     return out
 
 
@@ -337,6 +383,7 @@ def strategy_book(conn: sqlite3.Connection, statuses: tuple = ("test", "active",
     for r in rows:
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
+        r["rr"] = strategy_rr(conn, r["name"])
     return rows
 
 

@@ -253,6 +253,7 @@ _PARALLEL_SAFE_TOOLS = frozenset({
     # so predict can batch one per strategy in a single turn (run_agent loop).
     "predict_draft",
     "conviction_score",
+    "perception_freshness",
 })
 
 # File tools can run concurrently when they target independent paths.

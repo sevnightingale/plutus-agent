@@ -1,0 +1,41 @@
+"""Perception-freshness gate for prediction authoring."""
+
+from __future__ import annotations
+
+import trading.perception.cache as cache
+from trading.perception import freshness
+
+
+def test_effective_max_age_floors_at_30min_keeps_slow_budget():
+    # fast DPs get the 30-min authoring floor (not their tight 60s cache budget)
+    assert freshness.effective_max_age("hl_price") == 1800.0
+    # naturally-slow signals keep their own (longer) budget — not false-blocked
+    assert freshness.effective_max_age("macro_vix") == 14400.0
+
+
+def test_stale_missing_and_fresh(monkeypatch):
+    now = 1_000_000.0
+    ck = cache._canonical_key
+    state = {"data_points": {
+        ck("hl_price", {"symbol": "BTC"}): {"fetched_at": now - 100},    # fresh
+        ck("hl_cvd", {"symbol": "BTC"}):   {"fetched_at": now - 2000},   # STALE (>1800)
+        ck("macro_vix", None):             {"fetched_at": now - 5000},   # fresh (<14400)
+    }}
+    monkeypatch.setattr(cache, "read_perception_state", lambda: state)
+
+    dps = [{"name": "hl_price", "params": {"symbol": "BTC"}},
+           {"name": "hl_cvd", "params": {"symbol": "BTC"}},
+           {"name": "macro_vix"},
+           {"name": "ta_rsi", "params": {"symbol": "BTC"}}]  # never fetched → missing
+    flagged = freshness.stale_data_points(dps, now=now)
+    assert {e["name"]: e["reason"] for e in flagged} == {
+        "hl_cvd": "stale", "ta_rsi": "missing"}
+
+
+def test_empty_when_all_fresh(monkeypatch):
+    now = 1_000_000.0
+    ck = cache._canonical_key
+    monkeypatch.setattr(
+        cache, "read_perception_state",
+        lambda: {"data_points": {ck("hl_price", None): {"fetched_at": now - 10}}})
+    assert freshness.stale_data_points([{"name": "hl_price"}], now=now) == []

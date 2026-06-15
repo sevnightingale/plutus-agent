@@ -24,9 +24,14 @@ you never register predictions or evaluate live setups.
 1. CHECKPOINTS: lifecycle_query strategy_book + calibration per strategy
    with new resolutions. Moves (strategy_set_status):
    - checkpoint continue (every 10 resolved): win rate ≥ 50%, else retire.
-   - GRADUATION to active (trade-enabling): N ≥ 15 resolved AND win rate
-     ≥ 2/3 — a one-sided binomial bar (10/15 is p≈.15 vs a coin; the rate
-     bar holds as N grows, so coin flips don't graduate late either).
+   - GRADUATION to active (trade-enabling): N ≥ 15 resolved AND win rate ≥ 0.55
+     AND reward:risk RR > 1.0. Win rate is the near-edge hit rate (correct =
+     the favorable move reached the near floor); RR (strategy_book/strategy_stats
+     `rr` = median favorable move ÷ median adverse move on the wins) is
+     trade-worthiness — when the strategy is right, the move pays more than the
+     stop distance we'd actually risk. Together, win_rate × RR is positive
+     expectancy: a strategy that's directionally right but whose wins barely
+     clear the near edge (RR ≤ 1) does NOT graduate, whatever its win rate.
      Slower is fine; calibrating on mirages is not.
    - revoke (active → retired): N ≥ 20 with win rate < 40% across ≥ 2
      regime contexts.

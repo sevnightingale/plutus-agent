@@ -30,16 +30,28 @@ class TestPriceZoneMath:
         assert price_zone.validate_zone(5.0, 5.0)               # far not beyond near
         assert price_zone.validate_zone(8.0, 5.0)               # far inside near
 
-    def test_resolve_zone(self):
-        # touched the near edge → correct, regardless of horizon
-        assert price_zone.resolve_zone(5.0, 10.0, 6.0, False) == "correct"
-        assert price_zone.resolve_zone(5.0, 10.0, 5.0, False) == "correct"
-        # below near, horizon not passed → still open
-        assert price_zone.resolve_zone(5.0, 10.0, 4.9, False) is None
-        # below near, horizon passed → wrong
-        assert price_zone.resolve_zone(5.0, 10.0, 4.9, True) == "wrong"
-        # bearish uses magnitudes the same way (mfe is a positive magnitude)
-        assert price_zone.resolve_zone(-5.0, -10.0, 6.0, False) == "correct"
+    def test_classify(self):
+        c = price_zone.classify
+        # far reached → target (correct early); a full target beats invalidation
+        assert c(5.0, 10.0, 10.0, False) == "target"
+        assert c(5.0, 10.0, 11.0, False, invalidation_tripped=True) == "target"
+        # near reached, far not, horizon open → mark_near (win locked, stays open)
+        assert c(5.0, 10.0, 6.0, False) == "mark_near"
+        # near already stamped, still below far → open (no re-stamp)
+        assert c(5.0, 10.0, 6.0, False, near_already_reached=True) == "open"
+        # horizon: near reached → horizon-correct; never reached → expired
+        assert c(5.0, 10.0, 6.0, True) == "horizon"
+        assert c(5.0, 10.0, 4.9, True) == "expired"
+        assert c(5.0, 10.0, None, True, near_already_reached=True) == "horizon"
+        # below near, horizon open, invalidation trips → invalidated
+        assert c(5.0, 10.0, 4.9, False, invalidation_tripped=True) == "invalidated"
+        # LOCK: once near is reached, invalidation can no longer fire
+        assert c(5.0, 10.0, 4.9, False, invalidation_tripped=True,
+                 near_already_reached=True) == "open"
+        # below near, nothing tripped → open
+        assert c(5.0, 10.0, 4.9, False) == "open"
+        # bearish uses magnitudes (mfe is a positive magnitude)
+        assert c(-5.0, -10.0, 10.0, False) == "target"
 
     def test_profit_score(self):
         assert price_zone.profit_score(5.0, 10.0, 5.0) == pytest.approx(0.0)
@@ -123,28 +135,47 @@ def _stats_fn(mfe):
 
 
 class TestResolver:
-    def test_touch_resolves_correct(self, conn):
-        pid = _record(conn)  # near +5% (=105k), far +10%
+    def test_near_marks_open_then_far_resolves_target(self, conn):
+        pid = _record(conn)  # near +5% (105k), far +10% (110k)
         t = time.time()
-        res = resolver.resolve_open_predictions(
+        # +6% reaches near, not far → marked near, STAYS OPEN (win locked)
+        r1 = resolver.resolve_open_predictions(
             conn, mids={"BTC": 106_000.0}, path_stats_fn=_stats_fn(6.0), now=t)
-        assert [r["outcome"] for r in res["resolved"]] == ["correct"]
-        assert res["resolved"][0]["mode"] == "touch"
+        assert r1["resolved"] == []
+        assert [m["prediction_id"] for m in r1["marked_near"]] == [pid]
         got = queries.prediction(conn, pid)
-        assert got["outcome"] == "correct"
+        assert got["outcome"] is None and got["reached_near_at"] is not None
+        # +11% reaches far → correct early (target)
+        r2 = resolver.resolve_open_predictions(
+            conn, mids={"BTC": 111_000.0}, path_stats_fn=_stats_fn(11.0), now=t + 10)
+        assert r2["resolved"][0]["outcome"] == "correct"
+        assert r2["resolved"][0]["mode"] == "target"
+        got = queries.prediction(conn, pid)
         rv = json.loads(got["realized_value_json"])
-        assert rv["resolution_mode"] == "touch"
-        assert rv["profit_score"] == pytest.approx((6 - 5) / (10 - 5))
+        assert rv["resolution_mode"] == "target" and got["reached_far_at"] is not None
+        assert rv["profit_score"] == pytest.approx((11 - 5) / (10 - 5))
 
-    def test_bearish_touch(self, conn):
+    def test_bearish_far_resolves_target(self, conn):
         _record(conn, near_edge_pct=-5.0, far_edge_pct=-10.0)
         res = resolver.resolve_open_predictions(
-            conn, mids={"BTC": 94_000.0}, path_stats_fn=_stats_fn(6.0), now=time.time())
+            conn, mids={"BTC": 89_000.0}, path_stats_fn=_stats_fn(11.0), now=time.time())
         assert res["resolved"][0]["outcome"] == "correct"
+        assert res["resolved"][0]["mode"] == "target"
+
+    def test_horizon_correct_when_near_reached(self, conn):
+        t0 = time.time()
+        pid = _record(conn, ts=t0, horizon_ts=t0 + 60)
+        resolver.resolve_open_predictions(  # near reached before horizon
+            conn, mids={"BTC": 106_000.0}, path_stats_fn=_stats_fn(6.0), now=t0 + 10)
+        res = resolver.resolve_open_predictions(  # horizon passes, far never hit
+            conn, mids={"BTC": 107_000.0}, path_stats_fn=_stats_fn(6.0), now=t0 + 120)
+        assert res["resolved"][0]["outcome"] == "correct"
+        assert res["resolved"][0]["mode"] == "horizon"
+        assert queries.prediction(conn, pid)["reached_far_at"] is None
 
     def test_horizon_expiry_resolves_wrong(self, conn):
         t0 = time.time()
-        _record(conn, ts=t0, horizon_ts=t0 + 60)
+        _record(conn, ts=t0, horizon_ts=t0 + 60)  # near never reached
         res = resolver.resolve_open_predictions(
             conn, mids={"BTC": 101_000.0}, path_stats_fn=_stats_fn(1.0), now=t0 + 120)
         assert res["resolved"][0]["outcome"] == "wrong"
@@ -160,7 +191,7 @@ class TestResolver:
 
         res = resolver.resolve_open_predictions(
             conn, mids={"BTC": 101_000.0}, path_stats_fn=stats_fn, now=time.time())
-        assert res["resolved"] == []
+        assert res["resolved"] == [] and res["marked_near"] == []
         assert not called  # the cheap path never touched the network
 
     def test_invalidation_resolves_wrong(self, conn):
@@ -169,27 +200,39 @@ class TestResolver:
             "op": "lte", "threshold": 90_000.0})
         res = resolver.resolve_open_predictions(
             conn, mids={"BTC": 101_000.0}, path_stats_fn=_stats_fn(1.0),
-            fetch_fn=lambda dp, p: 85_000.0, now=time.time())  # price ≤ 90k → invalidated
+            fetch_fn=lambda name, p: 85_000.0, now=time.time())  # price ≤ 90k → invalidated
         assert res["resolved"][0]["outcome"] == "wrong"
         assert res["resolved"][0]["mode"] == "invalidated"
 
-    def test_success_beats_invalidation(self, conn):
-        _record(conn, invalidation_criteria={
+    def test_near_lock_blocks_invalidation(self, conn):
+        pid = _record(conn, invalidation_criteria={
             "data_point": "hl_price", "op": "lte", "threshold": 90_000.0})
-        # price touched the near edge AND the invalidation would trip — success wins
+        # near reached (+6%) AND the invalidation would trip — the win is LOCKED,
+        # invalidation can't fire; stays open (marked near), not wrong.
         res = resolver.resolve_open_predictions(
             conn, mids={"BTC": 106_000.0}, path_stats_fn=_stats_fn(6.0),
-            fetch_fn=lambda dp, p: 85_000.0, now=time.time())
+            fetch_fn=lambda name, p: 85_000.0, now=time.time())
+        assert res["resolved"] == []
+        assert [m["prediction_id"] for m in res["marked_near"]] == [pid]
+
+    def test_far_beats_invalidation(self, conn):
+        _record(conn, invalidation_criteria={
+            "data_point": "hl_price", "op": "lte", "threshold": 90_000.0})
+        # far reached AND the invalidation would trip — a full target wins
+        res = resolver.resolve_open_predictions(
+            conn, mids={"BTC": 111_000.0}, path_stats_fn=_stats_fn(11.0),
+            fetch_fn=lambda name, p: 85_000.0, now=time.time())
         assert res["resolved"][0]["outcome"] == "correct"
+        assert res["resolved"][0]["mode"] == "target"
 
     def test_second_pass_is_empty(self, conn):
         _record(conn)
-        mids = {"BTC": 106_000.0}
+        mids = {"BTC": 111_000.0}  # straight to far → resolves on pass 1
         r1 = resolver.resolve_open_predictions(
-            conn, mids=mids, path_stats_fn=_stats_fn(6.0), now=time.time())
+            conn, mids=mids, path_stats_fn=_stats_fn(11.0), now=time.time())
         assert len(r1["resolved"]) == 1
         r2 = resolver.resolve_open_predictions(
-            conn, mids=mids, path_stats_fn=_stats_fn(6.0), now=time.time())
+            conn, mids=mids, path_stats_fn=_stats_fn(11.0), now=time.time())
         assert r2["resolved"] == [] and r2["open_count"] == 0
 
 
@@ -197,21 +240,62 @@ class TestOpsSweepWiring:
     """The resolve_due_predictions dispatcher wires all_mids + path_stats into
     the shared resolver against the (conftest-isolated) lifecycle.db."""
 
-    def test_sweep_resolves_a_touch(self, monkeypatch):
+    def test_sweep_resolves_a_target(self, monkeypatch):
         from trading.dispatchers import resolution
         from trading.lifecycle.db import get_db
         from trading.integrations.hyperliquid import _client, outcomes
 
         conn = get_db()  # conftest points this at a per-test tempdir
-        pid = write.record_prediction(conn, _draft())  # near +5% of 100k = 105k
+        pid = write.record_prediction(conn, _draft())  # near +5%, far +10% (110k)
 
         info = MagicMock()
-        info.all_mids.return_value = {"BTC": "106000"}  # above the near edge
+        info.all_mids.return_value = {"BTC": "111000"}  # above the FAR edge
         monkeypatch.setattr(_client, "get_info", lambda: info)
         monkeypatch.setattr(
             outcomes, "path_stats",
-            lambda *a, **k: {"mfe_pct": 6.0, "mae_pct": -1.0, "range_pct": 7.0})
+            lambda *a, **k: {"mfe_pct": 11.0, "mae_pct": -1.0, "range_pct": 12.0})
 
         res = json.loads(resolution._resolve_due({}))
         assert [r["outcome"] for r in res["resolved"]] == ["correct"]
         assert queries.prediction(conn, pid)["outcome"] == "correct"
+
+
+class TestStrategyRR:
+    """RR = median favorable ÷ median adverse over a strategy's wins — the
+    graduation trade-worthiness gate, surfaced in strategy_book."""
+
+    def _strat_row(self, conn, name):
+        conn.execute(
+            "INSERT INTO strategies (name,file_path,status,timescale,"
+            "mechanism_family,created_at,updated_at) VALUES "
+            "(?,?, 'test','intraday','flow',0,0)", (name, f"{name}.md"))
+        conn.commit()
+
+    def _win(self, conn, strat, mfe, mae):
+        pid = _record(conn, strategy_name=strat, kind="strategy")
+        write.resolve_prediction(conn, pid, "correct", resolved_by="r",
+                                 realized_value={"mfe_pct": mfe, "mae_pct": mae})
+
+    def test_rr_is_ratio_of_medians(self, conn):
+        self._strat_row(conn, "s")
+        self._win(conn, "s", 3.0, -1.0)
+        self._win(conn, "s", 2.0, -1.0)
+        self._win(conn, "s", 4.0, -2.0)  # median mfe 3, median |mae| 1 → RR 3.0
+        assert queries.strategy_rr(conn, "s") == 3.0
+        assert queries.strategy_book(conn)[0]["rr"] == 3.0
+
+    def test_rr_none_without_wins(self, conn):
+        self._strat_row(conn, "s")
+        pid = _record(conn, strategy_name="s", kind="strategy")
+        write.resolve_prediction(conn, pid, "wrong", resolved_by="r",
+                                 realized_value={"mae_pct": -1.0, "resolution_mode": "expired"})
+        assert queries.strategy_rr(conn, "s") is None
+
+
+class TestReachedNear:
+    def test_mark_reached_near_idempotent(self, conn):
+        pid = _record(conn)
+        assert write.mark_reached_near(conn, pid, ts=123.0) is True
+        assert write.mark_reached_near(conn, pid, ts=456.0) is False  # already stamped
+        got = queries.prediction(conn, pid)
+        assert got["reached_near_at"] == 123.0 and got["resolved_at"] is None

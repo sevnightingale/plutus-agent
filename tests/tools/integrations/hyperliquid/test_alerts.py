@@ -154,12 +154,12 @@ def test_prediction_resolution_paper_is_silent(monkeypatch):
     from trading.integrations.hyperliquid import outcomes
 
     conn = get_db()
-    pid = write.record_prediction(conn, _zone_draft())  # near +5% of 100k = 105k
+    pid = write.record_prediction(conn, _zone_draft())  # near +5%, far +10% (110k)
     info = MagicMock()
-    info.all_mids.return_value = {"BTC": "106000"}  # above the near edge
+    info.all_mids.return_value = {"BTC": "111000"}  # above the far edge → target
     monkeypatch.setattr(alerts, "get_info", lambda: info)
     monkeypatch.setattr(outcomes, "path_stats",
-                        lambda *a, **k: {"mfe_pct": 6.0, "mae_pct": -1.0})
+                        lambda *a, **k: {"mfe_pct": 11.0, "mae_pct": -1.0})
 
     fired, _ = alerts.poll_hl_prediction_resolution(state={})
     assert fired == []  # routine paper resolution does not wake main
@@ -183,14 +183,14 @@ def test_prediction_resolution_funded_wakes(monkeypatch):
                         size=0.001, opening_trade_id=trid)
 
     info = MagicMock()
-    info.all_mids.return_value = {"BTC": "106000"}
+    info.all_mids.return_value = {"BTC": "111000"}  # above the far edge → target
     monkeypatch.setattr(alerts, "get_info", lambda: info)
-    monkeypatch.setattr(outcomes, "path_stats", lambda *a, **k: {"mfe_pct": 6.0})
+    monkeypatch.setattr(outcomes, "path_stats", lambda *a, **k: {"mfe_pct": 11.0})
 
     fired, _ = alerts.poll_hl_prediction_resolution(state={})
     assert len(fired) == 1
     assert fired[0]["funded"] and fired[0]["prediction_id"] == pid
-    assert fired[0]["kind"] == "correct" and fired[0]["mode"] == "touch"
+    assert fired[0]["kind"] == "correct" and fired[0]["mode"] == "target"
 
 
 def test_prediction_resolution_no_open_skips_network(monkeypatch):

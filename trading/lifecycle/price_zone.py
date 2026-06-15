@@ -5,11 +5,14 @@ A prediction is a **% move from an entry reference price**: a *near edge*
 *far edge* (the optimistic target). Both are SIGNED — bullish positive,
 bearish negative — with ``|far| > |near|``. Direction is implied by the sign.
 
-Resolution is path-based: a prediction is CORRECT the moment the *favorable
-excursion* (the best move in the thesis direction, as a positive magnitude)
-reaches the near edge; WRONG once the horizon passes without reaching it. The
-*profit score* grades how far into ``[near, far]`` the favorable excursion ran
-— 0 at the floor, 1.0 at the target, >1 on a blow-past.
+Resolution is path-based and FLOOR-CORRECT: reaching the *near edge* (the best
+move in the thesis direction, as a positive magnitude) LOCKS the win but keeps
+the prediction open; reaching the *far edge* resolves it CORRECT early; if only
+the near edge is reached, the horizon backstops a CORRECT resolution; the
+horizon passing without the near edge is WRONG; an invalidation can fire only
+BEFORE the near edge is reached. The *profit score* grades how far into
+``[near, far]`` the favorable excursion ran — 0 at the floor, 1.0 at the
+target, >1 on a blow-past.
 
 These functions never touch the network or the DB; the caller supplies the
 windowed favorable-excursion magnitude (from candles) and whether the horizon
@@ -66,18 +69,48 @@ def adverse_pct(direction: int, low_pct: float, high_pct: float) -> float:
     return low_pct if direction > 0 else -high_pct
 
 
-def resolve_zone(near_edge_pct, far_edge_pct, mfe_pct, horizon_passed) -> Optional[str]:
-    """``'correct'`` | ``'wrong'`` | ``None`` (still open).
+def classify(
+    near_edge_pct,
+    far_edge_pct,
+    mfe_pct,
+    horizon_passed,
+    *,
+    invalidation_tripped: bool = False,
+    near_already_reached: bool = False,
+) -> str:
+    """Resolution decision for the floor-correct / target-accelerated model.
 
     ``mfe_pct`` is the favorable-excursion magnitude (≥0 when price moved in the
-    thesis direction) over ``[birth, now]``. Correct as soon as it reaches the
-    near edge magnitude; wrong only once the horizon has passed without it.
+    thesis direction) over ``[birth, now]``. Returns one of:
+
+    - ``'target'``      — far edge reached → CORRECT, resolve early (a full
+                          target beats a simultaneous invalidation).
+    - ``'horizon'``     — horizon passed with the near edge reached → CORRECT at
+                          the backstop (the move happened but never hit far).
+    - ``'expired'``     — horizon passed without the near edge → WRONG.
+    - ``'invalidated'`` — thesis broke BEFORE the near edge was reached → WRONG.
+    - ``'mark_near'``   — near edge just reached (win LOCKED) but far not yet hit
+                          and horizon not passed → stay open, stamp reached_near.
+    - ``'open'``        — still developing (incl. near already stamped, awaiting
+                          the far edge or the horizon).
+
+    Once the near edge is reached the win is locked: invalidation can no longer
+    flip it; only the far edge (early) or the horizon resolves it.
     """
-    if mfe_pct is not None and mfe_pct >= abs(near_edge_pct):
-        return "correct"
+    near_mag, far_mag = abs(near_edge_pct), abs(far_edge_pct)
+    reached_near_now = mfe_pct is not None and mfe_pct >= near_mag
+    reached_near = near_already_reached or reached_near_now
+    reached_far = mfe_pct is not None and mfe_pct >= far_mag
+
+    if reached_far:
+        return "target"
     if horizon_passed:
-        return "wrong"
-    return None
+        return "horizon" if reached_near else "expired"
+    if reached_near:
+        return "open" if near_already_reached else "mark_near"
+    if invalidation_tripped:
+        return "invalidated"
+    return "open"
 
 
 def profit_score(near_edge_pct, far_edge_pct, mfe_pct) -> Optional[float]:

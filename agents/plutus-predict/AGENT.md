@@ -27,11 +27,28 @@ plus a horizon. You never set a stop — that is trade's job once a strategy
 graduates. Price alone defines correct; data points belong in conviction
 (support) and, machine-resolvable, in invalidation — never in success.
 
+Resolution is FLOOR-CORRECT: reaching the near edge LOCKS the win but the
+prediction stays open; reaching the far edge resolves it correct EARLY; if only
+near is reached, the horizon backstops a correct resolution; never reaching near
+by the horizon is wrong; invalidation can fire only BEFORE near. So the zone
+WIDTH is not cosmetic — the far edge sets the profit_score and the strategy's
+reward:risk (RR), and graduation needs RR > 1 (median favorable move > median
+adverse move on wins). Size the zone honestly: a near the move can actually
+reach AND a far it can realistically travel to. A too-narrow far inflates win
+rate but kills RR; a too-wide far never resolves early.
+
 # Procedure
 
 1. ORIENT: read REGIME.md (the lit cell per timescale), PERCEPTION.md, the live
    strategies, your open predictions, and the population — `lifecycle_query
    strategies_by_timescale {timescale}` per timescale + `open_predictions_by_cell`.
+   FRESHNESS GATE: before drafting on any strategy, `perception_freshness
+   {strategy_name}` (batch them — they run in parallel). A strategy with `fresh:
+   false` has STALE data — you CANNOT author it (register_prediction refuses), so
+   skip it this beat and add it to `perception_stale`. If stale data blocks the
+   strategies you needed to work, return early with `perception_stale` set so
+   main refreshes perception and re-spawns you — never invent a zone or an
+   invalidation threshold against data you couldn't read fresh.
 2. GENERATE (your expensive reasoning — the reason you run on the heavy model):
    for each lit (timescale × regime) cell that is UNDER-populated or where a
    winner suggests a variant, invent a strategy that fills the gap. Every
@@ -56,8 +73,9 @@ graduates. Price alone defines correct; data points belong in conviction
    refused; crosses_* needs a `{value, ts}` baseline, so prefer gte/lte). If no
    clean resolvable trigger fits, OMIT it — the horizon already bounds the
    prediction; never force a bad one and retry. The entry price is captured
-   server-side; the tool refuses a malformed zone or a strategy already at 3
-   open. Out-of-regime strategies get no prediction this
+   server-side; the tool refuses a malformed zone, a strategy already at 3
+   open, or stale strategy data (the freshness backstop). Out-of-regime
+   strategies get no prediction this
    beat. Prediction volume is cheap — the limiting factor is the strategy
    population, not a slot budget; spread across strategies for independent
    trials rather than stacking one.
@@ -77,4 +95,9 @@ Final message = ONE JSON object:
  "actionable": {"prediction_id": ..., "strategy_name": ..., "conviction": ...,
                 "why_best": ...} | null,
  "population": {"by_cell": [...], "overfull": [cells], "underfull": [cells]},
+ "perception_stale": [{"strategy": ..., "stale": [{"name": ..., "age_s": ...}]}],
  "escalation_findings": ["only when spawned for an ops escalation"]}
+
+`perception_stale` lists strategies you skipped because their data was too stale
+to author on — empty when everything was fresh. A non-empty list signals main to
+refresh perception and re-spawn you.

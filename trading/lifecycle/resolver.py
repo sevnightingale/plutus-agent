@@ -6,15 +6,19 @@ is PURE ORCHESTRATION over injected IO — ``mids`` (symbol → current price),
 reader for invalidation leaves). No venue or registry imports, so it unit-tests
 with plain fakes.
 
-Per open prediction it decides, in this precedence:
-  1. the favorable excursion reached the near edge → CORRECT (success wins even
-     if invalidation also tripped — you hit your target);
-  2. invalidation criteria tripped → WRONG (mode 'invalidated');
-  3. horizon passed → WRONG (mode 'expired');
-  else still open (and, crucially, no candle fetch — the cheap path).
+Per open prediction it decides (floor-correct, target-accelerated, horizon-
+backstopped):
+  - far edge reached → CORRECT early (mode 'target'); a full target beats a
+    simultaneous invalidation;
+  - near edge reached but not far, horizon not passed → the win is LOCKED:
+    stamp ``reached_near_at`` and STAY OPEN (no candle fetch — the cheap path);
+  - horizon passed with the near edge reached → CORRECT (mode 'horizon');
+  - horizon passed without it → WRONG (mode 'expired');
+  - invalidation tripped BEFORE the near edge → WRONG (mode 'invalidated').
 
-Candles are pulled only when something is actually resolving, so a 5-second
-watcher tick stays a single ``all_mids()`` call most of the time.
+Candles are pulled only when something is actually resolving; near-touch
+detection and the stay-open stamp run off the live mid, so a 5-second watcher
+tick stays a single ``all_mids()`` call most of the time.
 """
 
 from __future__ import annotations
@@ -45,38 +49,54 @@ def resolve_open_predictions(
     now = now if now is not None else time.time()
     rows = conn.execute(
         """SELECT id, symbol, ts, horizon_ts, entry_ref_price, near_edge_pct,
-                  far_edge_pct, invalidation_criteria_json, strategy_name
+                  far_edge_pct, reached_near_at, invalidation_criteria_json,
+                  strategy_name
            FROM predictions WHERE resolved_at IS NULL"""
     ).fetchall()
 
-    resolved = []
+    resolved, marked = [], []
     for r in rows:
-        outcome, mode, stats = _decide(
+        action, outcome, mode, stats, near_ts, far_ts = _decide(
             r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now)
-        if outcome is None:
+        if action == "open":
+            continue
+        if action == "mark_near":
+            if write.mark_reached_near(conn, r["id"], near_ts):
+                marked.append({
+                    "prediction_id": r["id"], "symbol": r["symbol"],
+                    "strategy_name": r["strategy_name"],
+                })
             continue
         realized = dict(stats or {})
         realized["resolution_mode"] = mode
         won = write.resolve_prediction(
             conn, r["id"], outcome, resolved_by="resolver",
-            notes_md=f"price-zone {mode}", realized_value=realized, ts=now)
+            notes_md=f"price-zone {mode}", realized_value=realized,
+            reached_near_at=near_ts, reached_far_at=far_ts, ts=now)
         if won:
             resolved.append({
                 "prediction_id": r["id"], "outcome": outcome, "mode": mode,
                 "symbol": r["symbol"], "strategy_name": r["strategy_name"],
             })
-    return {"resolved": resolved, "open_count": len(rows)}
+    return {"resolved": resolved, "marked_near": marked, "open_count": len(rows)}
 
 
 def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now):
-    """-> (outcome|None, mode|None, stats|None). None outcome = still open."""
+    """-> (action, outcome|None, mode|None, stats|None, near_ts|None, far_ts|None).
+
+    ``action`` ∈ {'open', 'mark_near', 'resolve'}. The cheap path (no candle
+    fetch) covers 'open' and 'mark_near'; candles are pulled only to resolve.
+    """
     near, far = r["near_edge_pct"], r["far_edge_pct"]
     entry, symbol = r["entry_ref_price"], r["symbol"]
     horizon_passed = now >= r["horizon_ts"]
+    near_already = r["reached_near_at"] is not None
 
     # Malformed/legacy row with no zone — never crash the sweep; expire at horizon.
     if near is None or far is None or not entry:
-        return ("wrong", "expired", None) if horizon_passed else (None, None, None)
+        if horizon_passed:
+            return ("resolve", "wrong", "expired", None, None, None)
+        return ("open", None, None, None, None, None)
 
     direction = price_zone.direction_of(near, far)
     price = mids.get(symbol) if mids else None
@@ -84,35 +104,48 @@ def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now):
         (100.0 * (float(price) - entry) / entry) * (1 if direction > 0 else -1)
         if price and entry > 0 else None
     )
-    touched_now = mid_mfe is not None and mid_mfe >= abs(near)
 
-    invalidated = False
-    inv_json = r["invalidation_criteria_json"]
-    if not touched_now and inv_json and fetch_fn is not None:
-        try:
-            invalidated = criteria_mod.resolve(
-                json.loads(inv_json), fetch_fn, fetch_extreme_fn) == "correct"
-        except Exception:
-            invalidated = False
+    # Cheap classify on the live mid — no candle pull, no invalidation fetch yet.
+    state = price_zone.classify(
+        near, far, mid_mfe, horizon_passed, near_already_reached=near_already)
 
-    # Cheap path: nothing to do, don't touch the network.
-    if not (touched_now or invalidated or horizon_passed):
-        return (None, None, None)
+    # Invalidation matters only BEFORE the near edge and only if nothing else
+    # fired — evaluate it lazily (it costs a data-point fetch).
+    if state == "open" and not near_already and not horizon_passed:
+        inv_json = r["invalidation_criteria_json"]
+        if inv_json and fetch_fn is not None:
+            try:
+                if criteria_mod.resolve(
+                        json.loads(inv_json), fetch_fn, fetch_extreme_fn) == "correct":
+                    state = "invalidated"
+            except Exception:
+                pass
 
-    # Something's resolving — pull windowed stats (accurate; catches the wick a
-    # 5s/30s poll missed for the horizon case). Fall back to the live mid.
+    if state == "open":
+        return ("open", None, None, None, None, None)
+    if state == "mark_near":
+        return ("mark_near", None, None, None, now, None)
+
+    # Something resolves — pull windowed stats for an accurate mfe/mae (catches a
+    # wick the mid poll missed) and re-confirm against the precise number.
     stats = path_stats_fn(symbol, r["ts"], now, entry, direction) or {}
     mfe = stats.get("mfe_pct")
     if mfe is None:
         mfe = mid_mfe
+    state = price_zone.classify(
+        near, far, mfe, horizon_passed,
+        invalidation_tripped=(state == "invalidated"),
+        near_already_reached=near_already)
 
-    # Success precedence: hitting the target beats a simultaneous invalidation.
-    if mfe is not None and mfe >= abs(near):
+    if state in ("target", "horizon"):
         stats["profit_score"] = price_zone.profit_score(near, far, mfe)
-        return ("correct", "touch", stats)
-    if invalidated:
-        return ("wrong", "invalidated", stats)
-    if horizon_passed:
-        return ("wrong", "expired", stats)
-    # touched_now was a transient the windowed read didn't confirm — stay open.
-    return (None, None, None)
+        far_ts = now if state == "target" else None
+        return ("resolve", "correct", state, stats, now, far_ts)
+    if state == "expired":
+        return ("resolve", "wrong", "expired", stats, None, None)
+    if state == "invalidated":
+        return ("resolve", "wrong", "invalidated", stats, None, None)
+    if state == "mark_near":
+        # The precise read says near (not far) — stay open, stamp near.
+        return ("mark_near", None, None, None, now, None)
+    return ("open", None, None, None, None, None)

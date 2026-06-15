@@ -151,13 +151,15 @@ def poll_hl_account_balance_change(
     throttle_seconds=5,
     description=(
         "Event-driven prediction resolution. Every tick: read open price-zone "
-        "predictions, fetch all_mids once, and deterministically resolve any "
-        "whose favorable move touched the near edge (correct), whose "
-        "invalidation tripped (wrong), or whose horizon expired (wrong) — "
-        "writing path stats and bumping strategy counters. Candles are pulled "
-        "only at the moment of resolution. Wakes main ONLY when the prediction "
-        "backing the OPEN position resolves (a take-profit or exit signal); "
-        "routine paper resolutions are silent (ops reports them on its tick)."
+        "predictions, fetch all_mids once, and deterministically advance any "
+        "whose favorable move reached the far edge (correct early), whose near "
+        "edge just locked the win (stamped, stays open), whose horizon expired "
+        "(correct if the near edge was reached, else wrong), or whose "
+        "invalidation tripped before the near edge (wrong) — writing path stats "
+        "and bumping strategy counters. Candles are pulled only at the moment of "
+        "resolution. Wakes main ONLY when the prediction backing the OPEN "
+        "position resolves; routine paper resolutions and near-locks are silent "
+        "(ops reports them on its tick)."
     ),
 )
 def poll_hl_prediction_resolution(
@@ -202,7 +204,7 @@ def poll_hl_prediction_resolution(
             fired.append({
                 "alert": "hl_prediction_resolution",
                 "kind": r["outcome"],            # correct | wrong
-                "mode": r["mode"],               # touch | expired | invalidated
+                "mode": r["mode"],               # target | horizon | expired | invalidated
                 "coin": r["symbol"],
                 "prediction_id": r["prediction_id"],
                 "strategy_name": r.get("strategy_name"),

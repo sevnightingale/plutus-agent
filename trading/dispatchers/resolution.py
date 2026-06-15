@@ -79,11 +79,14 @@ def _resolve_due(args: Dict[str, Any]) -> str:
     res = resolver.resolve_open_predictions(
         conn, mids=mids, path_stats_fn=path_stats,
         fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
+    marked = res.get("marked_near", [])
     write.record_action_run(
         conn, action_type="resolution", agent="plutus-ops",
         session_name=session_id_from_context(),
-        notes_md=f"{len(res['resolved'])} resolved of {res['open_count']} open")
-    return tool_result({"resolved": res["resolved"], "open_count": res["open_count"]})
+        notes_md=f"{len(res['resolved'])} resolved, {len(marked)} near-locked "
+                 f"of {res['open_count']} open")
+    return tool_result({"resolved": res["resolved"], "marked_near": marked,
+                        "open_count": res["open_count"]})
 
 
 def _rescore_open(args: Dict[str, Any]) -> str:

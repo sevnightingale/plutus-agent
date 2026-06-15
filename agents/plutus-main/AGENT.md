@@ -29,7 +29,10 @@ the one thing only you do: WHAT deserves capital, WHEN.
      spawn_desk_agent(plutus-regime)
    - regime FLIP → rotate dormancy (strategy_set_status), then
      spawn_desk_agent(plutus-predict) with a generation-burst task
-   - predict due, or an ops escalation → spawn_desk_agent(plutus-predict)
+   - predict due, or an ops escalation → spawn_desk_agent(plutus-predict).
+     If predict returns a non-empty `perception_stale` (its data was too old to
+     author on — register refuses stale data), spawn_desk_agent(plutus-perception)
+     to refresh, THEN re-spawn plutus-predict. Never fund off a stale-data beat.
    - reflect due (weekly, or 3+ unreflected closes) →
      spawn_desk_agent(plutus-reflect)
 3. DECIDE: when predict returns an actionable setup — fund it or not, given

@@ -17,7 +17,7 @@ weeks, and that is the system working.
 Three design laws shape everything below:
 
 1. **One binary gate.** Strategy graduation (N≥15 resolved predictions, win
-   rate ≥ 2/3) is the only yes/no on trading. Above the global conviction
+   rate ≥ 0.55 AND reward:risk > 1) is the only yes/no on trading. Above the global conviction
    threshold (0.50), conviction is a *sizing dial* — leverage bands — never a
    veto.
 2. **Honest absence.** Failed readings stay FAILED and are treated as missing;
@@ -138,18 +138,25 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    thesis breaking, never a price wiggle). Price alone defines correct; data
    points live in conviction and invalidation, never in success. The limiting
    factor is the per-(timescale × regime) strategy population (≈ 2 active +
-   6 test per cell), not a slot budget — prediction volume is cheap.
-3. **Resolve.** Resolution is EARLY and CONTINUOUS: a prediction is CORRECT the
-   moment price touches its near edge — the live watcher detects this within
-   seconds and resolves deterministically — WRONG at the horizon otherwise, or
-   WRONG early if invalidation trips. The ops sweep is a race-safe safety net.
-   On resolution the price path over [birth, now] is measured (MAE / MFE /
-   profit-score → `realized_value_json`) and the outcome accrues to the
-   strategy; MAE-on-correct later sets stops (see Execute).
+   6 test per cell), not a slot budget — prediction volume is cheap. predict
+   authors only on FRESH perception: `perception_freshness` gates each strategy
+   and `register_prediction` refuses stale data, so a stale beat returns
+   `perception_stale` and main refreshes perception before predict retries.
+3. **Resolve.** Resolution is FLOOR-CORRECT and CONTINUOUS: touching the near
+   edge LOCKS the win but the prediction stays OPEN; touching the far edge
+   resolves it CORRECT early (the live watcher detects touches within seconds);
+   if only near is reached, the horizon backstops a CORRECT resolution; never
+   reaching near by the horizon is WRONG; invalidation trips WRONG only BEFORE
+   near. The ops sweep is a race-safe safety net. On resolution the price path
+   over [birth, resolution] is measured (MAE / MFE / profit-score →
+   `realized_value_json`); MAE-on-correct sets stops and MFE-vs-MAE on wins is
+   the strategy's reward:risk (see Graduate, Execute).
 4. **Graduate.** plutus-reflect promotes test → **active** only at **N≥15
-   resolved AND win rate ≥ 2/3** (checkpoint every 10: ≥50%; revoke at N≥20
-   below 40% across ≥2 regimes). No manual graduation, no hand-seeded
-   actives — the bar is the bar.
+   resolved AND win rate ≥ 0.55 AND reward:risk RR > 1** (RR = median favorable
+   ÷ median adverse move on wins; win_rate × RR is positive expectancy — a good
+   forecaster with RR ≤ 1 is a losing trade and does NOT graduate). Checkpoint
+   every 10: ≥50%; revoke at N≥20 below 40% across ≥2 regimes. No manual
+   graduation, no hand-seeded actives — the bar is the bar.
 5. **Fund & size.** When an active strategy's prediction clears the global
    conviction threshold (0.50), main decides funding and spawns plutus-trade
    with a risk budget. Conviction sets **size** via the leverage bands —

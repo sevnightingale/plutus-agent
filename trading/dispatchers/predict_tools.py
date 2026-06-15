@@ -353,3 +353,54 @@ registry.register(
     description="Cheap-model conviction score over a strategy's declared data points.",
     emoji="🎯",
 )
+
+
+PERCEPTION_FRESHNESS_SCHEMA = {
+    "name": "perception_freshness",
+    "description": (
+        "Before authoring a prediction, check that the perception data the "
+        "strategy needs is fresh enough to ground a zone + invalidation on. "
+        "Returns the strategy's declared data points that are STALE (present but "
+        "older than max(cache budget, 30 min)) and, separately, MISSING ones "
+        "(declared missing_data_points are excluded). If 'fresh' is false there "
+        "are stale points — do NOT register on this strategy; return "
+        "perception_stale to main so it re-runs perception, then retry. "
+        "register_prediction enforces the stale check as a hard backstop."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"strategy_name": {"type": "string"}},
+        "required": ["strategy_name"],
+    },
+}
+
+
+def _perception_freshness(args: Dict[str, Any]) -> str:
+    from trading.perception import freshness
+    name = args.get("strategy_name")
+    strat = _load_strategy(name)
+    if strat is None:
+        return tool_error(f"unknown strategy {name!r} — no file at strategies/{name}.md")
+    missing_declared = set(strat.missing_data_points or [])
+    declared = [dp for dp in (strat.data_points or [])
+                if isinstance(dp, dict) and dp.get("name") not in missing_declared]
+    flagged = freshness.stale_data_points(declared)
+    stale = [e for e in flagged if e["reason"] == "stale"]
+    missing = [e for e in flagged if e["reason"] == "missing"]
+    return tool_result({
+        "strategy_name": name,
+        "fresh": not stale,          # stale blocks; missing is informational
+        "stale": stale,
+        "missing": missing,
+        "checked": len(declared),
+    })
+
+
+registry.register(
+    name="perception_freshness",
+    toolset="conviction",
+    schema=PERCEPTION_FRESHNESS_SCHEMA,
+    handler=lambda args, **kw: _perception_freshness(args),
+    description="Check a strategy's perception data is fresh enough to author on.",
+    emoji="⏱️",
+)

@@ -197,6 +197,8 @@ def resolve_prediction(
     notes_md: Optional[str] = None,
     realized_value: Optional[dict] = None,
     snapshot_ids: Sequence[int] = (),
+    reached_near_at: Optional[float] = None,
+    reached_far_at: Optional[float] = None,
     ts: Optional[float] = None,
 ) -> bool:
     """Record a resolution and bump strategy mirror counters — race-safe.
@@ -207,6 +209,11 @@ def resolve_prediction(
     UPDATE matches, so counters bump exactly once. An invalidation is recorded
     as ``outcome='wrong'`` with ``realized_value['resolution_mode']='invalidated'``
     (so every existing win-rate query keeps working).
+
+    ``reached_near_at`` / ``reached_far_at`` stamp the resolution markers when
+    not already set (``COALESCE`` keeps an earlier near touch). A ``'target'``
+    resolution passes both (far reached now); a ``'horizon'`` correct passes
+    only near; a wrong resolution passes neither.
     """
     if outcome not in VALID_OUTCOMES:
         raise ValueError(f"outcome must be one of {VALID_OUTCOMES}")
@@ -222,12 +229,15 @@ def resolve_prediction(
     cur = conn.execute(
         """UPDATE predictions SET resolved_at=?, outcome=?, resolved_by=?,
            resolution_notes_md=?, realized_value_json=?,
-           resolution_snapshot_ids_json=?
+           resolution_snapshot_ids_json=?,
+           reached_near_at=COALESCE(reached_near_at, ?),
+           reached_far_at=COALESCE(reached_far_at, ?)
            WHERE id=? AND resolved_at IS NULL""",
         (
             ts, outcome, resolved_by, notes_md,
             json.dumps(realized_value) if realized_value else None,
             json.dumps(list(snapshot_ids)) if snapshot_ids else None,
+            reached_near_at, reached_far_at,
             prediction_id,
         ),
     )
@@ -249,6 +259,25 @@ def resolve_prediction(
         )
     conn.commit()
     return True
+
+
+def mark_reached_near(conn: sqlite3.Connection, prediction_id: int,
+                      ts: Optional[float] = None) -> bool:
+    """Stamp ``reached_near_at`` once — the moment the win is LOCKED.
+
+    Race-safe and idempotent: the conditional UPDATE only matches an open,
+    not-yet-stamped row, so the watcher and the ops sweep can both detect the
+    near touch and exactly one stamps it. Returns True if THIS call stamped it.
+    The prediction stays open — only the far edge (early) or the horizon
+    resolves it.
+    """
+    cur = conn.execute(
+        "UPDATE predictions SET reached_near_at=? "
+        "WHERE id=? AND reached_near_at IS NULL AND resolved_at IS NULL",
+        (ts if ts is not None else time.time(), prediction_id),
+    )
+    conn.commit()
+    return cur.rowcount == 1
 
 
 def record_prediction_evaluation(

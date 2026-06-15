@@ -110,6 +110,34 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             f"entry reference price for {symbol} is unavailable — refusing to "
             "register a price zone with no anchor")
 
+    # Grounding backstop: refuse to author on STALE strategy data. predict is
+    # meant to catch this in ORIENT (perception_freshness) and have main refresh
+    # perception first; this is the hard guard. Only stale (present-but-old)
+    # blocks — a never-fetched DP shouldn't loop us forever, and conviction
+    # self-fetches live regardless.
+    kind = args.get("kind", "strategy")
+    strat_name = args.get("strategy_name")
+    if kind == "strategy" and strat_name:
+        from trading.perception import freshness as fresh_mod
+        from trading.strategies import files as strat_files
+
+        spath = strat_files.strategies_dir() / f"{strat_name}.md"
+        if spath.exists():
+            strat = strat_files.parse_strategy(spath)
+            missing_declared = set(strat.missing_data_points or [])
+            declared = [dp for dp in (strat.data_points or [])
+                        if isinstance(dp, dict) and dp.get("name") not in missing_declared]
+            stale = [e for e in fresh_mod.stale_data_points(declared)
+                     if e["reason"] == "stale"]
+            if stale:
+                pts = ", ".join(f"{e['name']} ({e['age_s']}s > {e['max_age_s']}s)"
+                                for e in stale)
+                return tool_error(
+                    f"stale perception data for strategy {strat_name!r} — "
+                    f"prediction refused: {pts}. Author on fresh readings: "
+                    f"return perception_stale to main so it re-runs perception, "
+                    f"then retry.")
+
     try:
         horizon_hours = float(args["horizon_hours"])
         now = time.time()

@@ -1,4 +1,4 @@
-"""lifecycle.db v3 — the prediction-first event log (PLUTUS rebuild, R1).
+"""lifecycle.db v4 — the prediction-first event log (PLUTUS rebuild, R1).
 
 The lifecycle of PREDICTIONS, some of which become trades. The chain:
 prediction → (funding) → thesis (cites prediction_id) → decision → trade →
@@ -6,12 +6,12 @@ position → outcome. Resolution and calibration happen uniformly at the
 prediction level; support_scores records the per-(prediction, data point)
 conviction inputs including narrative LLM reasoning.
 
-Fresh-create starts calibration from zero. A v2 file is migrated in place to
-v3 (price-zone predictions): the migration expires all open predictions and
-resets the strategy mirror counters — a deliberate clean slate, because the
-old counts measured forecast-accuracy and graduation now measures the price-
-zone metric. A pre-v2 (v1) file is still refused, never migrated; the old
-runtime's file stays preserved as reference.
+Fresh-create starts calibration from zero. Migrations chain in place: v2 → v3
+added the price-zone columns and clean-slated the old forecast-accuracy counters
+(graduation now measures the price-zone metric); v3 → v4 adds the
+reached_near_at / reached_far_at resolution markers (floor-correct, target-
+accelerated, horizon-backstopped). A pre-v2 (v1) file is still refused, never
+migrated; the old runtime's file stays preserved as reference.
 
 Write ownership (doctrine): plutus-main writes events from subagents'
 structured returns; plutus-predict writes predictions; plutus-ops resolves
@@ -30,7 +30,7 @@ from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # ───────────────────────────────────────────────────────────────────────────
 # Schema
@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     entry_ref_price REAL,                 -- spot captured at registration; the % zone is relative to this
     near_edge_pct REAL,                   -- correctness floor: signed % move (bullish +, bearish -)
     far_edge_pct REAL,                    -- optimistic target: signed % move, |far| > |near|
+    reached_near_at REAL,                 -- favorable excursion first touched near → win LOCKED (stays open)
+    reached_far_at REAL,                  -- touched far → early target (resolves correct, mode 'target')
     success_criteria_json TEXT NOT NULL,  -- serialized price zone (the explicit *_pct cols are truth)
     failure_criteria_json TEXT,
     invalidation_criteria_json TEXT,      -- optional machine-resolvable thesis-break (resolvable DP leaves)
@@ -369,14 +371,20 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         version = row["version"] if row else None
         if version == SCHEMA_VERSION:
             return conn
+        # Incremental migrations chain forward: v2 → v3 → v4.
         if version == 2:
             _migrate_v2_to_v3(conn)
-            logger.info("Migrated lifecycle.db v2 → v3 (price-zone) at %s", db_path)
+            version = 3
+        if version == 3:
+            _migrate_v3_to_v4(conn)
+            version = 4
+        if version == SCHEMA_VERSION:
+            logger.info("Migrated lifecycle.db → v%s at %s", SCHEMA_VERSION, db_path)
             return conn
         conn.close()
         raise RuntimeError(
             f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
-            "Only v2 → v3 is migrated; a pre-v2 (v1) file is fresh-create only. "
+            "Migrations chain v2 → v3 → v4; a pre-v2 (v1) file is fresh-create only. "
             "Back up and remove the old file (see SETUP.md, 'Redeploying "
             "a fresh runtime'), then rerun."
         )
@@ -468,6 +476,32 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
         )
 
         conn.execute("UPDATE schema_version SET version = 3")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
+    """In-place v3 → v4: add the resolution-progress markers.
+
+    ``reached_near_at`` / ``reached_far_at`` back the floor-correct, target-
+    accelerated, horizon-backstopped model: near touch LOCKS the win but keeps
+    the prediction open; far touch resolves it correct early; otherwise the
+    horizon backstops a correct resolution. No data backfill — existing resolved
+    rows keep NULL markers (only forward predictions carry the trajectory).
+
+    Idempotent (re-running on a partial file is a no-op) and serialized with
+    ``BEGIN IMMEDIATE`` so a watcher/ops race on first open can't double-apply.
+    """
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for col in ("reached_near_at", "reached_far_at"):
+            try:
+                conn.execute(f"ALTER TABLE predictions ADD COLUMN {col} REAL")
+            except sqlite3.OperationalError:
+                pass  # column already present — idempotent
+        conn.execute("UPDATE schema_version SET version = 4")
         conn.commit()
     except Exception:
         conn.rollback()

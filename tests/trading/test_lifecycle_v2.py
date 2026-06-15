@@ -374,14 +374,17 @@ def _make_v2_db(path, *, open_pred=True, backed_pred=False):
 
 
 class TestMigration:
-    def test_v2_migrates_to_v3(self, tmp_path):
+    def test_v2_migrates_forward(self, tmp_path):
         p = tmp_path / "lifecycle.db"
         _make_v2_db(p, open_pred=True, backed_pred=True)
         c = get_db(p)
         try:
-            assert c.execute("SELECT version FROM schema_version").fetchone()["version"] == 3
+            # migrations chain v2 → v3 → v4
+            assert c.execute(
+                "SELECT version FROM schema_version").fetchone()["version"] == SCHEMA_VERSION
             cols = {r[1] for r in c.execute("PRAGMA table_info(predictions)")}
-            assert {"entry_ref_price", "near_edge_pct", "far_edge_pct"} <= cols
+            assert {"entry_ref_price", "near_edge_pct", "far_edge_pct",
+                    "reached_near_at", "reached_far_at"} <= cols
             assert _has_table(c, "prediction_evaluations")
             # open (unbacked) prediction was clean-slate expired
             row = c.execute(
@@ -420,7 +423,8 @@ class TestMigration:
         assert not errors, errors
         c = get_db(p)
         try:
-            assert c.execute("SELECT version FROM schema_version").fetchone()["version"] == 3
+            assert c.execute(
+                "SELECT version FROM schema_version").fetchone()["version"] == SCHEMA_VERSION
         finally:
             c.close()
 
