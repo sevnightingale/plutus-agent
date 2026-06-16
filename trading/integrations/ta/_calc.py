@@ -155,18 +155,26 @@ def calc_vwap(df: pd.DataFrame, anchor: str = "D") -> dict:
 
 # ── volatility indicators ──────────────────────────────────────────────────
 
+def _bb_col(length: int, std: float, prefix: str) -> str:
+    """Format a pandas_ta BB column name.  pandas_ta always renders whole-number
+    std as ``2.0`` not ``2``, but callers may pass std as an int from JSON
+    params.  Normalise to float so the key always matches."""
+    return f"{prefix}_{length}_{float(std)}"
+
+
 def calc_bbands(df: pd.DataFrame, length: int = 20, std: float = 2.0) -> dict:
     result = ta.bbands(df["close"], length=length, std=std)
-    upper = result[f"BBU_{length}_{std}"]
-    middle = result[f"BBM_{length}_{std}"]
-    lower = result[f"BBL_{length}_{std}"]
+    upper = result[_bb_col(length, std, "BBU")]
+    middle = result[_bb_col(length, std, "BBM")]
+    lower = result[_bb_col(length, std, "BBL")]
     return get_preprocessor("bbands").preprocess(upper, middle, lower,
                                                   df["close"],
                                                   length=length, std=std)
 
 
 def calc_bbwidth(df: pd.DataFrame, length: int = 20, std: float = 2.0) -> dict:
-    series = ta.bbands(df["close"], length=length, std=std)[f"BBB_{length}_{std}"]
+    result = ta.bbands(df["close"], length=length, std=std)
+    series = result[_bb_col(length, std, "BBB")]
     return get_preprocessor("bbwidth").preprocess(series,
                                                    prices=df["close"],
                                                    length=length, std=std)
