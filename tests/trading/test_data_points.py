@@ -21,6 +21,7 @@ from trading.perception.cache import get_staleness_budget, _canonical_key
 # into the still-populated registry → RegistryError. Collection-time imports
 # are in every test's snapshot and never popped.
 from trading.integrations.ta import _calc as ta_calc
+from trading.integrations.ta import data_points as ta_dp
 from trading.integrations.flow._calc import calc_cvd
 from trading.integrations.coingecko.data_points import _historical_dominance
 
@@ -127,6 +128,32 @@ class TestPsarCalc:
     def test_non_default_af_params_dont_keyerror(self):
         out = ta_calc.calc_psar(_trend_df(), af_start=0.03, af_max=0.3)
         assert "error" not in out and "current" in out
+
+
+class TestPsarParamAlias:
+    """ta_psar accepts ``af_step`` as an alias for ``af_increment`` — agents
+    author strategies with either name (TradingView 'increment', pandas_ta
+    'af', many refs 'af_step'); an unknown kwarg used to crash the fetch."""
+
+    def _capture_fetch(self, monkeypatch):
+        captured = {}
+
+        def fake(symbol, interval, lookback_bars, calc_fn, **kw):
+            captured.update(kw)
+            return {"current": {"psar_value": 1.0}}
+
+        monkeypatch.setattr(ta_dp, "_ta_fetch", fake)
+        return captured
+
+    def test_af_step_routes_to_af_increment(self, monkeypatch):
+        captured = self._capture_fetch(monkeypatch)
+        ta_dp.ta_psar("BTC", af_step=0.05)
+        assert captured["af_increment"] == 0.05
+
+    def test_af_increment_still_honored(self, monkeypatch):
+        captured = self._capture_fetch(monkeypatch)
+        ta_dp.ta_psar("BTC", af_increment=0.07)
+        assert captured["af_increment"] == 0.07
 
 
 class TestCvdDivergence:

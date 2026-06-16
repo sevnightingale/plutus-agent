@@ -12,7 +12,7 @@ All indicators share the same call signature:
 from __future__ import annotations
 
 import numpy as np
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from trading.perception.core.data_point_registry import register_data_point
 
@@ -577,7 +577,12 @@ def ta_obv(symbol: str, interval: str = "1h",
 )
 def ta_psar(symbol: str, interval: str = "1h", af_start: float = 0.02,
             af_increment: float = 0.02, af_max: float = 0.2,
-            lookback_bars: int = 200) -> Dict[str, Any]:
+            lookback_bars: int = 200, af_step: Optional[float] = None) -> Dict[str, Any]:
+    # ``af_step`` is a common alias for the acceleration increment (TradingView
+    # "increment", pandas_ta "af") — accept it so an agent-authored strategy
+    # that uses that name doesn't crash the whole perception fetch.
+    if af_step is not None:
+        af_increment = af_step
     return _ta_fetch(symbol, interval, lookback_bars,
                      _calc.calc_psar, af_start=af_start,
                      af_increment=af_increment, af_max=af_max)
