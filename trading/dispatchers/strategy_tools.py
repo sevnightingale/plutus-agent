@@ -52,6 +52,15 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
     from trading.strategies.files import Strategy, strategies_dir
 
     name = args["name"]
+    # Normalize string-params (e.g. "symbol=BTC") → dict before writing.
+    # The LLM sometimes emits them as strings; _dp_key / _fetch_reading
+    # handle them defensively, but written files should use the canonical
+    # dict format so they never trip future readers.
+    from trading.strategies.files import _normalize_params
+    dps = args.get("data_points") or []
+    for dp in dps:
+        if isinstance(dp, dict) and "params" in dp:
+            dp["params"] = _normalize_params(dp.get("params"))
     s = Strategy(
         name=name,
         status=args.get("status", "test"),
@@ -61,7 +70,7 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
         parent_strategy=args.get("parent_strategy"),
         variant_tweak=args.get("variant_tweak"),
         regime_applicability=args.get("regime_applicability") or {},
-        data_points=args.get("data_points") or [],
+        data_points=dps,
         missing_data_points=args.get("missing_data_points") or [],
         created=time.strftime("%Y-%m-%d"),
         body_md="\n" + args["body"].strip() + "\n",

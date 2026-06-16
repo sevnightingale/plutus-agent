@@ -57,29 +57,13 @@ def _parse_json_loose(text: str) -> dict:
     return json.loads(t[start:end + 1])
 
 
-def _structured_call(*, task: str, system: str, user: str, schema: dict,
-                     max_tokens: int = 1200) -> dict:
-    """One light-model completion returning a JSON object matching ``schema``.
+def _extract_json_from_message(msg) -> Optional[dict]:
+    """Try every field a thinking model might put its answer in.
 
-    Uses strict-JSON prompting + content parsing — NOT forced tool calls. The
-    light tier is a thinking-mode model and providers like DeepSeek reject
-    ``tool_choice`` in thinking mode ("Thinking mode does not support this
-    tool_choice"), which would 400 the whole call. The schema is communicated
-    in-prompt; if a provider happens to emit a tool call anyway we accept it.
+    Checks in order: tool_calls → content → reasoning_content.
+    Returns the first JSON dict found, or None.
     """
-    from harness.agent.auxiliary_client import call_llm
-
-    sys_full = (
-        system + "\n\nReturn ONLY a single JSON object — no prose, no markdown "
-        "code fences — matching this JSON schema:\n" + json.dumps(schema)
-    )
-    resp = call_llm(
-        task=task, model=_light_model(),
-        messages=[{"role": "system", "content": sys_full},
-                  {"role": "user", "content": user}],
-        max_tokens=max_tokens, temperature=0,
-    )
-    msg = resp.choices[0].message
+    # 1. Tool-call (provider forced-emit — rare for thinking models).
     tcs = getattr(msg, "tool_calls", None)
     if tcs:
         try:
@@ -88,14 +72,66 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
                 return out
         except Exception:
             pass
+
+    # 2. Regular content field.
     content = getattr(msg, "content", None)
-    if not content:
-        raise ValueError("structured call returned no content")
-    out = _parse_json_loose(content)
-    if not isinstance(out, dict):
-        raise ValueError(
-            f"structured call did not return a JSON object (got {type(out).__name__})")
-    return out
+    if content and str(content).strip():
+        try:
+            out = _parse_json_loose(str(content))
+            if isinstance(out, dict):
+                return out
+        except Exception:
+            pass
+
+    # 3. Reasoning / thinking output (deepseek-v4-flash and other thinking
+    #    models sometimes put the final answer here, leaving content null).
+    reasoning = getattr(msg, "reasoning_content", None)
+    if reasoning and str(reasoning).strip():
+        try:
+            out = _parse_json_loose(str(reasoning))
+            if isinstance(out, dict):
+                return out
+        except Exception:
+            pass
+
+    return None
+
+
+def _structured_call(*, task: str, system: str, user: str, schema: dict,
+                     max_tokens: int = 1200, max_retries: int = 2) -> dict:
+    """One light-model completion returning a JSON object matching ``schema``.
+
+    Uses strict-JSON prompting + content parsing — NOT forced tool calls. The
+    light tier is a thinking-mode model and providers like DeepSeek reject
+    ``tool_choice`` in thinking mode ("Thinking mode does not support this
+    tool_choice"), which would 400 the whole call. The schema is communicated
+    in-prompt.
+
+    Retries once on empty/missing content (the thinking model sometimes
+    returns a reply where every field is null).  Also checks
+    ``reasoning_content`` — thinking models may put their final answer there
+    while leaving ``content`` empty.
+    """
+    from harness.agent.auxiliary_client import call_llm
+
+    sys_full = (
+        system + "\n\nReturn ONLY a single JSON object — no prose, no markdown "
+        "code fences — matching this JSON schema:\n" + json.dumps(schema)
+    )
+
+    for attempt in range(max_retries):
+        resp = call_llm(
+            task=task, model=_light_model(),
+            messages=[{"role": "system", "content": sys_full},
+                      {"role": "user", "content": user}],
+            max_tokens=max_tokens, temperature=0,
+        )
+        msg = resp.choices[0].message
+        out = _extract_json_from_message(msg)
+        if out is not None:
+            return out
+
+    raise ValueError(f"structured call returned no content in {max_retries} attempts")
 
 
 def _load_strategy(name: str):
@@ -239,8 +275,9 @@ _SCORE_OUT_SCHEMA = {
 def _fetch_reading(dp: dict):
     """(numeric, compact-reading-string) for one declared data point, fresh."""
     from trading.perception.core import data_point_registry
+    from trading.strategies.files import _normalize_params
     name = dp["name"]
-    params = dp.get("params") or {}
+    params = _normalize_params(dp.get("params"))
     try:
         entry = data_point_registry.lookup(name)
         value = entry.fn(**params) if entry.fn else None

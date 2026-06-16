@@ -62,8 +62,30 @@ class Strategy:
         return m.group(1).strip() if m else None
 
 
+def _normalize_params(params: object) -> dict:
+    """Coerce string-params ``"k=v,k2=v2"`` → ``{k: v, k2: v2}``.
+
+    Strategy files sometimes store params as YAML strings (e.g.
+    ``params: symbol=BTC``) instead of maps.  This defends every
+    downstream reader — _dp_key, _fetch_reading, and any future
+    iterator — from the ``TypeError: string indices must be integers``
+    crash documented under BUG 1 (2026-06-16).
+    """
+    if isinstance(params, dict):
+        return params
+    if isinstance(params, str) and params.strip():
+        result: dict = {}
+        for part in params.split(","):
+            part = part.strip()
+            if "=" in part:
+                k, v = part.split("=", 1)
+                result[k.strip()] = v.strip()
+        return result
+    return {}
+
+
 def _dp_key(dp: dict) -> str:
-    params = dp.get("params") or {}
+    params = _normalize_params(dp.get("params"))
     if params:
         inner = ",".join(f"{k}={params[k]}" for k in sorted(params))
         return f"{dp['name']}({inner})"
