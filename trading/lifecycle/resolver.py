@@ -39,12 +39,22 @@ def resolve_open_predictions(
     fetch_fn: Optional[Callable] = None,
     fetch_extreme_fn: Optional[Callable] = None,
     now: Optional[float] = None,
+    deep: bool = False,
 ) -> dict:
     """Resolve every open price-zone prediction that has met its terms.
 
     Returns ``{"resolved": [...], "open_count": N}``. Each resolved entry is a
     compact dict suitable for a wake event. Idempotent across callers: the
     race-safe ``write.resolve_prediction`` ensures one winner per prediction.
+
+    ``deep=False`` (the watcher's per-tick fast path) detects edge touches off
+    the live ``mids`` only — one ``all_mids()`` call, no candle pull unless
+    something is already resolving. ``deep=True`` (the ops safety-net sweep)
+    additionally pulls the windowed candle path for each still-open prediction
+    and re-checks the near/far edges against the path MFE — catching a
+    favorable wick that touched an edge and recovered *between* the 5s mid
+    polls (the near edge is the correctness floor, so a missed near-touch would
+    otherwise expire WRONG a prediction that genuinely hit its floor).
     """
     now = now if now is not None else time.time()
     rows = conn.execute(
@@ -57,7 +67,7 @@ def resolve_open_predictions(
     resolved, marked = [], []
     for r in rows:
         action, outcome, mode, stats, near_ts, far_ts = _decide(
-            r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now)
+            r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep)
         if action == "open":
             continue
         if action == "mark_near":
@@ -81,11 +91,14 @@ def resolve_open_predictions(
     return {"resolved": resolved, "marked_near": marked, "open_count": len(rows)}
 
 
-def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now):
+def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep=False):
     """-> (action, outcome|None, mode|None, stats|None, near_ts|None, far_ts|None).
 
     ``action`` ∈ {'open', 'mark_near', 'resolve'}. The cheap path (no candle
     fetch) covers 'open' and 'mark_near'; candles are pulled only to resolve.
+    When ``deep`` is set and the live mid shows nothing, a still-developing
+    prediction (near not yet locked, horizon not passed) ALSO gets a candle
+    look-back so a favorable wick the mid poll missed still locks the floor.
     """
     near, far = r["near_edge_pct"], r["far_edge_pct"]
     entry, symbol = r["entry_ref_price"], r["symbol"]
@@ -121,13 +134,18 @@ def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now):
             except Exception:
                 pass
 
-    if state == "open":
-        return ("open", None, None, None, None, None)
     if state == "mark_near":
         return ("mark_near", None, None, None, now, None)
 
-    # Something resolves — pull windowed stats for an accurate mfe/mae (catches a
-    # wick the mid poll missed) and re-confirm against the precise number.
+    # Cheap fast path: the live mid shows nothing and this isn't the deep sweep
+    # — leave it open (the watcher's per-tick behaviour, no candle pull).
+    if state == "open" and not deep:
+        return ("open", None, None, None, None, None)
+
+    # Either something is resolving on the live mid, OR this is the ops deep
+    # sweep taking a candle look-back over [birth, now] to catch a favorable
+    # wick the 5s mid poll missed between ticks. Pull windowed stats for an
+    # accurate mfe/mae and (re-)classify against the precise number.
     stats = path_stats_fn(symbol, r["ts"], now, entry, direction) or {}
     mfe = stats.get("mfe_pct")
     if mfe is None:

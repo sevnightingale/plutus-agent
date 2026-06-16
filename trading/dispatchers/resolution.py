@@ -76,9 +76,12 @@ def _resolve_due(args: Dict[str, Any]) -> str:
     except Exception as exc:
         return tool_error(f"could not fetch prices (all_mids): {exc}")
 
+    # deep=True: the safety-net sweep pulls candles for each still-open
+    # prediction and re-checks the edges against the path MFE, catching any
+    # favorable wick the watcher's live-mid poll missed between ticks.
     res = resolver.resolve_open_predictions(
         conn, mids=mids, path_stats_fn=path_stats,
-        fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
+        fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme, deep=True)
     marked = res.get("marked_near", [])
     write.record_action_run(
         conn, action_type="resolution", agent="plutus-ops",

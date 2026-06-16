@@ -235,6 +235,57 @@ class TestResolver:
             conn, mids=mids, path_stats_fn=_stats_fn(11.0), now=time.time())
         assert r2["resolved"] == [] and r2["open_count"] == 0
 
+    def test_deep_sweep_catches_missed_near_wick(self, conn):
+        # The live mid is back AT entry (mid_mfe == 0 — the watcher sees nothing),
+        # but the candle path wicked past the near edge and recovered. The cheap
+        # watcher pass leaves it open and pulls no candles; the deep ops sweep
+        # pulls candles, sees the +6% favorable wick, and LOCKS the floor.
+        # (This is the #71/BOJ case: a near touch between 5s mid polls.)
+        pid = _record(conn)  # near +5% (105k), far +10%
+        t = time.time()
+        mids = {"BTC": 100_000.0}  # exactly entry → mid sees nothing
+        called = []
+
+        def wick_stats(*a, **k):
+            called.append(1)
+            return {"mfe_pct": 6.0, "mae_pct": -1.0, "range_pct": 7.0}
+
+        # Cheap watcher pass: no candle pull, prediction stays fully open.
+        r_cheap = resolver.resolve_open_predictions(
+            conn, mids=mids, path_stats_fn=wick_stats, now=t)
+        assert r_cheap["marked_near"] == [] and r_cheap["resolved"] == []
+        assert not called  # the mid said nothing → no candle look-back
+        assert queries.prediction(conn, pid)["reached_near_at"] is None
+
+        # Deep ops sweep: candle look-back catches the wick → marks near.
+        r_deep = resolver.resolve_open_predictions(
+            conn, mids=mids, path_stats_fn=wick_stats, now=t + 5, deep=True)
+        assert [m["prediction_id"] for m in r_deep["marked_near"]] == [pid]
+        assert called  # the deep sweep DID pull candles
+        assert queries.prediction(conn, pid)["reached_near_at"] is not None
+
+    def test_deep_sweep_resolves_missed_far_wick(self, conn):
+        # A wick that touched the FAR target and recovered (mid sees nothing)
+        # resolves CORRECT (target) on the deep sweep — the optimistic target
+        # was genuinely hit.
+        pid = _record(conn)  # near +5%, far +10% (110k)
+        res = resolver.resolve_open_predictions(
+            conn, mids={"BTC": 100_000.0}, path_stats_fn=_stats_fn(11.0),
+            now=time.time(), deep=True)
+        assert res["resolved"][0]["outcome"] == "correct"
+        assert res["resolved"][0]["mode"] == "target"
+        assert queries.prediction(conn, pid)["reached_far_at"] is not None
+
+    def test_deep_sweep_leaves_open_when_path_flat(self, conn):
+        # Deep mode pulls candles but the path never reached the near edge —
+        # still open, nothing marked or resolved.
+        pid = _record(conn)  # near +5%
+        res = resolver.resolve_open_predictions(
+            conn, mids={"BTC": 100_000.0}, path_stats_fn=_stats_fn(2.0),
+            now=time.time(), deep=True)
+        assert res["resolved"] == [] and res["marked_near"] == []
+        assert queries.prediction(conn, pid)["reached_near_at"] is None
+
 
 class TestOpsSweepWiring:
     """The resolve_due_predictions dispatcher wires all_mids + path_stats into
