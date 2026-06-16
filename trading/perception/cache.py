@@ -63,6 +63,8 @@ _PREFIX_STALENESS_BUDGETS = {
     "btc_dominance_velocity": 1800.0,
     # Macro — slow-moving context; 4h matches the perception staleness floor.
     "macro_": 14400.0,
+    # BTC ETF net flow — T+1 daily data; 4h cache (doesn't match macro_ prefix).
+    "btc_etf_netflow": 14400.0,
     # Competition state — 1 hour.
     "dgclaw_": 3600.0,
     "acp_": 3600.0,

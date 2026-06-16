@@ -1,2 +1,2 @@
-"""Macro integration — agentic query blueprints for VIX, DXY, CPI.""" 
+"""Macro integration — direct web-sourced DPs (VIX, DXY, CPI, ETF flows) via context.dev.""" 
 from . import data_points

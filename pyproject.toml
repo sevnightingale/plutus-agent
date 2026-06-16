@@ -48,6 +48,7 @@ dependencies = [
   # at tag 0.3.14 (internally reports version 0.3.14b0, same code as upstream).
   # To upgrade later: bump Python>=3.12 + numpy>=2 + pandas-ta>=0.4 together.
   "pandas_ta @ git+https://github.com/freqtrade/pandas-ta.git@0.3.14",
+  "context-dev>=0.34",  # web scrape/extract backend for macro data points
 ]
 
 [project.optional-dependencies]
