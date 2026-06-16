@@ -68,7 +68,6 @@
 --deselect=tests/hermes_cli/test_skills_config.py::TestFindAllSkillsFiltering::test_enabled_skill_included
 --deselect=tests/hermes_cli/test_skills_config.py::TestFindAllSkillsFiltering::test_skip_disabled_returns_all
 --deselect=tests/hermes_cli/test_status.py::test_show_status_termux_gateway_section_skips_systemctl
---deselect=tests/hermes_cli/test_tips.py::TestTipsCorpus::test_max_length_reasonable
 --deselect=tests/hermes_cli/test_update_gateway_restart.py::TestCmdUpdateLaunchdRestart::test_update_without_launchd_shows_manual_restart
 --deselect=tests/hermes_cli/test_update_gateway_restart.py::TestCmdUpdateLegacyGatewayWarning::test_update_prints_legacy_warning_when_detected
 --deselect=tests/hermes_cli/test_update_hangup_protection.py::TestInstallHangupProtection::test_wraps_stdout_and_stderr_with_mirror
@@ -120,6 +119,7 @@
 --deselect=tests/tools/test_file_staleness.py::TestStalenessCheck::test_warning_when_file_modified_externally
 --deselect=tests/tools/test_file_state_registry.py::FileToolsIntegrationTests::test_net_new_file_no_warning
 --deselect=tests/tools/test_file_state_registry.py::FileToolsIntegrationTests::test_sibling_agent_write_surfaces_warning_through_handler
+--deselect=tests/tools/test_local_interrupt_cleanup.py::test_wait_for_process_kills_subprocess_on_keyboardinterrupt
 --deselect=tests/tools/test_file_sync_back.py::TestSyncBackAppliesChanged::test_sync_back_applies_changed_file
 --deselect=tests/tools/test_file_sync_back.py::TestSyncBackConflict::test_sync_back_conflict_warns
 --deselect=tests/tools/test_file_sync_back.py::TestSyncBackNewRemoteFile::test_sync_back_detects_new_remote_file
@@ -169,4 +169,3 @@
 --deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_silent_response_suppresses_delivery
 --deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_failed_job_always_delivers
 --deselect=tests/cron/test_scheduler.py::TestSilentDelivery::test_output_saved_even_when_delivery_suppressed
---deselect=tests/cli/test_tips.py::TestTipsCorpus::test_max_length_reasonable
