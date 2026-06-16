@@ -146,3 +146,104 @@ def macro_cpi() -> Dict[str, Any]:
             "source": "string (URL used)",
         },
     }
+
+
+@register_data_point(
+    name="btc_etf_netflow_daily",
+    category="macro",
+    source="web_search",
+    description=(
+        "Daily aggregate net flow for US spot Bitcoin ETFs in USD. "
+        "Positive = net inflows (institutional buying pressure). "
+        "Negative = net outflows (distribution). Sourced from Farside "
+        "Investors, SoSoValue, or CoinGlass — all publish next-day T+1 data. "
+        "Returns a query blueprint: web_search for today's/latest BTC ETF "
+        "flow, extract the aggregate number, classify flow regime."
+    ),
+    params_schema={},
+    tags=["macro", "etf", "flows", "institutional", "agentic"],
+)
+def btc_etf_netflow_daily() -> Dict[str, Any]:
+    return {
+        "_type": "agentic_query",
+        "description": (
+            "Aggregate daily net flow (in USD millions) across all US spot "
+            "Bitcoin ETFs (IBIT, FBTC, GBTC, ARKB, BITB, etc.). "
+            "T+1 reporting: today's data is for the prior trading day."
+        ),
+        "search": "BTC ETF net flow daily USD millions today",
+        "primary_source": "https://farside.co.uk/btc/",
+        "fallback_sources": [
+            "https://sosovalue.com/assets/btc",
+            "https://www.coinglass.com/bitcoin-etf",
+        ],
+        "extract_hint": (
+            "Look for 'Total Net Flow', 'Aggregate', or 'All ETFs' row. "
+            "Number is in USD millions — e.g. '+$245.3M' (inflow) or "
+            "'-$89.7M' (outflow). Farside shows 'Total' at the table bottom. "
+            "SoSoValue shows a headline aggregate number."
+        ),
+        "classify": {
+            "field": "flow_regime",
+            "buckets": [
+                {
+                    "range": [-5000, -500],
+                    "label": "heavy_outflows",
+                    "narrative": (
+                        ">$500M/day outflows — sustained institutional "
+                        "distribution. Strong risk-off signal."
+                    ),
+                },
+                {
+                    "range": [-500, -100],
+                    "label": "moderate_outflows",
+                    "narrative": (
+                        "$100-500M/day outflows — mild distribution pressure. "
+                        "Bearish but not extreme."
+                    ),
+                },
+                {
+                    "range": [-100, 100],
+                    "label": "flat",
+                    "narrative": (
+                        "Flows near zero — no directional institutional signal. "
+                        "ETF capital is sidelined."
+                    ),
+                },
+                {
+                    "range": [100, 500],
+                    "label": "moderate_inflows",
+                    "narrative": (
+                        "$100-500M/day inflows — steady accumulation. "
+                        "Bullish institutional tailwind."
+                    ),
+                },
+                {
+                    "range": [500, 5000],
+                    "label": "heavy_inflows",
+                    "narrative": (
+                        ">$500M/day inflows — aggressive institutional buying. "
+                        "Strong risk-on signal."
+                    ),
+                },
+            ],
+        },
+        "ttl_hint": (
+            "Check daily after US market close (21:00Z+). "
+            "ETF flow data publishes T+1 — Monday's flow is available "
+            "Tuesday morning. Weekend flows are zero (markets closed)."
+        ),
+        "output_schema": {
+            "value": "float (net flow in USD millions, negative = outflow)",
+            "flow_regime": (
+                "string (heavy_outflows|moderate_outflows|flat|"
+                "moderate_inflows|heavy_inflows)"
+            ),
+            "date": "string (date of the flow data, e.g. '2026-06-15')",
+            "consecutive_days": (
+                "integer — same-direction days in current streak. "
+                "3+ days above $300M = directional regime signal"
+            ),
+            "source": "string (URL used)",
+        },
+    }
