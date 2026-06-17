@@ -97,8 +97,40 @@ def _extract_json_from_message(msg) -> Optional[dict]:
     return None
 
 
+# ── Light-tier reasoning budgets (deliberately GENEROUS — see below) ──────────
+#
+# The light tier (deepseek-v4-flash) is a REASONING model whose latency and
+# token use are dominated by a variable-length thinking phase that runs BEFORE
+# it emits the JSON answer into ``content``. Stingy limits here are a primary
+# failure source, and in two distinct ways:
+#
+#   • A too-small TOKEN budget truncates the model mid-thought
+#     (``finish_reason="length"``, empty ``content``) → surfaces as "no content".
+#   • A too-short TIMEOUT kills a call the model would have completed → surfaces
+#     as "Request timed out". The shared auxiliary client defaults these trading
+#     tasks to a 30s timeout (``_DEFAULT_AUX_TIMEOUT``) — far too short for
+#     reasoning generation — so we ALWAYS pass our own generous timeout here.
+#     Neither failure is a dead/wrong model or a credential problem.
+#
+# Sizing intent:
+#   LIGHT_CALL_TIMEOUT_S — a per-call CEILING, not the expected latency (which
+#     is well under it). Generous so a single conviction/predict call never
+#     times out under normal endpoint latency. Note: ``rescore`` calls
+#     conviction sequentially per strategy, so the realistic batch cost is
+#     ``n_strategies × actual_latency`` — keep the ceiling clear of the agent
+#     ``gateway_timeout`` (1800s) so a slow batch can't get killed mid-sweep.
+#   LIGHT_MAX_TOKENS / _CAP — total (reasoning + answer) budget, and the
+#     grow-on-truncation ceiling. Generous, BUT tokens DRIVE latency: a bigger
+#     budget is not strictly safer (it lets the model think longer, which costs
+#     wall-clock). The answer JSON is tiny; the budget exists for the reasoning.
+LIGHT_CALL_TIMEOUT_S = 300.0
+LIGHT_MAX_TOKENS = 8000
+LIGHT_MAX_TOKENS_CAP = 16000
+
+
 def _structured_call(*, task: str, system: str, user: str, schema: dict,
-                     max_tokens: int = 1200, max_retries: int = 2) -> dict:
+                     max_tokens: int = LIGHT_MAX_TOKENS, max_retries: int = 2,
+                     timeout: float = LIGHT_CALL_TIMEOUT_S) -> dict:
     """One light-model completion returning a JSON object matching ``schema``.
 
     Uses strict-JSON prompting + content parsing — NOT forced tool calls. The
@@ -107,10 +139,14 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
     tool_choice"), which would 400 the whole call. The schema is communicated
     in-prompt.
 
-    Retries once on empty/missing content (the thinking model sometimes
-    returns a reply where every field is null).  Also checks
-    ``reasoning_content`` — thinking models may put their final answer there
-    while leaving ``content`` empty.
+    Token budget and request timeout are the dominant failure modes here — see
+    the ``LIGHT_*`` constants above for the full rationale. In short: the light
+    tier is a REASONING model, so both the token budget (reasoning + answer) and
+    the timeout must accommodate a variable-length thinking phase. We pass an
+    explicit ``timeout`` because the shared auxiliary client otherwise applies a
+    30s default that is far too short for reasoning generation.
+    ``_extract_json_from_message`` also checks ``reasoning_content`` as a last
+    resort for models that leave the answer there.
     """
     from harness.agent.auxiliary_client import call_llm
 
@@ -119,17 +155,22 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
         "code fences — matching this JSON schema:\n" + json.dumps(schema)
     )
 
+    budget = max_tokens
     for attempt in range(max_retries):
         resp = call_llm(
             task=task, model=_light_model(),
             messages=[{"role": "system", "content": sys_full},
                       {"role": "user", "content": user}],
-            max_tokens=max_tokens, temperature=0,
+            max_tokens=budget, temperature=0, timeout=timeout,
         )
-        msg = resp.choices[0].message
-        out = _extract_json_from_message(msg)
+        choice = resp.choices[0]
+        out = _extract_json_from_message(choice.message)
         if out is not None:
             return out
+        # Reasoning model truncated before emitting the answer — give it more
+        # room on the next attempt instead of burning a retry at the same budget.
+        if getattr(choice, "finish_reason", None) == "length":
+            budget = min(budget * 2, LIGHT_MAX_TOKENS_CAP)
 
     raise ValueError(f"structured call returned no content in {max_retries} attempts")
 
