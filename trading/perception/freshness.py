@@ -18,6 +18,7 @@ Freshness criterion per data point: ``age <= max(cache_budget, 30 min)``.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -34,6 +35,42 @@ def effective_max_age(name: str) -> float:
     return max(get_staleness_budget(name), MIN_PREDICT_FRESHNESS_S)
 
 
+def _parse_cache_key(key: str) -> tuple:
+    """Split a canonical cache key into ``(data_point_name, stored_params_dict)``.
+
+    Keys are ``name`` (no params) or ``name:{compact-json}`` (see
+    ``cache._canonical_key``). Data point names never contain ``:`` and the JSON
+    payload always begins with ``{``, so a partition on the first ``:`` is
+    unambiguous.
+    """
+    if ":" not in key:
+        return key, {}
+    name, _, rest = key.partition(":")
+    try:
+        params = json.loads(rest)
+    except Exception:
+        params = {}
+    return name, (params if isinstance(params, dict) else {})
+
+
+def _params_subset(declared: Dict[str, Any], stored: Dict[str, Any]) -> bool:
+    """True if every declared key/value is present and equal in ``stored``.
+
+    A strategy declares only the params that identify the reading it wants
+    (e.g. ``{interval, symbol}``); ``fetch_data_point`` caches under the full
+    fetch signature, adding ``length``, ``lookback_bars``, ``std``, … . The
+    declared params are therefore a SUBSET of the stored params for the same
+    logical reading — an exact cache-key string match misses every TA point.
+    Values are compared with a string fallback so ``2`` and ``"2"`` match.
+    """
+    for k, v in (declared or {}).items():
+        if k not in stored:
+            return False
+        if stored[k] != v and str(stored[k]) != str(v):
+            return False
+    return True
+
+
 def stale_data_points(
     data_points: Sequence[dict], *, now: Optional[float] = None
 ) -> List[Dict[str, Any]]:
@@ -43,12 +80,31 @@ def stale_data_points(
     Each returned item is ``{name, params, age_s|None, max_age_s, reason}`` with
     ``reason`` ∈ {'missing', 'stale'}. An empty list means everything is fresh
     enough to ground a prediction.
+
+    Matching is by logical param SUBSET, not exact cache-key string equality: a
+    strategy's declared params match any cache entry whose stored params are a
+    superset, and when several variants of one reading exist the FRESHEST is
+    used. This lets a strategy declaring ``{interval:4h, symbol:BTC}`` resolve
+    against the entry written as ``{interval:4h, lookback_bars:200, symbol:BTC}``
+    and ignore stale leftover variants of the same reading.
     """
-    from trading.perception.cache import _canonical_key, read_perception_state
+    from trading.perception.cache import read_perception_state
+    from trading.strategies.files import _normalize_params
 
     now = now if now is not None else time.time()
     state = read_perception_state()
     cached = state.get("data_points", {}) if isinstance(state, dict) else {}
+
+    # Index every parseable, timestamped cache entry by its base DP name.
+    index: Dict[str, List[tuple]] = {}
+    for key, entry in cached.items():
+        if not isinstance(entry, dict):
+            continue
+        fetched_at = entry.get("fetched_at")
+        if not isinstance(fetched_at, (int, float)):
+            continue
+        base, stored_params = _parse_cache_key(key)
+        index.setdefault(base, []).append((stored_params, float(fetched_at)))
 
     stale: List[Dict[str, Any]] = []
     for dp in data_points or []:
@@ -57,17 +113,23 @@ def stale_data_points(
         name = dp.get("name")
         if not name:
             continue
-        params = dp.get("params")
-        key = _canonical_key(name, params)
+        declared = dp.get("params")
+        params = _normalize_params(declared)  # tolerate legacy string params
         max_age = effective_max_age(name)
-        entry = cached.get(key)
-        fetched_at = entry.get("fetched_at") if isinstance(entry, dict) else None
-        if not isinstance(fetched_at, (int, float)):
-            stale.append({"name": name, "params": params, "age_s": None,
+
+        # Freshest cache entry whose stored params superset the declared params.
+        best_fetched_at: Optional[float] = None
+        for stored_params, fetched_at in index.get(name, []):
+            if _params_subset(params, stored_params):
+                if best_fetched_at is None or fetched_at > best_fetched_at:
+                    best_fetched_at = fetched_at
+
+        if best_fetched_at is None:
+            stale.append({"name": name, "params": declared, "age_s": None,
                           "max_age_s": round(max_age), "reason": "missing"})
             continue
-        age = now - float(fetched_at)
+        age = now - best_fetched_at
         if age > max_age:
-            stale.append({"name": name, "params": params, "age_s": round(age),
+            stale.append({"name": name, "params": declared, "age_s": round(age),
                           "max_age_s": round(max_age), "reason": "stale"})
     return stale
