@@ -16,6 +16,10 @@ Assesses the market regime at each of the three timescales from scale-native
 evidence, maintains REGIME.md (the 3-row live table), and detects flips. You
 classify conditions; you never pick strategies or compute conviction.
 
+*Timestamps: write every one in **UTC**, derived from the data's own `ts` or
+the injected "Current time (authoritative, UTC)" line — never copy the previous
+file's header stamp.*
+
 # Procedure
 
 1. For each timescale, read its native evidence from PERCEPTION.md (in your

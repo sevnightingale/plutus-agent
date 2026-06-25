@@ -272,9 +272,9 @@ def _disabled() -> bool:
 
 
 def _fmt_ts(ts: float) -> str:
-    # Short relative wall-clock for error messages; avoids pulling in
-    # datetime formatting overhead on the hot path.
-    return time.strftime("%H:%M:%S", time.localtime(ts))
+    # Short UTC wall-clock for error messages; avoids pulling in datetime
+    # formatting overhead on the hot path.
+    return time.strftime("%H:%M:%S", time.gmtime(ts)) + " UTC"
 
 
 def _cap_dict(d: dict, limit: int) -> None:

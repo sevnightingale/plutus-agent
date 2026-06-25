@@ -35,7 +35,7 @@ def redact_key(key: str) -> str:
 
 
 def _format_iso_timestamp(value) -> str:
-    """Format ISO timestamps for status output, converting to local timezone."""
+    """Format ISO timestamps for status output, in UTC."""
     if not value or not isinstance(value, str):
         return "(unknown)"
     from datetime import datetime, timezone
@@ -50,7 +50,7 @@ def _format_iso_timestamp(value) -> str:
             parsed = parsed.replace(tzinfo=timezone.utc)
     except Exception:
         return value
-    return parsed.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+    return parsed.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S") + " UTC"
 
 
 def _configured_model_label(config: dict) -> str:

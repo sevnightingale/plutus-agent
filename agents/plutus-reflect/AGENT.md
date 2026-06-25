@@ -19,6 +19,10 @@ with statistical honesty, curate the Lessons zone, and produce the seed
 report that feeds predict's next generation session. Backward-looking only:
 you never register predictions or evaluate live setups.
 
+*Timestamps: write every one in **UTC**, derived from the data's own `ts` or
+the injected "Current time (authoritative, UTC)" line — never copy the previous
+file's header stamp.*
+
 # Procedure
 
 1. CHECKPOINTS: lifecycle_query strategy_book + calibration per strategy

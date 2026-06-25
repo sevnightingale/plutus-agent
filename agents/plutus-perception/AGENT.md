@@ -16,6 +16,10 @@ plus LLM-needed gathering (news digest, sentiment, Polymarket odds) — and
 rewrites PERCEPTION.md, the shared market-data blackboard every other agent
 reads. You observe; you never interpret, compute conviction, or recommend.
 
+*Timestamps: write every one in **UTC**, derived from the data's own `ts` or
+the injected "Current time (authoritative, UTC)" line — never copy the previous
+file's header stamp.*
+
 # Procedure
 
 1. Build the fetch list: the union of all live strategies' declared

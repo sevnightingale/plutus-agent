@@ -13,7 +13,7 @@ import threading
 import os
 import re
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from harness.constants import get_hermes_home
 from typing import Optional, Dict, List, Any
@@ -176,14 +176,17 @@ def parse_schedule(schedule: str) -> Dict[str, Any]:
         try:
             # Parse and validate
             dt = datetime.fromisoformat(schedule.replace('Z', '+00:00'))
-            # Make naive timestamps timezone-aware at parse time so the stored
-            # value doesn't depend on the system timezone matching at check time.
+            # Naive operator-typed timestamps are interpreted as UTC (Issue 1:
+            # all machine times are UTC); timezone-aware input is converted to
+            # UTC. The stored value is therefore always UTC and independent of
+            # the system timezone at check time.
             if dt.tzinfo is None:
-                dt = dt.astimezone()  # Interpret as local timezone
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.astimezone(timezone.utc)
             return {
                 "kind": "once",
                 "run_at": dt.isoformat(),
-                "display": f"once at {dt.strftime('%Y-%m-%d %H:%M')}"
+                "display": f"once at {dt.strftime('%Y-%m-%d %H:%M')} UTC"
             }
         except ValueError as e:
             raise ValueError(f"Invalid timestamp '{schedule}': {e}")
@@ -214,17 +217,17 @@ def _ensure_aware(dt: datetime) -> datetime:
 
     Backward compatibility:
     - Older stored timestamps may be naive.
-    - Naive values are interpreted as *system-local wall time* (the timezone
-      `datetime.now()` used when they were created), then converted to the
-      configured Hermes timezone.
+    - Naive values are interpreted as UTC (Issue 1: all machine times are UTC).
+      New one-shots are stored UTC-aware at parse time, so this branch only
+      affects any pre-UTC legacy timestamps; reading them as UTC keeps a fixed,
+      system-timezone-independent interpretation.
 
-    This preserves relative ordering for legacy naive timestamps across
-    timezone changes and avoids false not-due results.
+    This preserves relative ordering across timezone changes and avoids false
+    not-due results.
     """
     target_tz = _hermes_now().tzinfo
     if dt.tzinfo is None:
-        local_tz = datetime.now().astimezone().tzinfo
-        return dt.replace(tzinfo=local_tz).astimezone(target_tz)
+        return dt.replace(tzinfo=timezone.utc).astimezone(target_tz)
     return dt.astimezone(target_tz)
 
 

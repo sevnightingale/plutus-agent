@@ -912,7 +912,7 @@ class ProcessRegistry:
                 "command": s.command[:200],
                 "cwd": s.cwd,
                 "pid": s.pid,
-                "started_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(s.started_at)),
+                "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(s.started_at)),
                 "uptime_seconds": int(time.time() - s.started_at),
                 "status": "exited" if s.exited else "running",
                 "output_preview": s.output_buffer[-200:] if s.output_buffer else "",

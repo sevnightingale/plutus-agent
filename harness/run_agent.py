@@ -4080,9 +4080,13 @@ class AIAgent:
             if context_files_prompt:
                 prompt_parts.append(context_files_prompt)
 
+        from datetime import timezone as _timezone
         from harness.clock import now as _hermes_now
         now = _hermes_now()
-        timestamp_line = f"Conversation started: {now.strftime('%A, %B %d, %Y %I:%M %p')}"
+        timestamp_line = (
+            "Current time (authoritative, UTC): "
+            f"{now.astimezone(_timezone.utc):%Y-%m-%d %H:%M} UTC"
+        )
         if self.pass_session_id and self.session_id:
             timestamp_line += f"\nSession ID: {self.session_id}"
         if self.model:

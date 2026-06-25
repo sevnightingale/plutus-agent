@@ -68,11 +68,11 @@ def _parse_dt(value: Any) -> Optional[datetime]:
 def _format_reset(dt: Optional[datetime]) -> str:
     if not dt:
         return "unknown"
-    local_dt = dt.astimezone()
+    utc_dt = dt.astimezone(timezone.utc)
     delta = dt - _utc_now()
     total_seconds = int(delta.total_seconds())
     if total_seconds <= 0:
-        return f"now ({local_dt.strftime('%Y-%m-%d %H:%M %Z')})"
+        return f"now ({utc_dt.strftime('%Y-%m-%d %H:%M')} UTC)"
     hours, rem = divmod(total_seconds, 3600)
     minutes = rem // 60
     if hours >= 24:
@@ -82,7 +82,7 @@ def _format_reset(dt: Optional[datetime]) -> str:
         rel = f"in {hours}h {minutes}m"
     else:
         rel = f"in {minutes}m"
-    return f"{rel} ({local_dt.strftime('%Y-%m-%d %H:%M %Z')})"
+    return f"{rel} ({utc_dt.strftime('%Y-%m-%d %H:%M')} UTC)"
 
 
 def render_account_usage_lines(snapshot: Optional[AccountUsageSnapshot], *, markdown: bool = False) -> list[str]:
