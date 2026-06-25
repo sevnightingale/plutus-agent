@@ -178,8 +178,15 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             resolvable_data_points=resolvable)
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
+    # Intrinsic reward:risk from the zone geometry — exists BEFORE any wins
+    # (queries.strategy_rr needs realized wins). |far| > |near| is enforced at
+    # write, so rr > 1; the v2 conditional-entry gate reads this value.
+    near = float(args["near_edge_pct"])
+    far = float(args["far_edge_pct"])
+    intrinsic_rr = round(abs(far) / abs(near), 3) if near else None
     return tool_result({"prediction_id": prediction_id, "ok": True,
                         "entry_ref_price": float(entry_ref_price),
+                        "intrinsic_rr": intrinsic_rr,
                         "slots": queries.open_slot_counts(conn)})
 
 

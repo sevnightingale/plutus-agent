@@ -121,6 +121,14 @@ def _desk_open(args: Dict[str, Any]) -> str:
     if entry_account_value is not None:
         leverage = round(notional / entry_account_value, 3)
 
+    # Entry delta (Issue 5): how far the actual fill drifted from the
+    # prediction's entry_ref_price (captured at registration) — raw material for
+    # reflect on wait-vs-immediate entry. Predictions stay immutable; this lives
+    # on the decision's free-form params.
+    entry_ref = pred.get("entry_ref_price")
+    entry_delta_pct = (round((fill["fill_price"] - entry_ref) / entry_ref * 100, 4)
+                       if entry_ref else None)
+
     thesis_id = write.record_thesis(
         conn, prediction_id=pred["id"], symbol=symbol,
         text_md=args["thesis"], agent="plutus-trade",
@@ -135,6 +143,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
             "sl": sl, "tp": args.get("tp"),
             "sl_order_id": fill.get("sl_order_id"),
             "tp_order_id": fill.get("tp_order_id"),
+            "entry_delta_pct": entry_delta_pct,
         },
     )
     trade_id = write.record_trade(

@@ -47,12 +47,17 @@ plutus-main and move on.
    equity read writes "unavailable", never a stale number.
 5. WATCHDOG: check_staleness. Anything overdue →
    enqueue_wake(reason=staleness, detail=the overdue action types).
-6. TRADE PATH: fetch_data_point hl_trade_readiness. ready=false OR
+6. DROPPED HANDOFF (Jun-24 backstop): lifecycle_query unhandled_actionable
+   {min_age_s: 5400}. Any row = an actionable prediction (active strategy,
+   conviction ≥ 0.50) left unfunded AND unskipped for >90 min — main dropped
+   the handoff. enqueue_wake(reason=escalation, detail=the prediction id,
+   strategy, and conviction). You never fund or skip; main does.
+7. TRADE PATH: fetch_data_point hl_trade_readiness. ready=false OR
    warn_expiring_soon=true → enqueue_wake(reason=escalation, detail=the
    reason string verbatim). A dead trade path is catastrophic, not quiet
    (TRADING.md fact #3) — and equity is NOT evidence the path works. You
    never diagnose or re-register; main does.
-7. Return your ops_report — exactly one per tick.
+8. Return your ops_report — exactly one per tick.
 
 # Output contract
 
