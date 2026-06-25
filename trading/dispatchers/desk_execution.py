@@ -90,6 +90,24 @@ def _desk_open(args: Dict[str, Any]) -> str:
     conviction = float(args.get("conviction", pred["conviction"]))
     session = session_id_from_context()
 
+    # Capture PRE-ENTRY (flat) equity BEFORE the fill (Issue 3). While a
+    # position is open, equity_breakdown double-counts the collateral (the
+    # margin shows on both the spot and perp legs → $17 reads as $24), so the
+    # denominator for entry_account_value / realized leverage must be read flat,
+    # before the order opens. The read NEVER blocks the order — a failure is
+    # recorded as missing and the trade still proceeds.
+    from trading.integrations.hyperliquid.venue import hl_account_state
+    entry_account_value = leverage = None
+    sizing_warning = None
+    try:
+        equity = float(hl_account_state()["equity_usd"])
+        if equity > 0:
+            entry_account_value = equity
+        else:
+            sizing_warning = "equity_usd <= 0 — leverage not recorded"
+    except Exception as exc:
+        sizing_warning = f"account_state failed ({type(exc).__name__}: {exc}) — leverage not recorded"
+
     try:
         fill = hl_place_order(
             symbol=symbol, side=side, size=size,
@@ -98,22 +116,10 @@ def _desk_open(args: Dict[str, Any]) -> str:
     except Exception as exc:
         return tool_error(f"venue order failed: {type(exc).__name__}: {exc}")
 
-    # Measure realized leverage at entry (reflect reviews sizing-vs-
-    # performance). A failed equity read NEVER blocks the lifecycle write
-    # after a real fill — it is recorded as missing and reported.
-    from trading.integrations.hyperliquid.venue import hl_account_state
+    # Realized leverage = notional / PRE-ENTRY equity (notional needs the fill).
     notional = fill["fill_price"] * fill.get("size", size)
-    entry_account_value = leverage = None
-    sizing_warning = None
-    try:
-        equity = float(hl_account_state()["equity_usd"])
-        if equity > 0:
-            entry_account_value = equity
-            leverage = round(notional / equity, 3)
-        else:
-            sizing_warning = "equity_usd <= 0 — leverage not recorded"
-    except Exception as exc:
-        sizing_warning = f"account_state failed ({type(exc).__name__}: {exc}) — leverage not recorded"
+    if entry_account_value is not None:
+        leverage = round(notional / entry_account_value, 3)
 
     thesis_id = write.record_thesis(
         conn, prediction_id=pred["id"], symbol=symbol,

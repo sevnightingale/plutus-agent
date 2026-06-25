@@ -296,6 +296,21 @@ def equity_breakdown(addr: str) -> Dict[str, float]:
     balance-change alert — uses THIS, never ``marginSummary.accountValue``
     alone: under unified mode that perp-side number is ≈0 when flat and
     only shows margin-allocated funds.
+
+    TODO(verify-live) — Issue 3 systemic: this formula is correct WHILE FLAT
+    (perp_account_value ≈ 0) but DOUBLE-COUNTS while a position is open — the
+    same USDC is held as spot ``total`` AND shows inside perp accountValue, so
+    $17 reads as ~$24. The immediate fix (desk_execution reads pre-fill equity)
+    sidesteps it for entry sizing; the systemic fix is GATED on one live-
+    position observation. Snapshot during a real open position: spot total/hold,
+    marginSummary.accountValue, totalMarginUsed, per-position marginUsed/uPnL,
+    and the true wallet value, then pick the formula that reconstructs truth —
+    candidates: (A) ``perp_account_value + spot_usdc_free`` (exclude USDC
+    ``hold`` already in margin, exposed by hl_holdings) or (B) ``spot_usdc +
+    perp_unrealized_pnl + margin_used`` rearranged so margin isn't counted
+    twice. The chosen formula MUST be continuous across flat↔in-position or the
+    300s balance-change alert fires spuriously. Propagates to hl_total_equity,
+    hl_drawdown_from_peak, the balance alert, account_state, and sizing.
     """
     info = get_info()
     state = info.user_state(addr)

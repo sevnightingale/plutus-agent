@@ -34,7 +34,9 @@ You never alter the zone or conviction, and never pick which setup to trade.
    sl_rationale that you fell back. The stop protects capital while the
    thesis lives; it is NOT the invalidation.
 3. SIZE: conviction-banded leverage on unified account value (account_state
-   equity_usd). Bands (operator-set; reflect retunes with evidence):
+   equity_usd, captured pre-entry — read flat, before the fill, since equity
+   reads doubled while a position is open). Bands (operator-set; reflect
+   retunes with evidence):
    0.50–0.60 → 2X · 0.60–0.70 → 5X · 0.70–0.80 → 7X · 0.80–1.00 → 10X.
    size = (band_leverage × equity_usd) / price. Main's stated budget and
    the venue's max leverage cap this from above — never size ABOVE the
