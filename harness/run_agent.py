@@ -4083,9 +4083,16 @@ class AIAgent:
         from datetime import timezone as _timezone
         from harness.clock import now as _hermes_now
         now = _hermes_now()
+        # Session ANCHOR: stamped once when the prompt is built and reused for
+        # the whole session (rebuilt only on compaction) — NOT a live per-turn
+        # clock. Label it honestly as the session start in UTC so a multi-hour
+        # session never reads a frozen value as "current"; the recipes derive
+        # the current time from the freshest data ts. (Cron desk-agents get a
+        # fresh session per run, so their anchor ≈ now; the persistent gateway
+        # session does not.)
         timestamp_line = (
-            "Current time (authoritative, UTC): "
-            f"{now.astimezone(_timezone.utc):%Y-%m-%d %H:%M} UTC"
+            f"Session start (UTC): {now.astimezone(_timezone.utc):%Y-%m-%d %H:%M} UTC"
+            " (anchor — derive the current time from the freshest data ts)"
         )
         if self.pass_session_id and self.session_id:
             timestamp_line += f"\nSession ID: {self.session_id}"

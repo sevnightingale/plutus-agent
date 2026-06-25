@@ -822,8 +822,9 @@ class TestBuildSystemPrompt:
 
     def test_includes_datetime(self, agent):
         prompt = agent._build_system_prompt()
-        # The authoritative UTC "now" grounding (Issue 1 anti-fabrication fix).
-        assert "Current time (authoritative, UTC):" in prompt
+        # The UTC session anchor (Issue 1: honest — a session-start stamp, not a
+        # live clock that would go stale across a persistent session's turns).
+        assert "Session start (UTC):" in prompt
         assert "UTC" in prompt
 
     def test_includes_nous_subscription_prompt(self, agent, monkeypatch):

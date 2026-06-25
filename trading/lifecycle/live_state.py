@@ -16,15 +16,11 @@ from __future__ import annotations
 
 import os
 import re
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-# Serialises this process's Live State writes (mirrors harness.tools.file_tools'
-# module-level lock idiom); the atomic os.replace below guards against partial
-# writes from any concurrent writer.
-_LIVE_STATE_LOCK = threading.Lock()
+from harness.tools import file_state
 
 _MARKER = "<!-- TOOL-REWRITTEN ONLY. Do not edit by hand. -->"
 
@@ -41,21 +37,27 @@ def replace_zone(path: Path, zone: str, new_body: str) -> bool:
     and every other zone. ``new_body`` is inserted literally (no regex
     backreference interpretation). Returns False if the file or the zone is
     absent — the caller surfaces that as honest failure, never a silent create.
-    """
+
+    The whole read→modify→write runs under the SHARED per-path lock
+    (``file_state.lock_path``) that reflect's Lessons edits and main's Doctrine
+    edits also take, so a concurrent edit to another zone is never lost (atomic
+    ``os.replace`` additionally rules out partial writes)."""
     if not path.exists():
         return False
-    text = path.read_text(encoding="utf-8")
+    resolved = str(Path(path).resolve())
     pattern = re.compile(
         rf"(^##\s+{re.escape(zone.replace('-', ' '))}\s*$)(.*?)(?=^##\s+|\Z)",
         re.MULTILINE | re.DOTALL | re.IGNORECASE,
     )
-    if not pattern.search(text):
-        return False
     body = new_body.strip("\n")
-    new_text = pattern.sub(lambda m: f"{m.group(1)}\n\n{body}\n\n", text)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(new_text, encoding="utf-8")
-    os.replace(tmp, path)
+    with file_state.lock_path(resolved):
+        text = path.read_text(encoding="utf-8")
+        if not pattern.search(text):
+            return False
+        new_text = pattern.sub(lambda m: f"{m.group(1)}\n\n{body}\n\n", text)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(new_text, encoding="utf-8")
+        os.replace(tmp, path)
     return True
 
 
@@ -115,8 +117,7 @@ def write_live_state(conn, path: Optional[Path] = None) -> dict:
         from harness.constants import get_hermes_home
         path = get_hermes_home() / "PLUTUS.md"
     body = build_live_state_body(conn)
-    with _LIVE_STATE_LOCK:
-        ok = replace_zone(Path(path), "live-state", body)
+    ok = replace_zone(Path(path), "live-state", body)
     return {
         "ok": ok,
         "path": str(path),

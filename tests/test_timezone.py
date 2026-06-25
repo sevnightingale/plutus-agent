@@ -258,33 +258,29 @@ class TestCronTimezone:
         due = get_due_jobs()
         assert len(due) == 1
 
-    def test_ensure_aware_naive_preserves_absolute_time(self):
-        """_ensure_aware must preserve the absolute instant for naive datetimes.
+    def test_ensure_aware_naive_interpreted_as_utc(self):
+        """_ensure_aware interprets naive datetimes as UTC (Issue 1).
 
-        Regression: the old code used replace(tzinfo=hermes_tz) which shifted
-        absolute time when system-local tz != Hermes tz.  The fix interprets
-        naive values as system-local wall time, then converts.
+        New one-shots are stored tz-aware at parse time, so this branch only
+        affects any pre-UTC legacy timestamps; reading them as UTC is a fixed,
+        system-timezone-independent interpretation (this assertion is therefore
+        host-independent — it does NOT depend on the box's local tz).
         """
         from harness.cron.jobs import _ensure_aware
 
         os.environ["HERMES_TIMEZONE"] = "Asia/Kolkata"
         _reset_hermes_time_cache()
 
-        # Create a naive datetime — will be interpreted as system-local time
         naive_dt = datetime(2026, 3, 11, 12, 0, 0)
-
         result = _ensure_aware(naive_dt)
 
-        # The result should be in Kolkata tz
-        assert result.tzinfo is not None
+        assert result.tzinfo is not None  # normalized into the configured tz
 
-        # The UTC equivalent must match what we'd get by correctly interpreting
-        # the naive dt as system-local time first, then converting
-        system_tz = datetime.now().astimezone().tzinfo
-        expected_utc = naive_dt.replace(tzinfo=system_tz).astimezone(timezone.utc)
+        # Naive is read as UTC, not system-local — the absolute instant is fixed.
+        expected_utc = naive_dt.replace(tzinfo=timezone.utc)
         actual_utc = result.astimezone(timezone.utc)
         assert actual_utc == expected_utc, (
-            f"Absolute time shifted: expected {expected_utc}, got {actual_utc}"
+            f"naive should be read as UTC: expected {expected_utc}, got {actual_utc}"
         )
 
     def test_ensure_aware_normalizes_aware_to_hermes_tz(self):

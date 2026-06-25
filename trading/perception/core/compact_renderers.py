@@ -29,6 +29,23 @@ def _f(x: Any) -> Optional[float]:
         return None
 
 
+# The TA preprocessors' full-output ``indicator`` field is the long human form
+# ("Bollinger_Bands"), but the preprocessor REGISTRY is keyed by the short form
+# ("bbands"). Without this map render_ta's lookup misses 5 band/channel/SAR
+# indicators and silently drops their zone/band/SAR fields (mirrors the
+# name_mapping inside base.py's to_compact).
+_TA_NAME_ALIASES = {
+    "bollinger_bands": "bbands",
+    "bollinger_width": "bbwidth",
+    "bb_width": "bbwidth",
+    "keltner_channels": "keltner",
+    "donchian_channels": "donchian",
+    "parabolic_sar": "psar",
+    "relative_strength_index": "rsi",
+    "stochastic_oscillator": "stochastic",
+}
+
+
 # ── orderbook ────────────────────────────────────────────────────────────────
 
 def render_orderbook(v: Dict[str, Any]) -> Dict[str, Any]:
@@ -164,6 +181,7 @@ def render_ta(v: Dict[str, Any]) -> Dict[str, Any]:
         return {"error": v.get("error"), "message": v.get("message")}
 
     name = (v.get("indicator") or "").lower()
+    name = _TA_NAME_ALIASES.get(name, name)
     try:
         from trading.integrations.ta.preprocessors import get_preprocessor
         pp = get_preprocessor(name) or get_preprocessor(name.replace("_", ""))

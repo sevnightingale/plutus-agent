@@ -342,6 +342,14 @@ def _fetch_reading(dp: dict):
     except Exception as exc:  # loud-but-soft: the score becomes 'missing'
         return None, f"<fetch failed: {exc}>", "fetch-failed"
 
+    # A data point that RETURNS an error payload (e.g. a ta_* indicator on
+    # insufficient candles, or a preprocessor that caught its own raise) is
+    # unusable — mark it 'missing' deterministically, exactly like a fetch
+    # failure, so it is never scored ~0.5 neutral (the Issue 4 invariant holds
+    # for the error-payload shape too, not just the sentinel strings).
+    if isinstance(value, dict) and value.get("error"):
+        return numeric, _compact(value, limit=_RENDERED_READING_CAP), "fetch-error"
+
     if entry.compact_fn is not None:
         try:
             rendered = entry.compact_fn(value)

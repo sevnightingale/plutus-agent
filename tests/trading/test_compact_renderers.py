@@ -94,6 +94,39 @@ class TestTA:
     def test_non_dict_is_total(self):
         assert "reading" in render_ta(["unexpected"])
 
+    @pytest.mark.parametrize("calc_name,expect_indicator", [
+        ("calc_bbands", "bbands"), ("calc_donchian", "donchian"),
+        ("calc_psar", "psar"), ("calc_keltner", "keltner"),
+    ])
+    def test_long_name_indicators_resolve_to_compact(self, calc_name, expect_indicator):
+        # The full output's `indicator` is the LONG form (e.g. Bollinger_Bands);
+        # render_ta must alias it to the short registry key so the band/channel/
+        # SAR zone fields survive (not the generic selector).
+        from trading.integrations.ta import _calc
+        df = pd.DataFrame({"open": [100 + math.sin(i / 4) for i in range(120)],
+                           "high": [100.6 + math.sin(i / 4) for i in range(120)],
+                           "low": [99.4 + math.sin(i / 4) for i in range(120)],
+                           "close": [100 + math.sin((i + 1) / 4) for i in range(120)],
+                           "volume": [1000 + i for i in range(120)]})
+        r = render_ta(getattr(_calc, calc_name)(df))
+        assert r["indicator"] == expect_indicator
+        assert "zone" in r  # indicator-specific to_compact ran, not the generic selector
+
+
+class TestFetchReadingErrorPayload:
+    def test_error_payload_is_missing_not_neutral(self):
+        from trading.perception.core.data_point_registry import register_data_point, _REGISTRY
+        from trading.dispatchers.predict_tools import _fetch_reading
+        _REGISTRY.pop("t_errpayload", None)
+        # a ta_* style point that RETURNS (not raises) an error dict
+        register_data_point(name="t_errpayload", category="ta", source="t",
+                            description="d", params_schema={}, returns_schema={},
+                            numeric_path="current.value",
+                            compact_fn=lambda v: {"error": v.get("error")})(
+            lambda: {"error": "insufficient_data", "indicator": "rsi", "message": "got 3"})
+        num, reading, miss = _fetch_reading({"name": "t_errpayload"})
+        assert miss == "fetch-error"  # deterministically missing, never scored 0.5
+
 
 class TestFetchReadingUsability:
     def _register(self, name, fn, **kw):
