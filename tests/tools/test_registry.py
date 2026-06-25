@@ -324,6 +324,7 @@ class TestBuiltinDiscovery:
 
             "trading.dispatchers.desk_execution",
             "trading.dispatchers.lifecycle_query",
+            "trading.dispatchers.live_state_tool",
             "trading.dispatchers.record",
             "trading.dispatchers.resolution",
             "trading.dispatchers.spawn_tool",

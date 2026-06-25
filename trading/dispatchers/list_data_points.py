@@ -38,7 +38,7 @@ def _list_data_points(args: Dict[str, Any]) -> str:
     return tool_result({
         "count": len(entries),
         "entries": [
-            {**{k: v for k, v in asdict(e).items() if k != "fn"},
+            {**{k: v for k, v in asdict(e).items() if k not in ("fn", "compact_fn")},
              "resolvable": bool(e.numeric_path)}
             for e in entries
         ],
