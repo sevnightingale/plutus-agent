@@ -430,11 +430,17 @@ def timescale_mix(conn: sqlite3.Connection, since_ts: float) -> dict:
     return {r["timescale"]: r["n"] for r in rows}
 
 
-def sizing_performance(conn: sqlite3.Connection) -> list:
+def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None) -> list:
     """Closed-position performance per conviction band (floored to 0.1 — the
     sizing dial's input), with the leverage actually realized at entry —
     reflect's evidence for retuning the conviction→leverage bands. Rows with
-    no opening-decision conviction group under NULL; shown, never dropped."""
+    no opening-decision conviction group under NULL; shown, never dropped.
+
+    ``fix_ts`` (epoch seconds, Issue 4 cutover) excludes positions whose opening
+    decision predates the conviction-render fix — those convictions were scored
+    on a byte-truncated (blinded) reading substrate and would pollute the sizing
+    review. None (the default) includes all history. Decision-less positions
+    (NULL d.ts) are always kept, matching the NULL-band-shown contract."""
     return _rows(conn.execute(
         """SELECT CAST(d.conviction * 10 AS INT) / 10.0 AS conviction_band,
                   COUNT(*) AS n,
@@ -450,4 +456,6 @@ def sizing_performance(conn: sqlite3.Connection) -> list:
            LEFT JOIN trades tr ON tr.id = p.opening_trade_id
            LEFT JOIN decisions d ON d.id = tr.decision_id
            WHERE p.status='closed'
-           GROUP BY conviction_band ORDER BY conviction_band"""))
+                 AND (:fix_ts IS NULL OR d.ts IS NULL OR d.ts >= :fix_ts)
+           GROUP BY conviction_band ORDER BY conviction_band""",
+        {"fix_ts": fix_ts}))

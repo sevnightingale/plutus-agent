@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from trading.perception.core.data_point_registry import register_data_point
+from trading.perception.core.compact_renderers import render_cvd
 from trading.integrations.hyperliquid.data_points import hl_candles as _hl_candles
 from trading.integrations.ta._calc import candles_to_df
 from ._calc import calc_cvd
@@ -41,6 +42,7 @@ def _get_df(symbol: str, interval: str, lookback_bars: int):
     },
     tags=["order-flow", "volume", "divergence", "smart-money"],
     numeric_path="cvd_current",
+    compact_fn=render_cvd,
 )
 def hl_cvd(
     symbol: str,

@@ -15,8 +15,20 @@ import numpy as np
 from typing import Any, Dict, Optional
 
 from trading.perception.core.data_point_registry import register_data_point
+from trading.perception.core.compact_renderers import render_ta
 
 from . import _calc
+
+
+def register_ta_data_point(**kwargs):
+    """``register_data_point`` with the shared TA compact renderer attached.
+
+    Every ta_* point returns the same large nested preprocessor output (Issue 4:
+    ~current/context/levels/patterns + a 200-bar series), so they share ONE
+    renderer rather than each getting a per-indicator one. A point may still
+    override by passing its own ``compact_fn``."""
+    kwargs.setdefault("compact_fn", render_ta)
+    return register_data_point(**kwargs)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────
@@ -66,7 +78,7 @@ def _ta_fetch(
 # ── momentum (6) ───────────────────────────────────────────────────────────
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_rsi",
     category="ta",
     source="hyperliquid",
@@ -90,7 +102,7 @@ def ta_rsi(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_rsi, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_stochastic",
     category="ta",
     source="hyperliquid",
@@ -115,7 +127,7 @@ def ta_stochastic(symbol: str, interval: str = "1h", k: int = 14,
                      _calc.calc_stochastic, k=k, d=d)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_williams_r",
     category="ta",
     source="hyperliquid",
@@ -138,7 +150,7 @@ def ta_williams_r(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_williams_r, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_cci",
     category="ta",
     source="hyperliquid",
@@ -161,7 +173,7 @@ def ta_cci(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_cci, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_mfi",
     category="ta",
     source="hyperliquid",
@@ -184,7 +196,7 @@ def ta_mfi(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_mfi, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_roc",
     category="ta",
     source="hyperliquid",
@@ -210,7 +222,7 @@ def ta_roc(symbol: str, interval: str = "1h", length: int = 10,
 # ── trend (5) ──────────────────────────────────────────────────────────────
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_macd",
     category="ta",
     source="hyperliquid",
@@ -236,7 +248,7 @@ def ta_macd(symbol: str, interval: str = "1h", fast: int = 12,
                      _calc.calc_macd, fast=fast, slow=slow, signal=signal)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_adx",
     category="ta",
     source="hyperliquid",
@@ -259,7 +271,7 @@ def ta_adx(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_adx, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_aroon",
     category="ta",
     source="hyperliquid",
@@ -282,7 +294,7 @@ def ta_aroon(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_aroon, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_trix",
     category="ta",
     source="hyperliquid",
@@ -306,7 +318,7 @@ def ta_trix(symbol: str, interval: str = "1h", length: int = 14,
                      _calc.calc_trix, length=length, signal=signal)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_vortex",
     category="ta",
     source="hyperliquid",
@@ -332,7 +344,7 @@ def ta_vortex(symbol: str, interval: str = "1h", length: int = 14,
 # ── moving averages (3) ────────────────────────────────────────────────────
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_sma",
     category="ta",
     source="hyperliquid",
@@ -356,7 +368,7 @@ def ta_sma(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_sma, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_ema",
     category="ta",
     source="hyperliquid",
@@ -381,7 +393,7 @@ def ta_ema(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_ema, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_vwap",
     category="ta",
     source="hyperliquid",
@@ -411,7 +423,7 @@ def ta_vwap(symbol: str, interval: str = "1h", anchor: str = "D",
 # ── volatility (5) ─────────────────────────────────────────────────────────
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_bbands",
     category="ta",
     source="hyperliquid",
@@ -435,7 +447,7 @@ def ta_bbands(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_bbands, length=length, std=std)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_bbwidth",
     category="ta",
     source="hyperliquid",
@@ -459,7 +471,7 @@ def ta_bbwidth(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_bbwidth, length=length, std=std)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_keltner",
     category="ta",
     source="hyperliquid",
@@ -484,7 +496,7 @@ def ta_keltner(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_keltner, length=length, multiplier=multiplier)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_donchian",
     category="ta",
     source="hyperliquid",
@@ -507,7 +519,7 @@ def ta_donchian(symbol: str, interval: str = "1h", length: int = 20,
                      _calc.calc_donchian, length=length)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_atr",
     category="ta",
     source="hyperliquid",
@@ -534,7 +546,7 @@ def ta_atr(symbol: str, interval: str = "1h", length: int = 14,
 # ── volume / other (2) ─────────────────────────────────────────────────────
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_obv",
     category="ta",
     source="hyperliquid",
@@ -555,7 +567,7 @@ def ta_obv(symbol: str, interval: str = "1h",
     return _ta_fetch(symbol, interval, lookback_bars, _calc.calc_obv)
 
 
-@register_data_point(
+@register_ta_data_point(
     name="ta_psar",
     category="ta",
     source="hyperliquid",

@@ -103,7 +103,7 @@ class TestPredictDraft:
 class TestConvictionScore:
     def test_aggregates_with_declared_weights(self, monkeypatch):
         monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: _strategy())
-        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading"))
+        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading", None))
         _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
             {"dp_key": "ta_rsi(symbol=BTC)", "score": 0.8, "kind": "narrative",
              "reasoning": "oversold"},
@@ -118,7 +118,7 @@ class TestConvictionScore:
 
     def test_missing_score_excluded(self, monkeypatch):
         monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: _strategy())
-        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading"))
+        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading", None))
         # only one DP scored; the other is missing → conviction from the one present
         _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
             {"dp_key": "ta_rsi(symbol=BTC)", "score": 0.9, "kind": "narrative",
@@ -130,7 +130,7 @@ class TestConvictionScore:
 
     def test_unreasoned_narrative_score_dropped(self, monkeypatch):
         monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: _strategy())
-        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading"))
+        monkeypatch.setattr(predict_tools, "_fetch_reading", lambda dp: (50.0, "reading", None))
         _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
             {"dp_key": "ta_rsi(symbol=BTC)", "score": 0.9, "kind": "narrative", "reasoning": ""},
             {"dp_key": "hl_funding", "score": 0.6, "kind": "narrative", "reasoning": "ok"},
@@ -138,6 +138,30 @@ class TestConvictionScore:
         res = json.loads(predict_tools._conviction_score({"strategy_name": "funding-flush"}))
         assert res["conviction"] == pytest.approx(0.6)  # the unreasoned one is dropped
         assert "ta_rsi(symbol=BTC)" in res["missing"]
+
+    def test_unusable_reading_forced_missing(self, monkeypatch):
+        """Issue 4: a TRUNCATED / fetch-failed reading is excluded
+        deterministically even when the scoring LLM (wrongly) returns a number
+        for it — honest absence, never a guessed 0.5 neutral."""
+        monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: _strategy())
+
+        def _fake_fetch(dp):
+            if dp["name"] == "hl_funding":
+                return (None, "<TRUNCATED dp=hl_funding kept=0B/9000B — NO RENDERER>",
+                        "no-renderer-truncated")
+            return (50.0, "reading", None)
+        monkeypatch.setattr(predict_tools, "_fetch_reading", _fake_fetch)
+
+        # the LLM ignores the instruction and scores the truncated DP anyway
+        _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
+            {"dp_key": "ta_rsi(symbol=BTC)", "score": 0.8, "kind": "narrative",
+             "reasoning": "oversold"},
+            {"dp_key": "hl_funding", "score": 0.5, "kind": "narrative",
+             "reasoning": "neutral guess"},
+        ]}))
+        res = json.loads(predict_tools._conviction_score({"strategy_name": "funding-flush"}))
+        assert res["conviction"] == pytest.approx(0.8)  # only the usable DP counts
+        assert "hl_funding" in res["missing"]  # truncated → missing, not 0.5
 
 
 # ── ops rescore loop (conviction trajectory) ─────────────────────────────────

@@ -7,9 +7,40 @@ predict, ops, and reflect. Adding a query = one entry in _QUERIES.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, Optional
 
 from harness.tools.registry import registry, tool_error, tool_result
+
+logger = logging.getLogger(__name__)
+
+
+def _conviction_render_fix_ts() -> Optional[float]:
+    """Operator-set Issue-4 cutover marker (epoch seconds) from config.yaml.
+
+    ``conviction_render_fix_ts`` may be a number (epoch seconds) or an ISO-8601
+    string; reflect's ``sizing_performance`` excludes pre-fix blinded
+    convictions from the band review. Absent/unparseable → None (no filtering;
+    honest absence — the whole history is shown rather than silently cut)."""
+    try:
+        import yaml
+        from harness.constants import get_config_path
+        path = get_config_path()
+        if not path.exists():
+            return None
+        with open(path) as f:
+            cfg = yaml.safe_load(f) or {}
+        raw = cfg.get("conviction_render_fix_ts")
+        if raw is None:
+            return None
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        if isinstance(raw, str) and raw.strip():
+            from datetime import datetime
+            return datetime.fromisoformat(raw.strip().replace("Z", "+00:00")).timestamp()
+    except Exception as exc:  # misconfigured marker must be loud, not silently filtering
+        logger.warning("conviction_render_fix_ts unreadable (%s) — sizing review unfiltered", exc)
+    return None
 
 
 def _run_query(args: Dict[str, Any]) -> str:
@@ -38,7 +69,8 @@ def _run_query(args: Dict[str, Any]) -> str:
             conn, params.get("strategy_name")),
         "last_action_runs": lambda: queries.last_action_runs(conn),
         "timescale_mix": lambda: queries.timescale_mix(conn, float(params["since_ts"])),
-        "sizing_performance": lambda: queries.sizing_performance(conn),
+        "sizing_performance": lambda: queries.sizing_performance(
+            conn, _conviction_render_fix_ts()),
     }
     if name not in _QUERIES:
         return tool_error(f"unknown query {name!r} — available: {sorted(_QUERIES)}")

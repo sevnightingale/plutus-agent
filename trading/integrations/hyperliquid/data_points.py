@@ -20,6 +20,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from trading.perception.core.data_point_registry import register_data_point
+from trading.perception.core.compact_renderers import render_candles, render_orderbook
 
 from ._client import (
     get_info,
@@ -70,6 +71,7 @@ def hl_price(symbol: str) -> Dict[str, Any]:
     },
     returns_schema={"candles": "list of {t,o,h,l,c,v}"},
     tags=["market", "ohlcv", "hyperliquid"],
+    compact_fn=render_candles,
 )
 def hl_candles(symbol: str, interval: str, lookback_bars: int = 200) -> Dict[str, Any]:
     info = get_info()
@@ -102,6 +104,7 @@ def hl_candles(symbol: str, interval: str, lookback_bars: int = 200) -> Dict[str
     },
     returns_schema={"bids": "list", "asks": "list", "ts_ms": "int"},
     tags=["market", "orderbook", "hyperliquid"],
+    compact_fn=render_orderbook,
 )
 def hl_orderbook(symbol: str, depth: int = 10) -> Dict[str, Any]:
     info = get_info()

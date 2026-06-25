@@ -38,6 +38,12 @@ class DataPointEntry:
     # data point is perception-only — register_prediction refuses criteria
     # leaves on it AT WRITE TIME (never a silent expired_unresolvable later).
     numeric_path: Optional[str] = None
+    # Optional renderer that turns a raw return value into a small, signal-dense
+    # reading for the conviction scorer (Issue 4). Without one, a return value
+    # over the per-DP byte cap is reported as a loud <TRUNCATED … NO RENDERER>
+    # sentinel and scored 'missing' — never silently byte-clamped to neutral.
+    # A compact_fn must be total (caught at the read path; a raise → missing).
+    compact_fn: Optional[Callable[[Any], Any]] = None
 
 
 _REGISTRY: Dict[str, DataPointEntry] = {}
@@ -53,6 +59,7 @@ def register_data_point(
     returns_schema: Optional[Dict[str, Any]] = None,
     tags: Optional[List[str]] = None,
     numeric_path: Optional[str] = None,
+    compact_fn: Optional[Callable[[Any], Any]] = None,
 ):
     """Decorator: register a function as a data-point fetcher.
 
@@ -83,6 +90,7 @@ def register_data_point(
             tags=tuple(tags or ()),
             fn=fn,
             numeric_path=numeric_path,
+            compact_fn=compact_fn,
         )
         return fn
     return _decorator

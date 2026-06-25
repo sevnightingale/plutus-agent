@@ -193,6 +193,14 @@ def _compact(value: Any, limit: int = 400) -> str:
     return s if len(s) <= limit else s[:limit] + "…"
 
 
+# Per-DP byte caps for the conviction read path (Issue 4). A renderer's output
+# is bounded by design, so it gets a generous cap; a renderer-LESS value over
+# the raw cap is NOT silently clamped to a blinded reading — it becomes a loud
+# <TRUNCATED … NO RENDERER> sentinel and is scored 'missing'.
+_RENDERED_READING_CAP = 1500
+_RAW_READING_CAP = 2000
+
+
 # ── predict_draft ────────────────────────────────────────────────────────────
 
 PREDICT_DRAFT_SCHEMA = {
@@ -314,7 +322,15 @@ _SCORE_OUT_SCHEMA = {
 
 
 def _fetch_reading(dp: dict):
-    """(numeric, compact-reading-string) for one declared data point, fresh."""
+    """(numeric, reading-string, missing_reason) for one declared data point, fresh.
+
+    ``missing_reason`` is None when the reading is usable; a short tag otherwise
+    ("fetch-failed", "render-failed", "no-renderer-truncated"). An unusable
+    reading MUST be scored 'missing' (honest absence) — never byte-clamped to a
+    blinded value the LLM would score ~0.5 neutral (Issue 4). The renderer
+    (registry ``compact_fn``) produces a small, signal-dense view; without one,
+    a value over the raw cap becomes a loud sentinel instead of silent garbage.
+    """
     from trading.perception.core import data_point_registry
     from trading.strategies.files import _normalize_params
     name = dp["name"]
@@ -323,9 +339,28 @@ def _fetch_reading(dp: dict):
         entry = data_point_registry.lookup(name)
         value = entry.fn(**params) if entry.fn else None
         numeric = data_point_registry.extract_numeric(value, entry.numeric_path)
-        return numeric, _compact(value)
     except Exception as exc:  # loud-but-soft: the score becomes 'missing'
-        return None, f"<fetch failed: {exc}>"
+        return None, f"<fetch failed: {exc}>", "fetch-failed"
+
+    if entry.compact_fn is not None:
+        try:
+            rendered = entry.compact_fn(value)
+        except Exception as exc:  # a throwing renderer → missing (safe)
+            return numeric, f"<render failed dp={name}: {exc}>", "render-failed"
+        return numeric, _compact(rendered, limit=_RENDERED_READING_CAP), None
+
+    # No renderer: keep the raw value if it fits the cap; otherwise emit a loud
+    # sentinel and force the score 'missing' rather than blind the LLM with a
+    # mid-structure byte clamp.
+    try:
+        raw = json.dumps(value, default=str)
+    except Exception:
+        raw = str(value)
+    if len(raw) <= _RAW_READING_CAP:
+        return numeric, raw, None
+    return (numeric,
+            f"<TRUNCATED dp={name} kept=0B/{len(raw)}B — NO RENDERER>",
+            "no-renderer-truncated")
 
 
 def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
@@ -348,8 +383,9 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
 
     readings = []
     for dp in strat.data_points:
-        numeric, compact = _fetch_reading(dp)
-        readings.append({"dp_key": files._dp_key(dp), "numeric": numeric, "reading": compact})
+        numeric, compact, missing_reason = _fetch_reading(dp)
+        readings.append({"dp_key": files._dp_key(dp), "numeric": numeric,
+                         "reading": compact, "missing_reason": missing_reason})
 
     system = (
         "You are a disciplined quantitative analyst. For each data point, score "
@@ -357,7 +393,10 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
         "thesis: 0.0 = contradicts, 0.5 = neutral, 1.0 = strongly supports. "
         "Reason strictly in the strategy's context (a reading that helps one "
         "thesis may hurt another). Use the exact dp_key given. Provide reasoning "
-        "for every score."
+        "for every score. A reading shown as '<fetch failed …>', '<render "
+        "failed …>', or '<TRUNCATED … NO RENDERER>' is UNAVAILABLE, not neutral "
+        "— OMIT it from your scores entirely; do NOT emit 0.5. Honest absence "
+        "beats a guessed middle."
     )
     reading_lines = "\n".join(
         f"- {r['dp_key']}: numeric={r['numeric']} reading={r['reading']}" for r in readings)
@@ -373,10 +412,14 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
                            schema=_SCORE_OUT_SCHEMA)
 
     by_key = {s.get("dp_key"): s for s in (out.get("scores") or []) if isinstance(s, dict)}
+    reading_by_key = {r["dp_key"]: r for r in readings}
     scored: List[engine.ScoredInput] = []
     support_scores = []
     for dp in strat.data_points:
         key = files._dp_key(dp)
+        rdg = reading_by_key.get(key)
+        if rdg and rdg.get("missing_reason"):
+            continue  # unusable reading → deterministically 'missing', never scored
         s = by_key.get(key)
         if not s:
             continue
