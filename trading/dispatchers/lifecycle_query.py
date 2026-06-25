@@ -44,7 +44,6 @@ def _conviction_render_fix_ts() -> Optional[float]:
 
 
 def _run_query(args: Dict[str, Any]) -> str:
-    from trading.conviction.engine import GLOBAL_CONVICTION_THRESHOLD
     from trading.lifecycle import queries
     from trading.lifecycle.db import get_db
 
@@ -55,8 +54,6 @@ def _run_query(args: Dict[str, Any]) -> str:
     _QUERIES = {
         "open_predictions": lambda: queries.open_predictions(conn, **params),
         "due_predictions": lambda: queries.due_predictions(conn),
-        "unhandled_actionable": lambda: queries.unhandled_actionable(
-            conn, float(params.get("min_age_s", 0)), GLOBAL_CONVICTION_THRESHOLD),
         "prediction": lambda: queries.prediction(conn, int(params["prediction_id"])),
         "open_position": lambda: queries.open_position(conn),
         "recent_outcomes": lambda: queries.recent_outcomes(conn, **params),
@@ -90,7 +87,7 @@ registry.register(
         "name": "lifecycle_query",
         "description": (
             "Read the prediction lifecycle. query: open_predictions | "
-            "due_predictions | unhandled_actionable {min_age_s?} | "
+            "due_predictions | "
             "prediction {prediction_id} | open_position | "
             "recent_outcomes {limit} | calibration {strategy_name?, "
             "regime_tag?, timescale?} | strategy_stats {name} | "

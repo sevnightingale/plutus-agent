@@ -216,38 +216,6 @@ def open_position(conn: sqlite3.Connection) -> Optional[dict]:
     return out
 
 
-def unhandled_actionable(conn: sqlite3.Connection, min_age_s: float = 0.0,
-                         min_conviction: float = 0.50) -> list:
-    """Actionable predictions that fell through the funding handoff (Issue 5).
-
-    An actionable prediction — ACTIVE strategy, conviction ≥ min_conviction,
-    unresolved — that, older than ``min_age_s``, has NEITHER a funding chain (a
-    thesis references it → it was funded) NOR a recorded skip (an observation
-    links it via related_prediction_ids). This is the deterministic backstop for
-    the Jun-24 dropped-handoff failure mode: ops escalates anything this returns.
-    A prediction main funds OR skips (recording with prediction_ids) drops off
-    the list, so a promptly-handled signal never trips it."""
-    max_ts = time.time() - max(0.0, min_age_s)
-    return _rows(conn.execute(
-        """SELECT p.id, p.strategy_name, p.symbol, p.timescale, p.conviction,
-                  p.ts, p.near_edge_pct, p.far_edge_pct
-           FROM predictions p
-           JOIN strategies s ON s.name = p.strategy_name AND s.status = 'active'
-           WHERE p.resolved_at IS NULL
-             AND p.kind = 'strategy'
-             AND p.conviction >= :min_conv
-             AND p.ts <= :max_ts
-             AND NOT EXISTS (
-                 SELECT 1 FROM theses t WHERE t.prediction_id = p.id)
-             AND NOT EXISTS (
-                 SELECT 1 FROM observations o,
-                              json_each(o.related_prediction_ids_json) je
-                 WHERE o.related_prediction_ids_json IS NOT NULL
-                   AND je.value = p.id)
-           ORDER BY p.ts ASC""",
-        {"min_conv": min_conviction, "max_ts": max_ts}))
-
-
 def recent_outcomes(conn: sqlite3.Connection, limit: int = 10) -> list:
     return _rows(conn.execute(
         """SELECT p.id AS position_id, p.symbol, p.side, p.opened_at, p.closed_at,
