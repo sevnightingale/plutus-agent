@@ -39,14 +39,20 @@ plutus-main and move on.
      enqueue_wake(reason=escalation) with a one-paragraph digest. You never
      close, modify, or open. (The watcher wakes main directly when the funded
      prediction's zone is tagged or its invalidation trips.)
-4. WATCHDOG: check_staleness. Anything overdue →
+4. LIVE STATE: sync_live_state rewrites the ## Live State block (equity
+   snapshot, open position, strategy counts). GATED — only call it when the
+   block in your context is stale: the open position opened/closed/changed, the
+   strategy counts moved, or its snapshot_at is older than ~6h. Otherwise skip
+   it — no need to round-trip the venue for equity every 30-min tick. A failed
+   equity read writes "unavailable", never a stale number.
+5. WATCHDOG: check_staleness. Anything overdue →
    enqueue_wake(reason=staleness, detail=the overdue action types).
-5. TRADE PATH: fetch_data_point hl_trade_readiness. ready=false OR
+6. TRADE PATH: fetch_data_point hl_trade_readiness. ready=false OR
    warn_expiring_soon=true → enqueue_wake(reason=escalation, detail=the
    reason string verbatim). A dead trade path is catastrophic, not quiet
    (TRADING.md fact #3) — and equity is NOT evidence the path works. You
    never diagnose or re-register; main does.
-6. Return your ops_report — exactly one per tick.
+7. Return your ops_report — exactly one per tick.
 
 # Output contract
 
