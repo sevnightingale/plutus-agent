@@ -41,7 +41,7 @@ class TestRecord:
             (time.time(), time.time() + 3600))
         pid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         tid = write.record_thesis(conn, prediction_id=pid, symbol="BTC",
-                                  text_md="t", agent="plutus-trade")
+                                  text_md="t", agent="plutus-main")
         result = _call({"kind": "decision", "text": "funding the flush setup",
                         "thesis_id": tid, "action": "open_long", "conviction": 0.7})
         assert result["ok"], result

@@ -5,7 +5,7 @@ read directly by the spawn mechanism (`harness/spawn.py`). The full picture —
 how the desk fits together, the blackboards, the strategy lifecycle — is in
 `ARCHITECTURE.md`; this file covers the roster and the recipe format.
 
-## The seven agents
+## The six agents
 
 | Agent | Role | Tier | Runs |
 |---|---|---|---|
@@ -13,9 +13,13 @@ how the desk fits together, the blackboards, the strategy lifecycle — is in
 | **plutus-perception** | The eyes — fetches every market reading, rewrites `PERCEPTION.md` | light | spawned by main |
 | **plutus-regime** | Classifies market regime per timescale, maintains `REGIME.md`, detects flips | light | spawned by main |
 | **plutus-predict** | The forward brain — evaluates strategies, registers machine-resolvable predictions, generates new strategy hypotheses | standard | spawned by main |
-| **plutus-trade** | The hands — given a funded prediction, sizes, places, stops, verifies | light | spawned by main |
 | **plutus-ops** | Back office + watchdog — resolves due predictions, checks trade readiness, enforces staleness floors | light | cron, every 30 min |
 | **plutus-reflect** | The backward brain — calibration review, weight tuning, strategy graduation/demotion, lessons | standard | spawned by main |
+
+**Execution is not an agent.** The hands — stop, size, place, verify, abort —
+are a deterministic tool (`desk_open_position` / `desk_close_position`) that main
+calls directly; the former `plutus-trade` sub-agent was retired (execution is
+arithmetic + structured venue ops, not judgment under ambiguity).
 
 `plutus-main` is special: it is **not spawned**. The gateway session (CLI /
 Telegram) *is* main — its directory holds doctrine context, and its tool

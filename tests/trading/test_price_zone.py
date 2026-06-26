@@ -350,3 +350,117 @@ class TestReachedNear:
         assert write.mark_reached_near(conn, pid, ts=456.0) is False  # already stamped
         got = queries.prediction(conn, pid)
         assert got["reached_near_at"] == 123.0 and got["resolved_at"] is None
+
+
+def _strat_row(conn, name, status="active"):
+    conn.execute(
+        "INSERT INTO strategies (name,file_path,status,timescale,"
+        "mechanism_family,created_at,updated_at) VALUES "
+        "(?,?,?,'intraday','flow',0,0)", (name, f"{name}.md", status))
+    conn.commit()
+
+
+def _resolved(conn, strat, far, outcome, mae, reached_far, reached_near=False):
+    """A resolved prediction with path stats; reached_far/near = it tagged that edge."""
+    pid = _record(conn, strategy_name=strat, kind="strategy",
+                  near_edge_pct=far / 2.0, far_edge_pct=far)
+    write.resolve_prediction(conn, pid, outcome, resolved_by="r",
+                             realized_value={"mae_pct": mae})
+    cols = (["reached_far_at"] if reached_far else []) + \
+           (["reached_near_at"] if reached_near else [])
+    for col in cols:
+        conn.execute(f"UPDATE predictions SET {col}=? WHERE id=?", (time.time(), pid))
+    if cols:
+        conn.commit()
+    return pid
+
+
+class TestStrategyExpectancy:
+    """Expectancy gate (graduation + entry) — replaces survivorship-biased rr.
+    The win signal is reached_far (tagged TP), NOT a floor/horizon 'correct'."""
+
+    def test_tagged_far_winners_are_tradeable(self, conn):
+        _strat_row(conn, "good")
+        for _ in range(12):                 # win: tagged far, tiny adverse
+            _resolved(conn, "good", far=3.0, outcome="correct", mae=-0.3, reached_far=True)
+        for _ in range(4):                  # loser: big adverse, never tagged far
+            _resolved(conn, "good", far=3.0, outcome="wrong", mae=-2.0, reached_far=False)
+        exp = queries.strategy_expectancy(conn, "good")
+        assert exp["n"] == 16 and exp["wins"] == 12
+        assert exp["expectancy_pct"] > 0 and exp["tradeable"] is True
+
+    def test_floor_correct_mirage_not_tradeable(self, conn):
+        # 'correct' by floor/horizon but never tagged far, with big adverse moves:
+        # rr (winners-only MFE/MAE) would bless it; expectancy correctly refuses.
+        _strat_row(conn, "mirage")
+        for _ in range(16):
+            _resolved(conn, "mirage", far=1.0, outcome="correct", mae=-3.0, reached_far=False)
+        exp = queries.strategy_expectancy(conn, "mirage")
+        assert exp["wins"] == 0
+        assert exp["expectancy_pct"] < 0 and exp["tradeable"] is False
+
+    def test_near_exit_graduates_high_winrate(self, conn):
+        # Reaches NEAR reliably (tagged near, tiny adverse), never far — profitable
+        # only under the near-edge (alert-up) exit. Graduates on best_target=near.
+        _strat_row(conn, "rev")
+        for _ in range(12):
+            _resolved(conn, "rev", far=2.0, outcome="correct", mae=-0.3,
+                      reached_far=False, reached_near=True)
+        for _ in range(4):                  # losers set the stop (~1.5%)
+            _resolved(conn, "rev", far=2.0, outcome="wrong", mae=-1.5,
+                      reached_far=False, reached_near=False)
+        exp = queries.strategy_expectancy(conn, "rev")
+        assert exp["best_target"] == "near"
+        assert exp["expectancy_near"] > 0 and (exp["expectancy_far"] or 0) <= 0
+        assert exp["tradeable"] is True
+
+    def test_below_min_n_not_tradeable(self, conn):
+        _strat_row(conn, "thin")            # +EV but only n=10 < 15
+        for _ in range(7):                  # wins: adverse well inside the stop
+            _resolved(conn, "thin", far=3.0, outcome="correct", mae=-0.3, reached_far=True)
+        for _ in range(3):                  # losers set the p75 stop (~2%)
+            _resolved(conn, "thin", far=3.0, outcome="wrong", mae=-2.0, reached_far=False)
+        exp = queries.strategy_expectancy(conn, "thin")
+        assert exp["expectancy_pct"] > 0 and exp["n"] == 10
+        assert exp["tradeable"] is False
+
+
+class TestBestActionable:
+    def test_picks_open_pred_of_tradeable_active(self, conn):
+        _strat_row(conn, "good")
+        for _ in range(12):
+            _resolved(conn, "good", far=3.0, outcome="correct", mae=-0.3, reached_far=True)
+        for _ in range(4):
+            _resolved(conn, "good", far=3.0, outcome="wrong", mae=-2.0, reached_far=False)
+        open_pid = _record(conn, strategy_name="good", kind="strategy",
+                           near_edge_pct=1.5, far_edge_pct=3.0)
+        best = queries.best_actionable_prediction(conn)
+        assert best is not None and best["id"] == open_pid and best["ev_pct"] > 0
+
+    def test_none_when_strategy_not_tradeable(self, conn):
+        _strat_row(conn, "mirage")
+        for _ in range(16):
+            _resolved(conn, "mirage", far=1.0, outcome="correct", mae=-3.0, reached_far=False)
+        _record(conn, strategy_name="mirage", kind="strategy",
+                near_edge_pct=0.5, far_edge_pct=1.0)
+        assert queries.best_actionable_prediction(conn) is None
+
+    def test_none_when_no_active_strategy(self, conn):
+        _strat_row(conn, "t", status="test")
+        _record(conn, strategy_name="t", kind="strategy")
+        assert queries.best_actionable_prediction(conn) is None
+
+    def test_stale_prediction_not_funded(self, conn):
+        _strat_row(conn, "good")
+        for _ in range(12):
+            _resolved(conn, "good", far=3.0, outcome="correct", mae=-0.3, reached_far=True)
+        for _ in range(4):
+            _resolved(conn, "good", far=3.0, outcome="wrong", mae=-2.0, reached_far=False)
+        # a prediction registered an hour ago is NOT funded (entry conditions aged)
+        _record(conn, strategy_name="good", kind="strategy",
+                near_edge_pct=1.5, far_edge_pct=3.0, ts=time.time() - 3600)
+        assert queries.best_actionable_prediction(conn) is None
+        # but a fresh one from the same strategy IS picked
+        fresh = _record(conn, strategy_name="good", kind="strategy",
+                        near_edge_pct=1.5, far_edge_pct=3.0)
+        assert queries.best_actionable_prediction(conn)["id"] == fresh

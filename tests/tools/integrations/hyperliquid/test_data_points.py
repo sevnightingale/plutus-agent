@@ -94,6 +94,7 @@ def test_alerts_registered():
         "hl_account_balance_change",
         "hl_price_range",
         "hl_prediction_resolution",
+        "hl_position_alert",
     }
 
 

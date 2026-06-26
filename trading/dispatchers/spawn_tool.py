@@ -51,7 +51,8 @@ registry.register(
         "description": (
             "Spawn a desk specialist synchronously and get its validated "
             "structured return. agent: plutus-perception | plutus-regime | "
-            "plutus-predict | plutus-trade | plutus-ops | plutus-reflect. "
+            "plutus-predict | plutus-ops | plutus-reflect (execution is a "
+            "deterministic tool — desk_open_position — not a spawned agent). "
             "task: the spawn-time instruction (what THIS run is for — the "
             "agent's standing procedure comes from its AGENT.md). Heavy "
             "work happens in the child; you hold the book."

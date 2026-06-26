@@ -24,15 +24,29 @@ GLOBAL_CONVICTION_THRESHOLD = 0.50  # operator-set 2026-06-10: graduation is
 # threshold is the SIZING dial, not a veto. Reflect reviews sizing-vs-
 # performance and these retune with evidence.
 
-# Conviction-banded target leverage — notional as a multiple of unified
-# account value (hl_account_state equity_usd). Bands are half-open [lo, hi);
-# conviction 1.0 takes the top band.
-LEVERAGE_BANDS = (
-    (0.50, 0.60, 2.0),
-    (0.60, 0.70, 5.0),
-    (0.70, 0.80, 7.0),
-    (0.80, 1.00, 10.0),
+# Conviction-banded RISK BUDGET — the fraction of unified account equity
+# (hl_account_state equity_usd) to risk on a trade if its stop hits. Sizing is
+# risk-based: size = (risk_budget × equity) / stop_distance, so a wider stop
+# auto-shrinks the position and risk-per-trade is constant within a band.
+# Superlinear by design — calibrated conviction earns meaningfully more.
+# Bands are half-open [lo, hi); conviction 1.0 takes the top band.
+#
+# PROVISIONAL: tuned on the post-2026-06-25 conviction substrate (render fix at
+# 10:42:57Z) with ~zero post-fix resolved trades — reflect recalibrates with
+# evidence, and should validate the 0.80+ hit rate before the top band runs at
+# full size. See PLANNING-trade-execution-collapse.md.
+RISK_BUDGET_BANDS = (
+    (0.50, 0.60, 0.01),   # 1%
+    (0.60, 0.70, 0.03),   # 3%
+    (0.70, 0.80, 0.07),   # 7%
+    (0.80, 1.00, 0.12),   # 12%
 )
+
+# Liquidation backstop: leverage = risk_budget / stop_distance is derived and
+# capped here (binds only on pathologically tight stops, where it reduces size —
+# erring safe). With one position in unified (cross) margin, notional/equity IS
+# leverage, so this also caps position size as a % of equity.
+MAX_LEVERAGE = 10.0
 
 # Weight-update discipline (inherited, evidence-tested in v1)
 WEIGHT_ALPHA = 0.05
@@ -40,14 +54,19 @@ WEIGHT_CAP = 0.30
 WEIGHT_SUM_MAX = 1.0
 
 
-def target_leverage(conviction: Optional[float]) -> Optional[float]:
-    """Band lookup. Below the global threshold → None (no trade)."""
+def target_risk_budget(conviction: Optional[float]) -> Optional[float]:
+    """Band lookup → fraction of equity to risk if the stop hits.
+
+    Below the global threshold → None (no trade). Conviction 1.0 takes the top
+    band. Size is then ``(target_risk_budget(conviction) × equity) /
+    stop_distance_pct``, capped at ``MAX_LEVERAGE``.
+    """
     if conviction is None or conviction < GLOBAL_CONVICTION_THRESHOLD:
         return None
-    for lo, hi, lev in LEVERAGE_BANDS:
+    for lo, hi, budget in RISK_BUDGET_BANDS:
         if lo <= conviction < hi:
-            return lev
-    return LEVERAGE_BANDS[-1][2]
+            return budget
+    return RISK_BUDGET_BANDS[-1][2]
 
 
 @dataclass

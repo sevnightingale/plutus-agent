@@ -60,6 +60,8 @@ def _run_query(args: Dict[str, Any]) -> str:
         "calibration": lambda: queries.calibration(conn, **params),
         "strategy_stats": lambda: queries.strategy_stats(conn, params["name"]),
         "strategy_book": lambda: queries.strategy_book(conn),
+        "strategy_expectancy": lambda: queries.strategy_expectancy(conn, **params),
+        "best_actionable_prediction": lambda: queries.best_actionable_prediction(conn),
         "strategies_by_timescale": lambda: queries.strategies_by_timescale(
             conn, params["timescale"], **{k: tuple(v) for k, v in params.items()
                                           if k == "statuses"}),
@@ -91,11 +93,13 @@ registry.register(
             "prediction {prediction_id} | open_position | "
             "recent_outcomes {limit} | calibration {strategy_name?, "
             "regime_tag?, timescale?} | strategy_stats {name} | "
-            "strategy_book | strategies_by_timescale {timescale, statuses?} | "
+            "strategy_book | strategy_expectancy {strategy_name} (the "
+            "profitability gate) | best_actionable_prediction (the fundable "
+            "pick) | strategies_by_timescale {timescale, statuses?} | "
             "open_predictions_by_cell | mae_envelope {strategy_name?, "
-            "timescale?, regime_tag?, percentile?} | support_score_performance "
-            "{strategy_name?} | last_action_runs | timescale_mix {since_ts} | "
-            "sizing_performance."
+            "timescale?, regime_tag?, percentile?, population?, statistic?} | "
+            "support_score_performance {strategy_name?} | last_action_runs | "
+            "timescale_mix {since_ts} | sizing_performance."
         ),
         "parameters": {
             "type": "object",

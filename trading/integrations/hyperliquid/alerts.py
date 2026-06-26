@@ -17,6 +17,7 @@ Plutus can author later as it learns what's worth watching.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any, Dict, List, Optional, Tuple
@@ -211,6 +212,80 @@ def poll_hl_prediction_resolution(
                 "funded": True,
             })
     return fired, state or {}
+
+
+def _opening_decision_params(conn, position_id: int) -> Dict[str, Any]:
+    """Free-form params on the position's opening decision (sl/tp/alert levels)."""
+    row = conn.execute(
+        "SELECT d.params_json FROM positions p "
+        "JOIN trades t ON t.id = p.opening_trade_id "
+        "JOIN decisions d ON d.id = t.decision_id WHERE p.id = ?",
+        (position_id,)).fetchone()
+    if not row or not row["params_json"]:
+        return {}
+    try:
+        return json.loads(row["params_json"])
+    except Exception:
+        return {}
+
+
+@register_alert(
+    name="hl_position_alert",
+    source="hyperliquid",
+    throttle_seconds=5,
+    description=(
+        "The 4-target judgment triggers for the OPEN position — the two alert "
+        "levels INSIDE the mechanical SL/TP bounds. Fires a wake when price "
+        "crosses the near edge (alert-up: take profit, or hold for far?) or the "
+        "winners'-MAE level (alert-down: normal wobble, or thesis breaking — cut "
+        "early before the hard SL?). Each level fires once per position; main "
+        "re-scores conviction on the wake and decides (take-profit / cut / hold)."
+    ),
+)
+def poll_hl_position_alert(
+    state: Optional[Dict[str, Any]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    try:
+        from trading.lifecycle import queries
+        from trading.lifecycle.db import get_db
+
+        conn = get_db()
+        pos = queries.open_position(conn)
+        if pos is None:
+            return [], {}        # flat → clear fired state
+        params = _opening_decision_params(conn, pos["id"])
+        near_px = params.get("alert_near_px")
+        adverse_px = params.get("alert_adverse_px")
+        if near_px is None and adverse_px is None:
+            return [], state or {}
+        side, symbol = pos["side"], pos["symbol"]
+        price = float(get_info().all_mids()[symbol])
+    except Exception as exc:
+        logger.warning("hl_position_alert poll failed: %s", exc)
+        return [], state or {}
+
+    prev = state or {}
+    # Reset the per-level fired flags when the open position changes.
+    already = set(prev.get("fired", [])) if prev.get("position_id") == pos["id"] else set()
+
+    def _crossed(level: Optional[float], kind: str) -> bool:
+        if level is None:
+            return False
+        if kind == "near":      # favorable: long tags above entry, short below
+            return price >= level if side == "long" else price <= level
+        return price <= level if side == "long" else price >= level  # adverse
+
+    fired: List[Dict[str, Any]] = []
+    for kind, level in (("near", near_px), ("adverse", adverse_px)):
+        if kind in already or not _crossed(level, kind):
+            continue
+        fired.append({
+            "alert": "hl_position_alert", "kind": kind, "coin": symbol,
+            "price": price, "level": level, "position_id": pos["id"],
+        })
+        already.add(kind)
+
+    return fired, {"position_id": pos["id"], "fired": sorted(already)}
 
 
 @register_alert(

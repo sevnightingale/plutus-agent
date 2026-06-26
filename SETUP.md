@@ -10,7 +10,7 @@ credentials you already have? Jump to [Redeploying a fresh runtime](#redeploying
 
 | Piece | What it is | Yields |
 |---|---|---|
-| plutus-agent (this repo) | The desk runtime — seven agents, wizard, pm2 fleet | — |
+| plutus-agent (this repo) | The desk runtime — six agents, wizard, pm2 fleet | — |
 | LLM provider account | The desk's reasoning | provider API key |
 | Telegram bot (optional) | The operator channel | `TELEGRAM_BOT_TOKEN` |
 | Virtuals ACP agent | Plutus's on-chain identity; its **managed wallet is the master** — it holds all funds, its key never touches this machine | `ACP_AGENT_WALLET` (an address) |

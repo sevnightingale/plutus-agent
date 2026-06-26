@@ -77,24 +77,33 @@ class TestUpdateWeights:
         assert out == {k: round(v, 4) for k, v in W.items()}
 
 
-class TestTargetLeverage:
+class TestTargetRiskBudget:
     def test_bands(self):
-        lev = engine.target_leverage
-        assert lev(0.49) is None          # below the gate: no trade
-        assert lev(None) is None
-        assert lev(0.50) == 2.0
-        assert lev(0.599) == 2.0
-        assert lev(0.60) == 5.0
-        assert lev(0.70) == 7.0
-        assert lev(0.80) == 10.0
-        assert lev(1.0) == 10.0           # top band is inclusive
+        rb = engine.target_risk_budget
+        assert rb(0.49) is None           # below the gate: no trade
+        assert rb(None) is None
+        assert rb(0.50) == 0.01
+        assert rb(0.599) == 0.01
+        assert rb(0.60) == 0.03
+        assert rb(0.70) == 0.07
+        assert rb(0.80) == 0.12
+        assert rb(1.0) == 0.12            # top band is inclusive
 
     def test_bands_cover_threshold_to_one(self):
         """The band table starts at the gate and tiles [threshold, 1.0]."""
-        assert engine.LEVERAGE_BANDS[0][0] == engine.GLOBAL_CONVICTION_THRESHOLD
-        for (_, hi, _), (lo, _, _) in zip(engine.LEVERAGE_BANDS,
-                                          engine.LEVERAGE_BANDS[1:]):
+        assert engine.RISK_BUDGET_BANDS[0][0] == engine.GLOBAL_CONVICTION_THRESHOLD
+        for (_, hi, _), (lo, _, _) in zip(engine.RISK_BUDGET_BANDS,
+                                          engine.RISK_BUDGET_BANDS[1:]):
             assert hi == lo               # no gaps, no overlaps
+
+    def test_superlinear(self):
+        """Budgets grow superlinearly — calibrated conviction earns more."""
+        budgets = [b for _, _, b in engine.RISK_BUDGET_BANDS]
+        gaps = [b - a for a, b in zip(budgets, budgets[1:])]
+        assert all(g2 > g1 for g1, g2 in zip(gaps, gaps[1:]))  # widening steps
+
+    def test_max_leverage(self):
+        assert engine.MAX_LEVERAGE == 10.0
 
 
 class TestNormalizers:
