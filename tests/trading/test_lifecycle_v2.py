@@ -193,7 +193,7 @@ class TestFundedChain:
         tid = write.record_thesis(
             conn, prediction_id=pid, symbol="BTC",
             text_md="Funding flush; entry 104100, stop 102600.",
-            agent="plutus-trade", sl_price=102600.0)
+            agent="plutus-main", sl_price=102600.0)
         did = write.record_decision(
             conn, thesis_id=tid, action="open_long", agent="plutus-main",
             conviction=0.7)
@@ -224,7 +224,7 @@ class TestFundedChain:
     def test_thesis_requires_real_prediction(self, conn):
         with pytest.raises(ValueError, match="does not exist"):
             write.record_thesis(conn, prediction_id=999, symbol="BTC",
-                                text_md="x", agent="plutus-trade")
+                                text_md="x", agent="plutus-main")
 
 
 class TestCalibration:

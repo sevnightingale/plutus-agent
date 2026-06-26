@@ -28,17 +28,22 @@ never copy the previous file's header stamp.*
 1. CHECKPOINTS: lifecycle_query strategy_book + calibration per strategy
    with new resolutions. Moves (strategy_set_status):
    - checkpoint continue (every 10 resolved): win rate ≥ 50%, else retire.
-   - GRADUATION to active (trade-enabling): N ≥ 15 resolved AND win rate ≥ 0.55
-     AND reward:risk RR > 1.0. Win rate is the near-edge hit rate (correct =
-     the favorable move reached the near floor); RR (strategy_book/strategy_stats
-     `rr` = median favorable move ÷ median adverse move on the wins) is
-     trade-worthiness — when the strategy is right, the move pays more than the
-     stop distance we'd actually risk. Together, win_rate × RR is positive
-     expectancy: a strategy that's directionally right but whose wins barely
-     clear the near edge (RR ≤ 1) does NOT graduate, whatever its win rate.
-     Slower is fine; calibrating on mirages is not.
-   - revoke (active → retired): N ≥ 20 with win rate < 40% across ≥ 2
-     regime contexts.
+   - GRADUATION to active (trade-enabling): the SINGLE gate is simulated net
+     EXPECTANCY — `lifecycle_query strategy_expectancy {strategy_name}` →
+     graduate iff `tradeable` (expectancy_pct > 0 AND n ≥ 15). It runs the
+     strategy's whole resolved book through the actual mechanical trade geometry
+     (TP = far edge, SL = the all-resolutions MAE stop), pessimistic on
+     path-dependence, with the win signal = the trade actually TAGGED its target
+     (reached_far) — NOT a floor/horizon "correct". This REPLACES the old
+     win-rate + RR>1 bar, which was survivorship-biased: `rr` (median MFE/MAE on
+     winners only) overstates tradeability — a strategy can read rr 1.8 on its
+     wins yet be net-negative across all trades (the orderbook-imbalance case).
+     `rr` stays in strategy_book/strategy_stats for visibility but is NOT the
+     gate. Expectancy is conviction-independent (pure outcome geometry), so the
+     conviction-render cutover doesn't touch it. Slower is fine; graduating
+     mirages is not.
+   - revoke (active → retired): strategy_expectancy no longer `tradeable`
+     (expectancy_pct ≤ 0) at N ≥ 20 — the edge decayed; stop funding it.
    - dormancy moves on regime mismatch; dormant strategies matching the new
      regime wake.
    - POPULATION: lifecycle_query strategies_by_timescale per timescale (each
@@ -52,15 +57,27 @@ never copy the previous file's header stamp.*
    correct − avg score on wrong). Narrative data points retune like any
    other — their recorded reasoning is your evidence.
 3. SIZING + STOPS: lifecycle_query sizing_performance — PnL, R-multiples,
-   worst-R, and MAE per conviction band against the leverage actually taken.
-   The conviction→leverage bands (2X/5X/7X/10X, trade's procedure) are
-   operator-set priors: report whether realized risk per band matches intent
-   (watch leverage × stop-distance = equity risk per trade) and propose band
-   retunes with evidence. Also review the STOP envelope: trade sizes its SL
-   off mae_envelope (the percentile MAE of winning setups). If winners are
-   being stopped out (closed losers whose MFE later reached the zone), the
-   envelope percentile is too tight — flag it. Proposals go in the
-   reflect_report; the operator changes the bands/percentile.
+   worst-R, MAE per conviction band against the realized leverage. Sizing is
+   RISK-BASED: conviction → a risk BUDGET (% of equity risked if the stop hits:
+   1/3/7/12% by band, superlinear), size = budget × equity ÷ stop-distance,
+   capped at 10X leverage (so a wider stop auto-shrinks the position and
+   risk-per-trade is constant within a band). The bands are PROVISIONAL on the
+   post-2026-06-25 conviction substrate (~zero post-fix resolved trades): report
+   realized risk per band vs the intended budget (the R-multiples are the direct
+   read), and before the top band (0.80+ → 12%) runs at full size, validate that
+   0.80+ setups actually hit at the rate that earns it. Also review the STOP: the
+   hard SL is the all-resolutions MAE percentile (catches losers, spares typical
+   winners). If winners are stopped out (closed losers whose MFE later reached
+   the zone), the percentile is too tight — flag it. Proposals → reflect_report;
+   the operator changes the budgets/percentile.
+3b. GEOMETRY: per strategy, read `strategy_expectancy` — it reports
+   `expectancy_far` vs `expectancy_near` and the `best_target`. A strategy whose
+   edge is the NEAR move (high near-reach, far rarely tagged) graduates and trades
+   on near (the alert-up take-profit); one whose edge is the far extension trades
+   on far. Flag strategies whose far targets never pay (expectancy_far ≤ 0 while
+   expectancy_near > 0) so predict can widen/retune zones, and confirm the
+   alert-down winners'-MAE level isn't shaking out winners. This is the per-
+   strategy trade geometry — reflect governs it; execution consumes it.
 4. ERROR CLASS: every losing outcome gets a reflection with error_class ∈
    forecast | execution | sizing | regime | variance | process_violation.
    Different classes drive different responses: forecast → strategy update;

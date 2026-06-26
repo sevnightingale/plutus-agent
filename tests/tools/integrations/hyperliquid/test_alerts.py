@@ -174,7 +174,7 @@ def test_prediction_resolution_funded_wakes(monkeypatch):
     conn = get_db()
     pid = write.record_prediction(conn, _zone_draft())
     tid = write.record_thesis(conn, prediction_id=pid, symbol="BTC",
-                              text_md="t", agent="plutus-trade")
+                              text_md="t", agent="plutus-main")
     did = write.record_decision(conn, thesis_id=tid, action="open_long",
                                 agent="plutus-main")
     trid = write.record_trade(conn, decision_id=did, venue="hyperliquid",
@@ -201,3 +201,72 @@ def test_prediction_resolution_no_open_skips_network(monkeypatch):
     fired, _ = alerts.poll_hl_prediction_resolution(state={})
     assert fired == []
     info.all_mids.assert_not_called()  # no open predictions → no price fetch
+
+
+# ── position alert (the 4-target judgment triggers) ──────────────────────────
+
+def _open_with_alerts(side, near_px, adverse_px, symbol="BTC"):
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle import write
+    conn = get_db()
+    pid = write.record_prediction(conn, _zone_draft(symbol=symbol))
+    tid = write.record_thesis(conn, prediction_id=pid, symbol=symbol,
+                              text_md="t", agent="plutus-main")
+    did = write.record_decision(
+        conn, thesis_id=tid,
+        action="open_long" if side == "long" else "open_short",
+        agent="plutus-main", conviction=0.7,
+        params={"alert_near_px": near_px, "alert_adverse_px": adverse_px})
+    trid = write.record_trade(conn, decision_id=did, venue="hyperliquid",
+                              symbol=symbol, side=side, size=0.01, fill_price=100_000.0)
+    posid = write.open_position(conn, venue="hyperliquid", symbol=symbol, side=side,
+                                size=0.01, opening_trade_id=trid)
+    conn.commit()
+    return posid
+
+
+def _mids(monkeypatch, price):
+    info = MagicMock()
+    info.all_mids.return_value = {"BTC": str(price)}
+    monkeypatch.setattr(alerts, "get_info", lambda: info)
+
+
+def test_position_alert_near_long(monkeypatch):
+    posid = _open_with_alerts("long", near_px=101_000.0, adverse_px=99_000.0)
+    _mids(monkeypatch, 101_500)                 # up through the near edge
+    fired, state = alerts.poll_hl_position_alert(state={})
+    assert {f["kind"] for f in fired} == {"near"}
+    assert fired[0]["position_id"] == posid
+    assert state["position_id"] == posid and "near" in state["fired"]
+
+
+def test_position_alert_adverse_long(monkeypatch):
+    _open_with_alerts("long", near_px=101_000.0, adverse_px=99_000.0)
+    _mids(monkeypatch, 98_500)                  # down through the adverse level
+    fired, _ = alerts.poll_hl_position_alert(state={})
+    assert {f["kind"] for f in fired} == {"adverse"}
+
+
+def test_position_alert_near_short(monkeypatch):
+    # short: near (favorable) is BELOW entry, adverse ABOVE
+    _open_with_alerts("short", near_px=99_000.0, adverse_px=101_000.0)
+    _mids(monkeypatch, 98_500)
+    fired, _ = alerts.poll_hl_position_alert(state={})
+    assert {f["kind"] for f in fired} == {"near"}
+
+
+def test_position_alert_dedups_per_level(monkeypatch):
+    _open_with_alerts("long", near_px=101_000.0, adverse_px=99_000.0)
+    _mids(monkeypatch, 101_500)
+    fired1, state1 = alerts.poll_hl_position_alert(state={})
+    assert fired1                                # fires once
+    fired2, _ = alerts.poll_hl_position_alert(state=state1)
+    assert fired2 == []                          # already fired this level
+
+
+def test_position_alert_silent_when_flat(monkeypatch):
+    from trading.lifecycle.db import get_db
+    get_db()
+    _mids(monkeypatch, 100_000)
+    fired, state = alerts.poll_hl_position_alert(state={})
+    assert fired == [] and state == {}

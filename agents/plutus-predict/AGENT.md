@@ -32,10 +32,11 @@ prediction stays open; reaching the far edge resolves it correct EARLY; if only
 near is reached, the horizon backstops a correct resolution; never reaching near
 by the horizon is wrong; invalidation can fire only BEFORE near. So the zone
 WIDTH is not cosmetic — the far edge sets the profit_score and the strategy's
-reward:risk (RR), and graduation needs RR > 1 (median favorable move > median
-adverse move on wins). Size the zone honestly: a near the move can actually
-reach AND a far it can realistically travel to. A too-narrow far inflates win
-rate but kills RR; a too-wide far never resolves early.
+reward:risk, and graduation is gated on simulated net EXPECTANCY (reflect runs
+the whole resolved book through the actual trade geometry; a strategy whose wins
+barely clear the near edge won't clear it). Size the zone honestly: a near the
+move can actually reach AND a far it can realistically travel to. A too-narrow
+far inflates win rate but kills expectancy; a too-wide far never resolves early.
 
 # Procedure
 
@@ -79,10 +80,13 @@ rate but kills RR; a too-wide far never resolves early.
    beat. Prediction volume is cheap — the limiting factor is the strategy
    population, not a slot budget; spread across strategies for independent
    trials rather than stacking one.
-5. ACTIONABLE: among ACTIVE strategies only, the highest-conviction live setup
-   clearing the global threshold (0.50). Test-status strategies are never
-   actionable regardless of conviction; above the threshold, conviction drives
-   position size (trade's leverage bands), not the trade decision.
+5. ACTIONABLE (advisory only): you no longer SELECT what to fund — main does
+   that with a deterministic query (best_actionable_prediction = the argmax-EV
+   open prediction of a currently-tradeable active strategy). For visibility,
+   report the highest-conviction live setup from an ACTIVE strategy clearing the
+   global threshold (0.50), or null. Test-status strategies are never actionable;
+   conviction drives position SIZE (the risk-budget bands), never the trade
+   decision — the funding gate is expectancy, applied downstream.
 6. Return your prediction_batch.
 
 # Output contract

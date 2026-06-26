@@ -1,13 +1,18 @@
-"""Desk execution tools (toolset: desk-execution) — plutus-trade's hands.
+"""Desk execution tools (toolset: desk-execution) — the deterministic hands.
 
-Thin wrappers over the sacrosanct venue layer (hyperliquid/venue.py — atomic
-normalTpsl brackets, bracket_warnings) that write the v2 lifecycle chain
-around the venue call. The single-position law and the funded-prediction
-requirement are enforced HERE, in code.
+main calls these directly (the plutus-trade sub-agent is retired): execution is
+arithmetic + structured venue ops, not judgment, so it lives in code. Thin over
+the sacrosanct venue layer (hyperliquid/venue.py — atomic normalTpsl brackets)
+which it wraps with the v2 lifecycle chain. The single-position law, the
+funded-prediction requirement, the expectancy gate, risk-based sizing, and the
+naked-position abort are all enforced HERE, in code.
 
-desk_open_position: prediction → thesis → decision → venue order (+brackets)
-→ trades + positions rows. Refuses without a prediction_id (a thesis is a
-funded prediction) or while any position is open.
+desk_open_position: given a prediction_id (+ thesis), DERIVES side, live entry,
+stop (empirical MAE envelope, ATR fallback), target (the prediction's far edge,
+a fixed zone level), and risk-based size from the conviction band; applies the
+expectancy gate; places a market order with an atomic on-venue SL bracket;
+verifies on-venue and ABORTS (auto-closes) a naked position. Explicit sl/tp/size
+override derivation (transition / tests). See PLANNING-trade-execution-collapse.md.
 
 desk_close_position: cancels tracked brackets, market-closes, writes the
 closing decision/trade, computes the outcome row.
@@ -23,27 +28,24 @@ from harness.tools.registry import registry, tool_error, tool_result
 OPEN_SCHEMA = {
     "name": "desk_open_position",
     "description": (
-        "Open a position funding a prediction. Writes thesis (citing the "
-        "prediction), decision, venue order WITH on-venue SL bracket "
-        "(mandatory — a naked position is a critical failure), trade and "
-        "position rows. Refuses while a position is open (one at a time) "
-        "and without sl. After this returns, POST-ENTRY VERIFY on-venue "
-        "(account_state) before reporting success upstream."
+        "Open a position funding a prediction — DETERMINISTIC. Given a "
+        "prediction_id (+ thesis_md narrative), derives side, live entry, stop "
+        "(empirical MAE envelope, ATR fallback), target (the prediction's far "
+        "edge — a fixed zone level), and risk-based size from the conviction "
+        "band; applies the expectancy gate (refuses negative-EV / non-tradeable "
+        "setups); places a market order with an atomic on-venue SL bracket "
+        "(mandatory); verifies on-venue and ABORTS (auto-closes) a naked "
+        "position. Refuses while a position is open (one at a time), if the "
+        "prediction is stale (>20 min), or if the setup is below the expectancy "
+        "gate. You only supply the prediction_id and a short thesis."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "prediction_id": {"type": "integer"},
-            "symbol": {"type": "string"},
-            "side": {"type": "string", "enum": ["long", "short"]},
-            "size": {"type": "number", "description": "Position size in coin units."},
-            "sl": {"type": "number", "description": "Stop price (volatility-derived, risk_tolerance-scaled)."},
-            "tp": {"type": "number"},
-            "thesis": {"type": "string", "description": "Execution narrative (markdown)."},
-            "sl_rationale": {"type": "string"},
-            "conviction": {"type": "number"},
+            "thesis_md": {"type": "string", "description": "Execution narrative (markdown), authored by main."},
         },
-        "required": ["prediction_id", "symbol", "side", "size", "sl", "thesis"],
+        "required": ["prediction_id", "thesis_md"],
     },
 }
 
@@ -59,17 +61,81 @@ CLOSE_SCHEMA = {
         "type": "object",
         "properties": {
             "position_id": {"type": "integer"},
-            "exit_reason": {"type": "string",
-                            "description": "sl|tp|invalidation|main_decision|..."},
+            "exit_reason": {
+                "type": "string",
+                "description": (
+                    "Why the position closed (invalidation ≠ stop-loss): "
+                    "sl | tp | invalidation | thesis_break | alert_take_profit | "
+                    "main_decision | naked_position_abort"
+                ),
+            },
         },
         "required": ["position_id", "exit_reason"],
     },
 }
 
 
+MARKET_SLIPPAGE = 0.003   # marketable-limit ±0.3% cap (the market path's IoC limit)
+ATR_STOP_MULT = 1.5       # ATR-multiple stop when the MAE envelope is too thin
+_ATR_INTERVAL = {"intraday": "1h", "swing": "4h", "position": "1d"}
+
+
+def _fresh_price(symbol: str) -> float:
+    """Live mark price, fetched server-side (never from a stale LLM view)."""
+    from trading.perception.core import data_point_registry
+    entry = data_point_registry.lookup("hl_price")
+    px = data_point_registry.extract_numeric(entry.fn(symbol=symbol), entry.numeric_path)
+    if not px or px <= 0:
+        raise ValueError(f"hl_price for {symbol} unavailable")
+    return float(px)
+
+
+def _derive_stop_pct(conn, strategy_name, symbol, timescale, current):
+    """Hard SL distance (% from entry): empirical all-resolutions MAE, with an
+    ATR-multiple fallback when the envelope is too thin. Returns
+    ``(stop_pct, rationale)`` — ``(None, reason)`` when neither is available
+    (honest absence: the caller then refuses rather than guessing a stop)."""
+    from trading.lifecycle import queries
+    if strategy_name:
+        stop = queries.hard_stop_pct(conn, strategy_name)
+        if stop:
+            return stop, (f"empirical all-resolutions MAE "
+                          f"p{int(queries.HARD_SL_PERCENTILE * 100)} = {stop}%")
+    try:
+        from trading.perception.core import data_point_registry
+        e = data_point_registry.lookup("ta_atr")
+        interval = _ATR_INTERVAL.get(timescale, "1h")
+        atr = data_point_registry.extract_numeric(
+            e.fn(symbol=symbol, interval=interval), e.numeric_path)
+        if atr and atr > 0 and current > 0:
+            stop = round(ATR_STOP_MULT * (atr / current) * 100.0, 4)
+            return stop, (f"ATR fallback {ATR_STOP_MULT}×ATR({interval})={stop}% "
+                          f"(envelope < n={queries.HARD_SL_MIN_N})")
+    except Exception as exc:
+        return None, f"no stop: envelope thin AND ATR failed ({type(exc).__name__}: {exc})"
+    return None, "no stop: envelope thin and ATR unavailable"
+
+
+def _sl_rests_on_venue(state, symbol, sl_order_id) -> bool:
+    """On-venue truth: is the SL trigger actually resting? Match by order id;
+    fall back to any reduce-only trigger on the symbol (format-quirk tolerant)."""
+    orders = (state or {}).get("open_orders") or []
+    if sl_order_id:
+        for o in orders:
+            if str(o.get("oid")) == str(sl_order_id):
+                return True
+    for o in orders:
+        if o.get("coin") == symbol and (
+                o.get("isTrigger") or o.get("triggerPx")
+                or "trigger" in str(o.get("orderType", "")).lower()):
+            return True
+    return False
+
+
 def _desk_open(args: Dict[str, Any]) -> str:
+    from trading.conviction.engine import MAX_LEVERAGE, target_risk_budget
     from trading.dispatchers._helpers import session_id_from_context
-    from trading.integrations.hyperliquid.venue import hl_place_order
+    from trading.integrations.hyperliquid.venue import hl_account_state, hl_place_order
     from trading.lifecycle import queries, write
     from trading.lifecycle.db import get_db
 
@@ -83,20 +149,74 @@ def _desk_open(args: Dict[str, Any]) -> str:
     if pred["resolved_at"] is not None:
         return tool_error(f"prediction {pred['id']} is already resolved — fund a live one")
 
-    symbol = args["symbol"]
-    side = args["side"]
-    size = float(args["size"])
-    sl = float(args["sl"])
+    far = pred.get("far_edge_pct")
+    entry_ref = pred.get("entry_ref_price")
+    symbol = args.get("symbol") or pred["symbol"]
+    side = args.get("side") or ("long" if (far or 0) > 0 else "short")
     conviction = float(args.get("conviction", pred["conviction"]))
+    strategy_name = pred.get("strategy_name")
+    timescale = pred.get("timescale")
+    thesis = args.get("thesis_md") or ""
     session = session_id_from_context()
 
-    # Capture PRE-ENTRY (flat) equity BEFORE the fill (Issue 3). While a
-    # position is open, equity_breakdown double-counts the collateral (the
-    # margin shows on both the spot and perp legs → $17 reads as $24), so the
-    # denominator for entry_account_value / realized leverage must be read flat,
-    # before the order opens. The read NEVER blocks the order — a failure is
-    # recorded as missing and the trade still proceeds.
-    from trading.integrations.hyperliquid.venue import hl_account_state
+    # DERIVE everything from the prediction + live market — one path, fully gated.
+    # RECENCY guard (defense-in-depth vs main's best_actionable filter): never
+    # fund a prediction whose entry conditions have aged out.
+    import time as _t
+    age_s = _t.time() - float(pred["ts"])
+    if age_s > queries.ACTIONABLE_MAX_AGE_S:
+        return tool_result({"ok": False, "refused": "prediction too stale to fund",
+                            "age_s": round(age_s),
+                            "max_age_s": queries.ACTIONABLE_MAX_AGE_S})
+    try:
+        current = _fresh_price(symbol)
+    except Exception as exc:
+        return tool_error(f"price read failed for {symbol}: {type(exc).__name__}: {exc}")
+    if far is None:
+        return tool_error(f"prediction {pred['id']} has no far_edge_pct — cannot derive target")
+    far = float(far)
+    if not entry_ref or float(entry_ref) <= 0:
+        return tool_error(f"prediction {pred['id']} has no entry_ref_price — cannot derive TP")
+    tp = float(entry_ref) * (1.0 + far / 100.0)          # FIXED zone target level
+
+    stop_pct, sl_rationale = _derive_stop_pct(conn, strategy_name, symbol, timescale, current)
+    if not stop_pct:
+        return tool_error(f"no stop available ({sl_rationale}) — refusing (honest absence)")
+    sl = (current * (1 - stop_pct / 100.0) if side == "long"
+          else current * (1 + stop_pct / 100.0))
+
+    # Expectancy gate: the strategy must be tradeable AND this setup must be
+    # +EV at the LIVE price (RR > (1−p)/p — the staleness + worth-it gate).
+    if not strategy_name:
+        return tool_result({"ok": False, "refused": "prediction has no strategy — cannot gate"})
+    exp = queries.strategy_expectancy(conn, strategy_name)
+    if not exp["tradeable"]:
+        return tool_result({"ok": False, "refused": "strategy not tradeable",
+                            "expectancy_pct": exp["expectancy_pct"], "n": exp["n"]})
+    p = exp["win_rate"]
+    reward_pct = abs(tp - current) / current * 100.0
+    rr = reward_pct / stop_pct if stop_pct else 0.0
+    threshold = (1.0 - p) / p if p else None
+    if threshold is None:
+        return tool_result({"ok": False, "refused": "no win-rate calibration"})
+    if rr <= threshold:
+        return tool_result({"ok": False, "refused": "setup below expectancy gate",
+                            "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
+                            "win_rate": p})
+
+    budget = target_risk_budget(conviction)
+    if budget is None:
+        return tool_result({"ok": False, "refused": "conviction below global threshold",
+                            "conviction": conviction})
+    sizing: Dict[str, Any] = {
+        "mode": "risk_based", "risk_budget": budget, "stop_pct": stop_pct,
+        "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
+        "current_price": current}
+
+    # PRE-ENTRY (flat) equity BEFORE the fill (Issue 3): the denominator for
+    # sizing + realized leverage. In-position equity_breakdown double-counts
+    # collateral, so this MUST read flat. Risk-based sizing NEEDS it — a failure
+    # blocks the open (can't size honestly without equity; honest absence).
     entry_account_value = leverage = None
     sizing_warning = None
     try:
@@ -104,74 +224,123 @@ def _desk_open(args: Dict[str, Any]) -> str:
         if equity > 0:
             entry_account_value = equity
         else:
-            sizing_warning = "equity_usd <= 0 — leverage not recorded"
+            sizing_warning = "equity_usd <= 0"
     except Exception as exc:
-        sizing_warning = f"account_state failed ({type(exc).__name__}: {exc}) — leverage not recorded"
+        sizing_warning = f"account_state failed ({type(exc).__name__}: {exc})"
+
+    if entry_account_value is None:
+        return tool_error(f"cannot size: pre-fill equity unavailable ({sizing_warning})")
+    # Risk-based: size to lose exactly the budget if the stop hits; cap leverage.
+    notional = (budget * entry_account_value) / (stop_pct / 100.0)
+    if notional > MAX_LEVERAGE * entry_account_value:
+        notional = MAX_LEVERAGE * entry_account_value
+        sizing["leverage_capped"] = True
+    size = notional / current
+    sizing["notional_usd"] = round(notional, 2)
+    sizing["size_coin"] = round(size, 8)
 
     try:
-        fill = hl_place_order(
-            symbol=symbol, side=side, size=size,
-            sl=sl, tp=float(args["tp"]) if args.get("tp") else None,
-        )
+        fill = hl_place_order(symbol=symbol, side=side, size=size, sl=sl, tp=tp,
+                              order_type="market", slippage=MARKET_SLIPPAGE)
     except Exception as exc:
         return tool_error(f"venue order failed: {type(exc).__name__}: {exc}")
 
-    # Realized leverage = notional / PRE-ENTRY equity (notional needs the fill).
-    notional = fill["fill_price"] * fill.get("size", size)
-    if entry_account_value is not None:
-        leverage = round(notional / entry_account_value, 3)
+    notional_filled = fill["fill_price"] * fill.get("size", size)
+    if entry_account_value:
+        leverage = round(notional_filled / entry_account_value, 3)
 
-    # Entry delta (Issue 5): how far the actual fill drifted from the
-    # prediction's entry_ref_price (captured at registration) — raw material for
-    # reflect on wait-vs-immediate entry. Predictions stay immutable; this lives
-    # on the decision's free-form params.
-    entry_ref = pred.get("entry_ref_price")
-    entry_delta_pct = (round((fill["fill_price"] - entry_ref) / entry_ref * 100, 4)
+    # Entry delta (Issue 5): fill drift vs the prediction's entry_ref_price —
+    # reflect's raw material for wait-vs-immediate entry. Predictions stay
+    # immutable; this lives on the decision's free-form params.
+    entry_delta_pct = (round((fill["fill_price"] - float(entry_ref)) / float(entry_ref) * 100, 4)
                        if entry_ref else None)
 
+    # 4-target ALERT levels (the two judgment triggers inside the mechanical
+    # SL/TP bounds). Stored on the decision; poll_hl_position_alert fires a wake
+    # when price crosses one, and main re-scores + decides (take-profit / cut /
+    # hold). alert-up = the near edge (fixed zone level); alert-down = the
+    # winners' MAE (median-anchored), anchored to the fill. Derive path only.
+    alert_near_px = alert_adverse_px = None
+    if entry_ref:
+        near_pct = pred.get("near_edge_pct")
+        if near_pct is not None:
+            alert_near_px = round(float(entry_ref) * (1 + float(near_pct) / 100.0), 6)
+        wmae = queries.mae_envelope(
+            conn, strategy_name=strategy_name,
+            population="reached_target_winners", statistic="median_anchored",
+            median_multiplier=3.0, min_n=queries.HARD_SL_MIN_N)["suggested_sl_pct"]
+        if wmae:
+            fp = fill["fill_price"]
+            alert_adverse_px = round(
+                fp * (1 - wmae / 100.0) if side == "long" else fp * (1 + wmae / 100.0), 6)
+
     thesis_id = write.record_thesis(
-        conn, prediction_id=pred["id"], symbol=symbol,
-        text_md=args["thesis"], agent="plutus-trade",
-        sl_price=sl, sl_rationale_md=args.get("sl_rationale"),
-        session_name=session,
-    )
+        conn, prediction_id=pred["id"], symbol=symbol, text_md=thesis,
+        agent="plutus-main", sl_price=sl, sl_rationale_md=sl_rationale,
+        session_name=session)
     decision_id = write.record_decision(
         conn, thesis_id=thesis_id,
         action="open_long" if side == "long" else "open_short",
-        agent="plutus-trade", conviction=conviction,
-        params={
-            "sl": sl, "tp": args.get("tp"),
-            "sl_order_id": fill.get("sl_order_id"),
-            "tp_order_id": fill.get("tp_order_id"),
-            "entry_delta_pct": entry_delta_pct,
-        },
-    )
+        agent="plutus-main", conviction=conviction,
+        params={"sl": sl, "tp": tp, "sl_order_id": fill.get("sl_order_id"),
+                "tp_order_id": fill.get("tp_order_id"),
+                "entry_delta_pct": entry_delta_pct, "sizing": sizing,
+                "alert_near_px": alert_near_px,
+                "alert_adverse_px": alert_adverse_px})
     trade_id = write.record_trade(
         conn, decision_id=decision_id, venue="hyperliquid", symbol=symbol,
-        side=side, size=fill.get("size", size),
-        fill_price=fill["fill_price"], slippage_bp=fill.get("slippage_bp"),
+        side=side, size=fill.get("size", size), fill_price=fill["fill_price"],
+        slippage_bp=fill.get("slippage_bp"),
         venue_order_id=str(fill.get("order_id") or ""),
-        venue_fill_id=str(fill.get("fill_id") or ""),
-    )
+        venue_fill_id=str(fill.get("fill_id") or ""))
     position_id = write.open_position(
         conn, venue="hyperliquid", symbol=symbol, side=side,
         size=fill.get("size", size), opening_trade_id=trade_id,
-        entry_account_value=entry_account_value, leverage=leverage,
-    )
+        entry_account_value=entry_account_value, leverage=leverage)
+
+    # POST-ENTRY VERIFY + NAKED-POSITION ABORT — the one money-critical guard.
+    # Brackets are atomic (normalTpsl), but a leg can still be rejected. PRIMARY
+    # signal: the fill returned an sl_order_id (the bracket was accepted).
+    # SECONDARY: re-read on-venue and, IF we get a real order list that lacks the
+    # SL, treat it as genuinely naked. Either way → auto-close immediately.
+    sl_order_id = fill.get("sl_order_id")
+    naked = sl is not None and not sl_order_id
+    position_on_venue = None
+    try:
+        st = hl_account_state()
+        position_on_venue = any((pp or {}).get("coin") == symbol
+                                for pp in (st.get("open_perp_positions") or []))
+        orders = st.get("open_orders")
+        if (sl is not None and sl_order_id and orders is not None
+                and not _sl_rests_on_venue(st, symbol, sl_order_id)):
+            naked = True
+    except Exception:
+        pass  # can't verify on-venue — fall back to the fill's bracket id
+
+    sl_on_venue = sl is not None and not naked
+    if naked:
+        _desk_close({"position_id": position_id, "exit_reason": "naked_position_abort"})
+        return tool_result({
+            "ok": False, "aborted_reason": "naked_position: SL did not rest on-venue",
+            "position_id": position_id, "thesis_id": thesis_id,
+            "fill": {"price": fill["fill_price"], "size": fill.get("size", size)},
+            "bracket_warnings": fill.get("bracket_warnings") or [],
+        })
 
     return tool_result({
         "ok": True,
         "position_id": position_id,
         "thesis_id": thesis_id,
+        "verified": bool(sl_on_venue),
+        "position_on_venue": position_on_venue,
         "fill": {"price": fill["fill_price"], "size": fill.get("size", size),
                  "slippage_bp": fill.get("slippage_bp")},
-        "sizing": {"notional_usd": round(notional, 2),
-                   "entry_account_value": entry_account_value,
+        "sizing": {**sizing, "entry_account_value": entry_account_value,
                    "leverage": leverage,
                    **({"warning": sizing_warning} if sizing_warning else {})},
         "sl": {"price": sl, "order_id": fill.get("sl_order_id"),
-               "on_venue": bool(fill.get("sl_order_id"))},
-        "tp": {"price": args.get("tp"), "order_id": fill.get("tp_order_id")},
+               "on_venue": bool(sl_on_venue), "rationale": sl_rationale},
+        "tp": {"price": tp, "order_id": fill.get("tp_order_id")},
         "bracket_warnings": fill.get("bracket_warnings") or [],
     })
 
@@ -195,7 +364,7 @@ def _desk_close(args: Dict[str, Any]) -> str:
     thesis = pos.get("thesis") or {}
     decision_id = write.record_decision(
         conn, thesis_id=thesis.get("id"), action="close",
-        agent="plutus-trade", conviction=0.5,
+        agent="plutus-main", conviction=0.5,
         params={"exit_reason": args["exit_reason"]},
     )
     close_trade_id = write.record_trade(
@@ -261,6 +430,87 @@ def _compute_outcome_fields(conn, pos: dict, close: dict, exit_reason: str) -> d
     }
 
 
+RESCORE_SCHEMA = {
+    "name": "rescore_position",
+    "description": (
+        "Re-score the OPEN position's conviction on fresh data and get a "
+        "recommended action — call this when a position alert wakes you "
+        "(alert-up near edge, or alert-down winners' MAE). Re-runs the "
+        "strategy's conviction on live readings, records the evaluation, and "
+        "returns recommended_action with a BIAS TO ACT: exit_now if conviction "
+        "has decayed materially below entry or fallen below the global threshold "
+        "(the premise is gone), else hold. You make the final call (take-profit / "
+        "cut / hold) and close via desk_close_position if warranted."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {"position_id": {"type": "integer"}},
+        "required": ["position_id"],
+    },
+}
+
+# How far conviction may decay from entry before the alert-review biases to exit.
+RESCORE_EXIT_DROP = 0.10
+
+
+def _opening_conviction(conn, position_id: int):
+    row = conn.execute(
+        "SELECT d.conviction FROM positions p "
+        "JOIN trades t ON t.id = p.opening_trade_id "
+        "JOIN decisions d ON d.id = t.decision_id WHERE p.id = ?",
+        (position_id,)).fetchone()
+    return row["conviction"] if row else None
+
+
+def _rescore_position(args: Dict[str, Any]) -> str:
+    from trading.conviction.engine import GLOBAL_CONVICTION_THRESHOLD
+    from trading.dispatchers._helpers import session_id_from_context
+    from trading.dispatchers.predict_tools import score_strategy
+    from trading.lifecycle import queries, write
+    from trading.lifecycle.db import get_db
+
+    conn = get_db()
+    position_id = int(args["position_id"])
+    pos = queries.open_position(conn)
+    if pos is None or pos["id"] != position_id:
+        return tool_error(f"position {position_id} is not the open position")
+    strat = (pos.get("thesis") or {}).get("strategy_name")
+    if not strat:
+        return tool_error("position has no strategy — cannot re-score")
+
+    regime = (pos.get("prediction") or {}).get("regime_tag")
+    try:
+        scored = score_strategy(strat, regime=regime)
+    except Exception as exc:
+        return tool_error(f"re-score failed: {type(exc).__name__}: {exc}")
+
+    conv = scored.get("conviction")
+    entry_conv = _opening_conviction(conn, position_id)
+    # Bias to act — the pos#4 over-hold fix: default to exit when the premise has
+    # weakened, not to hold.
+    if conv is None:
+        rec, why = "hold", "re-score returned no conviction (missing data) — hold, re-check"
+    elif conv < GLOBAL_CONVICTION_THRESHOLD:
+        rec, why = "exit_now", f"conviction {conv} below threshold {GLOBAL_CONVICTION_THRESHOLD}"
+    elif entry_conv is not None and conv <= entry_conv - RESCORE_EXIT_DROP:
+        rec, why = "exit_now", f"conviction decayed {entry_conv}→{conv} (≥{RESCORE_EXIT_DROP})"
+    else:
+        rec, why = "hold", f"conviction {conv} holding (entry {entry_conv})"
+
+    write.record_evaluation(
+        conn, position_id=position_id, conviction=conv if conv is not None else 0.0,
+        agent="plutus-main",
+        thesis_status="weakening" if rec == "exit_now" else "holding",
+        recommended_action=rec, rationale_md=why,
+        session_name=session_id_from_context())
+
+    return tool_result({
+        "ok": True, "position_id": position_id, "conviction": conv,
+        "entry_conviction": entry_conv, "recommended_action": rec,
+        "rationale": why, "support_scores": scored.get("support_scores"),
+    })
+
+
 registry.register(
     name="desk_open_position",
     toolset="desk-execution",
@@ -268,6 +518,15 @@ registry.register(
     handler=lambda args, **kw: _desk_open(args),
     description="Open a position funding a prediction (atomic SL bracket, lifecycle chain).",
     emoji="📈",
+)
+
+registry.register(
+    name="rescore_position",
+    toolset="desk-execution",
+    schema=RESCORE_SCHEMA,
+    handler=lambda args, **kw: _rescore_position(args),
+    description="Re-score the open position on fresh data; recommend hold/exit (bias to act).",
+    emoji="🔁",
 )
 
 registry.register(

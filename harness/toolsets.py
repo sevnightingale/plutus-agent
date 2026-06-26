@@ -426,10 +426,10 @@ TOOLSETS = {
     },
 
     "plutus-agent-cli": {
-        "description": "Default plutus-agent interactive CLI toolset — trader_core plus hyperliquid (native trading), the four PLUTUS function toolsets (perception/execution/reflection/identity), and plutus-main's desk surface (spawn/record/lifecycle-read/strategy-write/cronjob — the gateway session IS main). desk-execution and resolution are deliberately absent: trading hands belong to plutus-trade's spawn recipe, resolution to ops. ACP and dgclaw toolsets are opt-in via config.",
+        "description": "Default plutus-agent interactive CLI toolset — trader_core plus hyperliquid (native trading), the four PLUTUS function toolsets (perception/execution/reflection/identity), and plutus-main's desk surface (spawn/record/lifecycle-read/strategy-write/cronjob/desk-execution — the gateway session IS main). desk-execution is main's now: execution is a DETERMINISTIC tool (desk_open_position/desk_close_position) main calls directly — the plutus-trade sub-agent is retired. resolution stays with ops. ACP and dgclaw toolsets are opt-in via config.",
         "tools": [],
         "includes": ["trader_core", "hyperliquid", "perception", "execution", "reflection", "identity",
-                     "spawn", "record", "lifecycle-read", "strategy-write", "cronjob"]
+                     "spawn", "record", "lifecycle-read", "strategy-write", "cronjob", "desk-execution"]
     },
 
     # ─── PLUTUS function-shaped toolsets (Phase 4a) ───────────────────────

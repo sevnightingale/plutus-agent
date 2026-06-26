@@ -6,7 +6,7 @@ execution (if anything here contradicts it, TRADING.md wins); this document
 
 ## The thesis
 
-Plutus is a seven-agent trading desk where **trading is calibration-gated**:
+Plutus is a six-agent trading desk where **trading is calibration-gated**:
 nothing places a trade until a strategy has publicly earned the right to, on a
 machine-verified prediction record. The desk's north star is not this
 account's P&L — it is a credible, verifiable public track record (on-chain
@@ -16,10 +16,10 @@ weeks, and that is the system working.
 
 Three design laws shape everything below:
 
-1. **One binary gate.** Strategy graduation (N≥15 resolved predictions, win
-   rate ≥ 0.55 AND reward:risk > 1) is the only yes/no on trading. Above the global conviction
-   threshold (0.50), conviction is a *sizing dial* — leverage bands — never a
-   veto.
+1. **One binary gate.** Strategy graduation — positive simulated net EXPECTANCY
+   (the strategy's resolved book run through the actual trade geometry, at N≥15)
+   — is the only yes/no on trading. Above the global conviction threshold (0.50),
+   conviction is a *sizing dial* — risk-budget bands — never a veto.
 2. **Honest absence.** Failed readings stay FAILED and are treated as missing;
    nothing is defaulted, mocked, or silently fallen back.
 3. **Records live in lifecycle.db, via tools.** Predictions, decisions,
@@ -29,9 +29,11 @@ Three design laws shape everything below:
 
 ## The desk
 
-Seven agents in a **star topology**: plutus-main orchestrates; specialists
+Six agents in a **star topology**: plutus-main orchestrates; specialists
 never spawn each other (no-nesting is enforced — the `spawn` toolset is
-main-only). Each specialist is defined by an `agents/<name>/AGENT.md` recipe:
+main-only). Execution is NOT an agent — it is a deterministic tool main calls
+directly (see Execute). Each specialist is defined by an `agents/<name>/AGENT.md`
+recipe:
 frontmatter (model tier, toolsets, `reads:`, output contract) plus a procedure
 the spawned agent follows.
 
@@ -41,7 +43,6 @@ the spawned agent follows.
 | **plutus-perception** | eyes — refreshes PERCEPTION.md from data points | spawned when stale or pre-decision | light |
 | **plutus-regime** | classifies regime per timescale → REGIME.md | spawned on staleness / perception flips | light |
 | **plutus-predict** | forward brain — evaluates strategies, registers predictions, generates new hypotheses | spawned on beats and escalations | standard |
-| **plutus-trade** | hands — stop, size, place, verify, thesis | spawned by main **only on funding** | light |
 | **plutus-ops** | back office + watchdog | cron, every 30 min | light |
 | **plutus-reflect** | backward brain — weights, graduation, lessons, sizing review | staleness floor: weekly or 3 unreflected closes | standard |
 
@@ -54,8 +55,12 @@ whole desk on whatever provider the wizard configured.
 **plutus-main is not spawned** — it *is* the gateway session (Telegram/CLI).
 Its toolsets come from `platform_toolsets` in config.yaml (the
 `plutus-agent-cli` composite carries its desk surface: spawn, record,
-lifecycle-read, strategy-write, cronjob, perception). It deliberately lacks
-`desk-execution`: main decides and funds; only plutus-trade touches orders.
+lifecycle-read, strategy-write, cronjob, perception, **desk-execution**).
+Execution is main's now — a deterministic tool (`desk_open_position` /
+`desk_close_position`) it calls directly; the plutus-trade sub-agent is retired.
+This is a deliberate doctrine change: main gained a *deterministic capability*,
+not trading discretion (the expectancy gate, sizing, and naked-abort live in the
+tool, in code).
 
 ## Blackboards
 
@@ -149,30 +154,45 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    reaching near by the horizon is WRONG; invalidation trips WRONG only BEFORE
    near. The ops sweep is a race-safe safety net. On resolution the price path
    over [birth, resolution] is measured (MAE / MFE / profit-score →
-   `realized_value_json`); MAE-on-correct sets stops and MFE-vs-MAE on wins is
-   the strategy's reward:risk (see Graduate, Execute).
-4. **Graduate.** plutus-reflect promotes test → **active** only at **N≥15
-   resolved AND win rate ≥ 0.55 AND reward:risk RR > 1** (RR = median favorable
-   ÷ median adverse move on wins; win_rate × RR is positive expectancy — a good
-   forecaster with RR ≤ 1 is a losing trade and does NOT graduate). Checkpoint
-   every 10: ≥50%; revoke at N≥20 below 40% across ≥2 regimes. No manual
-   graduation, no hand-seeded actives — the bar is the bar.
-5. **Fund & size.** When an active strategy's prediction clears the global
-   conviction threshold (0.50), main decides funding and spawns plutus-trade
-   with a risk budget. Conviction sets **size** via the leverage bands —
-   0.50–0.60 → 2X · 0.60–0.70 → 5X · 0.70–0.80 → 7X · 0.80–1.00 → 10X of
-   unified account value — capped by main's budget and venue max, never
-   exceeded from below.
-6. **Execute.** plutus-trade sets the stop from the strategy's empirical risk
-   envelope — `mae_envelope` gives the percentile MAE of *winning* setups, so
-   the SL sits just beyond a typical winner's retrace (ATR is the fallback
-   while the envelope is still thin); the target is the prediction's far edge.
-   It places via `desk_open_position` →
-   `place_order(venue="hyperliquid")` (the native SDK path, API-wallet
-   signed) with on-venue SL/TP brackets, then **post-entry verifies**
-   on-chain — a naked position is closed immediately as a critical failure.
-   The fill is *measured*: realized leverage and `entry_account_value` are
-   recorded on the position row (code measures; doctrine bounds).
+   `realized_value_json`); MAE sets stops and the resolved book's simulated
+   expectancy is the graduation gate (see Graduate, Execute).
+4. **Graduate.** plutus-reflect promotes test → **active** only when the
+   strategy's **simulated net EXPECTANCY is positive at N≥15** — its whole
+   resolved book run through the actual trade geometry (TP = far edge, SL = the
+   all-resolutions MAE stop), pessimistic on path-dependence, with the win signal
+   = the trade actually TAGGED its target (`strategy_expectancy.tradeable`). This
+   replaces the old win-rate + RR>1 bar, which was survivorship-biased (median
+   MFE/MAE on winners only overstates tradeability). Revoke when expectancy turns
+   negative at N≥20. No manual graduation, no hand-seeded actives — the bar is
+   the bar.
+5. **Fund & size.** Selection is a deterministic query
+   (`best_actionable_prediction` = the argmax-EV open prediction of a
+   currently-tradeable active strategy). main funds it by calling
+   `desk_open_position` directly (mechanical — flat · trade-ready · not-HALT).
+   Sizing is RISK-BASED: conviction sets a risk BUDGET (% of equity risked if the
+   stop hits — 0.50–0.60 → 1% · 0.60–0.70 → 3% · 0.70–0.80 → 7% · 0.80–1.00 →
+   12%), and size = budget × equity ÷ stop-distance, capped at 10X leverage — so
+   a wider stop auto-shrinks the position and risk-per-trade is constant per band.
+6. **Execute.** `desk_open_position` is deterministic code, not an agent: it
+   derives the hard SL from the strategy's empirical risk envelope
+   (`mae_envelope` all-resolutions MAE percentile; ATR fallback while thin), the
+   target from the prediction's far edge (a fixed zone level), and the size from
+   the risk budget; it applies the per-setup expectancy gate (RR > (1−p)/p at the
+   live price — refusing negative-EV setups), then places via
+   `place_order(venue="hyperliquid")` (native SDK, API-wallet signed) with an
+   atomic on-venue SL bracket and a ±0.3% slippage cap, and **post-entry verifies
+   on-venue — a naked position (SL not resting) is auto-closed immediately** (the
+   one money-critical guard). The fill is *measured*: realized leverage and
+   `entry_account_value` are recorded on the position row.
+6a. **Manage (the 4-target structure).** Every position carries two mechanical
+   bounds (hard SL, far TP — they rest on-venue and fire without anyone) and two
+   *alert* triggers inside them: **alert-up** at the near edge (the `hl_position_alert`
+   watcher wakes main: take profit, or hold for far?) and **alert-down** at the
+   winners'-MAE level (normal wobble, or thesis breaking — cut early?). On a wake,
+   main calls `rescore_position` (re-scores conviction on fresh data, biased to
+   ACT on a weakened premise) and closes via `desk_close_position` if warranted.
+   Mechanism for the bounds + the alert firing; judgment only at the two ambiguous
+   edges. Invalidation ≠ stop-loss — exits are recorded as distinct `exit_reason`s.
 7. **Reflect.** Weekly (or after 3 unreflected closes): updates data-point
    weights from outcomes and the conviction trajectory, runs
    graduation/revocation checkpoints, prunes over-full (timescale × regime)

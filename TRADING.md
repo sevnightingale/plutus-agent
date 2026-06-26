@@ -106,7 +106,7 @@ everything else reuses it.
 
 | Measure | Definition | Used by |
 |---|---|---|
-| `equity_usd` | `spot_usdc + perp_account_value` — **THE account-worth number** for the whole unified cross-margin account | sizing base (leverage bands), Live State snapshot, drawdown, the balance-change alert |
+| `equity_usd` | `spot_usdc + perp_account_value` — **THE account-worth number** for the whole unified cross-margin account | sizing base (risk-budget bands), Live State snapshot, drawdown, the balance-change alert |
 | `spot_usdc` | spot clearinghouse USDC total — where idle funds *display* under unified mode | legibility split in account_state |
 | `perp_account_value` | perp-side `marginSummary.accountValue` (margin in use + unrealized PnL) — **≈ 0 when flat is NORMAL** | legibility split; never used alone for account worth |
 | `withdrawable_usd` | what could leave the venue right now | operator info |
