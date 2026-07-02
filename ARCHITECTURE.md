@@ -35,7 +35,12 @@ main-only). Execution is NOT an agent — it is a deterministic tool main calls
 directly (see Execute). Each specialist is defined by an `agents/<name>/AGENT.md`
 recipe:
 frontmatter (model tier, toolsets, `reads:`, output contract) plus a procedure
-the spawned agent follows.
+the spawned agent follows. The output contract is fulfilled through a
+`submit_report` tool the spawn runner injects into every contracted run —
+the payload validates against `RETURN_CONTRACTS` (harness/spawn.py) at the
+tool layer, so a malformed report bounces back for the model to retry, and
+the agent's final text message stays human-readable prose. (Final-message
+JSON still parses as a fallback.)
 
 | Agent | Role | Trigger | Tier |
 |---|---|---|---|

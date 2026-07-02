@@ -126,8 +126,9 @@ healthy, says anything about whether trading *works* (that's `hl_trade_readiness
 1. Plutus calls `place_order(venue="hyperliquid", thesis_id=..., conviction=..., side=...,
    symbol=..., ref_price=..., sl=..., tp=...)`.
 2. The venue dispatcher resolves account balance, computes size from the conviction
-   multiplier (or uses explicit `size`), and calls the HL SDK signing with the **API-wallet
-   key**.
+   multiplier (or uses explicit `size`), floors it to the asset's `szDecimals` (the
+   SDK *rejects* finer precision rather than rounding), and calls the HL SDK signing
+   with the **API-wallet key**.
 3. Hyperliquid verifies the API wallet is a **registered** signer for the master → accepts
    → fills.
 4. SL/TP are placed atomically as on-venue bracket triggers
@@ -135,6 +136,26 @@ healthy, says anything about whether trading *works* (that's `hl_trade_readiness
 5. Lifecycle rows (decision → trade → position) are written in `lifecycle.db`.
 
 Funds never move between spot and perp explicitly. Unified mode handles collateral.
+
+---
+
+## How capital enters the account (the deposit path)
+
+Adding USDC goes through the **`perp_deposit` ACP job on the Degen Claw agent**
+(provider `0xd478a8B40372db16cA8045F28C6FE07228F3781A`) — the `dgclaw` skill has the
+exact two-command sequence (create job + fund). The provider handles the entire
+Base → Arbitrum → Hyperliquid bridge; the desk never touches chains, bridges, or raw
+transfers. Minimum 6 USDC, SLA ~30 min. First used 2026-07-02 ($60, landed in ~30 min).
+
+Two things this is NOT:
+- **Not the trade path.** dgclaw's `trade.ts` exists but trades go through
+  `place_order(venue="hyperliquid")` only (fact #2).
+- **Not a spot→perp transfer.** The deposit lands in the unified balance; collateral
+  handling stays automatic (fact #4).
+
+Deposits require live ACP auth (`acp_auth_readiness` — ops watches it every tick).
+A dead ACP auth blocks deposits but never trading; the HL API-wallet registration is
+a separate, on-chain credential.
 
 ---
 
