@@ -21,6 +21,18 @@ def _reset_singletons():
     _client.reset_singletons_for_tests()
 
 
+class _FakeInfo:
+    """Stub of the SDK Info's cached meta maps (size rounding lookups)."""
+    name_to_coin = {"BTC": "BTC", "ETH": "ETH"}
+    coin_to_asset = {"BTC": 0, "ETH": 1}
+    asset_to_sz_decimals = {0: 5, 1: 4}
+
+
+@pytest.fixture(autouse=True)
+def _fake_info(monkeypatch):
+    monkeypatch.setattr(venue, "get_info", lambda: _FakeInfo())
+
+
 def _make_filled_response(avg_px: float, size: float, oid: int = 12345):
     return {
         "response": {
@@ -67,6 +79,37 @@ def test_hl_place_order_limit_requires_px(monkeypatch):
     monkeypatch.setattr(venue, "get_exchange", lambda: MagicMock())
     with pytest.raises(ValueError, match="limit_px required"):
         venue.hl_place_order(symbol="BTC", side="long", size=0.01, order_type="limit")
+
+
+class TestRoundSzForHl:
+    """Size flooring to szDecimals — the 2026-07-02 first-trade killer.
+
+    A raw risk-derived size (0.00025113643744465553 BTC) reached the SDK,
+    whose float_to_wire REJECTS sub-szDecimals precision instead of
+    rounding. The venue layer now floors size like it already rounds price.
+    """
+
+    def test_floors_raw_risk_derived_size(self):
+        assert venue._round_sz_for_hl("BTC", 0.00025113643744465553) == 0.00025
+
+    def test_valid_size_unchanged(self):
+        assert venue._round_sz_for_hl("BTC", 0.01) == 0.01
+
+    def test_float_artifact_does_not_underfloor(self):
+        # 0.29 * 1e4 == 2899.9999... in binary; must floor to 0.29, not 0.2899
+        assert venue._round_sz_for_hl("ETH", 0.29) == 0.29
+
+    def test_zero_floor_is_refused(self):
+        with pytest.raises(ValueError, match="floors to 0"):
+            venue._round_sz_for_hl("BTC", 0.000001)
+
+    def test_market_order_sends_floored_size(self, monkeypatch):
+        mock_ex = MagicMock()
+        mock_ex.market_open.return_value = _make_filled_response(62000.0, 0.00025)
+        monkeypatch.setattr(venue, "get_exchange", lambda: mock_ex)
+        venue.hl_place_order(symbol="BTC", side="long",
+                             size=0.00025113643744465553)
+        assert mock_ex.market_open.call_args.kwargs["sz"] == 0.00025
 
 
 def test_hl_close_position_routes_to_market_close(monkeypatch):
