@@ -69,6 +69,14 @@ impulse.
   a DATA POINT (fetch_data_point hl_trade_readiness), computed live on-chain
   per call and never persisted to any file; ops fetches it every tick.
   Sizing base is equity_usd — the whole unified account.
+- **Deposit path (funding the account):** To add USDC, use the `perp_deposit`
+  ACP job via the Degen Claw agent (provider `0xd478a8B40372db16cA8045F28C6FE07228F3781A`).
+  **Load the `dgclaw` skill** for the exact two-command sequence (create job +
+  fund). The Degen Claw agent handles the entire Base→Arbitrum→Hyperliquid
+  bridge automatically — you never touch chains, bridges, or raw transfers.
+  Minimum 6 USDC, SLA ~30 min. dgclaw is NOT the trade path (see above),
+  but it IS the deposit path — don't go looking for wallet send-transaction
+  tools or manual bridging when you need to add capital.
 
 **Cold start (a fresh desk has nothing to trade yet).** The pipeline to the
 first trade: predict GENERATES strategy hypotheses (status=test, thesis filed at

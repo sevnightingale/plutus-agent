@@ -1,4 +1,4 @@
-"""ACP data points — wallet balance, offerings discovery, chain list.
+"""ACP data points — wallet balance, offerings discovery, chain list, auth.
 
 Verified against `acp <subcommand> --help` (acp-cli v1.0.5):
 - `acp wallet balance` REQUIRES `--chain-id` (no default)
@@ -8,7 +8,10 @@ Verified against `acp <subcommand> --help` (acp-cli v1.0.5):
 
 from __future__ import annotations
 
+import json
 import logging
+import time
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from trading.perception.core.data_point_registry import register_data_point
@@ -94,3 +97,126 @@ def acp_browse_offerings(query: str,
 )
 def acp_chain_list() -> Dict[str, Any]:
     return _cli.acp("chain", "list")
+
+
+# ───────────────────────────────────────────────────────────────────────────
+# ACP auth readiness — the identity system's hl_trade_readiness
+# ───────────────────────────────────────────────────────────────────────────
+
+AUTH_WARN_DAYS = 45
+AUTH_CRITICAL_DAYS = 60
+AUTH_STATE_FILENAME = "acp_auth_state.json"
+
+
+def _acp_config_path() -> Path:
+    return Path("~/.config/acp/config.json").expanduser()
+
+
+def _auth_state_path() -> Path:
+    from harness.constants import get_hermes_home
+    return get_hermes_home() / AUTH_STATE_FILENAME
+
+
+@register_data_point(
+    name="acp_auth_readiness",
+    category="account",
+    source="acp",
+    description=(
+        "Liveness + age of the ACP CLI's OAuth session — the identity "
+        "system's analogue of hl_trade_readiness. Runs `acp agent whoami` "
+        "live and ages the last refresh (config.json mtime; self-healing "
+        "state file catches out-of-band re-auths). alive=false or "
+        "critical=true → the operator must run `acp configure` (never the "
+        "desk). Computed per call, never persisted as a report."
+    ),
+    params_schema={},
+    returns_schema={
+        "alive": "bool — `acp agent whoami` succeeded",
+        "days_since_refresh": "float|null — age of the OAuth session",
+        "warn_reauth_soon": f"bool — age ≥ {AUTH_WARN_DAYS}d",
+        "critical": f"bool — age ≥ {AUTH_CRITICAL_DAYS}d",
+        "reason": "human-readable verdict",
+    },
+    tags=["account", "acp", "auth", "readiness", "watchdog"],
+)
+def acp_auth_readiness() -> Dict[str, Any]:
+    """Return the auth verdict dict. Never raises; failures are encoded."""
+    result: Dict[str, Any] = {
+        "alive": False,
+        "reason": "",
+        "days_since_refresh": None,
+        "refreshed_at_epoch": None,
+        "refreshed_at_iso": None,
+        "warn_reauth_soon": False,
+        "critical": False,
+    }
+
+    cfg = _acp_config_path()
+    if not cfg.exists():
+        result["reason"] = (
+            "~/.config/acp/config.json missing — the acp CLI has never been "
+            "configured on this machine. Operator must run `acp configure`.")
+        return result
+    cfg_mtime = cfg.stat().st_mtime
+
+    # Last refresh the desk knows about. Self-healing: a config.json newer
+    # than the recorded epoch means the operator re-authed out of band —
+    # record it silently instead of nagging about a refresh that happened.
+    state_path = _auth_state_path()
+    recorded: Optional[float] = None
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        recorded = float(state.get("acp_auth_refreshed_at_epoch") or 0) or None
+    except Exception:
+        pass
+    refreshed = max(recorded or 0.0, cfg_mtime)
+    if recorded is None or cfg_mtime > recorded:
+        try:
+            state_path.write_text(json.dumps({
+                "acp_auth_refreshed_at": time.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ", time.gmtime(refreshed)),
+                "acp_auth_refreshed_at_epoch": refreshed,
+                "notes": ("auto-updated by acp_auth_readiness — "
+                          "config.json mtime advanced past the recorded epoch"),
+            }, indent=2) + "\n", encoding="utf-8")
+        except Exception as exc:
+            logger.warning("acp_auth_readiness: could not update %s: %s",
+                           state_path, exc)
+
+    result["refreshed_at_epoch"] = refreshed
+    result["refreshed_at_iso"] = time.strftime(
+        "%Y-%m-%d %H:%M UTC", time.gmtime(refreshed))
+    days = (time.time() - refreshed) / 86400.0
+    result["days_since_refresh"] = round(days, 1)
+    result["warn_reauth_soon"] = days >= AUTH_WARN_DAYS
+    result["critical"] = days >= AUTH_CRITICAL_DAYS
+
+    # The live check — the only proof the session can still sign.
+    try:
+        whoami = _cli.acp("agent", "whoami")
+    except Exception as exc:
+        result["reason"] = (
+            f"acp agent whoami FAILED — auth is dead; operator must run "
+            f"`acp configure`. ({exc})")
+        return result
+    if isinstance(whoami, dict) and whoami.get("error"):
+        result["reason"] = (
+            f"acp agent whoami returned an error — auth is dead; operator "
+            f"must run `acp configure`. ({whoami.get('error')})")
+        return result
+
+    result["alive"] = True
+    if result["critical"]:
+        result["reason"] = (
+            f"ALIVE but auth is {result['days_since_refresh']}d old "
+            f"(≥{AUTH_CRITICAL_DAYS}d) — may expire any moment; operator "
+            "should run `acp configure` NOW.")
+    elif result["warn_reauth_soon"]:
+        result["reason"] = (
+            f"ALIVE but auth is {result['days_since_refresh']}d old "
+            f"(≥{AUTH_WARN_DAYS}d) — re-authenticate proactively with "
+            "`acp configure`.")
+    else:
+        result["reason"] = (
+            f"ALIVE — auth refreshed {result['days_since_refresh']}d ago.")
+    return result

@@ -52,7 +52,17 @@ plutus-main and move on.
    reason string verbatim). A dead trade path is catastrophic, not quiet
    (TRADING.md fact #3) — and equity is NOT evidence the path works. You
    never diagnose or re-register; main does.
-7. Return your ops_report — exactly one per tick.
+7. ACP AUTH: fetch_data_point acp_auth_readiness — the identity system's
+   analogue of step 6 (a live computed check; the mtime/state bookkeeping
+   happens inside the data point, never by you).
+   - alive=false → enqueue_wake(reason=escalation, detail=the reason
+     string verbatim). The operator must run `acp configure` — never you.
+   - critical=true (auth ≥60d old) → enqueue_wake(reason=escalation,
+     detail=the reason string verbatim).
+   - warn_reauth_soon=true (≥45d) → enqueue_wake(reason=staleness,
+     detail=the reason string verbatim).
+   - otherwise silent.
+8. Return your ops_report — exactly one per tick.
 
 # Output contract
 
