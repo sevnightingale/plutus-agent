@@ -71,6 +71,23 @@ def acp(*args: str,
     stderr = proc.stderr or ""
 
     if proc.returncode != 0:
+        # The node CLI intermittently crashes on EXIT (SIGABRT, code -6)
+        # AFTER printing a complete, valid JSON result — teardown noise, not
+        # failure. Salvage a parseable non-error payload over the exit code.
+        # (Observed 2026-07-02: `agent whoami` and `job history` both printed
+        # full JSON then exited -6; the raise here had ops falsely escalating
+        # "ACP auth dead" while whoami was succeeding.)
+        if capture and stdout.strip():
+            try:
+                salvaged = json.loads(stdout)
+            except json.JSONDecodeError:
+                salvaged = None
+            if salvaged is not None and not (
+                    isinstance(salvaged, dict) and salvaged.get("error")):
+                logger.warning(
+                    "acp %s exited %s but printed valid JSON — salvaged",
+                    " ".join(args), proc.returncode)
+                return salvaged
         raise ACPCLIError(
             f"acp {' '.join(args)} exited with code {proc.returncode}: "
             f"{stderr.strip() or stdout.strip() or 'no output'}"
