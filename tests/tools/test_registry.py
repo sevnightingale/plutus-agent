@@ -307,6 +307,7 @@ class TestBuiltinDiscovery:
             "harness.tools.session_search_tool",
             "harness.tools.skill_manager_tool",
             "harness.tools.skills_tool",
+            "harness.tools.submit_report",
             "harness.tools.terminal_tool",
             "harness.tools.todo_tool",
             "harness.tools.tts_tool",
