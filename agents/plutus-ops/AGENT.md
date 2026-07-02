@@ -56,7 +56,8 @@ plutus-main and move on.
 
 # Output contract
 
-Final message = ONE JSON object:
+Call submit_report ONCE with your report, then end with a short human
+summary. report =
 {"resolved": [{"prediction_id": ..., "outcome": ...}],
  "rescored": [{"strategy_name": ..., "conviction": ..., "n_predictions": ...}],
  "evaluation": {...}|null,

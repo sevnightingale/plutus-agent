@@ -40,7 +40,8 @@ never copy the previous file's header stamp.*
 
 # Output contract
 
-Final message = ONE JSON object:
+Call submit_report ONCE with your report, then end with a short human
+summary. report =
 {"rows": {"intraday": {"direction": ..., "volatility": ...},
           "swing": {...}, "position": {..., "macro": ...}},
  "flips": [{"timescale": ..., "from": ..., "to": ..., "evidence": ...}]}
