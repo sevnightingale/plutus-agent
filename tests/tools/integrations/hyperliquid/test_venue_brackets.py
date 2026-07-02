@@ -36,6 +36,18 @@ def _reset_singletons():
     _client.reset_singletons_for_tests()
 
 
+class _FakeInfo:
+    """Stub of the SDK Info's cached meta maps (size rounding lookups)."""
+    name_to_coin = {"BTC": "BTC", "ETH": "ETH"}
+    coin_to_asset = {"BTC": 0, "ETH": 1}
+    asset_to_sz_decimals = {0: 5, 1: 4}
+
+
+@pytest.fixture(autouse=True)
+def _fake_info(monkeypatch):
+    monkeypatch.setattr(venue, "get_info", lambda: _FakeInfo())
+
+
 def _make_filled(avg_px, size, oid=12345):
     return {
         "filled": {

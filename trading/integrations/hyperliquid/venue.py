@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from typing import Any, Dict, List, Optional
 
 from trading.lifecycle.db import get_db
@@ -143,6 +144,27 @@ def _round_px_for_hl(px: float) -> float:
     rounded = round(px, max(digits, 0))
     # Cap at 6 decimal places (HL wire format constraint)
     return round(rounded, 6)
+
+
+def _round_sz_for_hl(symbol: str, sz: float) -> float:
+    """Floor size to the asset's szDecimals (from the SDK's cached meta).
+
+    The SDK's float_to_wire REJECTS (never rounds) a size finer than the
+    asset allows — a raw risk-derived size like 0.00025113643744465553 BTC
+    kills the order at the wire. Floor, never round-half-up: rounding up
+    would breach the risk budget the size was derived from.
+    """
+    info = get_info()
+    decimals = info.asset_to_sz_decimals[info.coin_to_asset[info.name_to_coin[symbol]]]
+    step = 10 ** decimals
+    # +1e-9 absorbs binary-float artifacts (0.29*100 == 28.999...996) without
+    # letting any real sub-step excess round up.
+    floored = math.floor(float(sz) * step + 1e-9) / step
+    if floored <= 0:
+        raise ValueError(
+            f"size {sz} floors to 0 at {symbol}'s szDecimals={decimals} — "
+            "position too small for this asset's size granularity")
+    return floored
 
 
 def _normalize_bulk_bracket_response(
@@ -287,7 +309,7 @@ def hl_place_order(
     """
     ex = get_exchange()
     is_buy = (side == "long")
-    sz = float(size)
+    sz = _round_sz_for_hl(symbol, float(size))
     has_brackets = sl is not None or tp is not None
 
     # Limit-entry + brackets: surface a warning, place entry only.
@@ -557,7 +579,7 @@ def hl_place_trigger(
     order = {
         "coin": symbol,
         "is_buy": is_close_buy,
-        "sz": float(size),
+        "sz": _round_sz_for_hl(symbol, float(size)),
         "limit_px": limit_rounded,
         "order_type": {
             "trigger": {
