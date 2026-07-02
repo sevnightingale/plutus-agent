@@ -68,6 +68,13 @@ _PREFIX_STALENESS_BUDGETS = {
     # Competition state — 1 hour.
     "dgclaw_": 3600.0,
     "acp_": 3600.0,
+    # Readiness watchdogs — liveness checks whose whole point is being
+    # current; a cached verdict is the thing they exist to prevent. 60s
+    # dedupes within a single agent turn, nothing more. (2026-07-02: a
+    # poisoned alive=false acp_auth_readiness rode the 1h acp_ budget
+    # through two extra ops ticks of false escalations.)
+    "hl_trade_readiness": 60.0,
+    "acp_auth_readiness": 60.0,
 }
 
 
