@@ -95,7 +95,8 @@ never copy the previous file's header stamp.*
 
 # Output contract
 
-Final message = ONE JSON object:
+Call submit_report ONCE with your report, then end with a short human
+summary. report =
 {"status_changes": [{"strategy": ..., "from": ..., "to": ..., "evidence": ...}],
  "weight_updates": [{"strategy": ..., "changes": {...}}],
  "sizing_review": {"by_band": [...], "band_retune_proposals": [...]},

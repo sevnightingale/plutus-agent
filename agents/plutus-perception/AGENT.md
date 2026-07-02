@@ -46,6 +46,7 @@ never copy the previous file's header stamp.*
 
 # Output contract
 
-Final message = ONE JSON object:
+Call submit_report ONCE with your report, then end with a short human
+summary. report =
 {"updated": [data point names], "failed": [data point names],
  "notable": ["short strings — outlier readings worth main's attention"]}

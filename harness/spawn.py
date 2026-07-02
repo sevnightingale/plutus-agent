@@ -16,6 +16,7 @@ the audit trail is free, not a discipline.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import re
@@ -213,6 +214,43 @@ def parse_return(contract: Optional[str], final_text: str) -> Dict[str, Any]:
 
 
 # ───────────────────────────────────────────────────────────────────────────
+# submit_report channel — the structured return, decoupled from prose
+# ───────────────────────────────────────────────────────────────────────────
+
+# Set by spawn_agent for the duration of a run; the child thread inherits the
+# binding via copy_context(), and the submit_report tool handler mutates the
+# shared dict in place — that's the whole cross-thread channel.
+_REPORT_CHANNEL: contextvars.ContextVar[Optional[Dict[str, Any]]] = (
+    contextvars.ContextVar("spawn_report_channel", default=None)
+)
+
+
+def submit_report_handler(args: Dict[str, Any]) -> str:
+    """Validate + capture a spawned agent's structured report.
+
+    Backs the ``submit_report`` tool (toolset ``report``), which spawn_agent
+    injects mechanically into every run that declares ``returns:`` — it is
+    never listed in an AGENT.md. A payload that fails its contract bounces
+    back as a tool error so the model can correct and retry; once accepted,
+    the agent's final text message is free to be human-readable prose.
+    """
+    from harness.tools.registry import tool_error, tool_result
+
+    channel = _REPORT_CHANNEL.get()
+    if channel is None:
+        return tool_error("submit_report only works inside a spawned desk-agent run")
+    report = args.get("report")
+    if not isinstance(report, dict):
+        return tool_error("submit_report requires 'report': a JSON object")
+    problems = validate_return(channel["contract"], report)
+    if problems:
+        return tool_error("; ".join(problems))
+    channel["payload"] = report
+    return tool_result({"ok": True, "contract": channel["contract"],
+                        "recorded": True})
+
+
+# ───────────────────────────────────────────────────────────────────────────
 # Transcripts
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -304,7 +342,6 @@ def spawn_agent(
     payload — the spawn mechanism itself never writes to lifecycle.db.
     """
     import concurrent.futures
-    import contextvars
 
     spec = load_agent(name, agents_dir)
     prompt = assemble_context(spec, task_md)
@@ -318,6 +355,12 @@ def spawn_agent(
 
     sub_session = f"{session_name}-{name}"
 
+    # The report toolset (submit_report) is injected mechanically for every
+    # contracted run — agents can't forget a toolset they never declare.
+    toolsets = list(spec.toolsets)
+    if spec.returns and "report" not in toolsets:
+        toolsets.append("report")
+
     from harness.run_agent import AIAgent
     agent = AIAgent(
         model=spec.model,
@@ -328,7 +371,7 @@ def spawn_agent(
         max_iterations=max_iterations,
         reasoning_config=parse_reasoning_effort(effort),
         fallback_model=cfg.get("fallback_providers") or cfg.get("fallback_model"),
-        enabled_toolsets=spec.toolsets,
+        enabled_toolsets=toolsets,
         # The desk's no-nesting + no-side-channel invariants: never grant
         # spawn/cron/messaging to a subagent regardless of its declaration.
         disabled_toolsets=["spawn", "cronjob", "messaging", "clarify"],
@@ -345,6 +388,14 @@ def spawn_agent(
     messages: List[dict] = []
     err: Optional[str] = None
     timed_out = False
+
+    # The structured-return channel: submit_report (running in the child
+    # thread) validates against the contract and drops the payload here.
+    channel: Optional[Dict[str, Any]] = None
+    token = None
+    if spec.returns:
+        channel = {"contract": spec.returns, "payload": None}
+        token = _REPORT_CHANNEL.set(channel)
 
     def _run():
         from harness.gateway.session_context import set_session_vars, clear_session_vars
@@ -388,8 +439,19 @@ def spawn_agent(
         logger.exception("desk agent %s raised: %s", name, err)
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
+        if token is not None:
+            _REPORT_CHANNEL.reset(token)
 
-    parsed = parse_return(spec.returns, final_text)
+    if channel is not None and isinstance(channel["payload"], dict):
+        # The agent submitted its report through the tool — already validated.
+        parsed = {"ok": True, "payload": channel["payload"], "problems": [],
+                  "raw": final_text}
+    else:
+        parsed = parse_return(spec.returns, final_text)
+        if channel is not None and not parsed["ok"]:
+            parsed["problems"].append(
+                "submit_report was never called — fell back to parsing the "
+                "final message as JSON, which also failed")
     if timed_out:
         parsed["ok"] = False
         parsed["problems"].append(f"inactivity timeout after {inactivity_timeout_s:.0f}s")

@@ -52,7 +52,7 @@ impulse.
 - Invalidation ≠ stop-loss. Thesis-break exits and risk exits are different
   exits.
 
-**Money model (canonical — TRADING.md governs).**
+**Money model (canonical — TRADING.md, at the repo root, governs).**
 - Two wallets. The ACP agent wallet (`ACP_AGENT_WALLET`) is the MASTER —
   your Virtuals on-chain identity's managed wallet. It holds ALL funds;
   its key is never on this machine. The API wallet signs trades, holds
@@ -65,9 +65,10 @@ impulse.
 - The ONLY trade path is place_order(venue="hyperliquid") — the native HL
   SDK signing with the API wallet. The ACP CLI's HL order commands and
   dgclaw's trade.ts exist; they are NOT how you trade.
-- Equity ≠ readiness. Only hl_trade_readiness (live on-chain registration
-  check; ops fetches it every tick) proves the trade path works. Sizing
-  base is equity_usd — the whole unified account.
+- Equity ≠ readiness. Only hl_trade_readiness proves the trade path works —
+  a DATA POINT (fetch_data_point hl_trade_readiness), computed live on-chain
+  per call and never persisted to any file; ops fetches it every tick.
+  Sizing base is equity_usd — the whole unified account.
 
 **Cold start (a fresh desk has nothing to trade yet).** The pipeline to the
 first trade: predict GENERATES strategy hypotheses (status=test, thesis filed at

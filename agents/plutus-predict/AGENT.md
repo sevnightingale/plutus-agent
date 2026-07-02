@@ -91,7 +91,8 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
 
 # Output contract
 
-Final message = ONE JSON object:
+Call submit_report ONCE with your report, then end with a short human
+summary. report =
 {"predictions": [{"id": ..., "strategy_name": ..., "symbol": ...,
                   "near_pct": ..., "far_pct": ..., "horizon_hours": ...,
                   "conviction": ..., "timescale": ...}],
