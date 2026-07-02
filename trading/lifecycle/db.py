@@ -359,7 +359,12 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
     exists = db_path.exists()
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(str(db_path))
+    # timeout: how long a lock wait may ride the busy handler before
+    # OperationalError. The 5s default is too tight for concurrent first
+    # opens — the WAL switch needs exclusive access and a migration holds
+    # BEGIN IMMEDIATE for its whole run; on a loaded CI box that collision
+    # exceeded 5s (test_migration_idempotent_under_concurrent_open).
+    conn = sqlite3.connect(str(db_path), timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
