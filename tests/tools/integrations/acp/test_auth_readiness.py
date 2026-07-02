@@ -105,3 +105,29 @@ def test_recorded_epoch_newer_than_mtime_wins(auth_env, monkeypatch):
     res = data_points.acp_auth_readiness()
     assert res["days_since_refresh"] < 1
     assert res["warn_reauth_soon"] is False
+
+
+class TestCliSigabrtSalvage:
+    """The node acp CLI intermittently SIGABRTs (exit -6) on teardown AFTER
+    printing a complete valid JSON result. First live ops tick on
+    2026-07-02 falsely escalated 'auth dead' because of it."""
+
+    def _run_with(self, monkeypatch, returncode, stdout, stderr=""):
+        import subprocess
+        from unittest.mock import MagicMock
+        proc = MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
+        monkeypatch.setattr(subprocess, "run", lambda *a, **k: proc)
+        monkeypatch.setattr(_cli, "is_installed", lambda: True)
+        return _cli.acp("agent", "whoami")
+
+    def test_sigabrt_with_valid_json_is_salvaged(self, monkeypatch):
+        out = self._run_with(monkeypatch, -6, '{"walletAddress": "0xabc"}')
+        assert out == {"walletAddress": "0xabc"}
+
+    def test_sigabrt_with_error_json_still_raises(self, monkeypatch):
+        with pytest.raises(_cli.ACPCLIError):
+            self._run_with(monkeypatch, -6, '{"error": "not authenticated"}')
+
+    def test_nonzero_without_output_still_raises(self, monkeypatch):
+        with pytest.raises(_cli.ACPCLIError):
+            self._run_with(monkeypatch, 1, "", stderr="boom")
