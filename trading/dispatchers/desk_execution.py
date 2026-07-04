@@ -49,6 +49,34 @@ OPEN_SCHEMA = {
     },
 }
 
+ADOPT_SCHEMA = {
+    "name": "desk_adopt_position",
+    "description": (
+        "Adopt an on-venue position that lifecycle.db doesn't know about "
+        "(orphaned fills from failed opens, out-of-band entries) so the desk "
+        "can manage it: writes the thesis→decision→trade→position chain from "
+        "VENUE TRUTH (live account_state — side, size, entry price are read "
+        "from the venue, never supplied). Requires the venue to show exactly "
+        "one open position and the DB to show flat. prediction_id links the "
+        "prediction these fills were funding (a thesis is a funded "
+        "prediction — mandatory). Pass the protecting sl/tp order ids + "
+        "prices if known so close-time bracket cancel works."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "prediction_id": {"type": "integer"},
+            "thesis_md": {"type": "string", "description": "Why this position is being kept (markdown)."},
+            "sl_order_id": {"type": "string", "description": "On-venue stop trigger oid protecting this position (from account_state open_orders)."},
+            "tp_order_id": {"type": "string", "description": "On-venue TP trigger oid."},
+            "sl_price": {"type": "number"},
+            "tp_price": {"type": "number"},
+            "conviction": {"type": "number", "description": "Conviction carried on the decision (default 0.5)."},
+        },
+        "required": ["prediction_id", "thesis_md"],
+    },
+}
+
 CLOSE_SCHEMA = {
     "name": "desk_close_position",
     "description": (
@@ -251,8 +279,9 @@ def _desk_open(args: Dict[str, Any]) -> str:
         if untracked:
             return tool_error(
                 f"venue shows open position(s) {untracked} but lifecycle.db "
-                "shows flat — refusing to stack exposure; reconcile first "
-                "(desk_close_position or manual)")
+                "shows flat — refusing to stack exposure; reconcile first: "
+                "desk_adopt_position (keep it, books catch up) or flatten "
+                "manually")
     except Exception as exc:
         sizing_warning = f"account_state failed ({type(exc).__name__}: {exc})"
 
@@ -400,6 +429,79 @@ def _desk_open(args: Dict[str, Any]) -> str:
                "rationale": sl_rationale},
         "tp": {"price": tp, "order_id": fill.get("tp_order_id")},
         "bracket_warnings": bracket_warns,
+    })
+
+
+def _desk_adopt(args: Dict[str, Any]) -> str:
+    from trading.integrations.hyperliquid.venue import hl_account_state
+    from trading.lifecycle import queries, write
+    from trading.lifecycle.db import get_db
+
+    conn = get_db()
+    if queries.open_position(conn) is not None:
+        return tool_error("lifecycle.db already has an open position — "
+                          "nothing to adopt (one at a time is law)")
+
+    thesis_md = (args.get("thesis_md") or "").strip()
+    if not thesis_md:
+        return tool_error("thesis_md is required — why is this position kept?")
+
+    try:
+        st = hl_account_state()
+    except Exception as exc:
+        return tool_error(f"cannot adopt: account_state failed "
+                          f"({type(exc).__name__}: {exc})")
+    live = [pp for pp in (st.get("open_perp_positions") or []) if pp]
+    if not live:
+        return tool_error("venue shows no open position — nothing to adopt")
+    if len(live) > 1:
+        return tool_error(f"venue shows {len(live)} open positions — adopt "
+                          "supports exactly one; flatten the others first")
+
+    pp = live[0]
+    symbol = pp.get("coin")
+    szi = float(pp.get("szi", 0))
+    side = "long" if szi > 0 else "short"
+    size = abs(szi)
+    entry_px = float(pp.get("entryPx"))
+
+    try:
+        thesis_id = write.record_thesis(
+            conn, prediction_id=int(args["prediction_id"]), symbol=symbol,
+            text_md=thesis_md, agent="plutus-main",
+            sl_price=args.get("sl_price"),
+            sl_rationale_md="adopted — protection pre-existing on venue")
+    except ValueError as exc:
+        return tool_error(str(exc))
+    decision_id = write.record_decision(
+        conn, thesis_id=thesis_id,
+        action="adopt_long" if side == "long" else "adopt_short",
+        agent="plutus-main",
+        conviction=float(args.get("conviction") or 0.5),
+        params={"adopted": True,
+                "provenance": "on-venue position adopted from venue truth",
+                "sl": args.get("sl_price"), "tp": args.get("tp_price"),
+                "sl_order_id": args.get("sl_order_id"),
+                "tp_order_id": args.get("tp_order_id")})
+    trade_id = write.record_trade(
+        conn, decision_id=decision_id, venue="hyperliquid", symbol=symbol,
+        side=side, size=size, fill_price=entry_px,
+        venue_order_id="adopted")
+    # entry_account_value/leverage stay NULL — the pre-fill flat equity is
+    # unknowable after the fact; honest absence beats reconstruction.
+    position_id = write.open_position(
+        conn, venue="hyperliquid", symbol=symbol, side=side, size=size,
+        opening_trade_id=trade_id)
+
+    return tool_result({
+        "ok": True, "position_id": position_id, "thesis_id": thesis_id,
+        "adopted": {"symbol": symbol, "side": side, "size": size,
+                    "entry_px": entry_px,
+                    "unrealized_pnl": pp.get("unrealizedPnl")},
+        "note": ("books now match the venue; manage via rescore/close as "
+                 "normal. Stray triggers beyond the recorded sl/tp ids are "
+                 "NOT tracked — cancel them (hl_cancel_order) or they fire "
+                 "as reduce-only orders later."),
     })
 
 
@@ -600,4 +702,13 @@ registry.register(
     handler=lambda args, **kw: _desk_close(args),
     description="Close the open position (brackets cancelled first, outcome computed).",
     emoji="📉",
+)
+
+registry.register(
+    name="desk_adopt_position",
+    toolset="desk-execution",
+    schema=ADOPT_SCHEMA,
+    handler=lambda args, **kw: _desk_adopt(args),
+    description="Adopt an untracked on-venue position into lifecycle.db from venue truth.",
+    emoji="🤝",
 )

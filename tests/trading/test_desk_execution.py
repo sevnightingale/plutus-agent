@@ -441,3 +441,59 @@ class TestVenuePreflight:
         assert "refusing to stack exposure" in r["error"]
         assert not placed                                # never reached the venue
         assert queries.open_position(get_db()) is None
+
+
+class TestAdopt:
+    """desk_adopt_position — books catch up to venue truth (the 2026-07-03
+    orphan fills left a live position lifecycle.db knew nothing about)."""
+
+    _VENUE_POS = {"coin": "BTC", "szi": "0.00592", "entryPx": "62561.8",
+                  "unrealizedPnl": "1.32"}
+
+    def test_adopt_then_manage_full_cycle(self, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.integrations.hyperliquid.venue as venue
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 150.0,
+                                         "open_perp_positions": [self._VENUE_POS],
+                                         "open_orders": []})
+        r = _call("desk_adopt_position", {
+            "prediction_id": pid,
+            "thesis_md": "orphan fills adopted; brackets rest on venue",
+            "sl_price": 60644.0, "tp_price": 63909.0,
+            "sl_order_id": "486977722841", "tp_order_id": "486977722840"})
+        assert r["ok"], r
+        assert r["adopted"]["side"] == "long"
+        assert r["adopted"]["size"] == pytest.approx(0.00592)
+        assert r["adopted"]["entry_px"] == pytest.approx(62561.8)
+        pos = queries.open_position(get_db())
+        assert pos["id"] == r["position_id"]
+        assert pos["thesis"]["prediction_id"] == pid
+
+        # the adopted position is now manageable: close it normally
+        monkeypatch.setattr(venue, "hl_close_position",
+                            lambda **kw: {"fill_price": 63000.0, "size": 0.00592,
+                                          "cancel_warnings": []})
+        c = _call("desk_close_position",
+                  {"position_id": r["position_id"], "exit_reason": "main_decision"})
+        assert c["ok"], c
+        assert queries.open_position(get_db()) is None
+
+    def test_adopt_refuses_when_venue_flat(self, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.integrations.hyperliquid.venue as venue
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 150.0,
+                                         "open_perp_positions": [],
+                                         "open_orders": []})
+        r = _call("desk_adopt_position",
+                  {"prediction_id": pid, "thesis_md": "t"})
+        assert "nothing to adopt" in r["error"]
+
+    def test_adopt_refuses_when_db_already_open(self, mock_venue):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        assert _call("desk_open_position",
+                     {"prediction_id": pid, "thesis_md": "t"})["ok"]
+        r = _call("desk_adopt_position",
+                  {"prediction_id": pid, "thesis_md": "t"})
+        assert "already has an open position" in r["error"]
