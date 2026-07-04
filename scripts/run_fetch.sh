@@ -1,0 +1,1 @@
+cd /home/sev/plutus-agent && .venv/bin/python scripts/plutus_fetch_data.py 2>&1
