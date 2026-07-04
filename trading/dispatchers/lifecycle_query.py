@@ -43,24 +43,48 @@ def _conviction_render_fix_ts() -> Optional[float]:
     return None
 
 
+def _epoch(v: Any) -> float:
+    """Accept epoch seconds or an ISO-8601 string (the model sends both)."""
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        from datetime import datetime
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+
+
 def _run_query(args: Dict[str, Any]) -> str:
+    import re
+
     from trading.lifecycle import queries
     from trading.lifecycle.db import get_db
 
     conn = get_db()
-    name = args.get("query", "")
-    params = args.get("params") or {}
+    name = str(args.get("query", "")).strip()
+    params = dict(args.get("params") or {})
+
+    # Normalize the model's predictable variations instead of crashing on
+    # them (each of these was a recurring daily failure in the logs):
+    # "prediction 464" shorthand → prediction {prediction_id: 464}
+    m = re.match(r"^prediction\s+#?(\d+)$", name)
+    if m:
+        name = "prediction"
+        params.setdefault("prediction_id", int(m.group(1)))
+    # name ↔ strategy_name (the underlying query functions are inconsistent)
+    strategy = params.get("strategy_name", params.get("name"))
 
     _QUERIES = {
-        "open_predictions": lambda: queries.open_predictions(conn, **params),
+        "open_predictions": lambda: queries.open_predictions(
+            conn, **{k: v for k, v in params.items() if k == "limit"}),
         "due_predictions": lambda: queries.due_predictions(conn),
         "prediction": lambda: queries.prediction(conn, int(params["prediction_id"])),
         "open_position": lambda: queries.open_position(conn),
         "recent_outcomes": lambda: queries.recent_outcomes(conn, **params),
         "calibration": lambda: queries.calibration(conn, **params),
-        "strategy_stats": lambda: queries.strategy_stats(conn, params["name"]),
+        "strategy_stats": lambda: queries.strategy_stats(conn, strategy),
         "strategy_book": lambda: queries.strategy_book(conn),
-        "strategy_expectancy": lambda: queries.strategy_expectancy(conn, **params),
+        "strategy_expectancy": lambda: queries.strategy_expectancy(
+            conn, **{("strategy_name" if k == "name" else k): v
+                     for k, v in params.items()}),
         "best_actionable_prediction": lambda: queries.best_actionable_prediction(conn),
         "strategies_by_timescale": lambda: queries.strategies_by_timescale(
             conn, params["timescale"], **{k: tuple(v) for k, v in params.items()
@@ -68,9 +92,9 @@ def _run_query(args: Dict[str, Any]) -> str:
         "open_predictions_by_cell": lambda: queries.open_predictions_by_cell(conn),
         "mae_envelope": lambda: queries.mae_envelope(conn, **params),
         "support_score_performance": lambda: queries.support_score_performance(
-            conn, params.get("strategy_name")),
+            conn, strategy),
         "last_action_runs": lambda: queries.last_action_runs(conn),
-        "timescale_mix": lambda: queries.timescale_mix(conn, float(params["since_ts"])),
+        "timescale_mix": lambda: queries.timescale_mix(conn, _epoch(params["since_ts"])),
         "sizing_performance": lambda: queries.sizing_performance(
             conn, _conviction_render_fix_ts()),
     }
@@ -79,7 +103,9 @@ def _run_query(args: Dict[str, Any]) -> str:
     try:
         return tool_result({"query": name, "result": _QUERIES[name]()})
     except (KeyError, TypeError, ValueError) as exc:
-        return tool_error(f"{name}: {type(exc).__name__}: {exc}")
+        return tool_error(
+            f"{name}: {type(exc).__name__}: {exc} — check this query's "
+            f"params in the lifecycle_query tool description")
 
 
 registry.register(

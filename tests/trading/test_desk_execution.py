@@ -69,7 +69,11 @@ def mock_venue(monkeypatch):
     import trading.integrations.hyperliquid.venue as venue
     monkeypatch.setattr(venue, "hl_place_order", fake_place)
     monkeypatch.setattr(venue, "hl_close_position", fake_close)
-    monkeypatch.setattr(venue, "hl_account_state", lambda **k: {"equity_usd": 1000.0})
+    # open_orders carries the SL oid so the on-venue verification confirms.
+    monkeypatch.setattr(venue, "hl_account_state",
+                        lambda **k: {"equity_usd": 1000.0,
+                                     "open_perp_positions": [],
+                                     "open_orders": [{"coin": "BTC", "oid": "sl9"}]})
     monkeypatch.setattr(mod, "_fresh_price", lambda symbol: 100_000.0)
     return calls
 
@@ -141,10 +145,11 @@ class TestNakedAbort:
         import trading.integrations.hyperliquid.venue as venue
         closed = {}
 
-        def fake_place(**kw):                 # bracket leg rejected: NO sl_order_id
+        def fake_place(**kw):                 # bracket leg rejected: SL warning
             return {"fill_price": 100_500.0, "size": kw["size"], "order_id": "o1",
                     "fill_id": "f1", "slippage_bp": 4.0, "sl_order_id": None,
-                    "tp_order_id": None, "bracket_warnings": ["sl leg rejected"]}
+                    "tp_order_id": None,
+                    "bracket_warnings": ["SL: Order could not immediately match"]}
 
         def fake_close(**kw):
             closed.update(kw)
@@ -202,3 +207,237 @@ class TestRescore:
                             lambda name, regime=None: {"conviction": 0.75, "support_scores": []})
         r = _call("rescore_position", {"position_id": pos_id})
         assert r["ok"] and r["recommended_action"] == "hold"
+
+
+class TestExtractBracketStatus:
+    """Bracket verification is what stands between a position and nakedness."""
+
+    def test_resting_limit_order(self):
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status([{"resting": {"oid": 42}}], 0, "TP")
+        assert oid == "42" and warn is None
+
+    def test_waiting_for_trigger_dict_shape(self):
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status(
+            [{"waitingForTrigger": {"oid": 7}}], 0, "SL")
+        assert oid == "7" and warn is None
+
+    def test_waiting_for_trigger_bare_string(self):
+        # The REAL shape observed live 2026-07-03: HL reports untriggered
+        # stops as the bare string "waitingForTrigger" with NO oid. This is
+        # acceptance (no warning) — unrecognized, it aborted five
+        # well-bracketed fills in a row.
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status(["waitingForTrigger"], 0, "SL")
+        assert oid is None and warn is None
+
+    def test_unknown_bare_string_fails_loudly(self):
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status(["somethingNew"], 0, "SL")
+        assert oid is None and "unrecognised" in warn
+
+    def test_unknown_status_fails_loudly(self):
+        # Never guess an oid out of an unknown blob: a fabricated id reads as
+        # "SL rests on-venue" and defeats the naked-position guard.
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status([{"rejected": {"oid": 99}}], 0, "SL")
+        assert oid is None
+        assert "unrecognised" in warn
+
+    def test_error_status_surfaces_message(self):
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status([{"error": "px too far"}], 0, "SL")
+        assert oid is None and "px too far" in warn
+
+    def test_truncated_response(self):
+        from trading.integrations.hyperliquid.venue import _extract_bracket_status
+        oid, warn = _extract_bracket_status([], 0, "SL")
+        assert oid is None and "truncated" in warn
+
+
+class TestSlRestsOnVenue:
+    """The on-venue stop verifier — oid match or price-matched trigger."""
+
+    def _sl(self, *a, **k):
+        from trading.dispatchers.desk_execution import _sl_rests_on_venue
+        return _sl_rests_on_venue(*a, **k)
+
+    def test_oid_match(self):
+        st = {"open_orders": [{"coin": "BTC", "oid": 42}]}
+        assert self._sl(st, "BTC", "42", sl_price=95_000.0)
+
+    def test_price_matched_trigger_without_oid(self):
+        # The waitingForTrigger reality: no oid from the response, but the
+        # stop rests on-venue — matched by triggerPx.
+        st = {"open_orders": [{"coin": "BTC", "isTrigger": True,
+                               "triggerPx": "95001.0", "oid": 7}]}
+        assert self._sl(st, "BTC", None, sl_price=95_000.0)
+
+    def test_tp_trigger_does_not_masquerade_as_sl(self):
+        # A resting TP is also a trigger order — it must NOT satisfy the SL
+        # check (price mismatch).
+        st = {"open_orders": [{"coin": "BTC", "isTrigger": True,
+                               "triggerPx": "103000.0", "oid": 8}]}
+        assert not self._sl(st, "BTC", None, sl_price=95_000.0)
+
+    def test_empty_orders_is_naked(self):
+        assert not self._sl({"open_orders": []}, "BTC", None, sl_price=95_000.0)
+
+
+class TestBracketVerification:
+    """End-to-end guard behavior against the real venue response shapes."""
+
+    def test_waiting_for_trigger_no_oid_opens_clean(self, monkeypatch):
+        # The 2026-07-03 five-abort scenario: brackets accepted, response
+        # carries no oids (bare-string statuses), on-venue state unreadable
+        # for orders. Must NOT abort.
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+
+        def fake_place(**kw):
+            return {"fill_price": 100_500.0, "size": kw["size"], "order_id": "o1",
+                    "fill_id": "f1", "slippage_bp": 4.0, "sl_order_id": None,
+                    "tp_order_id": None, "bracket_warnings": []}
+
+        monkeypatch.setattr(venue, "hl_place_order", fake_place)
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 1000.0})
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is True, r
+        assert queries.open_position(get_db()) is not None
+
+    def test_readable_empty_order_book_aborts(self, monkeypatch):
+        # Response claims acceptance but on-venue truth shows NO orders at
+        # all — genuinely naked; venue truth must win over the response.
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+        closed = {}
+
+        def fake_place(**kw):
+            return {"fill_price": 100_500.0, "size": kw["size"], "order_id": "o1",
+                    "fill_id": "f1", "slippage_bp": 4.0, "sl_order_id": None,
+                    "tp_order_id": None, "bracket_warnings": []}
+
+        def fake_close(**kw):
+            closed.update(kw)
+            return {"fill_price": 100_400.0, "size": 0.035, "cancel_warnings": []}
+
+        monkeypatch.setattr(venue, "hl_place_order", fake_place)
+        monkeypatch.setattr(venue, "hl_close_position", fake_close)
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 1000.0, "open_orders": [],
+                                         "open_perp_positions": []})
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False
+        assert "naked_position" in r["aborted_reason"]
+        assert closed
+        assert queries.open_position(get_db()) is None
+
+
+class TestResponseEnvelope:
+    """_response_statuses — the shared exchange-response unwrapper."""
+
+    def _unwrap(self, resp):
+        from trading.integrations.hyperliquid.venue import _response_statuses
+        return _response_statuses(resp)
+
+    def test_ok_envelope(self):
+        resp = {"status": "ok",
+                "response": {"data": {"statuses": [{"filled": {"oid": 1}}]}}}
+        assert self._unwrap(resp) == [{"filled": {"oid": 1}}]
+
+    def test_action_rejection_surfaces_venue_text(self):
+        # HL returns HTTP 200 with response as a STRING on action-level
+        # rejections (expired agent wallet, bad nonce...).
+        resp = {"status": "err",
+                "response": "User or API Wallet does not exist."}
+        with pytest.raises(RuntimeError, match="does not exist"):
+            self._unwrap(resp)
+
+    def test_none_response_fails_loudly(self):
+        with pytest.raises(RuntimeError, match="no statuses"):
+            self._unwrap(None)
+
+
+class TestAlreadyFlatClose:
+    def test_bracket_fired_close_settles_books(self, mock_venue, monkeypatch):
+        # An on-venue SL/TP fired: market_close finds nothing, the fill is
+        # recovered from venue history. The DB position MUST close (this
+        # used to deadlock the desk permanently on the one-position law).
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        import trading.integrations.hyperliquid.venue as venue
+        monkeypatch.setattr(venue, "hl_close_position",
+                            lambda **kw: {"already_flat": True,
+                                          "fill_price": 101_200.0, "size": 0.035,
+                                          "order_id": "486", "fill_id": "t1",
+                                          "slippage_bp": None})
+        c = _call("desk_close_position",
+                  {"position_id": r["position_id"], "exit_reason": "sl_fired"})
+        assert c["ok"] is True
+        assert c["venue_already_flat"] is True
+        assert queries.open_position(get_db()) is None   # books settled
+
+
+class TestAbortCloseEscalation:
+    def test_failed_abort_close_reported_loudly(self, monkeypatch):
+        # Naked position AND the abort-close fails: the result must scream
+        # "still open and unprotected", never report a clean abort.
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+
+        def fake_place(**kw):
+            return {"fill_price": 100_500.0, "size": kw["size"], "order_id": "o1",
+                    "fill_id": "f1", "slippage_bp": 4.0, "sl_order_id": None,
+                    "tp_order_id": None,
+                    "bracket_warnings": ["SL: Order could not immediately match"]}
+
+        def close_boom(**kw):
+            raise RuntimeError("venue timeout")
+
+        monkeypatch.setattr(venue, "hl_place_order", fake_place)
+        monkeypatch.setattr(venue, "hl_close_position", close_boom)
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 1000.0})
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False
+        assert r["abort_close_failed"] is True
+        assert "UNPROTECTED" in r["aborted_reason"]
+        assert "venue timeout" in r["abort_close_error"]
+
+
+class TestVenuePreflight:
+    def test_untracked_on_venue_position_refuses_open(self, monkeypatch):
+        # lifecycle.db says flat but the venue shows a live position —
+        # opening would silently double exposure. Refuse.
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+        placed = {}
+
+        def fake_place(**kw):
+            placed["yes"] = True
+            return {}
+
+        monkeypatch.setattr(venue, "hl_place_order", fake_place)
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 1000.0,
+                                         "open_perp_positions": [
+                                             {"coin": "BTC", "szi": "0.001"}]})
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert "refusing to stack exposure" in r["error"]
+        assert not placed                                # never reached the venue
+        assert queries.open_position(get_db()) is None

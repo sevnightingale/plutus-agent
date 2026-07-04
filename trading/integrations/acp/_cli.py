@@ -84,7 +84,10 @@ def acp(*args: str,
                 salvaged = None
             if salvaged is not None and not (
                     isinstance(salvaged, dict) and salvaged.get("error")):
-                logger.warning(
+                # DEBUG: fires on every ~30-min ops tick (the node CLI
+                # SIGABRTs on teardown routinely) — at WARNING it was the
+                # largest noise source in the error logs (~46/day).
+                logger.debug(
                     "acp %s exited %s but printed valid JSON — salvaged",
                     " ".join(args), proc.returncode)
                 return salvaged

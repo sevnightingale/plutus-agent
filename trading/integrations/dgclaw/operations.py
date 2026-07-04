@@ -20,6 +20,7 @@ Note: `--size` for `trade.ts open` is in **USD notional**, not native units.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict
 
 from harness.tools.registry import registry, tool_error, tool_result
@@ -27,6 +28,74 @@ from harness.tools.registry import registry, tool_error, tool_result
 from . import _cli
 
 logger = logging.getLogger(__name__)
+
+
+# ─── own-forum identity ───────────────────────────────────────────────────
+
+_IDENTITY_CACHE: Dict[str, str] = {}
+
+
+def resolve_own_forum() -> Dict[str, str]:
+    """Resolve THIS agent's Arena agent id + SIGNALS thread id.
+
+    Resolution order: ``dgclaw:`` overrides in config.yaml → live lookup
+    (the leaderboard row whose ``agentAddress`` equals ``ACP_AGENT_WALLET``,
+    then that agent's forum thread of type SIGNALS). Cached per process.
+
+    Raises RuntimeError with a fix-it message when unresolvable — posting is
+    doctrine, and requiring the model to hand-carry its own ids on every
+    call is why the desk went silent on the Arena (zero SIGNALS posts as of
+    2026-07-04 despite the machinery working).
+    """
+    if _IDENTITY_CACHE:
+        return dict(_IDENTITY_CACHE)
+
+    import yaml
+    from harness.constants import get_hermes_home
+
+    agent_id = thread_id = None
+    cfg_path = get_hermes_home() / "config.yaml"
+    try:
+        dg = (yaml.safe_load(cfg_path.read_text()) or {}).get("dgclaw") or {}
+        agent_id = str(dg.get("agent_id") or "") or None
+        thread_id = str(dg.get("signals_thread_id") or "") or None
+    except FileNotFoundError:
+        pass
+
+    if not (agent_id and thread_id):
+        wallet = (os.environ.get("ACP_AGENT_WALLET") or "").lower()
+        if not wallet:
+            raise RuntimeError(
+                "cannot resolve Arena identity: set dgclaw.agent_id + "
+                "dgclaw.signals_thread_id in config.yaml, or ACP_AGENT_WALLET "
+                "in .env for live lookup")
+        from trading.integrations.dgclaw.data_points import (
+            dgclaw_forum, dgclaw_leaderboard)
+        rows = dgclaw_leaderboard(limit=200)
+        rows = rows.get("data") if isinstance(rows, dict) else rows
+        mine = [a for a in (rows or [])
+                if str(a.get("agentAddress", "")).lower() == wallet]
+        if not mine:
+            raise RuntimeError(
+                f"cannot resolve Arena identity: wallet {wallet} not on the "
+                "leaderboard — register first (dgclaw.sh join)")
+        agent_id = agent_id or str(mine[0]["id"])
+        if not thread_id:
+            forum = dgclaw_forum(agent_id)
+            threads = ((forum.get("data") or {}).get("threads")
+                       if isinstance(forum, dict) else None) or []
+            signals = [t for t in threads if t.get("type") == "SIGNALS"]
+            chosen = signals or threads
+            if not chosen:
+                raise RuntimeError(
+                    f"Arena agent {agent_id} has no forum threads — create "
+                    "the forum on degen.virtuals.io first")
+            thread_id = str(chosen[0]["id"])
+
+    _IDENTITY_CACHE.update({"agent_id": agent_id, "thread_id": thread_id})
+    logger.info("Arena identity resolved: agent_id=%s signals_thread=%s",
+                agent_id, thread_id)
+    return dict(_IDENTITY_CACHE)
 
 
 # ─── forum ────────────────────────────────────────────────────────────────

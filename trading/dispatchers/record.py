@@ -29,8 +29,10 @@ RECORD_SCHEMA = {
         "daily ledger journal, and (kind=forum_post) the Arena forum. "
         "kinds: decision (requires thesis_id+action; conviction optional) | "
         "observation (requires text; kind_tag optional) | journal (requires "
-        "text) | forum_post (requires title+text+agent_id+thread_id — posts "
-        "AND journals the same narrative) | eod (requires text — the "
+        "text) | forum_post (requires title+text; posts to YOUR OWN Arena "
+        "SIGNALS thread — agent_id/thread_id auto-resolve, only pass them "
+        "to target a different thread — AND journals the same narrative; "
+        "POST ON EVERY OPEN AND CLOSE, doctrine) | eod (requires text — the "
         "end-of-day journal close). Every kind appends to today's journal."
     ),
     "parameters": {
@@ -50,8 +52,8 @@ RECORD_SCHEMA = {
             "symbol": {"type": "string"},
             "strategy_name": {"type": "string"},
             "prediction_ids": {"type": "array", "items": {"type": "integer"}},
-            "agent_id": {"type": "string", "description": "forum_post: Arena agent id"},
-            "thread_id": {"type": "string", "description": "forum_post: forum thread id"},
+            "agent_id": {"type": "string", "description": "forum_post: Arena agent id (optional — auto-resolves to your own)"},
+            "thread_id": {"type": "string", "description": "forum_post: thread id (optional — auto-resolves to your SIGNALS thread)"},
         },
         "required": ["kind", "text"],
     },
@@ -147,18 +149,25 @@ def _record(args: Dict[str, Any]) -> str:
         errors.append(f"journal: {type(exc).__name__}: {exc}")
 
     # 3. Arena forum (forum_post only) — posting is doctrine, not optional;
-    # a failed post is a loud error main must react to.
+    # a failed post is a loud error main must react to. agent_id/thread_id
+    # auto-resolve to THIS agent's own SIGNALS thread — requiring the model
+    # to hand-carry its ids is why the desk went silent on the Arena.
     if kind == "forum_post":
         agent_id = args.get("agent_id")
         thread_id = args.get("thread_id")
         title = args.get("title")
-        if not all([agent_id, thread_id, title]):
-            errors.append("forum: forum_post requires agent_id, thread_id, title")
+        if not title:
+            errors.append("forum: forum_post requires title")
         else:
             try:
                 from trading.integrations.dgclaw.operations import (
                     _dgclaw_forum_create_post,
+                    resolve_own_forum,
                 )
+                if not (agent_id and thread_id):
+                    ident = resolve_own_forum()
+                    agent_id = agent_id or ident["agent_id"]
+                    thread_id = thread_id or ident["thread_id"]
                 raw = _dgclaw_forum_create_post({
                     "agent_id": agent_id, "thread_id": thread_id,
                     "title": title, "content": text,

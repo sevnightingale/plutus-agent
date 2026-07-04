@@ -93,9 +93,20 @@ def hard_stop_pct(
     )["suggested_sl_pct"]
 
 
+# Rough round-trip execution cost, % of notional — the expectancy gate's
+# default cost margin and the EV gates' haircut. Composition (BTC, base
+# fee tier): taker 0.045% × 2 legs = 0.090%, plus marketable-limit slippage
+# ≈ 0.03% × 2 legs = 0.060% (observed ~3-4 bp/leg). A strategy must clear
+# this to be tradeable — paper expectancy below the round-trip cost is a
+# slow bleed, not an edge. Rough by design; refine from realized fills once
+# outcomes track fees.
+ESTIMATED_ROUND_TRIP_COST_PCT = 0.15
+
+
 def strategy_expectancy(
     conn: sqlite3.Connection, strategy_name: str, *,
-    cost_margin: float = 0.0, min_n: int = GRADUATION_MIN_N,
+    cost_margin: float = ESTIMATED_ROUND_TRIP_COST_PCT,
+    min_n: int = GRADUATION_MIN_N,
 ) -> dict:
     """Simulated net expectancy — the profitability gate (graduation + entry).
 
@@ -184,6 +195,7 @@ def strategy_expectancy(
         "expectancy_pct": expectancy,
         "expectancy_far": fe,
         "expectancy_near": ne,
+        "cost_margin_pct": cost_margin,
         "tradeable": bool(stop) and expectancy is not None
         and expectancy > cost_margin and n >= min_n,
     }
@@ -232,7 +244,9 @@ def best_actionable_prediction(
         target = stats["best_target"]
         edge = r["near_edge_pct"] if target == "near" else r["far_edge_pct"]
         reward = abs(float(edge))
-        ev = p * reward - (1.0 - p) * stop
+        # Net of the estimated round-trip cost — same haircut as the
+        # tradeable gate, applied per setup.
+        ev = p * reward - (1.0 - p) * stop - ESTIMATED_ROUND_TRIP_COST_PCT
         if ev <= 0:
             continue
         cand = {**r, "ev_pct": round(ev, 4), "win_rate": p, "stop_pct": stop,
@@ -257,6 +271,12 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
     registers. The population is governed by per-(timescale × regime) strategy
     cell caps (see ``strategies_by_timescale``) plus the per-strategy open cap,
     NOT a global prediction budget — prediction volume is deliberately cheap.
+
+    ``by_strategy`` counts only UNDECIDED open predictions — the same rows the
+    per-strategy cap in ``write.record_prediction`` counts. Win-locked rows
+    (``reached_near_at`` stamped, outcome already decided, awaiting far edge or
+    horizon) are reported separately in ``win_locked_by_strategy`` so a hot
+    strategy's slots read as free the moment its floor is hit.
     """
     total = conn.execute(
         "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
@@ -267,11 +287,19 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
     ).fetchall())
     by_strategy = dict(conn.execute(
         "SELECT strategy_name, COUNT(*) FROM predictions "
-        "WHERE resolved_at IS NULL AND strategy_name IS NOT NULL "
+        "WHERE resolved_at IS NULL AND reached_near_at IS NULL "
+        "AND strategy_name IS NOT NULL "
+        "GROUP BY strategy_name"
+    ).fetchall())
+    win_locked = dict(conn.execute(
+        "SELECT strategy_name, COUNT(*) FROM predictions "
+        "WHERE resolved_at IS NULL AND reached_near_at IS NOT NULL "
+        "AND strategy_name IS NOT NULL "
         "GROUP BY strategy_name"
     ).fetchall())
     return {"open_total": total, "by_timescale": by_timescale,
-            "by_strategy": by_strategy}
+            "by_strategy": by_strategy,
+            "win_locked_by_strategy": win_locked}
 
 
 def strategies_by_timescale(
@@ -666,7 +694,11 @@ def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None)
     decision predates the conviction-render fix — those convictions were scored
     on a byte-truncated (blinded) reading substrate and would pollute the sizing
     review. None (the default) includes all history. Decision-less positions
-    (NULL d.ts) are always kept, matching the NULL-band-shown contract."""
+    (NULL d.ts) are always kept, matching the NULL-band-shown contract.
+
+    ``naked_position_abort`` closes are excluded — a 1-second plumbing abort
+    is not sizing evidence (2026-07-03: five aborts at ~-0.002% each would
+    have dragged the 0.7 band's stats)."""
     return _rows(conn.execute(
         """SELECT CAST(d.conviction * 10 AS INT) / 10.0 AS conviction_band,
                   COUNT(*) AS n,
@@ -683,5 +715,6 @@ def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None)
            LEFT JOIN decisions d ON d.id = tr.decision_id
            WHERE p.status='closed'
                  AND (:fix_ts IS NULL OR d.ts IS NULL OR d.ts >= :fix_ts)
+                 AND COALESCE(o.exit_reason, '') != 'naked_position_abort'
            GROUP BY conviction_band ORDER BY conviction_band""",
         {"fix_ts": fix_ts}))

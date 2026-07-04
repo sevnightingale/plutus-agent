@@ -242,7 +242,19 @@ once in TRADING.md's glossary and computed once in code
   posts per-target with logged per-target failures.
 - **Watchers** (`plutus-watchers` pm2 process): polls registered alerts
   (position changes, total-equity changes, price ranges) into the wake
-  queue.
+  queue — and runs the prediction resolver every ~5s (it writes
+  lifecycle.db; it is a second resident interpreter, not just a poller).
+- **Stale-code law**: the gateway and the watchers import `harness/` +
+  `trading/` once at boot and cache them for life — a repo patch is NOT
+  live until both restart (2026-07-03: five fills aborted on a stale
+  `venue.py` while the verified fix sat on disk). The sanctioned reload is
+  the `request_desk_restart` tool: queues a resume wake, recycles the
+  watchers, drain-restarts the gateway (pm2 revives both).
+- **Memory safety**: every memory mutation (including the pre-compression
+  flush, whose artifacts never appear in transcripts) is appended to
+  `memories/audit.jsonl` with its source; entries that would require
+  operator approval for execution are rejected at write time (the
+  2026-07-03 flush-poisoning incident).
 
 ## Runtime anatomy (`~/.plutus-agent/`)
 

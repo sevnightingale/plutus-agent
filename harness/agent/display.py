@@ -826,7 +826,17 @@ def _detect_tool_failure(tool_name: str, result: str | None) -> tuple[bool, str]
             if data.get("success") is False and "exceed the limit" in data.get("error", ""):
                 return True, " [full]"
 
-    # Generic heuristic for non-terminal tools
+    # Generic: for JSON results judge by real fields — substring matching
+    # flagged successful payloads that merely CONTAIN the word "error"
+    # (sync_live_state's embedded PLUTUS.md body tripped it daily).
+    data = safe_json_loads(result)
+    if isinstance(data, dict):
+        if data.get("ok") is False or data.get("success") is False:
+            return True, " [error]"
+        if data.get("error"):
+            return True, " [error]"
+        return False, ""
+
     lower = result[:500].lower()
     if '"error"' in lower or '"failed"' in lower or result.startswith("Error"):
         return True, " [error]"

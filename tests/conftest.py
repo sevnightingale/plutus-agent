@@ -35,6 +35,15 @@ PROJECT_ROOT = Path(__file__).parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+# Route HERMES_HOME away from the real runtime at COLLECTION time, before
+# any harness import can initialize file logging. setup_logging() attaches
+# rotating handlers on first call and keeps them for the whole process — the
+# per-test monkeypatch below happens too late for that first call, so test
+# runs used to write into (and rotate away!) the production
+# ~/.plutus-agent/logs/agent.log + errors.log. The per-test fixture still
+# re-points HERMES_HOME for runtime file isolation.
+os.environ["HERMES_HOME"] = tempfile.mkdtemp(prefix="plutus-test-home-")
+
 
 # ── Credential env-var filter ──────────────────────────────────────────────
 #

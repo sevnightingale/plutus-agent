@@ -116,18 +116,31 @@ def _derive_stop_pct(conn, strategy_name, symbol, timescale, current):
     return None, "no stop: envelope thin and ATR unavailable"
 
 
-def _sl_rests_on_venue(state, symbol, sl_order_id) -> bool:
-    """On-venue truth: is the SL trigger actually resting? Match by order id;
-    fall back to any reduce-only trigger on the symbol (format-quirk tolerant)."""
+def _sl_rests_on_venue(state, symbol, sl_order_id, sl_price=None) -> bool:
+    """On-venue truth: is the SL trigger actually resting? Match by order id
+    when we have one; otherwise by a trigger order at the SL price
+    (frontend_open_orders reports triggerPx). The price match is required —
+    "any trigger on the symbol" would let a resting TP masquerade as the SL."""
     orders = (state or {}).get("open_orders") or []
     if sl_order_id:
         for o in orders:
             if str(o.get("oid")) == str(sl_order_id):
                 return True
     for o in orders:
-        if o.get("coin") == symbol and (
-                o.get("isTrigger") or o.get("triggerPx")
+        if o.get("coin") != symbol:
+            continue
+        if not (o.get("isTrigger") or o.get("triggerPx")
                 or "trigger" in str(o.get("orderType", "")).lower()):
+            continue
+        if sl_price is None:
+            return True
+        try:
+            trigger_px = float(o.get("triggerPx"))
+        except (TypeError, ValueError):
+            continue
+        # 0.15% tolerance absorbs HL's 5-sig-fig price rounding; SL and TP
+        # levels are always far wider apart than this.
+        if abs(trigger_px - float(sl_price)) <= 0.0015 * float(sl_price):
             return True
     return False
 
@@ -196,7 +209,11 @@ def _desk_open(args: Dict[str, Any]) -> str:
     p = exp["win_rate"]
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0
-    threshold = (1.0 - p) / p if p else None
+    # rr > (1−p)/p is p·reward > (1−p)·stop; the extra term charges the
+    # estimated round-trip cost so a fee-thin setup fails the gate.
+    threshold = ((1.0 - p) / p
+                 + queries.ESTIMATED_ROUND_TRIP_COST_PCT / (p * stop_pct)
+                 if p and stop_pct else None)
     if threshold is None:
         return tool_result({"ok": False, "refused": "no win-rate calibration"})
     if rr <= threshold:
@@ -220,11 +237,22 @@ def _desk_open(args: Dict[str, Any]) -> str:
     entry_account_value = leverage = None
     sizing_warning = None
     try:
-        equity = float(hl_account_state()["equity_usd"])
+        pre_state = hl_account_state()
+        equity = float(pre_state["equity_usd"])
         if equity > 0:
             entry_account_value = equity
         else:
             sizing_warning = "equity_usd <= 0"
+        # Venue preflight: lifecycle.db is not the only truth. A crash or
+        # timeout window can leave a live on-venue position the DB never
+        # recorded — stacking a new fill on top doubles exposure silently.
+        untracked = [(pp or {}).get("coin")
+                     for pp in (pre_state.get("open_perp_positions") or [])]
+        if untracked:
+            return tool_error(
+                f"venue shows open position(s) {untracked} but lifecycle.db "
+                "shows flat — refusing to stack exposure; reconcile first "
+                "(desk_close_position or manual)")
     except Exception as exc:
         sizing_warning = f"account_state failed ({type(exc).__name__}: {exc})"
 
@@ -299,39 +327,67 @@ def _desk_open(args: Dict[str, Any]) -> str:
         entry_account_value=entry_account_value, leverage=leverage)
 
     # POST-ENTRY VERIFY + NAKED-POSITION ABORT — the one money-critical guard.
-    # Brackets are atomic (normalTpsl), but a leg can still be rejected. PRIMARY
-    # signal: the fill returned an sl_order_id (the bracket was accepted).
-    # SECONDARY: re-read on-venue and, IF we get a real order list that lacks the
-    # SL, treat it as genuinely naked. Either way → auto-close immediately.
+    # Brackets are atomic (normalTpsl), but a leg can still be rejected.
+    # RESPONSE signal: a rejected SL leg produces an "SL..." bracket warning.
+    # Acceptance often carries NO oid — trigger orders come back as the bare
+    # string "waitingForTrigger" — so a missing order id is NOT failure; a
+    # warning is. ON-VENUE truth (frontend_open_orders) then rules in BOTH
+    # directions whenever readable: a resting stop at the SL price clears the
+    # fill, a missing one aborts it. If on-venue state is unreadable, the
+    # response verdict stands. Naked → auto-close immediately.
     sl_order_id = fill.get("sl_order_id")
-    naked = sl is not None and not sl_order_id
+    bracket_warns = fill.get("bracket_warnings") or []
+    sl_leg_warned = any(str(w).startswith("SL") for w in bracket_warns)
+    naked = sl is not None and sl_leg_warned
     position_on_venue = None
+    venue_verified = False
     try:
         st = hl_account_state()
         position_on_venue = any((pp or {}).get("coin") == symbol
                                 for pp in (st.get("open_perp_positions") or []))
         orders = st.get("open_orders")
-        if (sl is not None and sl_order_id and orders is not None
-                and not _sl_rests_on_venue(st, symbol, sl_order_id)):
-            naked = True
+        if sl is not None and orders is not None:
+            rests = _sl_rests_on_venue(st, symbol, sl_order_id, sl_price=sl)
+            naked = not rests
+            venue_verified = rests
     except Exception:
-        pass  # can't verify on-venue — fall back to the fill's bracket id
+        pass  # can't verify on-venue — the response verdict stands
 
-    sl_on_venue = sl is not None and not naked
     if naked:
-        _desk_close({"position_id": position_id, "exit_reason": "naked_position_abort"})
+        abort_close = json.loads(_desk_close(
+            {"position_id": position_id, "exit_reason": "naked_position_abort"}))
+        if not abort_close.get("ok"):
+            # The abort-close itself failed: the position is LIVE with no
+            # verified stop. Never report a clean abort — say exactly that.
+            return tool_result({
+                "ok": False,
+                "aborted_reason": (
+                    "naked_position: SL did not rest on-venue AND the "
+                    "abort-close FAILED — the position may still be OPEN and "
+                    "UNPROTECTED on-venue. Check account_state and close "
+                    "manually NOW."),
+                "abort_close_failed": True,
+                "abort_close_error": abort_close.get("error"),
+                "position_id": position_id, "thesis_id": thesis_id,
+                "fill": {"price": fill["fill_price"], "size": fill.get("size", size)},
+                "bracket_warnings": bracket_warns,
+            })
         return tool_result({
             "ok": False, "aborted_reason": "naked_position: SL did not rest on-venue",
             "position_id": position_id, "thesis_id": thesis_id,
             "fill": {"price": fill["fill_price"], "size": fill.get("size", size)},
-            "bracket_warnings": fill.get("bracket_warnings") or [],
+            "bracket_warnings": bracket_warns,
         })
 
     return tool_result({
         "ok": True,
         "position_id": position_id,
         "thesis_id": thesis_id,
-        "verified": bool(sl_on_venue),
+        # verified means CONFIRMED ON-VENUE. "response_only" = the venue
+        # accepted the bracket but the open-orders re-read wasn't available —
+        # the stop almost certainly rests (atomic bulk order), it just wasn't
+        # independently confirmed. Do NOT re-place a stop over it.
+        "verified": bool(venue_verified),
         "position_on_venue": position_on_venue,
         "fill": {"price": fill["fill_price"], "size": fill.get("size", size),
                  "slippage_bp": fill.get("slippage_bp")},
@@ -339,9 +395,11 @@ def _desk_open(args: Dict[str, Any]) -> str:
                    "leverage": leverage,
                    **({"warning": sizing_warning} if sizing_warning else {})},
         "sl": {"price": sl, "order_id": fill.get("sl_order_id"),
-               "on_venue": bool(sl_on_venue), "rationale": sl_rationale},
+               "on_venue": bool(venue_verified),
+               "verification": "on_venue" if venue_verified else "response_only",
+               "rationale": sl_rationale},
         "tp": {"price": tp, "order_id": fill.get("tp_order_id")},
-        "bracket_warnings": fill.get("bracket_warnings") or [],
+        "bracket_warnings": bracket_warns,
     })
 
 
@@ -365,7 +423,12 @@ def _desk_close(args: Dict[str, Any]) -> str:
     decision_id = write.record_decision(
         conn, thesis_id=thesis.get("id"), action="close",
         agent="plutus-main", conviction=0.5,
-        params={"exit_reason": args["exit_reason"]},
+        params={"exit_reason": args["exit_reason"],
+                # True when the venue was already flat (an on-venue SL/TP
+                # fired or it was closed out-of-band) and the fill below was
+                # recovered from venue history rather than a fresh close.
+                **({"venue_already_flat": True}
+                   if close.get("already_flat") else {})},
     )
     close_trade_id = write.record_trade(
         conn, decision_id=decision_id, venue="hyperliquid",
@@ -383,6 +446,7 @@ def _desk_close(args: Dict[str, Any]) -> str:
     return tool_result({
         "ok": True, "position_id": position_id,
         "fill": {"price": close["fill_price"], "size": close.get("size")},
+        "venue_already_flat": bool(close.get("already_flat")),
         "cancel_warnings": close.get("cancel_warnings") or [],
         "outcome": outcome,
     })

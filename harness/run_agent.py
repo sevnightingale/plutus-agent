@@ -7416,6 +7416,7 @@ class AIAgent:
                             content=args.get("content"),
                             old_text=args.get("old_text"),
                             store=self._memory_store,
+                            source="flush",
                         )
                         if not self.quiet_mode:
                             print(f"  🧠 Memory flush: saved to {args.get('target', 'memory')}")

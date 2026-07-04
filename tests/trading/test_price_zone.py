@@ -464,3 +464,38 @@ class TestBestActionable:
         fresh = _record(conn, strategy_name="good", kind="strategy",
                         near_edge_pct=1.5, far_edge_pct=3.0)
         assert queries.best_actionable_prediction(conn)["id"] == fresh
+
+
+class TestCostMargin:
+    """The expectancy gate is net of estimated round-trip execution cost —
+    a fee-thin paper edge must NOT be tradeable."""
+
+    def test_fee_thin_edge_not_tradeable(self, conn):
+        # Wins tag a tiny far edge (0.3%) against a 0.4% stop: paper
+        # expectancy ~ +0.08%/trade — positive, but below the ~0.15%
+        # round-trip cost. (11/16 wins keeps the winners' MAE below the
+        # percentile stop, so the stop derives from the losers.)
+        _strat_row(conn, "feethin")
+        for _ in range(11):
+            _resolved(conn, "feethin", far=0.3, outcome="correct", mae=-0.05,
+                      reached_far=True)
+        for _ in range(5):
+            _resolved(conn, "feethin", far=0.3, outcome="wrong", mae=-0.4,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "feethin")
+        assert exp["expectancy_pct"] is not None
+        assert 0 < exp["expectancy_pct"] <= queries.ESTIMATED_ROUND_TRIP_COST_PCT
+        assert exp["cost_margin_pct"] == queries.ESTIMATED_ROUND_TRIP_COST_PCT
+        assert exp["tradeable"] is False
+
+    def test_solid_edge_clears_cost_margin(self, conn):
+        _strat_row(conn, "solid")
+        for _ in range(12):
+            _resolved(conn, "solid", far=3.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        for _ in range(4):
+            _resolved(conn, "solid", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "solid")
+        assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
+        assert exp["tradeable"] is True
