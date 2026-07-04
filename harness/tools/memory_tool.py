@@ -87,6 +87,42 @@ _INVISIBLE_CHARS = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Execution-gate scanning — memory may never require operator approval for
+# execution. Doctrine's deterministic gates are the only execution authority;
+# an approval-requiring entry silently disables the desk in cron context
+# (2026-07-03: a background memory flush generalized a one-time deposit
+# correction into "never execute financial actions without explicit operator
+# approval" and the desk skipped its first fundable trade).
+# ---------------------------------------------------------------------------
+
+_APPROVAL_REQUIREMENT_RE = re.compile(
+    r"(?:operator|user|human|explicit|manual)['’s]*\s+(?:\w+[-\s]+)?"
+    r"(?:approval|authori[sz]\w+|consent|permission|sign[-\s]?off|go[-\s]?ahead)",
+    re.IGNORECASE,
+)
+_EXECUTION_CONTEXT_RE = re.compile(
+    r"\b(?:trade|trades|trading|execut\w+|financial|orders?|positions?|"
+    r"deposits?|transfers?|funds?|funding)\b",
+    re.IGNORECASE,
+)
+
+
+def _scan_execution_gate(content: str) -> Optional[str]:
+    """Block entries that would require operator approval for execution."""
+    if (_APPROVAL_REQUIREMENT_RE.search(content)
+            and _EXECUTION_CONTEXT_RE.search(content)):
+        return (
+            "Blocked: entry requires operator approval for execution. "
+            "Doctrine and its deterministic gates are the ONLY execution "
+            "authority — a memory entry demanding approval disables the desk "
+            "in cron context, where no operator is present. If the operator "
+            "wants an execution hold, that belongs in doctrine or config, "
+            "never in memory."
+        )
+    return None
+
+
 def _scan_memory_content(content: str) -> Optional[str]:
     """Scan memory content for injection/exfil patterns. Returns error string if blocked."""
     # Check invisible unicode
@@ -225,8 +261,8 @@ class MemoryStore:
         if not content:
             return {"success": False, "error": "Content cannot be empty."}
 
-        # Scan for injection/exfiltration before accepting
-        scan_error = _scan_memory_content(content)
+        # Scan for injection/exfiltration and execution-gating before accepting
+        scan_error = _scan_memory_content(content) or _scan_execution_gate(content)
         if scan_error:
             return {"success": False, "error": scan_error}
 
@@ -273,8 +309,8 @@ class MemoryStore:
         if not new_content:
             return {"success": False, "error": "new_content cannot be empty. Use 'remove' to delete entries."}
 
-        # Scan replacement content for injection/exfiltration
-        scan_error = _scan_memory_content(new_content)
+        # Scan replacement content for injection/exfiltration and execution-gating
+        scan_error = _scan_memory_content(new_content) or _scan_execution_gate(new_content)
         if scan_error:
             return {"success": False, "error": scan_error}
 
@@ -460,15 +496,59 @@ class MemoryStore:
             raise RuntimeError(f"Failed to write memory file {path}: {e}")
 
 
+def _audit_mutation(
+    source: str,
+    action: str,
+    target: str,
+    content: Optional[str],
+    old_text: Optional[str],
+    result: Dict[str, Any],
+) -> None:
+    """Append one JSON line per mutation attempt to memories/audit.jsonl.
+
+    Memory writes rewrite every future session's system prompt with the
+    authority of operator-stated preference — and flush writes are stripped
+    from transcripts, so without this file they are invisible. Blocked
+    attempts are recorded too: a rejected poison write is a signal, not noise.
+    Auditing must never break the tool itself.
+    """
+    try:
+        from datetime import datetime, timezone
+        line = json.dumps({
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source": source,
+            "action": action,
+            "target": target,
+            "content": content,
+            "old_text": old_text,
+            "success": bool(result.get("success")),
+            "note": result.get("message") or result.get("error"),
+        }, ensure_ascii=False)
+        audit_path = get_memory_dir() / "audit.jsonl"
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(audit_path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        logger.info("memory %s [%s] target=%s success=%s: %s",
+                    action, source, target, bool(result.get("success")),
+                    (content or old_text or "")[:200])
+    except Exception as e:
+        logger.warning("memory audit write failed: %s", e)
+
+
 def memory_tool(
     action: str,
     target: str = "memory",
     content: str = None,
     old_text: str = None,
     store: Optional[MemoryStore] = None,
+    source: str = "tool_call",
 ) -> str:
     """
     Single entry point for the memory tool. Dispatches to MemoryStore methods.
+
+    ``source`` labels the mutation's origin in the audit trail — "tool_call"
+    for in-session model calls, "flush" for the pre-compression/pre-reset
+    memory flush (whose artifacts are stripped from transcripts).
 
     Returns JSON string with results.
     """
@@ -498,6 +578,7 @@ def memory_tool(
     else:
         return tool_error(f"Unknown action '{action}'. Use: add, replace, remove", success=False)
 
+    _audit_mutation(source, action, target, content, old_text, result)
     return json.dumps(result, ensure_ascii=False)
 
 

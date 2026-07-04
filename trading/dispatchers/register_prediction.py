@@ -141,6 +141,15 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     try:
         horizon_hours = float(args["horizon_hours"])
         now = time.time()
+        # One score per data point — a duplicate used to surface as a raw
+        # UNIQUE-constraint traceback aborting the whole registration.
+        dp_seen: set = set()
+        for s in (args.get("support_scores") or []):
+            if s["data_point"] in dp_seen:
+                return tool_error(
+                    f"duplicate support score for data_point "
+                    f"{s['data_point']!r} — provide ONE score per data point")
+            dp_seen.add(s["data_point"])
         scores = [
             write.SupportScore(
                 data_point=s["data_point"], score=float(s["score"]),

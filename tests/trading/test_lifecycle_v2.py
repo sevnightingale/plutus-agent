@@ -134,14 +134,28 @@ class TestRecordPrediction:
                                  resolved_by="plutus-ops")
         write.record_prediction(conn, _draft())  # capacity freed
 
+    def test_win_locked_predictions_dont_count_toward_cap(self, conn):
+        ids = [write.record_prediction(conn, _draft())
+               for _ in range(write.MAX_OPEN_PER_STRATEGY)]
+        with pytest.raises(ValueError, match="undecided open predictions"):
+            write.record_prediction(conn, _draft())
+        # Near edge reached: outcome decided (win locked) but the row stays
+        # open awaiting far edge / horizon — it must not hold a cap slot.
+        assert write.mark_reached_near(conn, ids[0], time.time())
+        write.record_prediction(conn, _draft())
+
     def test_open_slot_counts_shape(self, conn):
         write.record_prediction(conn, _draft())
         write.record_prediction(conn, _draft(strategy_name="other-strategy"))
+        locked = write.record_prediction(conn, _draft())
+        write.mark_reached_near(conn, locked, time.time())
         counts = queries.open_slot_counts(conn)
-        assert counts["open_total"] == 2
-        assert sum(counts["by_timescale"].values()) == 2
+        assert counts["open_total"] == 3
+        assert sum(counts["by_timescale"].values()) == 3
         assert counts["by_strategy"] == {
             "funding-flush-reversal": 1, "other-strategy": 1}
+        assert counts["win_locked_by_strategy"] == {
+            "funding-flush-reversal": 1}
 
     def test_refuses_unreasoned_narrative_score(self, conn):
         with pytest.raises(ValueError, match="reasoning"):

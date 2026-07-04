@@ -42,12 +42,28 @@ DEFAULT_MARKET_SLIPPAGE = 0.05
 DEFAULT_TRIGGER_SLIPPAGE = 0.05
 
 
+def _response_statuses(resp: Any) -> List[Any]:
+    """Unwrap the exchange response envelope to its statuses list.
+
+    Fails loudly with the venue's own words on action-level rejections,
+    where HL returns HTTP 200 with ``{"status": "err", "response": "<string>"}``
+    (expired/unregistered agent wallet, bad nonce, ...). Dict-indexing that
+    string shape used to surface as a bare AttributeError that buried the
+    actual venue error text.
+    """
+    if not isinstance(resp, dict):
+        raise RuntimeError(f"Hyperliquid response had no statuses: {resp}")
+    payload = resp.get("response")
+    if resp.get("status") not in (None, "ok") or not isinstance(payload, dict):
+        raise RuntimeError(
+            f"Hyperliquid rejected the action: {payload if payload is not None else resp}"
+        )
+    return payload.get("data", {}).get("statuses", [])
+
+
 def _normalize_response(resp: Dict[str, Any]) -> Dict[str, Any]:
     """Pluck fill_price / fill_size / order_id / fill_id from HL response."""
-    statuses = (
-        resp.get("response", {}).get("data", {}).get("statuses", [])
-        if isinstance(resp, dict) else []
-    )
+    statuses = _response_statuses(resp)
     if not statuses:
         raise RuntimeError(
             f"Hyperliquid response had no statuses: {resp}"
@@ -182,10 +198,7 @@ def _normalize_bulk_bracket_response(
     them and capture the order ID. If a bracket failed, we surface a
     warning so the dispatcher / Plutus can decide whether to compensate.
     """
-    statuses = (
-        resp.get("response", {}).get("data", {}).get("statuses", [])
-        if isinstance(resp, dict) else []
-    )
+    statuses = _response_statuses(resp)
     if not statuses:
         raise RuntimeError(
             f"Hyperliquid bracket response had no statuses: {resp}"
@@ -218,18 +231,26 @@ def _normalize_bulk_bracket_response(
     bracket_warnings: List[str] = []
     next_idx = 1
     if has_tp:
-        normalized["tp_order_id"], _tp_warn = _extract_bracket_status(
-            statuses, next_idx, "TP",
-        )
+        try:
+            normalized["tp_order_id"], _tp_warn = _extract_bracket_status(
+                statuses, next_idx, "TP",
+            )
+        except Exception as e:
+            normalized["tp_order_id"] = None
+            _tp_warn = f"TP extraction crashed: {e}"
         if _tp_warn:
             bracket_warnings.append(_tp_warn)
         next_idx += 1
     else:
         normalized["tp_order_id"] = None
     if has_sl:
-        normalized["sl_order_id"], _sl_warn = _extract_bracket_status(
-            statuses, next_idx, "SL",
-        )
+        try:
+            normalized["sl_order_id"], _sl_warn = _extract_bracket_status(
+                statuses, next_idx, "SL",
+            )
+        except Exception as e:
+            normalized["sl_order_id"] = None
+            _sl_warn = f"SL extraction crashed: {e}"
         if _sl_warn:
             bracket_warnings.append(_sl_warn)
     else:
@@ -244,8 +265,11 @@ def _extract_bracket_status(
 ) -> tuple[Optional[str], Optional[str]]:
     """Pull the bracket order ID out of a multi-status response slot.
 
-    Returns (order_id, warning_message). order_id is None when the bracket
-    failed to land. warning_message is None on success.
+    Returns (order_id, warning_message). warning_message is None when the
+    bracket landed. order_id may ALSO be None on success: trigger orders that
+    land untriggered are reported as the BARE STRING "waitingForTrigger"
+    (observed live 2026-07-03), with no oid in the response — the caller must
+    verify the stop on-venue instead of relying on the id.
     """
     if idx >= len(statuses):
         return None, (
@@ -253,9 +277,14 @@ def _extract_bracket_status(
             f"got {len(statuses)} statuses)"
         )
     status = statuses[idx]
-    if "resting" in status:
-        oid = status["resting"].get("oid")
-        return (str(oid) if oid is not None else None), None
+    if isinstance(status, str):
+        if status in ("waitingForTrigger", "resting"):
+            return None, None
+        return None, f"{label}: unrecognised status: {status}"
+    if "resting" in status or "waitingForTrigger" in status:
+        val = status.get("resting") if "resting" in status else status.get("waitingForTrigger")
+        oid = val.get("oid") if isinstance(val, dict) else val
+        return (str(oid) if oid else None), None
     if "filled" in status:
         # Trigger orders shouldn't fill at submission time — would mean the
         # trigger was already in the money. Capture the order ID anyway.
@@ -267,6 +296,9 @@ def _extract_bracket_status(
         )
     if "error" in status:
         return None, f"{label}: {status['error']}"
+    # Unknown status shapes MUST fail loudly (order_id None → the caller's
+    # naked-position guard aborts). Never guess an oid out of the blob: a
+    # fabricated id reads as "SL rests on-venue" and defeats the guard.
     return None, f"{label}: unrecognised status: {status}"
 
 
@@ -471,10 +503,14 @@ def _cancel_tracked_brackets(
         # HL cancel response shape: {"status": "ok", "response": {...}} on
         # success; an "error" embedded somewhere otherwise. We tolerate
         # "Order was never placed, already canceled, or filled" as benign.
-        status = (
-            resp.get("response", {}).get("data", {}).get("statuses", [])
-            if isinstance(resp, dict) else []
-        )
+        # Cancel problems are warnings BY DESIGN (the close must proceed) —
+        # so even an action-level rejection becomes a warning here, never an
+        # exception that blocks market_close.
+        try:
+            status = _response_statuses(resp)
+        except RuntimeError as exc:
+            warnings.append(f"{label.upper()} cancel oid={oid}: {exc}")
+            continue
         for s in status:
             if isinstance(s, dict) and "error" in s:
                 msg = str(s["error"]).lower()
@@ -510,10 +546,45 @@ def hl_close_position(
     )
     ex = get_exchange()
     resp = ex.market_close(coin=symbol, slippage=slippage)
-    normalized = _normalize_response(resp)
+    if resp is None:
+        # The SDK returns None when the venue has no position for this coin —
+        # already flat: an on-venue SL/TP fired, or it was closed out-of-band.
+        # Recover the actual closing fill from venue history so the books
+        # settle on real numbers; raise if none can be found (no fabrication).
+        normalized = _recover_flat_close(symbol)
+    else:
+        normalized = _normalize_response(resp)
     if cancel_warnings:
         normalized["cancel_warnings"] = cancel_warnings
     return normalized
+
+
+def _recover_flat_close(symbol: str) -> Dict[str, Any]:
+    """Settle a close when the venue is already flat (bracket fired or closed
+    out-of-band): pull the most recent fill for the coin from venue history.
+
+    Without this, every on-venue SL/TP fire left the lifecycle.db position
+    permanently open — and the one-position law then deadlocked the desk.
+    """
+    info = get_info()
+    addr = resolve_account_address("hl_trading")
+    fills = [f for f in (info.user_fills(addr) or []) if f.get("coin") == symbol]
+    if not fills:
+        raise RuntimeError(
+            f"venue reports no open {symbol} position and no {symbol} fills "
+            "in recent history — cannot settle the close; reconcile manually"
+        )
+    last = max(fills, key=lambda f: f.get("time", 0))
+    return {
+        "already_flat": True,
+        "fill_price": float(last["px"]),
+        "size": float(last["sz"]),
+        "order_id": str(last.get("oid")) if last.get("oid") is not None else None,
+        "fill_id": str(last.get("tid")) if last.get("tid") is not None else None,
+        "slippage_bp": None,
+        "closed_pnl": last.get("closedPnl"),
+        "fill_time_ms": last.get("time"),
+    }
 
 
 def hl_place_trigger(
@@ -592,12 +663,25 @@ def hl_place_trigger(
     }
 
     ex = get_exchange()
-    resp = ex.bulk_orders([order], grouping="normalTpsl")
-    normalized = _normalize_response(resp)
-    normalized["trigger_px"] = trigger_rounded
-    normalized["limit_px"] = limit_rounded
-    normalized["kind"] = kind
-    normalized["position_side"] = position_side
+    # grouping "na": this is a standalone order, not a TP/SL pair attached to
+    # a parent entry (normalTpsl semantics).
+    resp = ex.bulk_orders([order], grouping="na")
+    # A successfully-placed trigger comes back as "waitingForTrigger" (often
+    # a bare string, no oid) — _normalize_response treats anything unfilled
+    # as failure, which reported every SUCCESSFUL placement as an error.
+    statuses = _response_statuses(resp)
+    oid, warn = _extract_bracket_status(statuses, 0, kind.upper())
+    if warn and "trigger fired immediately" not in warn:
+        raise RuntimeError(f"trigger placement failed — {warn}")
+    normalized: Dict[str, Any] = {
+        "order_id": oid,
+        "resting": warn is None,
+        "warning": warn,
+        "trigger_px": trigger_rounded,
+        "limit_px": limit_rounded,
+        "kind": kind,
+        "position_side": position_side,
+    }
     return normalized
 
 
@@ -612,22 +696,32 @@ def hl_modify_order(
     reduce_only: bool = False,
     **_extra: Any,
 ) -> Dict[str, Any]:
-    """Modify a resting limit order's price / size."""
+    """Modify a resting LIMIT order's price / size.
+
+    Trigger orders (SL/TP) are NOT supported here — this call rebuilds the
+    order as a plain limit, which would silently strip the trigger semantics
+    and the reduce-only flag off a stop. Cancel + re-place via
+    ``hl_place_trigger`` instead.
+    """
     ex = get_exchange()
     if symbol is None or side is None:
         raise ValueError("modify_order requires symbol + side to rebuild the order payload")
-    is_buy = (side == "long")
-    order_payload = {
-        "coin": symbol,
-        "is_buy": is_buy,
-        "sz": float(new_size) if new_size is not None else None,
-        "limit_px": float(new_limit_px),
-        "order_type": {"limit": {"tif": tif}},
-        "reduce_only": reduce_only,
-    }
-    if order_payload["sz"] is None:
+    if new_size is None:
         raise ValueError("modify_order requires new_size")
-    resp = ex.modify_order(int(venue_order_id), order_payload)
+    is_buy = (side == "long")
+    resp = ex.modify_order(
+        int(venue_order_id),
+        symbol,
+        is_buy,
+        float(new_size),
+        float(new_limit_px),
+        {"limit": {"tif": tif}},
+        reduce_only,
+    )
+    statuses = _response_statuses(resp)
+    for s in statuses:
+        if isinstance(s, dict) and "error" in s:
+            raise RuntimeError(f"modify failed: {s['error']}")
     return {"raw": resp, "venue_order_id": venue_order_id}
 
 
@@ -660,11 +754,9 @@ def hl_account_state(account_name: str = "hl_trading", **_extra: Any) -> Dict[st
     open_orders = info.frontend_open_orders(addr)
 
     from .data_points import hl_drawdown_from_peak, hl_total_equity
-    try:
-        equity = hl_total_equity(account_name)
-    except HLConfigError:
-        equity = {"equity_usd": 0.0, "spot_usdc": 0.0,
-                  "perp_account_value": 0.0, "withdrawable_usd": 0.0}
+    # HLConfigError (missing credentials) propagates — a fabricated $0
+    # equity reads as a real broke account everywhere downstream.
+    equity = hl_total_equity(account_name)
     try:
         drawdown = hl_drawdown_from_peak(account_name)
     except HLConfigError:

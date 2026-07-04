@@ -137,6 +137,26 @@ healthy, says anything about whether trading *works* (that's `hl_trade_readiness
 
 Funds never move between spot and perp explicitly. Unified mode handles collateral.
 
+**Bracket verification facts (learned live 2026-07-03, five aborted fills):**
+- HL reports an untriggered stop/TP as the **bare string** `"waitingForTrigger"`
+  in the placement response — **no order id**. A missing SL order id is NOT
+  failure; an explicit `SL:` warning is. The post-fill guard confirms the stop
+  ON-VENUE (`frontend_open_orders`, matched by trigger price so a resting TP
+  can't masquerade as the SL) and rules in both directions: confirmed stop →
+  trade stands; missing stop → auto-close (naked-position abort). If the
+  abort-close itself fails, the result says so loudly (`abort_close_failed`)
+  — never a clean-looking abort.
+- Closing when the venue is **already flat** (an on-venue SL/TP fired) settles
+  the books from venue fill history — it is not an error, and it never leaves
+  a phantom open position deadlocking the one-position law.
+- `desk_open_position` preflights the venue: an on-venue position the DB
+  doesn't know about refuses the open (no silent exposure stacking).
+- Action-level rejections arrive as HTTP 200 with `response` as a *string*
+  (e.g. expired agent wallet) — surfaced verbatim, never as an AttributeError.
+- Every EV/expectancy gate charges `ESTIMATED_ROUND_TRIP_COST_PCT` (~0.15%:
+  taker fees ~0.09% + slippage allowance) — a paper edge thinner than the
+  round trip is not tradeable.
+
 ---
 
 ## How capital enters the account (the deposit path)

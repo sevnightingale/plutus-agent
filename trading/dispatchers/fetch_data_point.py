@@ -93,6 +93,20 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
     except KeyError as exc:
         return tool_error(str(exc))
 
+    # Filter params to the fetcher's signature — the model routinely passes
+    # contextual extras (symbol/venue on global DPs) and a raw **params call
+    # crashed the fetch. Ignored keys are reported back, never dropped
+    # silently. Filtering BEFORE the cache read also unifies cache keys.
+    ignored_params: list = []
+    if entry.fn is not None and params:
+        import inspect
+        sig = inspect.signature(entry.fn)
+        if not any(p.kind is inspect.Parameter.VAR_KEYWORD
+                   for p in sig.parameters.values()):
+            kept = {k: v for k, v in params.items() if k in sig.parameters}
+            ignored_params = sorted(set(params) - set(kept))
+            params = kept
+
     conn = get_db()
     sid = session_id_from_context()
     tier = _tier_from_synthetic_kind()
@@ -126,6 +140,7 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
             "value": value,
             "cache": "hit",
             "age_s": time.time() - fetched_at,
+            **({"ignored_params": ignored_params} if ignored_params else {}),
         })
 
     # Cache miss (or force_fresh) → fetch from source.
@@ -163,6 +178,7 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
         "ts": ts,
         "value": value,
         "cache": "miss" if not force_fresh else "bypass",
+        **({"ignored_params": ignored_params} if ignored_params else {}),
     })
 
 

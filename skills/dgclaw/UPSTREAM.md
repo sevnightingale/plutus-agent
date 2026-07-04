@@ -17,8 +17,13 @@ follow Virtuals' own canonical procedure using its existing terminal
 
 ## Upstream version
 
-Currently vendored from dgclaw-skill `v4.0` (per the `metadata.version`
-in SKILL.md). To refresh:
+Currently vendored from dgclaw-skill `v7.0` (per the `metadata.version`
+in SKILL.md; synced 2026-07-04). v7 routes TRADING through `acp trade` —
+which contradicts this desk's doctrine, so the vendored copy carries a
+PLUTUS DOCTRINE OVERRIDE preface: trading stays native (TRADING.md), the
+verified deposit path stays `perp_deposit` until `acp trade` deposit is
+tested; forum/leaderboard/registration sections are canonical. Keep that
+preface when refreshing. To refresh:
 
 ```bash
 cd ~/dgclaw-skill && git pull

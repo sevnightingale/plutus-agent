@@ -82,8 +82,10 @@ def record_prediction(
       or perception-only data points)
     - horizon beyond the 30d cap / not after ts
     - kind='strategy' without a strategy_name (file-at-birth doctrine)
-    - strategy already at MAX_OPEN_PER_STRATEGY open predictions
-      (correlated trials inflate N without independent evidence)
+    - strategy already at MAX_OPEN_PER_STRATEGY undecided open predictions
+      (correlated trials inflate N without independent evidence; win-locked
+      rows — ``reached_near_at`` stamped, outcome already decided — don't
+      count, so a winning strategy is never capped out of its next setup)
     - narrative support scores without recorded reasoning
     """
     ts = draft.ts if draft.ts is not None else time.time()
@@ -122,16 +124,18 @@ def record_prediction(
     if draft.strategy_name:
         open_count = conn.execute(
             "SELECT COUNT(*) FROM predictions "
-            "WHERE strategy_name = ? AND resolved_at IS NULL",
+            "WHERE strategy_name = ? AND resolved_at IS NULL AND reached_near_at IS NULL",
             (draft.strategy_name,),
         ).fetchone()[0]
         if open_count >= MAX_OPEN_PER_STRATEGY:
             raise ValueError(
                 f"strategy {draft.strategy_name!r} already has {open_count} "
-                f"open predictions (cap {MAX_OPEN_PER_STRATEGY}) — refused. "
-                f"Simultaneous predictions from one strategy in one regime "
-                f"window are correlated trials: they resolve together and "
-                f"inflate N toward graduation without independent evidence. "
+                f"undecided open predictions (cap {MAX_OPEN_PER_STRATEGY}) — "
+                f"refused. Simultaneous undecided predictions from one strategy "
+                f"in one regime window are correlated trials: they resolve "
+                f"together and inflate N toward graduation without independent "
+                f"evidence. Win-locked predictions (near edge reached, outcome "
+                f"already decided) don't count against the cap. "
                 f"Wait for resolutions, or register for a different strategy."
             )
     if draft.risk_tolerance is not None and draft.risk_tolerance not in VALID_RISK:
