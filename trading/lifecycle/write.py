@@ -16,6 +16,7 @@ from typing import Optional, Sequence
 
 from trading.lifecycle import criteria as criteria_mod
 from trading.lifecycle import price_zone
+from trading.lifecycle import queries
 from trading.lifecycle.db import derive_timescale
 
 VALID_RISK = ("low", "med", "high")
@@ -28,6 +29,16 @@ VALID_OUTCOMES = ("correct", "wrong", "ambiguous", "expired_unresolvable")
 # without independent evidence. Three allows an honest spread (e.g. a level
 # ladder) while keeping the track record statistically meaningful.
 MAX_OPEN_PER_STRATEGY = 3
+
+# Incubation fast lane: a book already proving out — net expectancy above the
+# cost margin but not yet `tradeable` (under the multiplicity-deflated hurdle
+# or short of N), and not decaying — earns a wider cap. Evidence velocity is
+# the honest lever the deflated gate leaves: the selection premium shrinks as
+# √n, so a real edge clears sooner, at zero trading risk. The price is some
+# extra correlation between simultaneous trials (the reason the base cap
+# exists); a bump to five keeps that bounded while roughly doubling
+# throughput for exactly the books where evidence is worth the most.
+INCUBATION_OPEN_CAP = 5
 
 
 @dataclass
@@ -82,10 +93,13 @@ def record_prediction(
       or perception-only data points)
     - horizon beyond the 30d cap / not after ts
     - kind='strategy' without a strategy_name (file-at-birth doctrine)
-    - strategy already at MAX_OPEN_PER_STRATEGY undecided open predictions
+    - strategy already at its open cap of undecided open predictions
       (correlated trials inflate N without independent evidence; win-locked
       rows — ``reached_near_at`` stamped, outcome already decided — don't
-      count, so a winning strategy is never capped out of its next setup)
+      count, so a winning strategy is never capped out of its next setup).
+      The cap is MAX_OPEN_PER_STRATEGY, or INCUBATION_OPEN_CAP for a book in
+      the incubation fast lane (net-positive above the cost margin, not yet
+      tradeable, not decaying — proving out toward the deflated hurdle)
     - narrative support scores without recorded reasoning
     """
     ts = draft.ts if draft.ts is not None else time.time()
@@ -127,10 +141,19 @@ def record_prediction(
             "WHERE strategy_name = ? AND resolved_at IS NULL AND reached_near_at IS NULL",
             (draft.strategy_name,),
         ).fetchone()[0]
-        if open_count >= MAX_OPEN_PER_STRATEGY:
+        cap = MAX_OPEN_PER_STRATEGY
+        if open_count >= cap:
+            # Only price the fast lane when the base cap actually binds —
+            # strategy_expectancy re-reads the whole book.
+            exp = queries.strategy_expectancy(conn, draft.strategy_name)
+            if (exp["expectancy_pct"] is not None
+                    and exp["expectancy_pct"] > exp["cost_margin_pct"]
+                    and not exp["tradeable"] and not exp["decaying"]):
+                cap = INCUBATION_OPEN_CAP
+        if open_count >= cap:
             raise ValueError(
                 f"strategy {draft.strategy_name!r} already has {open_count} "
-                f"undecided open predictions (cap {MAX_OPEN_PER_STRATEGY}) — "
+                f"undecided open predictions (cap {cap}) — "
                 f"refused. Simultaneous undecided predictions from one strategy "
                 f"in one regime window are correlated trials: they resolve "
                 f"together and inflate N toward graduation without independent "

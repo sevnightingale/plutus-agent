@@ -16,9 +16,10 @@ weeks, and that is the system working.
 
 Three design laws shape everything below:
 
-1. **One binary gate.** Strategy graduation — positive simulated net EXPECTANCY
+1. **One binary gate.** Strategy graduation — simulated net EXPECTANCY
    (the strategy's resolved book run through the actual trade geometry, at N≥15)
-   — is the only yes/no on trading. Above the global conviction threshold (0.50),
+   clearing a multiplicity-deflated hurdle, and not currently decaying —
+   is the only yes/no on trading. Above the global conviction threshold (0.50),
    conviction is a *sizing dial* — risk-budget bands — never a veto.
 2. **Honest absence.** Failed readings stay FAILED and are treated as missing;
    nothing is defaulted, mocked, or silently fallen back.
@@ -137,7 +138,9 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
 2. **Predict.** predict runs on the heavy model as an ORCHESTRATOR: it spends
    its reasoning on STRATEGY GENERATION (filling gaps in the regime × timescale
    matrix) and offloads per-strategy work to cheap scoped tools. For each
-   regime-matched strategy below its open cap, `predict_draft` (light model)
+   regime-matched strategy below its open cap (3; 5 for an *incubating* book —
+   net-positive above costs but not yet clearing the deflated hurdle — so
+   promising strategies build evidence faster), `predict_draft` (light model)
    proposes a **price zone** — a signed % move from the current price with a
    near edge (correctness floor) and a far edge (target), plus a horizon ≤ 720h
    — and `conviction_score` (light model, self-fetching the strategy's declared
@@ -162,14 +165,22 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    `realized_value_json`); MAE sets stops and the resolved book's simulated
    expectancy is the graduation gate (see Graduate, Execute).
 4. **Graduate.** plutus-reflect promotes test → **active** only when the
-   strategy's **simulated net EXPECTANCY is positive at N≥15** — its whole
+   strategy's **simulated net EXPECTANCY clears the hurdle at N≥15** — its whole
    resolved book run through the actual trade geometry (TP = far edge, SL = the
    all-resolutions MAE stop), pessimistic on path-dependence, with the win signal
    = the trade actually TAGGED its target (`strategy_expectancy.tradeable`). This
    replaces the old win-rate + RR>1 bar, which was survivorship-biased (median
-   MFE/MAE on winners only overstates tradeability). Revoke when expectancy turns
-   negative at N≥20. No manual graduation, no hand-seeded actives — the bar is
-   the bar.
+   MFE/MAE on winners only overstates tradeability). Two hardenings (imported
+   from trading-design.md): the hurdle is **multiplicity-deflated** — cost margin
+   + √(2·ln M)·σ/√n over the M sibling books ever tried at the timescale
+   (retired siblings still count), so the survivor of thirty trials needs more
+   proof than a lone hypothesis — and a **hazard check** re-simulates the
+   trailing 10 resolutions: a full negative window (`decaying`) blocks
+   `tradeable` immediately, so a dead edge cannot coast on its historical wins
+   (the record itself is never rewritten). Revoke when the edge is gone at N≥20
+   (expectancy ≤ 0 or decaying); a book still positive but under the deflated
+   hurdle demotes to test to keep earning n. No manual graduation, no
+   hand-seeded actives — the bar is the bar.
 5. **Fund & size.** Selection is a deterministic query
    (`best_actionable_prediction` = the argmax-EV open prediction of a
    currently-tradeable active strategy). main funds it by calling

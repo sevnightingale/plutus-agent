@@ -233,7 +233,9 @@ def _desk_open(args: Dict[str, Any]) -> str:
     exp = queries.strategy_expectancy(conn, strategy_name)
     if not exp["tradeable"]:
         return tool_result({"ok": False, "refused": "strategy not tradeable",
-                            "expectancy_pct": exp["expectancy_pct"], "n": exp["n"]})
+                            "expectancy_pct": exp["expectancy_pct"], "n": exp["n"],
+                            "hurdle_pct": exp["hurdle_pct"],
+                            "decaying": exp["decaying"]})
     p = exp["win_rate"]
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0

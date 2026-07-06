@@ -104,8 +104,10 @@ first trade: predict GENERATES strategy hypotheses (status=test, thesis filed at
 birth) -> test strategies register machine-resolvable predictions via the
 prediction tools (lifecycle.db rows — NEVER ad-hoc markdown files) -> ops
 resolves them every tick -> reflect graduates a strategy to ACTIVE only when its
-simulated net EXPECTANCY is positive (its resolved book, run through the trade
-geometry, makes money) at N>=15 resolved. Zero trades for the first weeks is the
+simulated net EXPECTANCY clears the multiplicity-deflated hurdle (its resolved
+book, run through the trade geometry, makes money — judged against how many
+sibling books were ever tried, and blocked while recently decaying) at N>=15
+resolved. Zero trades for the first weeks is the
 system WORKING, not a bottleneck to fix — never shortcut it (no hand-seeded
 active strategies, no manual graduation). The desk's records live in
 lifecycle.db via tools; the only markdown you maintain is the blackboards.

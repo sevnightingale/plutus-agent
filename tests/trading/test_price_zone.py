@@ -499,3 +499,86 @@ class TestCostMargin:
         exp = queries.strategy_expectancy(conn, "solid")
         assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
         assert exp["tradeable"] is True
+
+
+class TestMultiplicity:
+    """The hurdle is deflated by search breadth (trading-design import A):
+    a book that clears the bar as a lone hypothesis must NOT clear it as the
+    survivor of thirty sibling trials at the same timescale."""
+
+    def _borderline_book(self, conn, name):
+        # 10 wins (reward 2%) / 6 losses (stop 2%), losses interleaved so the
+        # trailing hazard window stays positive: expectancy 0.5%/trade — above
+        # cost (0.15%) but only ~0.25 stdevs of selection premium away from it.
+        _strat_row(conn, name)
+        seq = [True, False, True, False, True, False] + \
+              [False, True, True, False, True, True, False, True, True, True]
+        assert sum(seq) == 10 and len(seq) == 16
+        assert sum(seq[-10:]) == 7        # trailing window stays positive
+        for is_win in seq:
+            if is_win:
+                _resolved(conn, name, far=2.0, outcome="correct", mae=-0.3,
+                          reached_far=True)
+            else:
+                _resolved(conn, name, far=2.0, outcome="wrong", mae=-2.0,
+                          reached_far=False)
+
+    def test_lone_strategy_pays_no_premium(self, conn):
+        self._borderline_book(conn, "cand")
+        exp = queries.strategy_expectancy(conn, "cand")
+        assert exp["siblings_tried"] == 1
+        assert exp["multiplicity_premium_pct"] == 0.0
+        assert exp["hurdle_pct"] == exp["cost_margin_pct"]
+        assert exp["decaying"] is False
+        assert exp["tradeable"] is True
+
+    def test_sibling_trials_raise_the_hurdle(self, conn):
+        self._borderline_book(conn, "cand")
+        # 30 sibling trials at the same timescale, each with a resolved book —
+        # retired status must still count (pruning can't launder multiplicity).
+        for i in range(30):
+            _strat_row(conn, f"sib{i}", status="retired")
+            _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "cand")
+        assert exp["siblings_tried"] == 31
+        assert exp["multiplicity_premium_pct"] > 0
+        assert exp["hurdle_pct"] > exp["cost_margin_pct"]
+        # the book itself is unchanged — only the bar moved
+        assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
+        assert exp["tradeable"] is False
+
+
+class TestHazard:
+    """Recency check (trading-design import B): 'was this real?' and 'is it
+    still?' are different questions — a dead edge must not coast on the
+    strength of its historical wins."""
+
+    def test_dead_edge_cannot_coast_on_history(self, conn):
+        _strat_row(conn, "coast")
+        for _ in range(12):                 # a genuinely great early book...
+            _resolved(conn, "coast", far=3.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        for _ in range(10):                 # ...then 10 straight recent losses
+            _resolved(conn, "coast", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "coast")
+        # lifetime book still clears the hurdle — that is exactly the trap
+        assert exp["expectancy_pct"] > exp["hurdle_pct"] and exp["n"] >= 15
+        assert exp["recent"]["n"] == queries.HAZARD_WINDOW_N
+        assert exp["recent"]["expectancy_pct"] < 0
+        assert exp["decaying"] is True
+        assert exp["tradeable"] is False
+
+    def test_recovered_edge_is_not_decaying(self, conn):
+        _strat_row(conn, "recov")           # same book, opposite order
+        for _ in range(10):
+            _resolved(conn, "recov", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        for _ in range(12):
+            _resolved(conn, "recov", far=3.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        exp = queries.strategy_expectancy(conn, "recov")
+        assert exp["recent"]["expectancy_pct"] > 0
+        assert exp["decaying"] is False
+        assert exp["tradeable"] is True

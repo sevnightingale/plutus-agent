@@ -30,20 +30,33 @@ never copy the previous file's header stamp.*
    - checkpoint continue (every 10 resolved): win rate ≥ 50%, else retire.
    - GRADUATION to active (trade-enabling): the SINGLE gate is simulated net
      EXPECTANCY — `lifecycle_query strategy_expectancy {strategy_name}` →
-     graduate iff `tradeable` (expectancy_pct > 0 AND n ≥ 15). It runs the
-     strategy's whole resolved book through the actual mechanical trade geometry
-     (TP = far edge, SL = the all-resolutions MAE stop), pessimistic on
-     path-dependence, with the win signal = the trade actually TAGGED its target
-     (reached_far) — NOT a floor/horizon "correct". This REPLACES the old
-     win-rate + RR>1 bar, which was survivorship-biased: `rr` (median MFE/MAE on
-     winners only) overstates tradeability — a strategy can read rr 1.8 on its
-     wins yet be net-negative across all trades (the orderbook-imbalance case).
-     `rr` stays in strategy_book/strategy_stats for visibility but is NOT the
-     gate. Expectancy is conviction-independent (pure outcome geometry), so the
+     graduate iff `tradeable` (expectancy_pct > hurdle_pct AND n ≥ 15 AND not
+     `decaying`). It runs the strategy's whole resolved book through the actual
+     mechanical trade geometry (TP = far edge, SL = the all-resolutions MAE
+     stop), pessimistic on path-dependence, with the win signal = the trade
+     actually TAGGED its target (reached_far) — NOT a floor/horizon "correct".
+     This REPLACES the old win-rate + RR>1 bar, which was survivorship-biased:
+     `rr` (median MFE/MAE on winners only) overstates tradeability — a strategy
+     can read rr 1.8 on its wins yet be net-negative across all trades (the
+     orderbook-imbalance case). `rr` stays in strategy_book/strategy_stats for
+     visibility but is NOT the gate. Two hardenings you must not argue with:
+     the hurdle is MULTIPLICITY-DEFLATED (`hurdle_pct` = cost margin +
+     √(2·ln M)·σ/√n over the M sibling books ever tried at the timescale — the
+     survivor of thirty trials needs more proof than a lone hypothesis; a
+     borderline book that "just misses" needs more resolutions, not a retry),
+     and `decaying` (trailing-10 re-sim negative) blocks tradeable even when
+     the lifetime book still clears — a dead edge must not coast on old wins.
+     Expectancy is conviction-independent (pure outcome geometry), so the
      conviction-render cutover doesn't touch it. Slower is fine; graduating
      mirages is not.
-   - revoke (active → retired): strategy_expectancy no longer `tradeable`
-     (expectancy_pct ≤ 0) at N ≥ 20 — the edge decayed; stop funding it.
+   - revoke (active → retired) when the edge is GONE at N ≥ 20:
+     expectancy_pct ≤ 0, or `decaying`. A book still positive but under the
+     multiplicity-deflated hurdle is NOT dead — it is under-evidenced: demote
+     it to test instead (it keeps registering predictions; the premium shrinks
+     as √n grows, so a real edge re-clears on its own). Either way funding
+     already stopped the moment tradeable went false — your status change is
+     the bookkeeping that ends the niche occupancy. Decay never rewrites the
+     book — the record stands; only the validity ended.
    - dormancy moves on regime mismatch; dormant strategies matching the new
      regime wake.
    - POPULATION: lifecycle_query strategies_by_timescale per timescale (each

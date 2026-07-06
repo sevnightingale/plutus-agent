@@ -8,6 +8,7 @@ the substance behind the desk's read toolset AND the spawn mechanism's
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 import time
 from typing import Optional
@@ -74,6 +75,9 @@ def strategy_rr(conn: sqlite3.Connection, name: str):
 HARD_SL_PERCENTILE = 0.75   # all-resolutions MAE percentile = the hard stop
 HARD_SL_MIN_N = 6           # below this, the stop can't be trusted → ATR fallback
 GRADUATION_MIN_N = 15       # resolved predictions required to graduate
+HAZARD_WINDOW_N = 10        # trailing resolutions the decay check reads (one
+                            # reflect-checkpoint's worth; < GRADUATION_MIN_N so
+                            # every graduated book has a full window)
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
 
@@ -120,24 +124,46 @@ def strategy_expectancy(
 
     Replaces the survivorship-biased ``strategy_rr`` as the graduation gate
     (rr measured median MFE/MAE on WINNERS only; this runs the whole book through
-    the actual rules). ``tradeable`` iff ``expectancy > cost_margin`` AND
-    ``n >= min_n`` AND the stop is estimable."""
+    the actual rules).
+
+    Two trading-design.md imports harden the bar:
+
+    MULTIPLICITY (was this the survivor of how many trials?): a positive book
+    means little if it is the best of thirty siblings — with enough test
+    strategies, some clear any fixed bar by luck. The hurdle is deflated by the
+    expected best-of-M selection premium under the null,
+    ``sqrt(2·ln(M)) · σ/√n`` (σ = per-trade simulated-PnL stdev, M =
+    ``siblings_tried`` — strategies at this timescale, any status INCLUDING
+    retired, that ever produced a resolved book; retiring a sibling must not
+    shrink M). A lone strategy (M=1) pays zero premium — the original bar.
+
+    HAZARD (was this real? ≠ is it still?): a whole-book expectancy lets a dead
+    edge coast on its historical wins. The trailing ``HAZARD_WINDOW_N``
+    resolutions are re-simulated under the same geometry; a full window with
+    negative expectancy sets ``decaying`` and blocks ``tradeable`` — funding
+    stops before the lifetime average catches up. Decay never rewrites the
+    book: the lifetime record stands.
+
+    ``tradeable`` iff ``expectancy > hurdle`` (cost margin + multiplicity
+    premium) AND ``n >= min_n`` AND the stop is estimable AND not ``decaying``."""
     stop = hard_stop_pct(conn, strategy_name)
     rows = conn.execute(
         """SELECT near_edge_pct, far_edge_pct, reached_near_at, reached_far_at,
                   realized_value_json AS rv
            FROM predictions WHERE strategy_name=? AND resolved_at IS NOT NULL
-             AND realized_value_json IS NOT NULL""", (strategy_name,)).fetchall()
+             AND realized_value_json IS NOT NULL
+           ORDER BY resolved_at, id""", (strategy_name,)).fetchall()
 
-    def _sim(edge_col, reached_col):
-        """Run the book through one exit target (far edge or near edge)."""
+    def _sim(book, edge_col, reached_col):
+        """Run a book of rows through one exit target (far edge or near edge)."""
         wins = losses = scratch = 0
         win_pnls: list = []
+        pnls: list = []
         sum_pnl = 0.0
         n = 0
         if not stop:
             return None
-        for r in rows:
+        for r in book:
             try:
                 mae = abs(float(json.loads(r["rv"]).get("mae_pct")))
             except Exception:
@@ -153,25 +179,32 @@ def strategy_expectancy(
                 wins += 1
                 win_pnls.append(reward)
                 sum_pnl += reward
+                pnls.append(reward)
             elif hit_sl:                        # stopped (incl. pessimistic path-dep)
                 losses += 1
                 sum_pnl -= stop
+                pnls.append(-stop)
             else:                               # neither — rode to horizon ~flat
                 scratch += 1
+                pnls.append(0.0)
         decided = wins + losses
+        mean = sum_pnl / n if n else None
+        stdev = (math.sqrt(sum((x - mean) ** 2 for x in pnls) / (n - 1))
+                 if n >= 2 else None)
         return {
             "n": n, "wins": wins, "losses": losses, "scratch": scratch,
             "win_rate": round(wins / decided, 3) if decided else None,
             "avg_win_pct": round(sum(win_pnls) / len(win_pnls), 4) if win_pnls else None,
-            "expectancy_pct": round(sum_pnl / n, 4) if n else None,
+            "expectancy_pct": round(mean, 4) if n else None,
+            "pnl_stdev_pct": round(stdev, 4) if stdev is not None else None,
         }
 
     # Two exit targets — TP at the far edge, or take-profit at the near edge (the
     # alert-up exit). The strategy's geometry favours whichever has higher
     # expectancy; graduate on the BEST (a high-win-rate / near-reaching strategy
     # can be profitable on near even when far never pays).
-    far = _sim("far_edge_pct", "reached_far_at")
-    near = _sim("near_edge_pct", "reached_near_at")
+    far = _sim(rows, "far_edge_pct", "reached_far_at")
+    near = _sim(rows, "near_edge_pct", "reached_near_at")
     fe = far["expectancy_pct"] if far else None
     ne = near["expectancy_pct"] if near else None
     if fe is None and ne is None:
@@ -182,6 +215,42 @@ def strategy_expectancy(
         best, best_target = near, "near"
     expectancy = best["expectancy_pct"] if best else None
     n = best["n"] if best else 0
+
+    # Multiplicity: count sibling trials at this timescale (evidence filter
+    # matches the book query above). None when the strategy row is missing —
+    # visible, never guessed.
+    srow = conn.execute(
+        "SELECT timescale FROM strategies WHERE name=?", (strategy_name,)).fetchone()
+    siblings = None
+    if srow:
+        siblings = max(1, conn.execute(
+            """SELECT COUNT(*) FROM strategies s
+               WHERE s.timescale = ?
+                 AND EXISTS (SELECT 1 FROM predictions p
+                             WHERE p.strategy_name = s.name
+                               AND p.resolved_at IS NOT NULL
+                               AND p.realized_value_json IS NOT NULL)""",
+            (srow["timescale"],)).fetchone()[0])
+    sigma = best["pnl_stdev_pct"] if best else None
+    premium = (math.sqrt(2.0 * math.log(siblings)) * sigma / math.sqrt(n)
+               if siblings and sigma is not None and n else None)
+    hurdle = cost_margin + (premium or 0.0)
+
+    # Hazard: re-simulate the trailing window under the SAME target the
+    # lifetime book graduates on. A short book (< window) can't decay yet.
+    recent = None
+    if best_target:
+        edge_col, reached_col = (("far_edge_pct", "reached_far_at")
+                                 if best_target == "far"
+                                 else ("near_edge_pct", "reached_near_at"))
+        recent = _sim(rows[-HAZARD_WINDOW_N:], edge_col, reached_col)
+        if recent:
+            recent.pop("pnl_stdev_pct", None)
+            recent.pop("avg_win_pct", None)
+    decaying = bool(recent and recent["n"] >= HAZARD_WINDOW_N
+                    and recent["expectancy_pct"] is not None
+                    and recent["expectancy_pct"] < 0)
+
     return {
         "strategy_name": strategy_name,
         "best_target": best_target,
@@ -196,8 +265,14 @@ def strategy_expectancy(
         "expectancy_far": fe,
         "expectancy_near": ne,
         "cost_margin_pct": cost_margin,
+        "pnl_stdev_pct": sigma,
+        "siblings_tried": siblings,
+        "multiplicity_premium_pct": round(premium, 4) if premium is not None else None,
+        "hurdle_pct": round(hurdle, 4),
+        "recent": recent,
+        "decaying": decaying,
         "tradeable": bool(stop) and expectancy is not None
-        and expectancy > cost_margin and n >= min_n,
+        and expectancy > hurdle and n >= min_n and not decaying,
     }
 
 

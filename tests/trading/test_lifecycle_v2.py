@@ -144,6 +144,51 @@ class TestRecordPrediction:
         assert write.mark_reached_near(conn, ids[0], time.time())
         write.record_prediction(conn, _draft())
 
+
+def _resolved_trade(conn, strat, win):
+    """Register + immediately resolve one prediction (never holds a cap slot).
+    Wins tag the far edge with tiny adverse; losses set the ~2% stop."""
+    pid = write.record_prediction(conn, _draft(
+        strategy_name=strat, near_edge_pct=1.5, far_edge_pct=3.0))
+    write.resolve_prediction(
+        conn, pid, "correct" if win else "wrong", resolved_by="t",
+        realized_value={"mae_pct": -0.3 if win else -2.0},
+        reached_far_at=time.time() if win else None)
+
+
+class TestIncubationFastLane:
+    """A book proving out — net-positive above the cost margin but not yet
+    tradeable, and not decaying — earns INCUBATION_OPEN_CAP instead of the
+    base cap: evidence velocity toward the multiplicity-deflated hurdle."""
+
+    def test_incubating_book_gets_wider_cap(self, conn):
+        for win in [True] * 7 + [False] * 3:      # +EV at n=10 < 15: promising
+            _resolved_trade(conn, "inc", win)
+        for _ in range(write.INCUBATION_OPEN_CAP):
+            write.record_prediction(conn, _draft(strategy_name="inc"))
+        with pytest.raises(ValueError, match=f"cap {write.INCUBATION_OPEN_CAP}"):
+            write.record_prediction(conn, _draft(strategy_name="inc"))
+
+    def test_decaying_book_keeps_base_cap(self, conn):
+        # Lifetime-positive but the trailing window is all losses — a decaying
+        # book gets no fast lane (more correlated trials won't save it).
+        for win in [True] * 12 + [False] * 10:
+            _resolved_trade(conn, "dk", win)
+        for _ in range(write.MAX_OPEN_PER_STRATEGY):
+            write.record_prediction(conn, _draft(strategy_name="dk"))
+        with pytest.raises(ValueError, match=f"cap {write.MAX_OPEN_PER_STRATEGY}"):
+            write.record_prediction(conn, _draft(strategy_name="dk"))
+
+    def test_tradeable_book_keeps_base_cap(self, conn):
+        # Already clears the hurdle — its predictions are for trading, not
+        # for inflating n.
+        for win in [True] * 12 + [False] * 4:
+            _resolved_trade(conn, "tr", win)
+        for _ in range(write.MAX_OPEN_PER_STRATEGY):
+            write.record_prediction(conn, _draft(strategy_name="tr"))
+        with pytest.raises(ValueError, match=f"cap {write.MAX_OPEN_PER_STRATEGY}"):
+            write.record_prediction(conn, _draft(strategy_name="tr"))
+
     def test_open_slot_counts_shape(self, conn):
         write.record_prediction(conn, _draft())
         write.record_prediction(conn, _draft(strategy_name="other-strategy"))
