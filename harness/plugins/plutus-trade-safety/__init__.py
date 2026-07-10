@@ -13,8 +13,12 @@ Two hooks:
 
 The list of trade-emitting tools is intentionally explicit (not regex)
 so additions stay deliberate. Currently:
+  desk_open_position, desk_close_position (the desk trade path),
   place_order, close_position, modify_order, cancel_order,
   acp_wallet_send, dgclaw_trade_open, dgclaw_trade_close.
+
+The desk tools ALSO check HALT inside the tool itself (defense in depth —
+this hook only sees registered tool calls, not in-process calls).
 """
 
 from __future__ import annotations
@@ -31,6 +35,8 @@ logger = logging.getLogger(__name__)
 
 
 TRADE_TOOLS = frozenset({
+    "desk_open_position",
+    "desk_close_position",
     "place_order",
     "close_position",
     "modify_order",

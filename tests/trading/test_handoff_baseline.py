@@ -80,3 +80,39 @@ class TestIntrinsicRR:
             "kind": "adhoc"})
         assert res["ok"]
         assert res["intrinsic_rr"] == pytest.approx(2.0)  # |10| / |5|
+
+
+class TestFundableWake:
+    """register_prediction nudges main when an ACTIVE strategy registers —
+    the 20-min actionable window must not die to in-turn deferral (item G)."""
+
+    _ARGS = {"claim": "x", "symbol": "BTC", "horizon_hours": 12,
+             "near_edge_pct": 5.0, "far_edge_pct": 10.0, "conviction": 0.7}
+
+    def _patch(self, monkeypatch):
+        monkeypatch.setattr(RP, "_capture_entry_ref", lambda symbol: 100000.0)
+        import harness.wake_queue as wq
+        wakes = []
+        monkeypatch.setattr(wq, "enqueue", lambda **kw: wakes.append(kw) or kw)
+        return wakes
+
+    def test_active_strategy_enqueues_fundable_wake(self, monkeypatch):
+        conn = get_db()
+        _tradeable(conn, "aw")
+        wakes = self._patch(monkeypatch)
+        res = _call("register_prediction", {**self._ARGS, "strategy_name": "aw"})
+        assert res["ok"] and res["fundable_wake"] is True
+        assert len(wakes) == 1
+        assert wakes[0]["reason"] == "schedule" and "aw" in wakes[0]["detail"]
+
+    def test_test_strategy_registers_silently(self, monkeypatch):
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO strategies (name,file_path,status,timescale,"
+            "mechanism_family,created_at,updated_at) VALUES "
+            "('tw','tw.md','test','intraday','flow',0,0)")
+        conn.commit()
+        wakes = self._patch(monkeypatch)
+        res = _call("register_prediction", {**self._ARGS, "strategy_name": "tw"})
+        assert res["ok"] and res["fundable_wake"] is False
+        assert wakes == []

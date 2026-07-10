@@ -120,3 +120,13 @@ def test_register_wires_both_hooks():
     calls = [c.args[0] for c in ctx.register_hook.call_args_list]
     assert "pre_tool_call" in calls
     assert "post_tool_call" in calls
+
+
+def test_halt_blocks_desk_trade_path(temp_home):
+    # The desk tools ARE the trade path since plutus-trade retired — HALT
+    # must cover them (review item A).
+    (temp_home / "HALT").write_text("")
+    for tool in ("desk_open_position", "desk_close_position"):
+        res = plugins_trade_safety._on_pre_tool_call(
+            tool_name=tool, args={"prediction_id": 1})
+        assert res is not None and res["action"] == "block", tool

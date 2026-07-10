@@ -14,10 +14,13 @@ trading.lifecycle.write.record_prediction.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Dict
 
 from harness.tools.registry import registry, tool_error, tool_result
+
+logger = logging.getLogger(__name__)
 
 SCHEMA = {
     "name": "register_prediction",
@@ -187,6 +190,26 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             resolvable_data_points=resolvable)
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
+    # Fundable window: an ACTIVE strategy's prediction is only fundable for
+    # ACTIONABLE_MAX_AGE_S (20 min). predict runs synchronously under main, so
+    # main is awake right now — the wake is the backstop against main deferring
+    # past the window within its own turn: the queue re-nudges it next drain.
+    fundable_wake = False
+    if strat_name:
+        srow = conn.execute("SELECT status FROM strategies WHERE name=?",
+                            (strat_name,)).fetchone()
+        if srow and srow["status"] == "active":
+            try:
+                from harness.wake_queue import enqueue
+                enqueue(reason="schedule",
+                        detail=(f"fundable prediction #{prediction_id} registered "
+                                f"(strategy {strat_name}, ACTIVE) — actionable "
+                                f"window {int(queries.ACTIONABLE_MAX_AGE_S // 60)} "
+                                f"min from registration"),
+                        source="plutus-predict")
+                fundable_wake = True
+            except Exception as exc:
+                logger.warning("fundable-window wake enqueue failed: %s", exc)
     # Intrinsic reward:risk from the zone geometry — exists BEFORE any wins
     # (queries.strategy_rr needs realized wins). |far| > |near| is enforced at
     # write, so rr > 1; the v2 conditional-entry gate reads this value.
@@ -196,6 +219,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     return tool_result({"prediction_id": prediction_id, "ok": True,
                         "entry_ref_price": float(entry_ref_price),
                         "intrinsic_rr": intrinsic_rr,
+                        "fundable_wake": fundable_wake,
                         "slots": queries.open_slot_counts(conn)})
 
 

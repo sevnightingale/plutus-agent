@@ -8,10 +8,12 @@ funded-prediction requirement, the expectancy gate, risk-based sizing, and the
 naked-position abort are all enforced HERE, in code.
 
 desk_open_position: given a prediction_id (+ thesis), DERIVES side, live entry,
-stop (empirical MAE envelope, ATR fallback), target (the prediction's far edge,
-a fixed zone level), and risk-based size from the conviction band; applies the
-expectancy gate; places a market order with an atomic on-venue SL bracket;
-verifies on-venue and ABORTS (auto-closes) a naked position. Explicit sl/tp/size
+stop (empirical MAE envelope, ATR fallback), target (the edge the strategy
+GRADUATED on — best_target near or far, a fixed zone level), and risk-based
+size from the conviction band; enforces every mechanical guard in-tool (HALT,
+one-position, staleness, ACTIVE status, trade readiness, expectancy gate);
+places a market order with an atomic on-venue SL bracket; verifies on-venue and
+ABORTS (auto-closes) a naked position. Explicit sl/tp/size
 override derivation (transition / tests). See PLANNING-trade-execution-collapse.md.
 
 desk_close_position: cancels tracked brackets, market-closes, writes the
@@ -30,14 +32,17 @@ OPEN_SCHEMA = {
     "description": (
         "Open a position funding a prediction — DETERMINISTIC. Given a "
         "prediction_id (+ thesis_md narrative), derives side, live entry, stop "
-        "(empirical MAE envelope, ATR fallback), target (the prediction's far "
-        "edge — a fixed zone level), and risk-based size from the conviction "
-        "band; applies the expectancy gate (refuses negative-EV / non-tradeable "
-        "setups); places a market order with an atomic on-venue SL bracket "
-        "(mandatory); verifies on-venue and ABORTS (auto-closes) a naked "
-        "position. Refuses while a position is open (one at a time), if the "
-        "prediction is stale (>20 min), or if the setup is below the expectancy "
-        "gate. You only supply the prediction_id and a short thesis."
+        "(empirical MAE envelope, ATR fallback), target (the edge the strategy "
+        "graduated on — best_target near or far, a fixed zone level), and "
+        "risk-based size from the conviction band; applies the expectancy gate "
+        "(refuses negative-EV / non-tradeable setups); places a market order "
+        "with an atomic on-venue SL bracket (mandatory); verifies on-venue and "
+        "ABORTS (auto-closes) a naked position. ALL mechanical guards are "
+        "enforced in-tool: refuses under HALT, while a position is open (one "
+        "at a time), if the prediction is stale (>20 min), if the strategy is "
+        "not ACTIVE, if the trade path is not READY (hl_trade_readiness), or "
+        "if the setup is below the expectancy gate. You only supply the "
+        "prediction_id and a short thesis."
     ),
     "parameters": {
         "type": "object",
@@ -108,6 +113,21 @@ ATR_STOP_MULT = 1.5       # ATR-multiple stop when the MAE envelope is too thin
 _ATR_INTERVAL = {"intraday": "1h", "swing": "4h", "position": "1d"}
 
 
+def _halt_reason():
+    """Operator kill-switch, checked IN the money tools (defense in depth
+    under the plutus-trade-safety plugin hook, which only sees registered
+    tool calls). None when trading is live; the HALT note ('' if none)
+    when the operator has paused."""
+    from harness.constants import get_hermes_home
+    path = get_hermes_home() / "HALT"
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+    except OSError:
+        return ""
+
+
 def _fresh_price(symbol: str) -> float:
     """Live mark price, fetched server-side (never from a stale LLM view)."""
     from trading.perception.core import data_point_registry
@@ -116,6 +136,12 @@ def _fresh_price(symbol: str) -> float:
     if not px or px <= 0:
         raise ValueError(f"hl_price for {symbol} unavailable")
     return float(px)
+
+
+def _trade_readiness() -> Dict[str, Any]:
+    """Live on-chain agent-wallet registration check (TRADING.md fact #3)."""
+    from trading.integrations.hyperliquid.data_points import hl_trade_readiness
+    return hl_trade_readiness()
 
 
 def _derive_stop_pct(conn, strategy_name, symbol, timescale, current):
@@ -181,6 +207,11 @@ def _desk_open(args: Dict[str, Any]) -> str:
     from trading.lifecycle.db import get_db
 
     conn = get_db()
+    halt = _halt_reason()
+    if halt is not None:
+        return tool_result({"ok": False,
+                            "refused": "HALT is set — operator paused trading",
+                            **({"halt_note": halt} if halt else {})})
     if queries.open_position(conn) is not None:
         return tool_error("a position is already open — one at a time is law")
 
@@ -218,7 +249,6 @@ def _desk_open(args: Dict[str, Any]) -> str:
     far = float(far)
     if not entry_ref or float(entry_ref) <= 0:
         return tool_error(f"prediction {pred['id']} has no entry_ref_price — cannot derive TP")
-    tp = float(entry_ref) * (1.0 + far / 100.0)          # FIXED zone target level
 
     stop_pct, sl_rationale = _derive_stop_pct(conn, strategy_name, symbol, timescale, current)
     if not stop_pct:
@@ -226,17 +256,38 @@ def _desk_open(args: Dict[str, Any]) -> str:
     sl = (current * (1 - stop_pct / 100.0) if side == "long"
           else current * (1 + stop_pct / 100.0))
 
-    # Expectancy gate: the strategy must be tradeable AND this setup must be
-    # +EV at the LIVE price (RR > (1−p)/p — the staleness + worth-it gate).
+    # Expectancy gate: the strategy must be ACTIVE (graduated — status is the
+    # binary gate, not just a selection filter), tradeable, AND this setup must
+    # be +EV at the LIVE price (RR > (1−p)/p — the staleness + worth-it gate).
     if not strategy_name:
         return tool_result({"ok": False, "refused": "prediction has no strategy — cannot gate"})
+    srow = conn.execute("SELECT status FROM strategies WHERE name=?",
+                        (strategy_name,)).fetchone()
+    status = srow["status"] if srow else None
+    if status != "active":
+        return tool_result({"ok": False,
+                            "refused": "strategy not ACTIVE — only graduated "
+                                       "strategies fund",
+                            "strategy": strategy_name, "status": status})
     exp = queries.strategy_expectancy(conn, strategy_name)
     if not exp["tradeable"]:
         return tool_result({"ok": False, "refused": "strategy not tradeable",
                             "expectancy_pct": exp["expectancy_pct"], "n": exp["n"],
                             "hurdle_pct": exp["hurdle_pct"],
                             "decaying": exp["decaying"]})
-    p = exp["win_rate"]
+    # GEOMETRY INVARIANT: the mechanical TP is the edge the strategy GRADUATED
+    # on (best_target) — the graduation sim, the entry gate, and the placed
+    # bracket must share one geometry. A near-edge book takes profit at near.
+    tp_target = exp["best_target"] or "far"
+    tp_edge = far if tp_target == "far" else pred.get("near_edge_pct")
+    if tp_edge is None:
+        return tool_error(f"prediction {pred['id']} has no {tp_target}_edge_pct "
+                          "— cannot derive TP")
+    tp = float(entry_ref) * (1.0 + float(tp_edge) / 100.0)   # FIXED zone target level
+    # p counts scratches as non-wins (wins/n) so the gate's p is consistent
+    # with expectancy, which carries scratches at PnL 0 — the scratch-free
+    # win_rate overstates the hit rate the book actually delivers.
+    p = (exp["wins"] / exp["n"]) if exp["n"] else None
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0
     # rr > (1−p)/p is p·reward > (1−p)·stop; the extra term charges the
@@ -249,12 +300,26 @@ def _desk_open(args: Dict[str, Any]) -> str:
     if rr <= threshold:
         return tool_result({"ok": False, "refused": "setup below expectancy gate",
                             "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
-                            "win_rate": p})
+                            "p_win": round(p, 3), "tp_target": tp_target})
 
     budget = target_risk_budget(conviction)
     if budget is None:
         return tool_result({"ok": False, "refused": "conviction below global threshold",
                             "conviction": conviction})
+
+    # Trade-path readiness (TRADING.md fact #3): an unregistered/expired agent
+    # wallet makes every order fail SILENTLY on-venue — refuse loudly here
+    # instead. Unverifiable readiness also refuses (honest absence): if the
+    # check can't run, the order would most likely fail anyway.
+    try:
+        readiness = _trade_readiness()
+    except Exception as exc:
+        return tool_result({"ok": False,
+                            "refused": "trade readiness unverifiable",
+                            "error": f"{type(exc).__name__}: {exc}"})
+    if not readiness.get("ready"):
+        return tool_result({"ok": False, "refused": "trade path not READY",
+                            "reason": readiness.get("reason")})
     sizing: Dict[str, Any] = {
         "mode": "risk_based", "risk_budget": budget, "stop_pct": stop_pct,
         "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
@@ -322,7 +387,9 @@ def _desk_open(args: Dict[str, Any]) -> str:
     alert_near_px = alert_adverse_px = None
     if entry_ref:
         near_pct = pred.get("near_edge_pct")
-        if near_pct is not None:
+        # On a near-target book the mechanical TP already SITS at the near
+        # edge — an alert there would just race the TP fill. Far-target only.
+        if near_pct is not None and tp_target == "far":
             alert_near_px = round(float(entry_ref) * (1 + float(near_pct) / 100.0), 6)
         wmae = queries.mae_envelope(
             conn, strategy_name=strategy_name,
@@ -429,7 +496,8 @@ def _desk_open(args: Dict[str, Any]) -> str:
                "on_venue": bool(venue_verified),
                "verification": "on_venue" if venue_verified else "response_only",
                "rationale": sl_rationale},
-        "tp": {"price": tp, "order_id": fill.get("tp_order_id")},
+        "tp": {"price": tp, "order_id": fill.get("tp_order_id"),
+               "target": tp_target},
         "bracket_warnings": bracket_warns,
     })
 
@@ -513,6 +581,15 @@ def _desk_close(args: Dict[str, Any]) -> str:
     from trading.lifecycle.db import get_db
 
     conn = get_db()
+    # HALT blocks closes too (matching the legacy close_position gate) — with
+    # ONE exception: the naked-position abort must ALWAYS run, because an
+    # unprotected live position is strictly worse than overriding the pause.
+    if args.get("exit_reason") != "naked_position_abort":
+        halt = _halt_reason()
+        if halt is not None:
+            return tool_result({"ok": False,
+                                "refused": "HALT is set — operator paused trading",
+                                **({"halt_note": halt} if halt else {})})
     position_id = int(args["position_id"])
     pos = queries.open_position(conn)
     if pos is None or pos["id"] != position_id:
@@ -602,17 +679,25 @@ RESCORE_SCHEMA = {
     "name": "rescore_position",
     "description": (
         "Re-score the OPEN position's conviction on fresh data and get a "
-        "recommended action — call this when a position alert wakes you "
-        "(alert-up near edge, or alert-down winners' MAE). Re-runs the "
-        "strategy's conviction on live readings, records the evaluation, and "
-        "returns recommended_action with a BIAS TO ACT: exit_now if conviction "
-        "has decayed materially below entry or fallen below the global threshold "
-        "(the premise is gone), else hold. You make the final call (take-profit / "
-        "cut / hold) and close via desk_close_position if warranted."
+        "recommended action — call this when a position alert wakes you, "
+        "passing which alert fired (alert='near' for the near-edge alert-up, "
+        "'adverse' for the winners'-MAE alert-down). Re-runs the strategy's "
+        "conviction on live readings, records the evaluation, and returns "
+        "recommended_action with a BIAS TO ACT: exit_now if conviction has "
+        "decayed materially below entry or fallen below the global threshold "
+        "(the premise is gone); when the re-score returns NO conviction "
+        "(missing data) the premise is unverifiable while risk is open — "
+        "take_profit on a near alert, exit_now otherwise; else hold. You make "
+        "the final call (take-profit / cut / hold) and close via "
+        "desk_close_position if warranted."
     ),
     "parameters": {
         "type": "object",
-        "properties": {"position_id": {"type": "integer"}},
+        "properties": {
+            "position_id": {"type": "integer"},
+            "alert": {"type": "string", "enum": ["near", "adverse"],
+                      "description": "Which position alert triggered this re-score."},
+        },
         "required": ["position_id"],
     },
 }
@@ -655,9 +740,17 @@ def _rescore_position(args: Dict[str, Any]) -> str:
     conv = scored.get("conviction")
     entry_conv = _opening_conviction(conn, position_id)
     # Bias to act — the pos#4 over-hold fix: default to exit when the premise has
-    # weakened, not to hold.
+    # weakened, not to hold. Missing conviction is honest absence WHILE RISK IS
+    # OPEN: a premise that can't be re-verified is treated as gone, never held.
     if conv is None:
-        rec, why = "hold", "re-score returned no conviction (missing data) — hold, re-check"
+        if args.get("alert") == "near":
+            rec, why = ("take_profit",
+                        "re-score returned no conviction (missing data) at the "
+                        "near edge — take the profit rather than hold blind")
+        else:
+            rec, why = ("exit_now",
+                        "re-score returned no conviction (missing data) while "
+                        "risk is open — honest absence biases to exit, not hold")
     elif conv < GLOBAL_CONVICTION_THRESHOLD:
         rec, why = "exit_now", f"conviction {conv} below threshold {GLOBAL_CONVICTION_THRESHOLD}"
     elif entry_conv is not None and conv <= entry_conv - RESCORE_EXIT_DROP:

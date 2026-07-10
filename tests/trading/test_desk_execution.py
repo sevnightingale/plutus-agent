@@ -20,14 +20,16 @@ def _call(name, args):
 def _seed_strategy(name, status, book):
     """Insert a strategy with a resolved book + return a fresh OPEN prediction.
 
-    book: list of (far, outcome, mae, reached_far). reached_far = tagged TP (win).
+    book: list of (far, outcome, mae, reached_far[, reached_near]).
+    reached_far = tagged TP (win on the far sim); reached_near = tagged the
+    near edge (win on the near sim).
     """
     conn = get_db()
     conn.execute(
         "INSERT INTO strategies (name,file_path,status,timescale,"
         "mechanism_family,created_at,updated_at) VALUES "
         "(?,?,?,'intraday','flow',0,0)", (name, f"{name}.md", status))
-    for far, outcome, mae, reached in book:
+    for far, outcome, mae, reached, *rest in book:
         pid = write.record_prediction(conn, write.PredictionDraft(
             claim_md="z", horizon_ts=time.time() + 3600, entry_ref_price=100_000.0,
             near_edge_pct=far / 2.0, far_edge_pct=far, conviction=0.72,
@@ -36,6 +38,9 @@ def _seed_strategy(name, status, book):
                                  realized_value={"mae_pct": mae})
         if reached:
             conn.execute("UPDATE predictions SET reached_far_at=? WHERE id=?",
+                         (time.time(), pid))
+        if rest and rest[0]:
+            conn.execute("UPDATE predictions SET reached_near_at=? WHERE id=?",
                          (time.time(), pid))
     open_pid = write.record_prediction(conn, write.PredictionDraft(
         claim_md="live", horizon_ts=time.time() + 3600, entry_ref_price=100_000.0,
@@ -47,6 +52,14 @@ def _seed_strategy(name, status, book):
 
 _TRADEABLE_BOOK = [(3.0, "correct", -0.3, True)] * 12 + [(3.0, "wrong", -2.0, False)] * 4
 _MIRAGE_BOOK = [(1.0, "correct", -3.0, False)] * 16   # floor-correct, never tags far
+# Tradeable overall, but scratch-heavy: 6 wins / 4 losses / 6 scratches. The
+# scratch-free win_rate (0.6) would pass the setup gate; p = wins/n (0.375)
+# must refuse it. Losses lead so the trailing hazard window stays positive.
+_SCRATCHY_BOOK = ([(3.0, "wrong", -2.0, False)] * 4
+                  + [(3.0, "correct", -0.3, False)] * 3
+                  + [(3.0, "correct", -0.3, True)] * 3
+                  + [(3.0, "correct", -0.3, False)] * 3
+                  + [(3.0, "correct", -0.3, True)] * 3)
 
 
 @pytest.fixture()
@@ -137,6 +150,105 @@ class TestExpectancyGate:
         assert r["ok"] is False and r["refused"] == "strategy not tradeable"
         assert queries.open_position(get_db()) is None
 
+    def test_p_includes_scratches(self, mock_venue):
+        # 6/16 wins: the scratch-free win_rate (0.6) clears the setup gate,
+        # p = wins/n (0.375) must refuse — scratches are not free.
+        pid = _seed_strategy("scratchy", "active", _SCRATCHY_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "x"})
+        assert r["ok"] is False, r
+        assert r["refused"] == "setup below expectancy gate"
+        assert r["p_win"] == pytest.approx(0.375)
+
+
+class TestMechanicalGuards:
+    """The guards the recipes describe live IN the tool — HALT, ACTIVE
+    status, trade-path readiness (review items A + B)."""
+
+    def _halt(self, note=""):
+        from harness.constants import get_hermes_home
+        path = get_hermes_home() / "HALT"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(note, encoding="utf-8")
+
+    def test_halt_refuses_open(self, mock_venue):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        self._halt("stand down")
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False and "HALT" in r["refused"]
+        assert r["halt_note"] == "stand down"
+        assert queries.open_position(get_db()) is None
+
+    def test_halt_refuses_close_but_not_naked_abort(self, mock_venue):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        opened = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert opened["ok"], opened
+        self._halt()
+        refused = _call("desk_close_position",
+                        {"position_id": opened["position_id"], "exit_reason": "tp"})
+        assert refused["ok"] is False and "HALT" in refused["refused"]
+        # the naked-position abort must ALWAYS be able to close
+        aborted = _call("desk_close_position",
+                        {"position_id": opened["position_id"],
+                         "exit_reason": "naked_position_abort"})
+        assert aborted["ok"] is True
+        assert queries.open_position(get_db()) is None
+
+    def test_non_active_strategy_refused_even_if_tradeable(self, mock_venue):
+        # A tradeable book left in status=test must NOT fund (the status gate
+        # is in-tool, not just in best_actionable's SQL).
+        pid = _seed_strategy("stillTest", "test", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False
+        assert r["refused"].startswith("strategy not ACTIVE")
+        assert r["status"] == "test"
+
+    def test_not_ready_refuses(self, mock_venue, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        monkeypatch.setattr(mod, "_trade_readiness",
+                            lambda: {"ready": False, "reason": "agent wallet expired"})
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False and r["refused"] == "trade path not READY"
+        assert "expired" in r["reason"]
+
+    def test_unverifiable_readiness_refuses(self, mock_venue, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+
+        def boom():
+            raise RuntimeError("rpc down")
+
+        monkeypatch.setattr(mod, "_trade_readiness", boom)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False and r["refused"] == "trade readiness unverifiable"
+        assert "rpc down" in r["error"]
+
+
+class TestGeometryInvariant:
+    """The mechanical TP is the edge the strategy graduated on (C1)."""
+
+    # Near-edge book: near tagged 12/16 with small MAE, far never tagged.
+    # best_target = near; the placed TP must sit at the NEAR edge.
+    _NEAR_BOOK = ([(3.0, "correct", -0.3, False, True)] * 12
+                  + [(3.0, "wrong", -2.0, False)] * 4)
+
+    def test_near_target_book_places_near_tp(self, mock_venue):
+        pid = _seed_strategy("nearS", "active", self._NEAR_BOOK)
+        exp = queries.strategy_expectancy(get_db(), "nearS")
+        assert exp["best_target"] == "near" and exp["tradeable"], exp
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["tp"]["target"] == "near"
+        # open prediction: entry_ref 100k, near 1.5% → TP at 101_500 (not 103_000)
+        assert r["tp"]["price"] == pytest.approx(101_500.0)
+
+    def test_far_target_book_places_far_tp(self, mock_venue):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["tp"]["target"] == "far"
+        assert r["tp"]["price"] == pytest.approx(103_000.0)
+
 
 class TestNakedAbort:
     def test_naked_position_auto_closes(self, monkeypatch):
@@ -207,6 +319,24 @@ class TestRescore:
                             lambda name, regime=None: {"conviction": 0.75, "support_scores": []})
         r = _call("rescore_position", {"position_id": pos_id})
         assert r["ok"] and r["recommended_action"] == "hold"
+
+    def test_missing_conviction_exits_not_holds(self, mock_venue, monkeypatch):
+        # Honest absence WHILE RISK IS OPEN: an unverifiable premise is
+        # treated as gone (the review's rescore finding) — never held.
+        pos_id = self._open(mock_venue)
+        import trading.dispatchers.predict_tools as pt
+        monkeypatch.setattr(pt, "score_strategy",
+                            lambda name, regime=None: {"conviction": None, "support_scores": []})
+        r = _call("rescore_position", {"position_id": pos_id, "alert": "adverse"})
+        assert r["ok"] and r["recommended_action"] == "exit_now"
+
+    def test_missing_conviction_on_near_alert_takes_profit(self, mock_venue, monkeypatch):
+        pos_id = self._open(mock_venue)
+        import trading.dispatchers.predict_tools as pt
+        monkeypatch.setattr(pt, "score_strategy",
+                            lambda name, regime=None: {"conviction": None, "support_scores": []})
+        r = _call("rescore_position", {"position_id": pos_id, "alert": "near"})
+        assert r["ok"] and r["recommended_action"] == "take_profit"
 
 
 class TestExtractBracketStatus:

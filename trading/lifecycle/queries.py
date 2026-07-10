@@ -78,6 +78,10 @@ GRADUATION_MIN_N = 15       # resolved predictions required to graduate
 HAZARD_WINDOW_N = 10        # trailing resolutions the decay check reads (one
                             # reflect-checkpoint's worth; < GRADUATION_MIN_N so
                             # every graduated book has a full window)
+SERIOUS_TRIAL_MIN_N = HARD_SL_MIN_N  # a sibling counts toward multiplicity only
+                            # once its book reaches this many resolutions — a
+                            # one-resolution noise book is not an independent
+                            # trial and must not raise the bar for leaders
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
 
@@ -133,9 +137,11 @@ def strategy_expectancy(
     strategies, some clear any fixed bar by luck. The hurdle is deflated by the
     expected best-of-M selection premium under the null,
     ``sqrt(2·ln(M)) · σ/√n`` (σ = per-trade simulated-PnL stdev, M =
-    ``siblings_tried`` — strategies at this timescale, any status INCLUDING
-    retired, that ever produced a resolved book; retiring a sibling must not
-    shrink M). A lone strategy (M=1) pays zero premium — the original bar.
+    ``siblings_tried`` — SERIOUS trials at this timescale: strategies of any
+    status INCLUDING retired whose book reached ``SERIOUS_TRIAL_MIN_N``
+    resolutions; retiring a sibling must not shrink M, but a one-resolution
+    noise book was never an independent trial and does not raise the bar).
+    A lone strategy (M=1) pays zero premium — the original bar.
 
     HAZARD (was this real? ≠ is it still?): a whole-book expectancy lets a dead
     edge coast on its historical wins. The trailing ``HAZARD_WINDOW_N``
@@ -216,9 +222,10 @@ def strategy_expectancy(
     expectancy = best["expectancy_pct"] if best else None
     n = best["n"] if best else 0
 
-    # Multiplicity: count sibling trials at this timescale (evidence filter
-    # matches the book query above). None when the strategy row is missing —
-    # visible, never guessed.
+    # Multiplicity: count SERIOUS sibling trials at this timescale — books of
+    # at least SERIOUS_TRIAL_MIN_N resolutions (evidence filter matches the
+    # book query above). None when the strategy row is missing — visible,
+    # never guessed.
     srow = conn.execute(
         "SELECT timescale FROM strategies WHERE name=?", (strategy_name,)).fetchone()
     siblings = None
@@ -226,11 +233,11 @@ def strategy_expectancy(
         siblings = max(1, conn.execute(
             """SELECT COUNT(*) FROM strategies s
                WHERE s.timescale = ?
-                 AND EXISTS (SELECT 1 FROM predictions p
-                             WHERE p.strategy_name = s.name
-                               AND p.resolved_at IS NOT NULL
-                               AND p.realized_value_json IS NOT NULL)""",
-            (srow["timescale"],)).fetchone()[0])
+                 AND (SELECT COUNT(*) FROM predictions p
+                      WHERE p.strategy_name = s.name
+                        AND p.resolved_at IS NOT NULL
+                        AND p.realized_value_json IS NOT NULL) >= ?""",
+            (srow["timescale"], SERIOUS_TRIAL_MIN_N)).fetchone()[0])
     sigma = best["pnl_stdev_pct"] if best else None
     premium = (math.sqrt(2.0 * math.log(siblings)) * sigma / math.sqrt(n)
                if siblings and sigma is not None and n else None)
@@ -289,7 +296,8 @@ def best_actionable_prediction(
     must currently clear the expectancy bar (``strategy_expectancy(...).tradeable``)
     — funding is tied to live profitability, and this blocks cherry-picking a
     wide-far prediction on a net-negative book. SETUP gate: among the survivors,
-    EV = p·reward − (1−p)·stop > 0 (RR > (1−p)/p). Returns the argmax-EV one
+    EV = p·reward − (1−p)·stop > 0 (RR > (1−p)/p), with p = wins/n — scratches
+    count as non-wins, matching expectancy. Returns the argmax-EV one
     (tiebreak: earliest). None when nothing qualifies — zero active/tradeable
     strategies or nothing fresh — so the desk correctly stays idle. The live tool
     re-checks EV against the actual fill price; this only picks the candidate id."""
@@ -312,7 +320,10 @@ def best_actionable_prediction(
         stats = cache[name]
         if not stats["tradeable"]:          # strategy gate: live profitability
             continue
-        p, stop = stats["win_rate"], stats["stop_pct"]
+        # p counts scratches as non-wins (wins/n), consistent with expectancy
+        # — the scratch-free win_rate would overstate the hit rate.
+        p = (stats["wins"] / stats["n"]) if stats["n"] else None
+        stop = stats["stop_pct"]
         if not p or not stop:
             continue
         # Reward = the edge of the strategy's BEST exit target (near vs far).
@@ -324,11 +335,59 @@ def best_actionable_prediction(
         ev = p * reward - (1.0 - p) * stop - ESTIMATED_ROUND_TRIP_COST_PCT
         if ev <= 0:
             continue
-        cand = {**r, "ev_pct": round(ev, 4), "win_rate": p, "stop_pct": stop,
-                "reward_pct": reward, "target": target}
+        cand = {**r, "ev_pct": round(ev, 4), "p_win": round(p, 3),
+                "stop_pct": stop, "reward_pct": reward, "target": target}
         if best is None or ev > best["ev_pct"]:
             best = cand
     return best
+
+
+def desk_gaps(conn: sqlite3.Connection, limit: int = 5) -> dict:
+    """Deterministic 'broken vs patient' read — the cold-start legibility
+    query. How far each live book is from the graduation bar (gap = hurdle −
+    expectancy), status/tradeable mismatches (empty when the status sync is
+    healthy), and what is fundable right now. The dispatcher-level
+    ``desk_status`` wraps this with HALT, readiness, and the open position."""
+    now = time.time()
+    counts: dict = {}
+    for status, ts, c in conn.execute(
+            "SELECT status, timescale, COUNT(*) FROM strategies "
+            "GROUP BY status, timescale"):
+        counts.setdefault(status, {})[ts] = c
+    books = []
+    for r in conn.execute(
+            "SELECT name, status FROM strategies WHERE status != 'retired'"):
+        exp = strategy_expectancy(conn, r["name"])
+        if exp["expectancy_pct"] is None:
+            continue
+        books.append({
+            "strategy": r["name"], "status": r["status"], "n": exp["n"],
+            "expectancy_pct": exp["expectancy_pct"],
+            "hurdle_pct": exp["hurdle_pct"],
+            "gap_pct": round(exp["hurdle_pct"] - exp["expectancy_pct"], 4),
+            "siblings_tried": exp["siblings_tried"],
+            "decaying": exp["decaying"], "tradeable": exp["tradeable"]})
+    books.sort(key=lambda b: b["gap_pct"])
+    open_total = conn.execute(
+        "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
+    ).fetchone()[0]
+    fresh = conn.execute(
+        """SELECT COUNT(*), MIN(? - pr.ts) FROM predictions pr
+           JOIN strategies s ON s.name = pr.strategy_name
+           WHERE pr.resolved_at IS NULL AND s.status = 'active'
+             AND pr.ts >= ?""",
+        (now, now - ACTIONABLE_MAX_AGE_S)).fetchone()
+    return {
+        "strategy_counts": counts,
+        "closest_to_tradeable": books[:limit],
+        "status_mismatches": [b for b in books
+                              if b["tradeable"] != (b["status"] == "active")],
+        "open_predictions": open_total,
+        "fundable_now": {"count": fresh[0],
+                         "youngest_age_s": (round(fresh[1])
+                                            if fresh[1] is not None else None)},
+        "actionable_window_s": ACTIONABLE_MAX_AGE_S,
+    }
 
 
 def open_predictions(conn: sqlite3.Connection, limit: int = 50) -> list:
