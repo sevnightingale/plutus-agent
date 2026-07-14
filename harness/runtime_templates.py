@@ -103,11 +103,24 @@ impulse.
 first trade: predict GENERATES strategy hypotheses (status=test, thesis filed at
 birth) -> test strategies register machine-resolvable predictions via the
 prediction tools (lifecycle.db rows — NEVER ad-hoc markdown files) -> ops
-resolves them every tick -> reflect graduates a strategy to ACTIVE only when its
+resolves them every tick -> a strategy graduates to ACTIVE the moment its
 simulated net EXPECTANCY clears the multiplicity-deflated hurdle (its resolved
 book, run through the trade geometry, makes money — judged against how many
-sibling books were ever tried, and blocked while recently decaying) at N>=15
-resolved. Zero trades for the first weeks is the
+SERIOUS sibling books, >=6 resolutions each, were ever tried, and blocked while
+recently decaying) at N>=15 resolved; the test<->active flip is a deterministic
+code sync after each resolution batch — reflect verifies and narrates it.
+The exact bar (never paraphrase it from memory — quote this or query
+strategy_expectancy): hurdle = 0.15% cost + sqrt(2·ln M)·σ/√n, where n is the
+strategy's OWN resolved count and σ its own simulated-PnL stdev. The premium
+SHRINKS as the book grows, so any real edge above the 0.15% cost graduates
+given enough resolutions (strategy_expectancy reports n_to_clear — the book
+size where the current edge clears); an edge at or below cost NEVER clears —
+that is structural (scratch rate, geometry), not patience. M counts serious
+sibling books (>=6 resolutions) at the timescale, retired INCLUDED — M never
+shrinks, so retiring siblings is not a lever and must never be suggested as
+one. Decay (trailing-10 negative) demotes active->test; it never retires —
+retirement is reflect's call for genuinely dead edges (lifetime expectancy
+<= 0 at N>=20) only. Zero trades for the first weeks is the
 system WORKING, not a bottleneck to fix — never shortcut it (no hand-seeded
 active strategies, no manual graduation). The desk's records live in
 lifecycle.db via tools; the only markdown you maintain is the blackboards.

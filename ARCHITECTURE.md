@@ -164,23 +164,33 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    over [birth, resolution] is measured (MAE / MFE / profit-score →
    `realized_value_json`); MAE sets stops and the resolved book's simulated
    expectancy is the graduation gate (see Graduate, Execute).
-4. **Graduate.** plutus-reflect promotes test → **active** only when the
-   strategy's **simulated net EXPECTANCY clears the hurdle at N≥15** — its whole
-   resolved book run through the actual trade geometry (TP = far edge, SL = the
-   all-resolutions MAE stop), pessimistic on path-dependence, with the win signal
-   = the trade actually TAGGED its target (`strategy_expectancy.tradeable`). This
-   replaces the old win-rate + RR>1 bar, which was survivorship-biased (median
-   MFE/MAE on winners only overstates tradeability). Two hardenings (imported
-   from trading-design.md): the hurdle is **multiplicity-deflated** — cost margin
-   + √(2·ln M)·σ/√n over the M sibling books ever tried at the timescale
-   (retired siblings still count), so the survivor of thirty trials needs more
-   proof than a lone hypothesis — and a **hazard check** re-simulates the
+4. **Graduate.** A strategy is promoted test → **active** the moment its
+   **simulated net EXPECTANCY clears the hurdle at N≥15** — its whole resolved
+   book run through the actual trade geometry (TP = the book's `best_target`
+   edge, SL = the all-resolutions MAE stop), pessimistic on path-dependence,
+   with the win signal = the trade actually TAGGED its target
+   (`strategy_expectancy.tradeable`). The test↔active flip is **code-owned**: a
+   deterministic status sync runs after every resolution batch (and on demand
+   via `strategy_status_sync`) — plutus-reflect verifies and narrates the
+   moves, and owns the judgment moves the sync never makes (dormancy,
+   retirement, population pruning). This replaces the old win-rate + RR>1 bar,
+   which was survivorship-biased (median MFE/MAE on winners only overstates
+   tradeability). Two hardenings (imported
+   from the trading design notes): the hurdle is **multiplicity-deflated** — cost margin
+   + √(2·ln M)·σ/√n over the M **serious** sibling trials ever tried at the
+   timescale (books of ≥6 resolutions; retired siblings still count, but a
+   one-resolution noise book never raises the bar), so the survivor of thirty
+   real trials needs more
+   proof than a lone hypothesis. The premium shrinks with the strategy's own
+   √n, so a real edge above cost always converges —
+   `strategy_expectancy.n_to_clear` projects the book size where the current
+   edge clears (None = at/below cost, never) — and a **hazard check** re-simulates the
    trailing 10 resolutions: a full negative window (`decaying`) blocks
    `tradeable` immediately, so a dead edge cannot coast on its historical wins
    (the record itself is never rewritten). Revoke when the edge is gone at N≥20
-   (expectancy ≤ 0 or decaying); a book still positive but under the deflated
-   hurdle demotes to test to keep earning n. No manual graduation, no
-   hand-seeded actives — the bar is the bar.
+   (expectancy ≤ 0 — reflect's call; decaying → demote to test, never retire); a book still positive but
+   under the deflated hurdle is auto-demoted to test to keep earning n. No
+   manual graduation, no hand-seeded actives — the bar is the bar.
 5. **Fund & size.** Selection is a deterministic query
    (`best_actionable_prediction` = the argmax-EV open prediction of a
    currently-tradeable active strategy). main funds it by calling
@@ -192,9 +202,14 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
 6. **Execute.** `desk_open_position` is deterministic code, not an agent: it
    derives the hard SL from the strategy's empirical risk envelope
    (`mae_envelope` all-resolutions MAE percentile; ATR fallback while thin), the
-   target from the prediction's far edge (a fixed zone level), and the size from
-   the risk budget; it applies the per-setup expectancy gate (RR > (1−p)/p at the
-   live price — refusing negative-EV setups), then places via
+   target from the edge the strategy **graduated on** (`best_target` — near or
+   far, a fixed zone level; the gate's geometry and the placed bracket always
+   match), and the size from
+   the risk budget; it enforces every mechanical guard in-tool (HALT ·
+   one-position · staleness · ACTIVE status · trade-path readiness) and applies
+   the per-setup expectancy gate (RR > (1−p)/p at the
+   live price, p = wins/n including scratches — refusing negative-EV setups),
+   then places via
    `place_order(venue="hyperliquid")` (native SDK, API-wallet signed) with an
    atomic on-venue SL bracket and a ±0.3% slippage cap, and **post-entry verifies
    on-venue — a naked position (SL not resting) is auto-closed immediately** (the

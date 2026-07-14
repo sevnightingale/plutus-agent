@@ -444,7 +444,7 @@ TOOLSETS = {
     },
 
     "execution": {
-        "description": "Plutus execution — place_order/close_position/modify_order/cancel_order (venue-dispatched), list_venues. Ungated.",
+        "description": "Legacy venue-dispatched order tools (place_order/close_position/modify_order/cancel_order, list_venues) — HALT-gated; kept for manual venue ops. The DESK trade path is the desk-execution toolset (desk_open_position/desk_close_position).",
         "tools": _EXECUTION_TOOLS,
         "includes": [],
     },

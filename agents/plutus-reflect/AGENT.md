@@ -30,8 +30,13 @@ never copy the previous file's header stamp.*
    - checkpoint continue (every 10 resolved): win rate ≥ 50%, else retire.
    - GRADUATION to active (trade-enabling): the SINGLE gate is simulated net
      EXPECTANCY — `lifecycle_query strategy_expectancy {strategy_name}` →
-     graduate iff `tradeable` (expectancy_pct > hurdle_pct AND n ≥ 15 AND not
-     `decaying`). It runs the strategy's whole resolved book through the actual
+     tradeable iff expectancy_pct > hurdle_pct AND n ≥ 15 AND not `decaying`.
+     The test↔active flip itself is CODE-OWNED: a deterministic sync runs
+     after every resolution batch (and via strategy_status_sync), promoting
+     tradeable test books and demoting active books that stop clearing. You
+     do NOT flip test↔active by hand — you VERIFY the sync's moves, narrate
+     them in your report, and own the judgment moves it never makes
+     (dormancy, retirement, population pruning). It runs the strategy's whole resolved book through the actual
      mechanical trade geometry (TP = far edge, SL = the all-resolutions MAE
      stop), pessimistic on path-dependence, with the win signal = the trade
      actually TAGGED its target (reached_far) — NOT a floor/horizon "correct".
@@ -41,22 +46,38 @@ never copy the previous file's header stamp.*
      orderbook-imbalance case). `rr` stays in strategy_book/strategy_stats for
      visibility but is NOT the gate. Two hardenings you must not argue with:
      the hurdle is MULTIPLICITY-DEFLATED (`hurdle_pct` = cost margin +
-     √(2·ln M)·σ/√n over the M sibling books ever tried at the timescale — the
-     survivor of thirty trials needs more proof than a lone hypothesis; a
-     borderline book that "just misses" needs more resolutions, not a retry),
+     √(2·ln M)·σ/√n over the M SERIOUS sibling trials at the timescale — books
+     that reached ≥ 6 resolutions, any status INCLUDING retired; a
+     one-resolution noise book was never an independent trial and does not
+     raise the bar — the survivor of thirty real trials needs more proof than
+     a lone hypothesis; a borderline book that "just misses" needs more
+     resolutions, not a retry — `strategy_expectancy.n_to_clear` projects the
+     book size where the current edge clears; None means the edge is at/below
+     cost and needs structural work, not patience).
+     M is timescale-scoped BY DESIGN — do not re-propose grouping siblings by
+     regime cell: the premium counts how many chances the desk gave itself to
+     find a lucky book (trials ever tried), not which strategies compete for
+     the same conditions — independent cells inflate the best-of-M fully, and
+     regime_applicability is self-declared, so a cell-scoped M would let a
+     strategy narrow its declared regime to lower its own bar. Considered and
+     rejected 2026-07-07.
      and `decaying` (trailing-10 re-sim negative) blocks tradeable even when
      the lifetime book still clears — a dead edge must not coast on old wins.
      Expectancy is conviction-independent (pure outcome geometry), so the
      conviction-render cutover doesn't touch it. Slower is fine; graduating
      mirages is not.
-   - revoke (active → retired) when the edge is GONE at N ≥ 20:
-     expectancy_pct ≤ 0, or `decaying`. A book still positive but under the
-     multiplicity-deflated hurdle is NOT dead — it is under-evidenced: demote
-     it to test instead (it keeps registering predictions; the premium shrinks
-     as √n grows, so a real edge re-clears on its own). Either way funding
-     already stopped the moment tradeable went false — your status change is
-     the bookkeeping that ends the niche occupancy. Decay never rewrites the
-     book — the record stands; only the validity ended.
+  - revoke (active → retired) ONLY when the edge is GONE at N ≥ 20:
+    expectancy_pct ≤ 0. `decaying` (trailing-10 negative) is a weight
+    calibration / regime-transition problem, NOT a dead edge — demote to
+    test, NEVER retire. Regime_applicability is self-declared; a strategy
+    that claims the new regime should get more resolutions there, not a
+    coffin. A book still positive but under the multiplicity-deflated hurdle
+    is NOT dead — it is under-evidenced: the status sync has already demoted
+    it to test (it keeps registering predictions; the premium shrinks as √n
+    grows, so a real edge re-clears and re-promotes on its own). Funding
+    stopped the moment tradeable went false — YOUR move is the retirement
+    call ONLY for genuinely negative lifetime expectancy. Decay never
+    rewrites the book — the record stands; only the validity ended.
    - dormancy moves on regime mismatch; dormant strategies matching the new
      regime wake.
    - POPULATION: lifecycle_query strategies_by_timescale per timescale (each
@@ -86,8 +107,8 @@ never copy the previous file's header stamp.*
 3b. GEOMETRY: per strategy, read `strategy_expectancy` — it reports
    `expectancy_far` vs `expectancy_near` and the `best_target`. A strategy whose
    edge is the NEAR move (high near-reach, far rarely tagged) graduates and trades
-   on near (the alert-up take-profit); one whose edge is the far extension trades
-   on far. Flag strategies whose far targets never pay (expectancy_far ≤ 0 while
+   on near (`desk_open_position` places the mechanical TP at the near edge); one
+   whose edge is the far extension trades on far (TP at far, near is the alert-up). Flag strategies whose far targets never pay (expectancy_far ≤ 0 while
    expectancy_near > 0) so predict can widen/retune zones, and confirm the
    alert-down winners'-MAE level isn't shaking out winners. This is the per-
    strategy trade geometry — reflect governs it; execution consumes it.
