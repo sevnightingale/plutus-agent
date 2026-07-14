@@ -132,6 +132,7 @@ class TestApprovalHeartbeat:
         """If tools.environments.base can't be imported, the wait still works."""
         from harness.tools.approval import (
             check_all_command_guards,
+            has_blocking_approval,
             register_gateway_notify,
             resolve_gateway_approval,
         )
@@ -157,9 +158,17 @@ class TestApprovalHeartbeat:
         thread = threading.Thread(target=_run_check, daemon=True)
         thread.start()
 
-        time.sleep(0.2)
+        # Wait for the blocking entry to REGISTER before resolving — a fixed
+        # sleep races thread startup under parallel-suite load; the resolve
+        # then fires into an empty queue, the wait runs its full timeout, and
+        # the join below flakes.
+        deadline = time.time() + 10.0
+        while not has_blocking_approval(self.SESSION_KEY) and time.time() < deadline:
+            time.sleep(0.02)
+        assert has_blocking_approval(self.SESSION_KEY), \
+            "approval wait never registered its blocking entry"
         resolve_gateway_approval(self.SESSION_KEY, "once")
-        thread.join(timeout=5)
+        thread.join(timeout=10)
 
         assert not thread.is_alive()
         # Even when heartbeat import fails, the approval flow completes.

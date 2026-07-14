@@ -207,16 +207,72 @@ class FileStateRegistryUnitTests(unittest.TestCase):
             del os.environ["HERMES_DISABLE_FILE_STATE_GUARD"]
 
 
+class _LocalFsOps:
+    """Real-filesystem file ops WITHOUT the terminal-environment layer.
+
+    The registry wiring under test (record_read / check_stale / lock_path /
+    note_write) lives entirely in the file_tools handlers around the
+    ``file_ops`` calls; the shell-environment layer underneath is
+    process-global state (spawned subshells, idle reapers, per-task caches)
+    that other tests in the same xdist worker mutate — the source of this
+    class's order-dependent full-suite flakes. Real disk I/O keeps the
+    mtime-based staleness semantics honest."""
+
+    class _R:
+        def __init__(self, d):
+            self._d = d
+            for k, v in d.items():
+                setattr(self, k, v)
+
+        def to_dict(self):
+            return self._d
+
+    def read_file(self, path, offset=1, limit=500):
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        return self._R({"content": content,
+                        "total_lines": content.count("\n"),
+                        "file_size": len(content)})
+
+    def write_file(self, path, content):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return self._R({"bytes_written": len(content)})
+
+    def patch_replace(self, path, old, new, replace_all=False):
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        if old not in text:
+            return self._R({"error": f"old_string not found in {path}"})
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text.replace(old, new) if replace_all
+                    else text.replace(old, new, 1))
+        return self._R({"success": True, "diff": ""})
+
+
 class FileToolsIntegrationTests(unittest.TestCase):
     """Integration through the real file_tools handlers.
 
     These exercise the wiring: read_file_tool → registry.record_read,
     write_file_tool / patch_tool → check_stale + lock_path + note_write.
+    The terminal-environment layer is replaced by ``_LocalFsOps`` (see its
+    docstring) — everything above it runs for real.
     """
 
     def setUp(self) -> None:
+        from unittest.mock import patch as _patch
         file_state.get_registry().clear()
         self._tmpdir = tempfile.mkdtemp(prefix="hermes_file_state_int_")
+        # UNIQUE task_ids per test: caches are process-global keyed by
+        # task_id; fresh ids can't collide with state other tests left.
+        import uuid
+        sfx = uuid.uuid4().hex[:8]
+        self.agent_a = f"agentA-{sfx}"
+        self.agent_b = f"agentB-{sfx}"
+        p = _patch("harness.tools.file_tools._get_file_ops",
+                   side_effect=lambda task_id="default": _LocalFsOps())
+        p.start()
+        self.addCleanup(p.stop)
 
     def tearDown(self) -> None:
         import shutil
@@ -231,38 +287,41 @@ class FileToolsIntegrationTests(unittest.TestCase):
 
     def test_sibling_agent_write_surfaces_warning_through_handler(self):
         p = self._write_seed("shared.txt")
-        r = json.loads(read_file_tool(path=p, task_id="agentA"))
+        r = json.loads(read_file_tool(path=p, task_id=self.agent_a))
         self.assertNotIn("error", r)
 
-        w_b = json.loads(write_file_tool(path=p, content="B wrote\n", task_id="agentB"))
+        w_b = json.loads(write_file_tool(path=p, content="B wrote\n",
+                                         task_id=self.agent_b))
         self.assertNotIn("error", w_b)
 
-        w_a = json.loads(write_file_tool(path=p, content="A stale\n", task_id="agentA"))
+        w_a = json.loads(write_file_tool(path=p, content="A stale\n",
+                                         task_id=self.agent_a))
         warn = w_a.get("_warning", "")
         self.assertTrue(warn, f"expected warning, got: {w_a}")
         # The cross-agent message names the sibling task_id.
-        self.assertIn("agentB", warn)
+        self.assertIn(self.agent_b, warn)
         self.assertIn("sibling", warn.lower())
 
     def test_same_agent_consecutive_writes_no_false_warning(self):
         p = self._write_seed("own.txt")
-        json.loads(read_file_tool(path=p, task_id="agentC"))
-        w1 = json.loads(write_file_tool(path=p, content="one\n", task_id="agentC"))
+        json.loads(read_file_tool(path=p, task_id=self.agent_a))
+        w1 = json.loads(write_file_tool(path=p, content="one\n", task_id=self.agent_a))
         self.assertFalse(w1.get("_warning"))
-        w2 = json.loads(write_file_tool(path=p, content="two\n", task_id="agentC"))
+        w2 = json.loads(write_file_tool(path=p, content="two\n", task_id=self.agent_a))
         self.assertFalse(w2.get("_warning"))
 
     def test_patch_tool_also_surfaces_sibling_warning(self):
         p = self._write_seed("p.txt", "hello world\n")
-        json.loads(read_file_tool(path=p, task_id="agentA"))
-        json.loads(write_file_tool(path=p, content="hello planet\n", task_id="agentB"))
+        json.loads(read_file_tool(path=p, task_id=self.agent_a))
+        json.loads(write_file_tool(path=p, content="hello planet\n",
+                                   task_id=self.agent_b))
         r = json.loads(
             patch_tool(
                 mode="replace",
                 path=p,
                 old_string="hello",
                 new_string="HI",
-                task_id="agentA",
+                task_id=self.agent_a,
             )
         )
         warn = r.get("_warning", "")
@@ -273,12 +332,12 @@ class FileToolsIntegrationTests(unittest.TestCase):
         # the sibling.  When old_string doesn't match, the patch itself
         # returns an error but the warning is still set from the pre-check.
         if warn:
-            self.assertIn("agentB", warn)
+            self.assertIn(self.agent_b, warn)
 
     def test_net_new_file_no_warning(self):
         p = os.path.join(self._tmpdir, "brand_new.txt")
         # Nobody has read or written this before.
-        w = json.loads(write_file_tool(path=p, content="hi\n", task_id="agentX"))
+        w = json.loads(write_file_tool(path=p, content="hi\n", task_id=self.agent_a))
         self.assertFalse(w.get("_warning"))
         self.assertNotIn("error", w)
 

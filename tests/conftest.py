@@ -193,6 +193,11 @@ _HERMES_BEHAVIORAL_VARS = frozenset({
     "HERMES_BACKGROUND_NOTIFICATIONS",
     "HERMES_EXEC_ASK",
     "HERMES_HOME_MODE",
+    # cron.scheduler._legacy_run_job sets this PROCESS-WIDE by design (every
+    # job that process runs is a cron job) — but in tests it leaks into every
+    # later test in the worker and flips tools/approval.py into unattended
+    # cron-mode ("BLOCKED: ... system-triggered"), flaking approval tests.
+    "HERMES_CRON_SESSION",
     "BROWSER_CDP_URL",
     "CAMOFOX_URL",
     # Filesystem-territory roots — if a test exercises a code path that
