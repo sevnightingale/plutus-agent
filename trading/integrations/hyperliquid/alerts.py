@@ -199,6 +199,16 @@ def poll_hl_prediction_resolution(
         logger.warning("hl_prediction_resolution poll failed: %s", exc)
         return [], state or {}
 
+    # Books just changed — the only moment tradeable can flip. Sync statuses
+    # deterministically (test↔active); the gate is code-owned, not a weekly
+    # reflect judgment. Sync failure must never block resolution events.
+    if res["resolved"]:
+        try:
+            from trading.lifecycle.graduation import sync_strategy_statuses
+            sync_strategy_statuses(conn)
+        except Exception as exc:
+            logger.warning("status sync after resolution failed: %s", exc)
+
     fired: List[Dict[str, Any]] = []
     for r in res["resolved"]:
         if r["prediction_id"] == funded_pid:

@@ -52,6 +52,27 @@ def _epoch(v: Any) -> float:
         return datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
 
 
+def _desk_status(conn) -> Dict[str, Any]:
+    """One deterministic answer to 'is the desk broken or patient?' —
+    tradeable gaps + fundable window (desk_gaps), HALT, the open position,
+    and live trade-path readiness (honest error when unverifiable)."""
+    from harness.constants import get_hermes_home
+    from trading.lifecycle import queries
+
+    out = queries.desk_gaps(conn)
+    out["halt"] = (get_hermes_home() / "HALT").exists()
+    out["open_position"] = queries.open_position(conn)
+    try:
+        from trading.integrations.hyperliquid.data_points import hl_trade_readiness
+        r = hl_trade_readiness()
+        out["readiness"] = {"ready": r.get("ready"), "reason": r.get("reason"),
+                            "days_remaining": r.get("days_remaining")}
+    except Exception as exc:
+        out["readiness"] = {"ready": None,
+                            "error": f"{type(exc).__name__}: {exc}"}
+    return out
+
+
 def _run_query(args: Dict[str, Any]) -> str:
     import re
 
@@ -86,6 +107,7 @@ def _run_query(args: Dict[str, Any]) -> str:
             conn, **{("strategy_name" if k == "name" else k): v
                      for k, v in params.items()}),
         "best_actionable_prediction": lambda: queries.best_actionable_prediction(conn),
+        "desk_status": lambda: _desk_status(conn),
         "strategies_by_timescale": lambda: queries.strategies_by_timescale(
             conn, params["timescale"], **{k: tuple(v) for k, v in params.items()
                                           if k == "statuses"}),
@@ -121,7 +143,9 @@ registry.register(
             "regime_tag?, timescale?} | strategy_stats {name} | "
             "strategy_book | strategy_expectancy {strategy_name} (the "
             "profitability gate) | best_actionable_prediction (the fundable "
-            "pick) | strategies_by_timescale {timescale, statuses?} | "
+            "pick) | desk_status (broken vs patient: gaps to tradeable, "
+            "HALT, readiness, fundable window) | "
+            "strategies_by_timescale {timescale, statuses?} | "
             "open_predictions_by_cell | mae_envelope {strategy_name?, "
             "timescale?, regime_tag?, percentile?, population?, statistic?} | "
             "support_score_performance {strategy_name?} | last_action_runs | "

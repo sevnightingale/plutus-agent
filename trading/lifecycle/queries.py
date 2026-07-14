@@ -130,7 +130,7 @@ def strategy_expectancy(
     (rr measured median MFE/MAE on WINNERS only; this runs the whole book through
     the actual rules).
 
-    Two trading-design.md imports harden the bar:
+    Two trading-design imports harden the bar:
 
     MULTIPLICITY (was this the survivor of how many trials?): a positive book
     means little if it is the best of thirty siblings — with enough test
@@ -141,7 +141,9 @@ def strategy_expectancy(
     status INCLUDING retired whose book reached ``SERIOUS_TRIAL_MIN_N``
     resolutions; retiring a sibling must not shrink M, but a one-resolution
     noise book was never an independent trial and does not raise the bar).
-    A lone strategy (M=1) pays zero premium — the original bar.
+    A lone strategy (M=1) pays zero premium — the original bar. ``n_to_clear``
+    reports the book size at which the current exp/σ/M clears the hurdle
+    (None = never at this expectancy: the edge is at/below cost).
 
     HAZARD (was this real? ≠ is it still?): a whole-book expectancy lets a dead
     edge coast on its historical wins. The trailing ``HAZARD_WINDOW_N``
@@ -258,6 +260,17 @@ def strategy_expectancy(
                     and recent["expectancy_pct"] is not None
                     and recent["expectancy_pct"] < 0)
 
+    # Path-to-clear (operator legibility): the book size at which the CURRENT
+    # exp/σ/M clears the hurdle. The premium shrinks as the strategy's own √n
+    # grows, so any real edge above the cost margin converges — while an edge
+    # at or below cost NEVER clears (None): that is a structural problem
+    # (scratch rate, geometry), not a patience problem. Assumes exp/σ/M hold.
+    n_to_clear = None
+    if (expectancy is not None and sigma is not None and siblings
+            and expectancy > cost_margin):
+        need = 2.0 * math.log(siblings) * (sigma / (expectancy - cost_margin)) ** 2
+        n_to_clear = max(min_n, math.floor(need) + 1)   # strictly above the bar
+
     return {
         "strategy_name": strategy_name,
         "best_target": best_target,
@@ -276,6 +289,7 @@ def strategy_expectancy(
         "siblings_tried": siblings,
         "multiplicity_premium_pct": round(premium, 4) if premium is not None else None,
         "hurdle_pct": round(hurdle, 4),
+        "n_to_clear": n_to_clear,
         "recent": recent,
         "decaying": decaying,
         "tradeable": bool(stop) and expectancy is not None
@@ -366,6 +380,7 @@ def desk_gaps(conn: sqlite3.Connection, limit: int = 5) -> dict:
             "hurdle_pct": exp["hurdle_pct"],
             "gap_pct": round(exp["hurdle_pct"] - exp["expectancy_pct"], 4),
             "siblings_tried": exp["siblings_tried"],
+            "n_to_clear": exp["n_to_clear"],
             "decaying": exp["decaying"], "tradeable": exp["tradeable"]})
     books.sort(key=lambda b: b["gap_pct"])
     open_total = conn.execute(

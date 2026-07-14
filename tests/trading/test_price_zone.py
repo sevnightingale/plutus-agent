@@ -534,12 +534,14 @@ class TestMultiplicity:
 
     def test_sibling_trials_raise_the_hurdle(self, conn):
         self._borderline_book(conn, "cand")
-        # 30 sibling trials at the same timescale, each with a resolved book —
-        # retired status must still count (pruning can't launder multiplicity).
+        # 30 SERIOUS sibling trials (books of ≥ SERIOUS_TRIAL_MIN_N
+        # resolutions) at the same timescale — retired status must still
+        # count (pruning can't launder multiplicity).
         for i in range(30):
             _strat_row(conn, f"sib{i}", status="retired")
-            _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
-                      reached_far=False)
+            for _ in range(queries.SERIOUS_TRIAL_MIN_N):
+                _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
+                          reached_far=False)
         exp = queries.strategy_expectancy(conn, "cand")
         assert exp["siblings_tried"] == 31
         assert exp["multiplicity_premium_pct"] > 0
@@ -547,6 +549,104 @@ class TestMultiplicity:
         # the book itself is unchanged — only the bar moved
         assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
         assert exp["tradeable"] is False
+
+    def test_thin_siblings_do_not_raise_the_hurdle(self, conn):
+        # Serious-trial M: a one-resolution noise book was never an
+        # independent trial — 30 of them must not pad the bar for a leader.
+        self._borderline_book(conn, "cand")
+        for i in range(30):
+            _strat_row(conn, f"noise{i}", status="test")
+            _resolved(conn, f"noise{i}", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "cand")
+        assert exp["siblings_tried"] == 1     # only cand's own serious book
+        assert exp["multiplicity_premium_pct"] == 0.0
+        assert exp["tradeable"] is True
+
+
+class TestNToClear:
+    """n_to_clear — the path-to-graduation projection: the premium shrinks
+    with the strategy's own √n, so a real edge above cost always converges;
+    an edge at/below cost reports None (never — structural, not patience)."""
+
+    def test_lone_strategy_clears_at_min_n(self, conn):
+        _strat_row(conn, "solo")
+        for _ in range(12):
+            _resolved(conn, "solo", far=3.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        for _ in range(4):
+            _resolved(conn, "solo", far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        exp = queries.strategy_expectancy(conn, "solo")
+        assert exp["siblings_tried"] == 1
+        assert exp["n_to_clear"] == queries.GRADUATION_MIN_N
+
+    def test_siblings_push_n_to_clear_out_but_finite(self, conn):
+        # Borderline edge (+0.5%/trade, σ=2) against 30 serious siblings:
+        # blocked today, but the projection is FINITE — evidence converges.
+        _strat_row(conn, "grind")
+        for _ in range(10):
+            _resolved(conn, "grind", far=2.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        for _ in range(6):
+            _resolved(conn, "grind", far=2.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+        for i in range(30):
+            _strat_row(conn, f"sib{i}", status="retired")
+            for _ in range(queries.SERIOUS_TRIAL_MIN_N):
+                _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
+                          reached_far=False)
+        exp = queries.strategy_expectancy(conn, "grind")
+        assert exp["tradeable"] is False
+        assert exp["n_to_clear"] is not None
+        assert exp["n_to_clear"] > exp["n"]
+        # sanity: at that book size the hurdle actually sits below the edge
+        import math
+        proj = (queries.ESTIMATED_ROUND_TRIP_COST_PCT
+                + math.sqrt(2 * math.log(exp["siblings_tried"]))
+                * exp["pnl_stdev_pct"] / math.sqrt(exp["n_to_clear"]))
+        assert exp["expectancy_pct"] > proj
+
+    def test_edge_at_or_below_cost_never_clears(self, conn):
+        _strat_row(conn, "mirage")
+        for _ in range(16):
+            _resolved(conn, "mirage", far=1.0, outcome="correct", mae=-3.0,
+                      reached_far=False)
+        assert queries.strategy_expectancy(conn, "mirage")["n_to_clear"] is None
+
+
+class TestDeskGaps:
+    """desk_gaps — the deterministic 'broken vs patient' read (item J)."""
+
+    def _book(self, conn, name):
+        for _ in range(12):
+            _resolved(conn, name, far=3.0, outcome="correct", mae=-0.3,
+                      reached_far=True)
+        for _ in range(4):
+            _resolved(conn, name, far=3.0, outcome="wrong", mae=-2.0,
+                      reached_far=False)
+
+    def test_gaps_counts_and_mismatches(self, conn):
+        _strat_row(conn, "good")                    # active + tradeable
+        self._book(conn, "good")
+        _strat_row(conn, "shy", status="test")      # tradeable but still test
+        self._book(conn, "shy")
+        g = queries.desk_gaps(conn)
+        assert g["strategy_counts"]["active"]["intraday"] == 1
+        assert g["strategy_counts"]["test"]["intraday"] == 1
+        names = [b["strategy"] for b in g["closest_to_tradeable"]]
+        assert "good" in names and "shy" in names
+        assert [b["strategy"] for b in g["status_mismatches"]] == ["shy"]
+        assert g["actionable_window_s"] == queries.ACTIONABLE_MAX_AGE_S
+
+    def test_fundable_now_counts_fresh_active_predictions(self, conn):
+        _strat_row(conn, "good")
+        self._book(conn, "good")
+        _record(conn, strategy_name="good", kind="strategy",
+                near_edge_pct=1.5, far_edge_pct=3.0)
+        g = queries.desk_gaps(conn)
+        assert g["fundable_now"]["count"] == 1
+        assert g["fundable_now"]["youngest_age_s"] is not None
 
 
 class TestHazard:

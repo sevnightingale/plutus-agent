@@ -100,6 +100,15 @@ def _strategy_set_status(args: Dict[str, Any]) -> str:
                         "retirement_reason": s.retirement_reason})
 
 
+def _strategy_status_sync(args: Dict[str, Any]) -> str:
+    from trading.lifecycle.db import get_db
+    from trading.lifecycle.graduation import sync_strategy_statuses
+
+    changes = sync_strategy_statuses(get_db())
+    return tool_result({"ok": True, "changes": changes,
+                        "in_sync": not changes})
+
+
 def _strategy_update_weights(args: Dict[str, Any]) -> str:
     from trading.conviction.engine import update_weights
     from trading.lifecycle.db import get_db
@@ -157,6 +166,26 @@ registry.register(
     handler=lambda args, **kw: _strategy_set_status(args),
     description="Change a strategy's frontmatter status + sync the mirror.",
     emoji="🎓",
+)
+
+registry.register(
+    name="strategy_status_sync",
+    toolset="strategy-write",
+    schema={
+        "name": "strategy_status_sync",
+        "description": (
+            "Deterministic test↔active sync from the graduation bar: "
+            "tradeable test strategies promote to active, active strategies "
+            "no longer clearing the bar demote to test. Runs automatically "
+            "after every resolution batch; call it to force a pass or to see "
+            "that the population is in sync. Dormancy and retirement stay "
+            "judgment moves (strategy_set_status)."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    handler=lambda args, **kw: _strategy_status_sync(args),
+    description="Code-owned graduation bookkeeping: sync status to tradeable.",
+    emoji="🎯",
 )
 
 registry.register(
