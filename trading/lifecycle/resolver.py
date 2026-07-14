@@ -24,11 +24,14 @@ tick stays a single ``all_mids()`` call most of the time.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Callable, Dict, Optional
 
 from trading.lifecycle import criteria as criteria_mod
 from trading.lifecycle import price_zone, write
+
+logger = logging.getLogger(__name__)
 
 
 def resolve_open_predictions(
@@ -43,9 +46,15 @@ def resolve_open_predictions(
 ) -> dict:
     """Resolve every open price-zone prediction that has met its terms.
 
-    Returns ``{"resolved": [...], "open_count": N}``. Each resolved entry is a
-    compact dict suitable for a wake event. Idempotent across callers: the
-    race-safe ``write.resolve_prediction`` ensures one winner per prediction.
+    Returns ``{"resolved": [...], "marked_near": [...], "open_count": N}``.
+    Each resolved entry is a compact dict suitable for a wake event. Idempotent
+    across callers: the race-safe ``write.resolve_prediction`` ensures one
+    winner per prediction.
+
+    After any resolution, runs the deterministic test↔active status sync
+    (``graduation.sync_strategy_statuses``) so both the watcher path and the
+    ops safety-net path share one code-owned graduation flip — sync failure
+    is logged and never blocks the resolution result.
 
     ``deep=False`` (the watcher's per-tick fast path) detects edge touches off
     the live ``mids`` only — one ``all_mids()`` call, no candle pull unless
@@ -88,6 +97,15 @@ def resolve_open_predictions(
                 "prediction_id": r["id"], "outcome": outcome, "mode": mode,
                 "symbol": r["symbol"], "strategy_name": r["strategy_name"],
             })
+    # Books just changed — the only moment tradeable can flip. Both callers
+    # (watcher + ops resolve_due) share this path, so status cannot lag when
+    # one daemon is down. Failure must never block resolution events.
+    if resolved:
+        try:
+            from trading.lifecycle.graduation import sync_strategy_statuses
+            sync_strategy_statuses(conn)
+        except Exception as exc:
+            logger.warning("status sync after resolution failed: %s", exc)
     return {"resolved": resolved, "marked_near": marked, "open_count": len(rows)}
 
 

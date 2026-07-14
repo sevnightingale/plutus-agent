@@ -98,3 +98,40 @@ class TestSync:
         _tradeable_book(conn, "sleeper")
         assert sync_strategy_statuses(conn) == []
         assert parse_strategy(strategies_dir() / "sleeper.md").status == "dormant"
+
+    def test_resolver_path_promotes_on_resolution(self):
+        """Both watcher and ops share resolve_open_predictions — a resolve
+        batch must promote a tradeable-but-test book without a separate sync.
+
+        Resolve an expired miss with mae matching the existing loss population
+        so the hard-stop envelope (and tradeable) does not collapse: a
+        winner-MAE of 0.3 with p75 stop of 0.3 would path-dependently count
+        every prior win as a stop-out and wrongly demote the book.
+        """
+        from trading.lifecycle import resolver
+
+        conn = get_db()
+        name = "via-resolve"
+        _mk_strategy(conn, name, status="test")
+        _tradeable_book(conn, name)  # tradeable, but status still test until sync
+        assert queries.strategy_expectancy(conn, name)["tradeable"] is True
+        assert parse_strategy(strategies_dir() / f"{name}.md").status == "test"
+
+        pid = write.record_prediction(conn, write.PredictionDraft(
+            claim_md="live", horizon_ts=time.time() + 3600,
+            entry_ref_price=100_000.0, near_edge_pct=1.5, far_edge_pct=3.0,
+            conviction=0.7, agent="plutus-predict", symbol="BTC",
+            strategy_name=name, kind="strategy"))
+        # Force expiry for the sweep (horizon must be after ts at insert time).
+        conn.execute("UPDATE predictions SET horizon_ts=? WHERE id=?",
+                     (time.time() - 10, pid))
+        conn.commit()
+        res = resolver.resolve_open_predictions(
+            conn, mids={"BTC": 100_000.0},  # no favorable move
+            path_stats_fn=lambda *a, **k: {
+                "mfe_pct": 0.1, "mae_pct": -2.0, "range_pct": 2.1},
+        )
+        assert any(r["prediction_id"] == pid and r["outcome"] == "wrong"
+                   for r in res["resolved"])
+        assert queries.strategy_expectancy(conn, name)["tradeable"] is True
+        assert parse_strategy(strategies_dir() / f"{name}.md").status == "active"

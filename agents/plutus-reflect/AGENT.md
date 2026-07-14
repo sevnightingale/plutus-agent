@@ -37,9 +37,10 @@ never copy the previous file's header stamp.*
      do NOT flip test↔active by hand — you VERIFY the sync's moves, narrate
      them in your report, and own the judgment moves it never makes
      (dormancy, retirement, population pruning). It runs the strategy's whole resolved book through the actual
-     mechanical trade geometry (TP = far edge, SL = the all-resolutions MAE
-     stop), pessimistic on path-dependence, with the win signal = the trade
-     actually TAGGED its target (reached_far) — NOT a floor/horizon "correct".
+     mechanical trade geometry (TP = the book's `best_target` edge — near or
+     far — SL = the all-resolutions MAE stop), pessimistic on path-dependence,
+     with the win signal = the trade actually TAGGED that target
+     (reached_near or reached_far) — NOT a floor/horizon "correct".
      This REPLACES the old win-rate + RR>1 bar, which was survivorship-biased:
      `rr` (median MFE/MAE on winners only) overstates tradeability — a strategy
      can read rr 1.8 on its wins yet be net-negative across all trades (the

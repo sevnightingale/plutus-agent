@@ -9,7 +9,8 @@ on ``status='active'``), and an ``active`` strategy that stops clearing
 until someone notices.
 
 Runs after every resolution batch — the only moment books (and therefore
-``tradeable``) change — via the resolution watcher, and on demand through the
+``tradeable``) change — inside ``resolver.resolve_open_predictions`` (shared by
+the watcher and the ops safety-net), and on demand through the
 ``strategy_status_sync`` tool.
 
 Deliberately narrow: only ``test ↔ active``. Dormancy is regime judgment

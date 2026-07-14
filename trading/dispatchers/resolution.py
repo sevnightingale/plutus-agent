@@ -79,6 +79,8 @@ def _resolve_due(args: Dict[str, Any]) -> str:
     # deep=True: the safety-net sweep pulls candles for each still-open
     # prediction and re-checks the edges against the path MFE, catching any
     # favorable wick the watcher's live-mid poll missed between ticks.
+    # Shared resolver also runs graduation.sync_strategy_statuses when anything
+    # resolves — so ops-only resolutions (watcher down) still flip test↔active.
     res = resolver.resolve_open_predictions(
         conn, mids=mids, path_stats_fn=path_stats,
         fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme, deep=True)

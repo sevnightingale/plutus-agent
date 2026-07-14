@@ -16,7 +16,7 @@ All findings verified (three minor imprecisions noted below), then fixed. Decisi
 | B (P0) | `refused:` codes in-tool for HALT, `hl_trade_readiness` (unverifiable also refuses), `status != 'active'` | `desk_execution.py` |
 | C (P1) | **C1**: mechanical TP = `best_target` edge; near-target books get no redundant near alert; gate reward/p match the placed TP | `desk_execution.py` |
 | D (P1) | **D1**: gate `p = wins/n` (scratches are non-wins) in both `desk_open` and `best_actionable_prediction` | `desk_execution.py`, `queries.py` |
-| E (P1) | Deterministic test↔active sync (`trading/lifecycle/graduation.py`), auto-run after every resolution batch + `strategy_status_sync` tool; dormancy/retirement stay reflect's | `graduation.py`, `alerts.py`, `strategy_tools.py` |
+| E (P1) | Deterministic test↔active sync (`trading/lifecycle/graduation.py`); auto-run after every resolution via shared `resolver.resolve_open_predictions` (watcher **and** ops) + `strategy_status_sync` tool; dormancy/retirement stay reflect's | `graduation.py`, `resolver.py`, `strategy_tools.py` |
 | M1 (P1) | Siblings = **serious trials**: books ≥ `SERIOUS_TRIAL_MIN_N` (=6) resolutions, any status incl. retired | `queries.py` |
 | F (P2) | Missing conviction while risk is open → `exit_now` (`take_profit` on a near alert); `rescore_position` takes `alert=` | `desk_execution.py` |
 | G (P2) | `register_prediction` enqueues a wake when an ACTIVE strategy registers (backstop vs in-turn deferral) | `register_prediction.py` |
