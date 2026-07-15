@@ -60,11 +60,15 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    note the weakest occupant for reflect to prune. Missing data? Declare
    missing_data_points — never block on infrastructure.
 3. DRAFT + SCORE (offloaded, in PARALLEL): for each regime-matched strategy
-   below its open-prediction cap (3), in ONE turn fire `predict_draft`
+   whose `strategies_by_timescale` row has `open_slots_remaining > 0`, in ONE
+   turn fire `predict_draft`
    (pass the strategy + the curated readings you selected from PERCEPTION.md →
    a {near_pct, far_pct, horizon_hours}) and then `conviction_score` (it
    self-fetches the strategy's declared data points and returns conviction +
-   support_scores). Batch the calls — they run concurrently.
+   support_scores). Batch the calls — they run concurrently. The default open
+   cap is 3; an `evidence_lane: incubation` book may expose 5. Consume the
+   reported capacity — never infer or hard-code a cap, and do not change
+   strategy ranking merely because a wider lane is available.
 4. REGISTER: `register_prediction` for each live setup — the zone (near_edge_pct,
    far_edge_pct, horizon_hours), conviction + support_scores from
    conviction_score, regime_tag. `invalidation_criteria` is OPTIONAL: include

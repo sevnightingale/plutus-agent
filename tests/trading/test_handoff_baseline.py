@@ -1,7 +1,6 @@
 """Issue 5 baseline — entry-delta recording, intrinsic RR, dropped-handoff query."""
 
 import json
-import sqlite3
 import time
 
 import pytest
@@ -9,7 +8,7 @@ import pytest
 import trading.dispatchers.desk_execution  # noqa: F401 — registers on import
 import trading.dispatchers.register_prediction as RP
 from harness.tools.registry import registry as tool_registry
-from trading.lifecycle import queries, write
+from trading.lifecycle import write
 from trading.lifecycle.db import get_db
 
 
@@ -115,4 +114,9 @@ class TestFundableWake:
         wakes = self._patch(monkeypatch)
         res = _call("register_prediction", {**self._ARGS, "strategy_name": "tw"})
         assert res["ok"] and res["fundable_wake"] is False
+        assert res["strategy_capacity"] == {
+            "strategy_name": "tw", "evidence_lane": "base",
+            "open_predictions": 1, "open_cap": write.MAX_OPEN_PER_STRATEGY,
+            "open_slots_remaining": write.MAX_OPEN_PER_STRATEGY - 1,
+        }
         assert wakes == []
