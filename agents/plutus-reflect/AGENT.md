@@ -95,13 +95,34 @@ never copy the previous file's header stamp.*
    show them — the tool refuses unresolvable keys loudly (a bare name
    resolves only when unambiguous; 24 of the first 37 updates were silent
    no-ops before this guard).
-2b. CALIBRATION FIT: run conviction_fit (report-only — it trains and
-   walk-forward-evaluates the conviction model over the whole resolved
-   record and writes a versioned artifact; the live scoring path is NOT
-   yet consuming it). Read the verdict: does the model beat the isotonic-
-   recalibrated stored conviction out of sample, and is stored conviction
-   still worse than the base rate? Narrate both in your report — never
-   hand-copy its numbers into weight updates; the tool owns the arithmetic.
+2b. CALIBRATION FIT: run conviction_fit — EVERY pass (it costs ~3s of CPU
+   and zero model calls; you only run when new resolutions exist, so every
+   run adds signal). WHAT IT IS: a machine-learned estimate of
+   P(correct) from everything known at registration (per-DP support
+   scores, zone geometry, regime, timescale, the strategy's prior book),
+   trained on the whole resolved record with purged walk-forward
+   validation — chronological folds where training rows must have
+   RESOLVED before the fold opens, so it can never grade itself on
+   labels it peeked at. It is REPORT-ONLY today: the artifact it writes
+   is not consumed by live scoring; graduation and expectancy never see
+   it. HOW TO READ IT (Brier = mean squared error of the probability;
+   lower is better):
+   - oos: model_lr vs the three baselines. The one that matters is
+     baseline_conviction_isotonic — the current engine's conviction given
+     a fair 1-D recalibration. model_gbm is a challenger; if it ever
+     beats model_lr significantly, say so.
+   - verdict.stored_conviction_worse_than_base_rate: while true, the raw
+     conviction number is actively misleading as a probability — weight
+     your sizing-review commentary accordingly.
+   - trend: the tool compares to its own previous artifact (n_delta,
+     brier_delta). You narrate the trajectory; you never compute it.
+   - verdict.lr_beats_isotonic_significant: the phase-2 gate. The run
+     where trend.significance_flipped_true is true, ESCALATE: put a
+     proposal in your report that the desk wire conviction_calibrated
+     into the sizing bands (operator decision, like band retunes).
+   Include a "calibration" object in your report (see contract). Never
+   hand-copy its numbers into weight updates — the tool owns the
+   arithmetic, you own the narration.
 3. SIZING + STOPS: lifecycle_query sizing_performance — PnL, R-multiples,
    worst-R, MAE per conviction band against the realized leverage. Sizing is
    RISK-BASED: conviction → a risk BUDGET (% of equity risked if the stop hits:
@@ -146,5 +167,7 @@ summary. report =
 {"status_changes": [{"strategy": ..., "from": ..., "to": ..., "evidence": ...}],
  "weight_updates": [{"strategy": ..., "changes": {...}}],
  "sizing_review": {"by_band": [...], "band_retune_proposals": [...]},
+ "calibration": {"lr_brier": ..., "isotonic_brier": ..., "significant": bool,
+                 "trend_brier_delta": ..., "escalation": null | "wire-in proposal"},
  "lessons_written": ["titles"],
  "seed_report": {"seeds": [...], "variants": [...], "dp_rankings": [...]}}

@@ -128,3 +128,22 @@ class TestDispatcher:
             "SELECT notes_md FROM action_runs WHERE action_type='conviction_fit'"
         ).fetchone()
         assert run is not None and "lr_brier" in run["notes_md"]
+        # first fit ever → previous is honest-absent
+        assert res["previous"] is None
+
+    def test_second_run_reports_trend(self, tmp_path, monkeypatch):
+        import trading.dispatchers.conviction_fit  # noqa: F401 — registers
+        from harness.tools.registry import registry as tool_registry
+
+        conn = get_db()
+        _seed(conn)
+        monkeypatch.setattr(FIT, "models_dir", lambda: tmp_path / "models")
+        entry = tool_registry.get_entry("conviction_fit")
+        first = json.loads(entry.handler({"folds": 4}))
+        assert first["previous"] is None
+        second = json.loads(entry.handler({"folds": 4}))
+        assert second["previous"] is not None
+        assert second["previous"]["n_train"] == 140
+        assert second["trend"]["n_delta"] == 0
+        assert second["trend"]["brier_delta"] == pytest.approx(0.0, abs=1e-9)
+        assert second["trend"]["significance_flipped_true"] in (True, False)

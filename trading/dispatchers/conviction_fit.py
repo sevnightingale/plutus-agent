@@ -63,6 +63,30 @@ def _conviction_fit(args: Dict[str, Any]) -> str:
         report = fit.walk_forward_report(frame, folds=int(args.get("folds") or 5))
         if "error" in report:
             return tool_error(f"conviction_fit: {report['error']}")
+        # Trend vs the previous artifact — computed HERE so reflect narrates
+        # a ready-made comparison instead of hand-carrying numbers.
+        try:
+            prev = fit.load_artifact()
+            prev_brier = (prev.get("oos") or {}).get("model_lr", {}).get("brier")
+            report["previous"] = {
+                "trained_at": prev.get("trained_at"),
+                "n_train": prev.get("n_train"),
+                "lr_brier": prev_brier,
+                "was_significant": (prev.get("verdict") or {}).get(
+                    "lr_beats_isotonic_significant"),
+            }
+            lr_now = report["oos"]["model_lr"]["brier"]
+            report["trend"] = {
+                "n_delta": report["dataset"]["n"] - (prev.get("n_train") or 0),
+                "brier_delta": round(lr_now - prev_brier, 5)
+                if prev_brier is not None else None,
+                "significance_flipped_true": bool(
+                    report["verdict"]["lr_beats_isotonic_significant"]
+                    and not (prev.get("verdict") or {}).get(
+                        "lr_beats_isotonic_significant")),
+            }
+        except FileNotFoundError:
+            report["previous"] = None  # first fit ever — honest absence
         saved = fit.fit_and_save(frame, report)
     except RuntimeError as exc:  # loud sklearn-missing path
         return tool_error(str(exc))
