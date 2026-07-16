@@ -90,7 +90,18 @@ never copy the previous file's header stamp.*
 2. WEIGHTS: lifecycle_query support_score_performance per strategy →
    strategy_update_weights with the signed per-DP edge (avg score on
    correct − avg score on wrong). Narrative data points retune like any
-   other — their recorded reasoning is your evidence.
+   other — their recorded reasoning is your evidence. Use the strategy's
+   DECLARED data-point keys exactly as strategy_expectancy/strategy_book
+   show them — the tool refuses unresolvable keys loudly (a bare name
+   resolves only when unambiguous; 24 of the first 37 updates were silent
+   no-ops before this guard).
+2b. CALIBRATION FIT: run conviction_fit (report-only — it trains and
+   walk-forward-evaluates the conviction model over the whole resolved
+   record and writes a versioned artifact; the live scoring path is NOT
+   yet consuming it). Read the verdict: does the model beat the isotonic-
+   recalibrated stored conviction out of sample, and is stored conviction
+   still worse than the base rate? Narrate both in your report — never
+   hand-copy its numbers into weight updates; the tool owns the arithmetic.
 3. SIZING + STOPS: lifecycle_query sizing_performance — PnL, R-multiples,
    worst-R, MAE per conviction band against the realized leverage. Sizing is
    RISK-BASED: conviction → a risk BUDGET (% of equity risked if the stop hits:

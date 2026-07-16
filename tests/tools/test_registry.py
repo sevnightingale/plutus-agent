@@ -335,6 +335,7 @@ class TestBuiltinDiscovery:
             "trading.dispatchers.register_prediction",
             "trading.dispatchers.predict_tools",
             "trading.dispatchers.record_data_point_observation",
+            "trading.dispatchers.conviction_fit",
 
 
 

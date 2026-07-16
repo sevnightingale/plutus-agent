@@ -55,6 +55,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# plutus-agent conviction calibration (trading/calibration/) — optional so
+# constrained installs (Termux) keep working; the conviction_fit tool errors
+# loudly with the install hint when absent.
+ml = ["scikit-learn>=1.5,<2"]
 modal = ["modal>=1.0.0,<2"]
 daytona = ["daytona>=0.148.0,<1"]
 dev = ["debugpy>=1.8.0,<2", "pytest>=9.0.2,<10", "pytest-asyncio>=1.3.0,<2", "pytest-xdist>=3.0,<4", "mcp>=1.2.0,<2", "ty>=0.0.1a29,<0.0.22", "ruff"]
