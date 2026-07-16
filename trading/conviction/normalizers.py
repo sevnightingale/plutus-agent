@@ -12,7 +12,7 @@ function — the registry pattern IS the extension surface.
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 _NORMALIZERS: Dict[str, Callable[..., float]] = {}
 
@@ -39,6 +39,37 @@ def apply(name: str, value: float, **params) -> float:
 
 def names() -> list:
     return sorted(_NORMALIZERS)
+
+
+def spec_id(name: str, params: Optional[dict] = None) -> str:
+    """Compact audit id for a declared spec: ``linear_band(hi=20,lo=70)``.
+
+    Persisted in support_scores.normalizer so every deterministic score is
+    reproducible from the row alone.
+    """
+    params = params or {}
+    if not params:
+        return name
+    inner = ",".join(f"{k}={params[k]}" for k in sorted(params))
+    return f"{name}({inner})"
+
+
+def validate_spec(name: str, params: Optional[dict] = None) -> list:
+    """Problems with a declared normalizer spec (empty = valid).
+
+    Checks registration and probes the function once (value=0.0) so missing/
+    unknown params and degenerate configs (lo == hi) refuse at STRATEGY WRITE
+    time, not at the first scoring beat.
+    """
+    if name not in _NORMALIZERS:
+        return [f"unknown normalizer {name!r} — registered: {sorted(_NORMALIZERS)}"]
+    try:
+        apply(name, 0.0, **(params or {}))
+    except TypeError as exc:
+        return [f"normalizer {name!r}: bad params {sorted((params or {}))} ({exc})"]
+    except ValueError as exc:
+        return [f"normalizer {name!r}: invalid config ({exc})"]
+    return []
 
 
 def _clamp01(x: float) -> float:

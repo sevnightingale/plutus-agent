@@ -209,6 +209,18 @@ def validate_strategy(s: Strategy, *, known_data_points: Optional[set] = None) -
                 f"data_point {dp['name']!r} is not registered and not declared "
                 "in missing_data_points (the self-extension hook)"
             )
+        spec = dp.get("normalizer")
+        if spec is not None:
+            from trading.conviction import normalizers
+            if not isinstance(spec, dict) or not spec.get("name"):
+                problems.append(
+                    f"data_point {dp['name']!r}: normalizer must be "
+                    "{name, params?} — got " + repr(spec))
+            else:
+                problems.extend(
+                    f"data_point {dp['name']!r}: {p}"
+                    for p in normalizers.validate_spec(
+                        spec["name"], spec.get("params")))
     if total > 1.0 + 1e-9:
         problems.append(f"weights sum to {total:.3f} (> 1.0)")
     if s.parent_strategy and not s.variant_tweak:

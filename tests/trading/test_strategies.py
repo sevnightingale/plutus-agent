@@ -235,3 +235,23 @@ class TestUpdateWeightsDispatcher:
         from trading.strategies.files import strategies_dir
         back = parse_strategy(strategies_dir() / "funding-flush-reversal.md")
         assert back.weights["hl_funding(symbol=BTC)"] == pytest.approx(0.4)
+
+
+class TestNormalizerDeclaration:
+    def test_valid_spec_writes(self, tmp_path, conn):
+        s = _strategy(tmp_path)
+        s.data_points[0]["normalizer"] = {"name": "linear_band",
+                                          "params": {"lo": -0.01, "hi": -0.05}}
+        loader.write_strategy(s, conn)
+        back = parse_strategy(s.file_path)
+        assert back.data_points[0]["normalizer"]["name"] == "linear_band"
+
+    def test_bad_spec_refused_at_write(self, tmp_path, conn):
+        s = _strategy(tmp_path)
+        s.data_points[0]["normalizer"] = {"name": "linear_band",
+                                          "params": {"lo": 1, "hi": 1}}
+        with pytest.raises(ValueError, match="invalid config"):
+            loader.write_strategy(s, conn)
+        s.data_points[0]["normalizer"] = {"name": "not_a_normalizer"}
+        with pytest.raises(ValueError, match="unknown normalizer"):
+            loader.write_strategy(s, conn)

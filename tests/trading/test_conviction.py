@@ -131,3 +131,18 @@ class TestNormalizers:
     def test_unknown_normalizer_lists_known(self):
         with pytest.raises(KeyError, match="linear_band"):
             normalizers.apply("vibes", 1.0)
+
+
+class TestNormalizerSpecs:
+    def test_spec_id_stable(self):
+        from trading.conviction.normalizers import spec_id
+        assert spec_id("linear_band", {"lo": 70, "hi": 20}) == "linear_band(hi=20,lo=70)"
+        assert spec_id("zscore") == "zscore"
+
+    def test_validate_spec(self):
+        from trading.conviction.normalizers import validate_spec
+        assert validate_spec("linear_band", {"lo": 70, "hi": 20}) == []
+        assert validate_spec("nope", {}) != []            # unregistered
+        assert validate_spec("linear_band", {"lo": 5, "hi": 5}) != []   # degenerate
+        assert validate_spec("linear_band", {"bogus": 1}) != []         # bad params
+        assert validate_spec("distance_from", {"anchor": 100}) != []    # missing param

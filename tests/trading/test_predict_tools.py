@@ -214,3 +214,68 @@ class TestRescoreLoop:
         assert res["failures"][0]["strategy_name"] == "s1"
         assert conn.execute(
             "SELECT COUNT(*) FROM prediction_evaluations").fetchone()[0] == 0
+
+
+# ── declared normalizers: deterministic scoring path ─────────────────────────
+
+def _norm_strategy():
+    return Strategy(
+        name="norm-mix", status="test", timescale="intraday",
+        mechanism_family="mean_reversion", file_path=Path("norm-mix.md"),
+        data_points=[
+            # mean-reversion RSI: oversold reads as support (lo > hi inverts)
+            {"name": "ta_rsi", "params": {"symbol": "BTC"}, "weight": 0.5,
+             "normalizer": {"name": "linear_band", "params": {"lo": 70, "hi": 20}}},
+            {"name": "hl_orderbook", "weight": 0.5},  # contextual → LLM
+        ],
+        body_md="# Hypothesis\nh\n# Mechanism\nm\n",
+    )
+
+
+class TestDeclaredNormalizers:
+    def test_normalized_dp_scored_deterministically(self, monkeypatch):
+        monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: _norm_strategy())
+        monkeypatch.setattr(predict_tools, "_fetch_reading",
+                            lambda dp: (45.0, "reading", None))
+        _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
+            {"dp_key": "hl_orderbook", "score": 0.8, "kind": "narrative",
+             "reasoning": "bid-heavy"}]}))
+        res = json.loads(predict_tools._conviction_score({"strategy_name": "norm-mix"}))
+        by_dp = {s["data_point"]: s for s in res["support_scores"]}
+        rsi = by_dp["ta_rsi(symbol=BTC)"]
+        # linear_band(45, lo=70, hi=20) = (45-70)/(20-70) = 0.5
+        assert rsi["score"] == pytest.approx(0.5)
+        assert rsi["kind"] == "numerical"
+        assert rsi["normalizer"] == "linear_band(hi=20,lo=70)"
+        assert rsi["reasoning_md"] is None
+        assert by_dp["hl_orderbook"]["score"] == pytest.approx(0.8)
+        assert res["conviction"] == pytest.approx(0.65)  # (0.5*0.5 + 0.5*0.8)
+
+    def test_all_normalized_skips_llm_entirely(self, monkeypatch):
+        s = _norm_strategy()
+        s.data_points = [s.data_points[0]]
+        s.data_points[0]["weight"] = 1.0
+        monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: s)
+        monkeypatch.setattr(predict_tools, "_fetch_reading",
+                            lambda dp: (20.0, "reading", None))
+        import harness.agent.auxiliary_client as aux
+        def boom(**kw):
+            raise AssertionError("LLM must not be called when all DPs are normalized")
+        monkeypatch.setattr(aux, "call_llm", boom)
+        res = json.loads(predict_tools._conviction_score({"strategy_name": "norm-mix"}))
+        assert res["conviction"] == pytest.approx(1.0)  # RSI 20 = fully oversold
+        assert res["support_scores"][0]["normalizer"] == "linear_band(hi=20,lo=70)"
+
+    def test_normalizer_without_numeric_scores_missing(self, monkeypatch):
+        s = _norm_strategy()
+        monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: s)
+        monkeypatch.setattr(
+            predict_tools, "_fetch_reading",
+            lambda dp: (None if dp["name"] == "ta_rsi" else 1.0, "reading", None))
+        _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
+            {"dp_key": "hl_orderbook", "score": 0.6, "kind": "narrative",
+             "reasoning": "thin book"}]}))
+        res = json.loads(predict_tools._conviction_score({"strategy_name": "norm-mix"}))
+        # RSI is missing (declared normalizer, no numeric) — never LLM-scored
+        assert "ta_rsi(symbol=BTC)" in res["missing"]
+        assert res["conviction"] == pytest.approx(0.6)

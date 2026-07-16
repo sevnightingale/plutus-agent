@@ -157,7 +157,11 @@ never copy the previous file's header stamp.*
    no strategy uses; almost-fired setups that would have won), DP
    predictiveness ranking, kill/promote calls, and proposed A/B variants
    (tuning tweaks AND regime-boundary widenings) each with its one stated
-   tweak.
+   tweak. Also propose structured `normalizer` specs for the numerical DPs
+   of strategies still scoring them via the analyst (predict applies them
+   through strategy_upsert): deterministic scoring is reproducible and
+   halo-free — prioritize the biggest books, and derive each spec's
+   direction from the strategy's own thesis, never from a global default.
 7. Return your reflect_report.
 
 # Output contract

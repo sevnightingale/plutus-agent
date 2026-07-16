@@ -22,7 +22,16 @@ UPSERT_SCHEMA = {
         "side). Variants set parent_strategy AND variant_tweak (the one "
         "stated change). data_points declare perception needs with weights "
         "(sum ≤ 1.0); unregistered names must be listed in "
-        "missing_data_points (the self-extension hook)."
+        "missing_data_points (the self-extension hook). A NUMERICAL data "
+        "point should also declare a normalizer — {name, params} from the "
+        "deterministic library (linear_band {lo,hi,invert?} · distance_from "
+        "{anchor,full_at,direction?} · zscore {cap?,invert?} · inside_band "
+        "{lo,hi}) — encoding how ITS reading supports THIS thesis (e.g. "
+        "mean-reversion RSI: linear_band lo=70 hi=20 reads oversold as "
+        "support). Normalized DPs score deterministically every beat (no "
+        "LLM, reproducible); leave narrative/contextual DPs (orderbook "
+        "shape, candles structure, macro narrative) without a normalizer so "
+        "the analyst scores them in context. Bad specs refuse at write time."
     ),
     "parameters": {
         "type": "object",

@@ -55,7 +55,14 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    winner suggests a variant, invent a strategy that fills the gap. Every
    hypothesis states its MECHANISM (who is on the other side); declare
    data_points + weights + regime_applicability; file at birth (strategy_upsert,
-   status=test). Variants declare parent_strategy + their one variant_tweak.
+   status=test). Give every NUMERICAL data point a structured `normalizer`
+   ({name, params} — see strategy_upsert's description for the library):
+   it encodes how that reading supports THIS thesis (direction included —
+   a mean-reversion RSI inverts what a momentum RSI reads as support) and
+   is then scored deterministically every beat, no analyst call. Reserve
+   normalizer-less DPs for genuinely contextual evidence (orderbook shape,
+   candle structure, narrative) where scoring needs judgment.
+   Variants declare parent_strategy + their one variant_tweak.
    Per-cell caps ≈ 2 active + 6 test — when a cell is full, do NOT overfill;
    note the weakest occupant for reflect to prune. Missing data? Declare
    missing_data_points — never block on infrastructure.

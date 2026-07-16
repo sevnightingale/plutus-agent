@@ -143,9 +143,13 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    promising strategies build evidence faster), `predict_draft` (light model)
    proposes a **price zone** — a signed % move from the current price with a
    near edge (correctness floor) and a far edge (target), plus a horizon ≤ 720h
-   — and `conviction_score` (light model, self-fetching the strategy's declared
+   — and `conviction_score` (self-fetching the strategy's declared
    data points) returns the conviction + per-DP support scores, aggregated
-   deterministically by the engine. `register_prediction` captures the entry
+   deterministically by the engine. A data point declaring a structured
+   `normalizer` ({name, params} from `trading/conviction/normalizers.py`) is
+   scored DETERMINISTICALLY from its fresh numeric reading — the light-model
+   analyst scores only the normalizer-less (narrative/contextual) DPs, so
+   numerical evidence is reproducible, halo-free, and costs no inference. `register_prediction` captures the entry
    price server-side, validates the zone, and accepts an optional
    machine-resolvable **invalidation** (resolvable-data-point leaves — the
    thesis breaking, never a price wiggle). Price alone defines correct; data

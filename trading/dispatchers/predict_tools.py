@@ -16,10 +16,14 @@ model never juggles many strategies at once — the scoping is what makes the
 cheap model sufficient. Structured output is forced via a single function tool
 where the provider supports it, with a strict-JSON fallback (Codex can't force).
 
-Normalizer specs live in the strategy's prose Trigger section, not the
-structured ``data_points`` declaration, so the cheap LLM applies them from
-context; the engine only aggregates. (A future structured-normalizer field
-could move numerical scoring fully deterministic.)
+A declared data point may carry a structured ``normalizer`` spec
+(``{name, params}`` against trading.conviction.normalizers) — those DPs are
+scored DETERMINISTICALLY from the fresh numeric reading and skipped in the
+LLM prompt entirely (no halo, no saturation, reproducible from the recorded
+spec id; a normalizer-declared DP with no numeric reading scores 'missing'
+loudly, never falls back to the LLM). DPs without a spec — narrative and
+contextual evidence — keep the LLM path, with normalizer guidance in the
+strategy's prose Trigger section as before.
 """
 
 from __future__ import annotations
@@ -392,71 +396,103 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
     readings = []
     for dp in strat.data_points:
         numeric, compact, missing_reason = _fetch_reading(dp)
-        readings.append({"dp_key": files._dp_key(dp), "numeric": numeric,
+        readings.append({"dp_key": files._dp_key(dp), "dp": dp, "numeric": numeric,
                          "reading": compact, "missing_reason": missing_reason})
 
-    system = (
-        "You are a disciplined quantitative analyst. For each data point, score "
-        "how strongly its CURRENT reading SUPPORTS this specific strategy's "
-        "thesis. Reason strictly in the strategy's context (a reading that helps "
-        "one thesis may hurt another). Use the exact dp_key given. Provide "
-        "reasoning for every score.\n\n"
-        "SCORE WITH FULL GRANULARITY — use the whole 0–1 range in steps of "
-        "0.05. Anchors: 0.0 directly contradicts the thesis · 0.2 leans "
-        "against · 0.35 slightly against · 0.5 genuinely mixed/neutral (never "
-        "a default) · 0.65 slightly supportive · 0.8 clearly supportive · 0.9 "
-        "strong · 1.0 the STRONGEST reading this data point could possibly "
-        "produce for this thesis. 1.0 should be RARE: if you can imagine this "
-        "data point reading more favorably, score below 1.0. Two readings of "
-        "different strength must get different scores — coarse scoring "
-        "(everything 0.5 or 1.0) destroys the calibration record downstream.\n\n"
-        "A reading shown as '<fetch failed …>', '<render failed …>', or "
-        "'<TRUNCATED … NO RENDERER>' is UNAVAILABLE, not neutral — OMIT it "
-        "from your scores entirely; do NOT emit 0.5. Honest absence beats a "
-        "guessed middle."
-    )
-    reading_lines = "\n".join(
-        f"- {r['dp_key']}: numeric={r['numeric']} reading={r['reading']}" for r in readings)
-    user = (
-        f"# Strategy: {strat.name} ({strat.timescale}/{strat.mechanism_family})\n"
-        f"## Hypothesis\n{strat.body_section('Hypothesis') or '(none)'}\n"
-        f"## Mechanism\n{strat.body_section('Mechanism') or '(none)'}\n"
-        f"## Trigger\n{strat.body_section('Trigger') or '(none)'}\n\n"
-        f"Regime: {regime or '(unspecified)'}\n"
-        f"Score these data points:\n{reading_lines}\n"
-    )
-    out = _structured_call(task="conviction_score", system=system, user=user,
-                           schema=_SCORE_OUT_SCHEMA)
-
-    by_key = {s.get("dp_key"): s for s in (out.get("scores") or []) if isinstance(s, dict)}
-    reading_by_key = {r["dp_key"]: r for r in readings}
-    scored: List[engine.ScoredInput] = []
-    support_scores = []
-    for dp in strat.data_points:
-        key = files._dp_key(dp)
-        rdg = reading_by_key.get(key)
-        if rdg and rdg.get("missing_reason"):
-            continue  # unusable reading → deterministically 'missing', never scored
-        s = by_key.get(key)
-        if not s:
+    # DECLARED NORMALIZERS score deterministically — no LLM, no halo, no
+    # saturation, reproducible from the recorded spec id. A DP that declares
+    # a normalizer but yields no numeric reading is a broken declaration and
+    # scores 'missing' loudly — it never silently falls back to the LLM.
+    from trading.conviction import normalizers as norm_mod
+    det_scored: List[engine.ScoredInput] = []
+    det_support = []
+    llm_readings = []
+    for r in readings:
+        spec = (r["dp"].get("normalizer") if isinstance(r["dp"], dict) else None)
+        if r["missing_reason"]:
+            continue  # unusable reading → missing on either path
+        if not spec:
+            llm_readings.append(r)
+            continue
+        if r["numeric"] is None:
+            r["missing_reason"] = "normalizer-declared-but-no-numeric"
             continue
         try:
-            sc = max(0.0, min(1.0, float(s.get("score"))))
-        except (TypeError, ValueError):
+            sc = norm_mod.apply(spec["name"], r["numeric"],
+                                **(spec.get("params") or {}))
+        except Exception as exc:  # loud-but-soft: this DP scores 'missing'
+            r["missing_reason"] = f"normalizer-failed: {exc}"
             continue
-        kind = s.get("kind") or "narrative"
-        reasoning = (s.get("reasoning") or "").strip()
-        if kind == "narrative" and not reasoning:
-            continue  # unreasoned narrative score → treat as missing, never guess
-        scored.append(engine.ScoredInput(
-            dp_key=key, score=sc, kind=kind, reasoning_md=reasoning or None))
-        # data_point carries the CANONICAL key (name(params)) — the bare name
-        # fragmented the calibration record and collided same-name declarations
-        # under the (prediction_id, data_point) uniqueness contract.
-        support_scores.append({
-            "data_point": key, "score": sc, "kind": kind,
-            "reasoning_md": reasoning or None, "weight": dp.get("weight"),
+        nid = norm_mod.spec_id(spec["name"], spec.get("params"))
+        det_scored.append(engine.ScoredInput(
+            dp_key=r["dp_key"], score=sc, kind="numerical", normalizer=nid))
+        det_support.append({
+            "data_point": r["dp_key"], "score": sc, "kind": "numerical",
+            "normalizer": nid, "reading_json": r["reading"],
+            "reasoning_md": None, "weight": r["dp"].get("weight"),
         })
+
+    scored: List[engine.ScoredInput] = list(det_scored)
+    support_scores = list(det_support)
+    if llm_readings:  # LLM scores ONLY the DPs without a declared normalizer
+        system = (
+            "You are a disciplined quantitative analyst. For each data point, score "
+            "how strongly its CURRENT reading SUPPORTS this specific strategy's "
+            "thesis. Reason strictly in the strategy's context (a reading that helps "
+            "one thesis may hurt another). Use the exact dp_key given. Provide "
+            "reasoning for every score.\n\n"
+            "SCORE WITH FULL GRANULARITY — use the whole 0–1 range in steps of "
+            "0.05. Anchors: 0.0 directly contradicts the thesis · 0.2 leans "
+            "against · 0.35 slightly against · 0.5 genuinely mixed/neutral (never "
+            "a default) · 0.65 slightly supportive · 0.8 clearly supportive · 0.9 "
+            "strong · 1.0 the STRONGEST reading this data point could possibly "
+            "produce for this thesis. 1.0 should be RARE: if you can imagine this "
+            "data point reading more favorably, score below 1.0. Two readings of "
+            "different strength must get different scores — coarse scoring "
+            "(everything 0.5 or 1.0) destroys the calibration record downstream.\n\n"
+            "A reading shown as '<fetch failed …>', '<render failed …>', or "
+            "'<TRUNCATED … NO RENDERER>' is UNAVAILABLE, not neutral — OMIT it "
+            "from your scores entirely; do NOT emit 0.5. Honest absence beats a "
+            "guessed middle."
+        )
+        reading_lines = "\n".join(
+            f"- {r['dp_key']}: numeric={r['numeric']} reading={r['reading']}"
+            for r in llm_readings)
+        user = (
+            f"# Strategy: {strat.name} ({strat.timescale}/{strat.mechanism_family})\n"
+            f"## Hypothesis\n{strat.body_section('Hypothesis') or '(none)'}\n"
+            f"## Mechanism\n{strat.body_section('Mechanism') or '(none)'}\n"
+            f"## Trigger\n{strat.body_section('Trigger') or '(none)'}\n\n"
+            f"Regime: {regime or '(unspecified)'}\n"
+            f"Score these data points:\n{reading_lines}\n"
+        )
+        out = _structured_call(task="conviction_score", system=system, user=user,
+                               schema=_SCORE_OUT_SCHEMA)
+
+        by_key = {s.get("dp_key"): s
+                  for s in (out.get("scores") or []) if isinstance(s, dict)}
+        for r in llm_readings:  # already excludes missing + normalizer-scored
+            key = r["dp_key"]
+            s = by_key.get(key)
+            if not s:
+                continue
+            try:
+                sc = max(0.0, min(1.0, float(s.get("score"))))
+            except (TypeError, ValueError):
+                continue
+            kind = s.get("kind") or "narrative"
+            reasoning = (s.get("reasoning") or "").strip()
+            if kind == "narrative" and not reasoning:
+                continue  # unreasoned narrative score → treat as missing, never guess
+            scored.append(engine.ScoredInput(
+                dp_key=key, score=sc, kind=kind, reasoning_md=reasoning or None))
+            # data_point carries the CANONICAL key (name(params)) — the bare name
+            # fragmented the calibration record and collided same-name declarations
+            # under the (prediction_id, data_point) uniqueness contract.
+            support_scores.append({
+                "data_point": key, "score": sc, "kind": kind,
+                "reasoning_md": reasoning or None, "weight": r["dp"].get("weight"),
+            })
 
     result = engine.compute_conviction(strat.weights, scored)
     return {
