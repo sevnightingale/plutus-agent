@@ -225,12 +225,25 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    Mechanism for the bounds + the alert firing; judgment only at the two ambiguous
    edges. Invalidation ≠ stop-loss — exits are recorded as distinct `exit_reason`s.
 7. **Reflect.** Weekly (or after 3 unreflected closes): updates data-point
-   weights from outcomes and the conviction trajectory, runs
+   weights from outcomes and the conviction trajectory (via
+   `strategy_update_weights`, which resolves keys against the strategy's
+   declared data points and refuses unresolvable ones loudly — bare-name
+   updates used to be silent no-ops), runs
    graduation/revocation checkpoints, prunes over-full (timescale × regime)
    cells so each niche stays a real champion/challenger contest, reviews sizing
    and the stop envelope via `sizing_performance` (proposes band/percentile
    retunes, operator decides), curates the 12-lesson cap, and seeds
-   next-generation hypotheses.
+   next-generation hypotheses. Every pass also runs **`conviction_fit`**
+   (`trading/calibration/`) — the REPORT-ONLY ML harness: a purged
+   walk-forward fit of P(correct) over the whole resolved record
+   (chronological folds; a training row must have RESOLVED before its fold
+   opens) scored against honest baselines (base rate · stored conviction ·
+   isotonic-recalibrated conviction), writing a versioned plain-JSON
+   artifact to `models/conviction/` and self-reporting its trend vs the
+   previous run. Live scoring consumes nothing from it yet; the run where
+   its edge over the recalibrated baseline turns significant, reflect
+   escalates a wire-in proposal (calibrated conviction → sizing bands —
+   operator decision, like band retunes).
 
 One position at a time (cross-margin law). Invalidation ≠ stop-loss: thesis
 breaks and risk exits are recorded as different exits.
@@ -260,8 +273,14 @@ once in TRADING.md's glossary and computed once in code
   `fetch_data_point` (auto-snapshots every read), `account_state`,
   `register_prediction`, `strategy_upsert`, `desk_open/close_position`,
   `lifecycle_query`, `record`, `spawn_desk_agent`, `enqueue_wake`,
-  `resolve_due_predictions`. Validation lives in the writers; agents that
-  fight a refusal are wrong by definition.
+  `resolve_due_predictions`, `conviction_fit`. Validation lives in the
+  writers; agents that fight a refusal are wrong by definition.
+  Calibration integrity is code-owned at the write path (2026-07-16):
+  support-score keys are canonicalized against the strategy's DECLARED
+  data points, declared weights are pinned server-side, and the stored
+  conviction is the engine's recomputed aggregate — never the agent's
+  transcription (free-form keys had fragmented the record; 13% of stored
+  convictions had drifted; lifecycle.db v5 canonicalized the history).
 - **Toolsets** compose by name (`harness/toolsets.py`); recipes request
   function-shaped sets (perception, prediction-write, desk-execution,
   resolution…). `record()` fans out: lifecycle.db + journal always; forum
@@ -289,6 +308,7 @@ once in TRADING.md's glossary and computed once in code
 | `PLUTUS.md` / `REGIME.md` / `PERCEPTION.md` | blackboards |
 | `strategies/*.md` | strategy files (truth; db mirror synced) |
 | `lifecycle.db` | predictions, decisions, trades, positions, outcomes, snapshots |
+| `models/conviction/` | versioned calibration artifacts (plain JSON; report-only until wired) |
 | `sessions/*.jsonl` | full message history per session (incl. Telegram) |
 | `ledger/<date>/*.md` | one transcript per spawned desk agent |
 | `logs/agent.log` | structured runtime log (API calls, tools, wakes) |

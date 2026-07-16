@@ -93,6 +93,7 @@ termux = [
 ]
 web = ["fastapi>=0.104.0,<1", "uvicorn[standard]>=0.24.0,<1"]
 all = [
+  "plutus-agent[ml]",
   "plutus-agent[modal]",
   "plutus-agent[daytona]",
   "plutus-agent[messaging]",
