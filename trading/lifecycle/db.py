@@ -10,8 +10,11 @@ Fresh-create starts calibration from zero. Migrations chain in place: v2 → v3
 added the price-zone columns and clean-slated the old forecast-accuracy counters
 (graduation now measures the price-zone metric); v3 → v4 adds the
 reached_near_at / reached_far_at resolution markers (floor-correct, target-
-accelerated, horizon-backstopped). A pre-v2 (v1) file is still refused, never
-migrated; the old runtime's file stays preserved as reference.
+accelerated, horizon-backstopped); v4 → v5 canonicalizes
+support_scores.data_point to the declared ``name(params)`` key form (free-form
+agent strings had fragmented the per-DP calibration record). A pre-v2 (v1)
+file is still refused, never migrated; the old runtime's file stays preserved
+as reference.
 
 Write ownership (doctrine): plutus-main writes events from subagents'
 structured returns; plutus-predict writes predictions; plutus-ops resolves
@@ -30,7 +33,7 @@ from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # ───────────────────────────────────────────────────────────────────────────
 # Schema
@@ -376,20 +379,23 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         version = row["version"] if row else None
         if version == SCHEMA_VERSION:
             return conn
-        # Incremental migrations chain forward: v2 → v3 → v4.
+        # Incremental migrations chain forward: v2 → v3 → v4 → v5.
         if version == 2:
             _migrate_v2_to_v3(conn)
             version = 3
         if version == 3:
             _migrate_v3_to_v4(conn)
             version = 4
+        if version == 4:
+            _migrate_v4_to_v5(conn)
+            version = 5
         if version == SCHEMA_VERSION:
             logger.info("Migrated lifecycle.db → v%s at %s", SCHEMA_VERSION, db_path)
             return conn
         conn.close()
         raise RuntimeError(
             f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
-            "Migrations chain v2 → v3 → v4; a pre-v2 (v1) file is fresh-create only. "
+            "Migrations chain v2 → v3 → v4 → v5; a pre-v2 (v1) file is fresh-create only. "
             "Back up and remove the old file (see SETUP.md, 'Redeploying "
             "a fresh runtime'), then rerun."
         )
@@ -508,6 +514,69 @@ def _migrate_v3_to_v4(conn: sqlite3.Connection) -> None:
                 pass  # column already present — idempotent
         conn.execute("UPDATE schema_version SET version = 4")
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
+    """In-place v4 → v5: canonicalize ``support_scores.data_point``.
+
+    The column historically stored whatever string the registering agent
+    passed — bare names (``ta_vortex``), full keys, or ad-hoc shorthand
+    (``ta_vortex(4h)``, ``ta_ema_1d``) — fragmenting the per-DP calibration
+    aggregates (support_score_performance) and colliding same-name
+    declarations. Rewrites every resolvable row to the declared canonical
+    ``name(params)`` key using the strategies mirror's ``data_points_json``.
+    Unresolvable rows stay as-is (counted loudly, never guessed); a rewrite
+    that would collide with an existing (prediction_id, data_point) row is
+    skipped the same way. No new columns — v5 is a data repair.
+
+    Idempotent (canonical rows resolve to themselves) and serialized with
+    ``BEGIN IMMEDIATE`` like every migration in the chain.
+    """
+    import json
+
+    from trading.strategies.files import resolve_dp_key
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        strat_dps: dict = {}
+        if _has_table(conn, "strategies"):
+            for r in conn.execute("SELECT name, data_points_json FROM strategies"):
+                try:
+                    dps = json.loads(r["data_points_json"] or "[]")
+                except (TypeError, ValueError):
+                    dps = []
+                strat_dps[r["name"]] = dps if isinstance(dps, list) else []
+
+        changed = unresolved = collided = 0
+        if _has_table(conn, "support_scores"):
+            rows = conn.execute(
+                """SELECT s.id, s.data_point, p.strategy_name
+                     FROM support_scores s
+                     JOIN predictions p ON p.id = s.prediction_id
+                    WHERE p.strategy_name IS NOT NULL""").fetchall()
+            for r in rows:
+                canonical = resolve_dp_key(
+                    strat_dps.get(r["strategy_name"]) or [], r["data_point"])
+                if canonical is None:
+                    unresolved += 1
+                elif canonical != r["data_point"]:
+                    cur = conn.execute(
+                        "UPDATE OR IGNORE support_scores SET data_point = ? "
+                        "WHERE id = ?", (canonical, r["id"]))
+                    if cur.rowcount:
+                        changed += 1
+                    else:
+                        collided += 1
+
+        conn.execute("UPDATE schema_version SET version = 5")
+        conn.commit()
+        logger.info(
+            "v5 support_scores canonicalization: %s rewritten, %s unresolved "
+            "(left as-is), %s uniqueness collisions (left as-is)",
+            changed, unresolved, collided)
     except Exception:
         conn.rollback()
         raise

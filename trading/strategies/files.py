@@ -92,6 +92,64 @@ def _dp_key(dp: dict) -> str:
     return str(dp["name"])
 
 
+_PAREN_KEY_RE = re.compile(r"^([A-Za-z0-9_]+)\((.*)\)$")
+_SUFFIX_KEY_RE = re.compile(r"^(.+?)[_-](\d+[smhdw])$")
+
+
+def resolve_dp_key(data_points: list, key: str) -> Optional[str]:
+    """Resolve a free-form data-point reference to its declared canonical key.
+
+    Agents render the same declared data point many ways — bare ``ta_vortex``,
+    full ``ta_vortex(interval=4h,symbol=BTC)``, shorthand ``ta_vortex(4h)`` /
+    ``ta_vortex_4h``. Free-form strings fragmented the calibration record
+    (support_score_performance grouped them separately) and made bare-keyed
+    weight updates silent no-ops. Resolution: exact canonical match; else
+    match by name (unique → resolved); same-name declarations disambiguate
+    on any parsed param hints (a bare ``(4h)`` reads as ``interval=4h``).
+
+    Returns None when nothing — or more than one thing — matches. The caller
+    decides whether that is a loud refusal (write paths) or a counted skip
+    (the v5 migration): scoring only ever happens over declared data points,
+    so an unresolvable key means the reference is broken, never that a new
+    data point appeared.
+    """
+    key = (key or "").strip()
+    if not key:
+        return None
+    canon = {}
+    for dp in data_points:
+        if isinstance(dp, dict) and dp.get("name"):
+            canon.setdefault(_dp_key(dp), dp)
+    if key in canon:
+        return key
+
+    base, hints = key, {}
+    m = _PAREN_KEY_RE.match(key)
+    if m:
+        base = m.group(1)
+        inner = m.group(2).strip()
+        hints = _normalize_params(inner)
+        if inner and not hints:  # positional shorthand: "ta_vortex(4h)"
+            hints = {"interval": inner}
+    candidates = {k: dp for k, dp in canon.items() if dp["name"] == base}
+    if not candidates:
+        sm = _SUFFIX_KEY_RE.match(key)  # "ta_ema_1d"
+        if sm:
+            base, hints = sm.group(1), {"interval": sm.group(2)}
+            candidates = {k: dp for k, dp in canon.items() if dp["name"] == base}
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    if len(candidates) > 1 and hints:
+        matched = [
+            k for k, dp in candidates.items()
+            if all(str(_normalize_params(dp.get("params")).get(h)) == str(v)
+                   for h, v in hints.items())
+        ]
+        if len(matched) == 1:
+            return matched[0]
+    return None
+
+
 def parse_strategy(path: Path) -> Strategy:
     text = path.read_text(encoding="utf-8")
     m = _FRONTMATTER_RE.match(text)

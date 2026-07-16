@@ -441,8 +441,11 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
             continue  # unreasoned narrative score → treat as missing, never guess
         scored.append(engine.ScoredInput(
             dp_key=key, score=sc, kind=kind, reasoning_md=reasoning or None))
+        # data_point carries the CANONICAL key (name(params)) — the bare name
+        # fragmented the calibration record and collided same-name declarations
+        # under the (prediction_id, data_point) uniqueness contract.
         support_scores.append({
-            "data_point": dp["name"], "score": sc, "kind": kind,
+            "data_point": key, "score": sc, "kind": kind,
             "reasoning_md": reasoning or None, "weight": dp.get("weight"),
         })
 

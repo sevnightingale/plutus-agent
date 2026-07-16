@@ -415,10 +415,20 @@ def _make_v2_db(path, *, open_pred=True, backed_pred=False):
         CREATE TABLE strategies (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, file_path TEXT,
             status TEXT, timescale TEXT, mechanism_family TEXT,
+            data_points_json TEXT,
             created_at REAL, updated_at REAL,
             n_resolved INTEGER DEFAULT 0, n_correct INTEGER DEFAULT 0,
             n_wrong INTEGER DEFAULT 0, n_ambiguous INTEGER DEFAULT 0,
             last_resolved_at REAL
+        );
+        CREATE TABLE support_scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_id INTEGER NOT NULL,
+            data_point TEXT NOT NULL,
+            score REAL NOT NULL, kind TEXT NOT NULL,
+            reading_json TEXT, weight REAL, normalizer TEXT,
+            reasoning_md TEXT, ts REAL NOT NULL,
+            UNIQUE (prediction_id, data_point)
         );
         CREATE TABLE theses (id INTEGER PRIMARY KEY AUTOINCREMENT, prediction_id INTEGER);
         CREATE TABLE decisions (id INTEGER PRIMARY KEY AUTOINCREMENT, thesis_id INTEGER);
@@ -429,13 +439,25 @@ def _make_v2_db(path, *, open_pred=True, backed_pred=False):
     )
     c.execute(
         "INSERT INTO strategies (name, file_path, status, timescale, "
-        "mechanism_family, created_at, updated_at, n_resolved, n_correct, n_wrong) "
-        "VALUES ('s','s.md','test','intraday','flow',0,0,9,6,3)")
+        "mechanism_family, data_points_json, created_at, updated_at, "
+        "n_resolved, n_correct, n_wrong) "
+        "VALUES ('s','s.md','test','intraday','flow', "
+        "'[{\"name\":\"ta_vortex\",\"params\":{\"interval\":\"1h\",\"symbol\":\"BTC\"},\"weight\":0.5},"
+        "{\"name\":\"hl_cvd\",\"params\":{\"interval\":\"1h\",\"symbol\":\"BTC\"},\"weight\":0.5}]',"
+        "0,0,9,6,3)")
     if open_pred:
         c.execute(
             "INSERT INTO predictions (ts, horizon_ts, timescale, symbol, claim_md, "
             "success_criteria_json, conviction, strategy_name, kind) "
             "VALUES (0, 9e9, 'intraday','BTC','old','{}',0.7,'s','strategy')")
+        opid = c.execute("SELECT id FROM predictions WHERE claim_md='old'").fetchone()[0]
+        # messy historical key forms the v5 migration must canonicalize
+        c.execute("INSERT INTO support_scores (prediction_id, data_point, score, "
+                  "kind, ts) VALUES (?, 'ta_vortex', 0.8, 'numerical', 0)", (opid,))
+        c.execute("INSERT INTO support_scores (prediction_id, data_point, score, "
+                  "kind, ts) VALUES (?, 'hl_cvd(1h)', 0.6, 'numerical', 0)", (opid,))
+        c.execute("INSERT INTO support_scores (prediction_id, data_point, score, "
+                  "kind, ts) VALUES (?, 'ta_rsi', 0.5, 'numerical', 0)", (opid,))
     if backed_pred:
         c.execute(
             "INSERT INTO predictions (ts, horizon_ts, timescale, symbol, claim_md, "
@@ -479,6 +501,13 @@ class TestMigration:
             s = c.execute(
                 "SELECT n_resolved, n_correct, n_wrong FROM strategies WHERE name='s'").fetchone()
             assert (s["n_resolved"], s["n_correct"], s["n_wrong"]) == (0, 0, 0)
+            # v5: messy support-score keys canonicalized against the mirror's
+            # declared data points; unresolvable keys left untouched
+            keys = {r["data_point"] for r in c.execute(
+                "SELECT data_point FROM support_scores")}
+            assert "ta_vortex(interval=1h,symbol=BTC)" in keys   # bare name resolved
+            assert "hl_cvd(interval=1h,symbol=BTC)" in keys      # "(1h)" shorthand resolved
+            assert "ta_rsi" in keys                              # undeclared → left as-is
         finally:
             c.close()
 

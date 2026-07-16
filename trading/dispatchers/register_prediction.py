@@ -43,7 +43,12 @@ SCHEMA = {
         "non-decaying incubation book may use 5. Concurrent predictions from "
         "one strategy are correlated trials, not independent evidence. "
         "support_scores record the conviction "
-        "inputs — narrative entries REQUIRE reasoning_md (the audit trail)."
+        "inputs — narrative entries REQUIRE reasoning_md (the audit trail). For "
+        "kind='strategy', each support score's data_point must reference a "
+        "DECLARED data point (canonical key preferred; unambiguous shorthand "
+        "resolves), the declared weight is applied server-side, and the STORED "
+        "conviction is recomputed deterministically from the scores — the "
+        "conviction argument is used as-passed only when no scores are given."
     ),
     "parameters": {
         "type": "object",
@@ -122,6 +127,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     # self-fetches live regardless.
     kind = args.get("kind", "strategy")
     strat_name = args.get("strategy_name")
+    strat = None
     if kind == "strategy" and strat_name:
         from trading.perception import freshness as fresh_mod
         from trading.strategies import files as strat_files
@@ -146,15 +152,54 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     try:
         horizon_hours = float(args["horizon_hours"])
         now = time.time()
+        raw_scores = list(args.get("support_scores") or [])
+        conviction = float(args["conviction"])
+        conviction_source = "as-stated"
         # One score per data point — a duplicate used to surface as a raw
         # UNIQUE-constraint traceback aborting the whole registration.
         dp_seen: set = set()
-        for s in (args.get("support_scores") or []):
-            if s["data_point"] in dp_seen:
-                return tool_error(
-                    f"duplicate support score for data_point "
-                    f"{s['data_point']!r} — provide ONE score per data point")
-            dp_seen.add(s["data_point"])
+        if strat is not None and raw_scores:
+            # Canonicalize each score's data_point against the strategy's
+            # DECLARED keys (free-form strings fragmented the calibration
+            # record), pin the DECLARED weight on every row, and recompute
+            # conviction with the engine — the stored conviction is the
+            # deterministic aggregate, never the agent's transcription
+            # (80/601 stored values drifted from their own scores before
+            # this, 2026-07-16 audit).
+            from trading.conviction import engine
+            from trading.strategies.files import resolve_dp_key
+
+            scored = []
+            for s in raw_scores:
+                canonical = resolve_dp_key(strat.data_points, s["data_point"])
+                if canonical is None:
+                    return tool_error(
+                        f"support score data_point {s['data_point']!r} does not "
+                        f"resolve to a declared data point of {strat_name!r} — "
+                        f"declared keys: {sorted(strat.weights)}")
+                if canonical in dp_seen:
+                    return tool_error(
+                        f"duplicate support score for {canonical!r} — provide "
+                        "ONE score per declared data point")
+                dp_seen.add(canonical)
+                s["data_point"] = canonical
+                s["weight"] = strat.weights.get(canonical)
+                scored.append(engine.ScoredInput(
+                    dp_key=canonical, score=float(s["score"]),
+                    kind=s.get("kind", "narrative"),
+                    normalizer=s.get("normalizer"),
+                    reasoning_md=s.get("reasoning_md")))
+            computed = engine.compute_conviction(strat.weights, scored).conviction
+            if computed is not None:
+                conviction = computed
+                conviction_source = "engine"
+        else:
+            for s in raw_scores:
+                if s["data_point"] in dp_seen:
+                    return tool_error(
+                        f"duplicate support score for data_point "
+                        f"{s['data_point']!r} — provide ONE score per data point")
+                dp_seen.add(s["data_point"])
         scores = [
             write.SupportScore(
                 data_point=s["data_point"], score=float(s["score"]),
@@ -163,7 +208,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
                 reasoning_md=s.get("reasoning_md"),
                 reading_json=s.get("reading_json"),
             )
-            for s in (args.get("support_scores") or [])
+            for s in raw_scores
         ]
         draft = write.PredictionDraft(
             claim_md=args["claim"],
@@ -172,7 +217,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             near_edge_pct=float(args["near_edge_pct"]),
             far_edge_pct=float(args["far_edge_pct"]),
             invalidation_criteria=args.get("invalidation_criteria"),
-            conviction=float(args["conviction"]),
+            conviction=conviction,
             risk_tolerance=args.get("risk_tolerance"),
             symbol=symbol,
             strategy_name=args.get("strategy_name"),
@@ -222,6 +267,8 @@ def _register_prediction(args: Dict[str, Any]) -> str:
                          if strat_name else None)
     return tool_result({"prediction_id": prediction_id, "ok": True,
                         "entry_ref_price": float(entry_ref_price),
+                        "conviction": conviction,
+                        "conviction_source": conviction_source,
                         "intrinsic_rr": intrinsic_rr,
                         "fundable_wake": fundable_wake,
                         "strategy_capacity": strategy_capacity,

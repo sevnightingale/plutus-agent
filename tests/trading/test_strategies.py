@@ -4,7 +4,13 @@ import pytest
 
 from trading.lifecycle.db import get_db
 from trading.strategies import loader
-from trading.strategies.files import Strategy, parse_strategy, render_strategy, validate_strategy
+from trading.strategies.files import (
+    Strategy,
+    parse_strategy,
+    render_strategy,
+    resolve_dp_key,
+    validate_strategy,
+)
 
 BODY = """
 # Hypothesis
@@ -139,3 +145,93 @@ class TestLoader:
             loader.write_strategy(bad, conn)
         assert not bad.file_path.exists()
         assert conn.execute("SELECT COUNT(*) c FROM strategies").fetchone()["c"] == 0
+
+
+class TestResolveDpKey:
+    DPS = [
+        {"name": "ta_vortex", "params": {"interval": "1h", "symbol": "BTC"}, "weight": 0.3},
+        {"name": "ta_vortex", "params": {"interval": "4h", "symbol": "BTC"}, "weight": 0.3},
+        {"name": "hl_cvd", "params": {"interval": "1h", "symbol": "BTC"}, "weight": 0.4},
+    ]
+
+    def test_exact_canonical(self):
+        assert resolve_dp_key(self.DPS, "hl_cvd(interval=1h,symbol=BTC)") == \
+            "hl_cvd(interval=1h,symbol=BTC)"
+
+    def test_bare_name_unique(self):
+        assert resolve_dp_key(self.DPS, "hl_cvd") == "hl_cvd(interval=1h,symbol=BTC)"
+
+    def test_bare_name_ambiguous_refused(self):
+        assert resolve_dp_key(self.DPS, "ta_vortex") is None
+
+    def test_paren_interval_shorthand(self):
+        assert resolve_dp_key(self.DPS, "ta_vortex(4h)") == \
+            "ta_vortex(interval=4h,symbol=BTC)"
+
+    def test_paren_kv_subset(self):
+        assert resolve_dp_key(self.DPS, "ta_vortex(interval=1h)") == \
+            "ta_vortex(interval=1h,symbol=BTC)"
+
+    def test_suffix_shorthand(self):
+        assert resolve_dp_key(self.DPS, "ta_vortex_4h") == \
+            "ta_vortex(interval=4h,symbol=BTC)"
+
+    def test_unknown_name(self):
+        assert resolve_dp_key(self.DPS, "ta_rsi") is None
+
+    def test_hint_matching_nothing(self):
+        assert resolve_dp_key(self.DPS, "ta_vortex(interval=2h)") is None
+
+    def test_paramless_declaration(self):
+        dps = [{"name": "macro_vix", "weight": 1.0}]
+        assert resolve_dp_key(dps, "macro_vix") == "macro_vix"
+
+    def test_empty_key(self):
+        assert resolve_dp_key(self.DPS, "") is None
+
+
+class TestUpdateWeightsDispatcher:
+    """The silent-no-op fix: bare keys resolve against the declaration;
+    unresolvable keys refuse the whole update loudly."""
+
+    def _tool(self):
+        import json as _json
+
+        import trading.dispatchers.strategy_tools  # noqa: F401 — registers
+        from harness.tools.registry import registry as tool_registry
+        entry = tool_registry.get_entry("strategy_update_weights")
+        return lambda args: _json.loads(entry.handler(args))
+
+    def _seed(self, conn):
+        from trading.strategies.files import strategies_dir
+        s = _strategy(strategies_dir())
+        loader.write_strategy(s, conn)
+        return s
+
+    def test_bare_keys_resolve_and_apply(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        self._seed(conn)
+        call = self._tool()
+        res = call({"name": "funding-flush-reversal",
+                    "dp_performance": {"hl_funding": 1.0, "hl_cvd": -1.0}})
+        assert res["ok"], res
+        # alpha 0.05: hl_cvd 0.3 → 0.25 (bare key resolved, decrease applied);
+        # hl_funding stays 0.4 (growth past the 0.30 cap is clamped by design)
+        assert res["weights"]["hl_cvd(symbol=BTC)"] == pytest.approx(0.25)
+        assert res["weights"]["hl_funding(symbol=BTC)"] == pytest.approx(0.4)
+
+    def test_unknown_key_refuses_whole_update(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        self._seed(conn)
+        call = self._tool()
+        res = call({"name": "funding-flush-reversal",
+                    "dp_performance": {"hl_funding": 1.0, "ta_nope": 0.5}})
+        assert "error" in res
+        assert "ta_nope" in res["error"]
+        assert "hl_funding(symbol=BTC)" in res["error"]  # declared keys listed
+        # nothing changed on disk
+        from trading.strategies.files import strategies_dir
+        back = parse_strategy(strategies_dir() / "funding-flush-reversal.md")
+        assert back.weights["hl_funding(symbol=BTC)"] == pytest.approx(0.4)

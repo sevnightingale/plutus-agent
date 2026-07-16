@@ -113,14 +113,34 @@ def _strategy_update_weights(args: Dict[str, Any]) -> str:
     from trading.conviction.engine import update_weights
     from trading.lifecycle.db import get_db
     from trading.strategies import loader
-    from trading.strategies.files import parse_strategy, strategies_dir
+    from trading.strategies.files import parse_strategy, resolve_dp_key, strategies_dir
 
     name = args["name"]
     path = strategies_dir() / f"{name}.md"
     if not path.exists():
         return tool_error(f"no strategy file {path}")
     s = parse_strategy(path)
-    new_weights = update_weights(s.weights, args.get("dp_performance") or {})
+    # Resolve every dp_performance key against the DECLARED data points and
+    # refuse anything unresolvable. update_weights ignores unknown keys by
+    # design, so a bare-name key against a parameterized declaration used to
+    # be a SILENT NO-OP reported as ok:true — 24 of the first 37 reflect
+    # weight updates changed nothing (2026-07-16 audit).
+    resolved: Dict[str, float] = {}
+    problems = []
+    for key, edge in (args.get("dp_performance") or {}).items():
+        canonical = resolve_dp_key(s.data_points, key)
+        if canonical is None:
+            problems.append(f"{key!r} does not resolve to a declared data point")
+        elif canonical in resolved:
+            problems.append(f"{key!r} duplicates {canonical!r}")
+        else:
+            resolved[canonical] = edge
+    if problems:
+        return tool_error(
+            f"weight update for {name!r} refused — no weights changed:\n  "
+            + "\n  ".join(problems)
+            + f"\nDeclared keys: {sorted(s.weights)}")
+    new_weights = update_weights(s.weights, resolved)
     # write the updated weights back into the declared data_points
     from trading.strategies.files import _dp_key
     for dp in s.data_points:

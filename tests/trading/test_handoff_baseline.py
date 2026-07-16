@@ -120,3 +120,83 @@ class TestFundableWake:
             "open_slots_remaining": write.MAX_OPEN_PER_STRATEGY - 1,
         }
         assert wakes == []
+
+
+class TestSupportScoreCanonicalization:
+    """Repairs from the 2026-07-16 audit: canonical DP keys, declared weights
+    pinned server-side, conviction recomputed by the engine (never the
+    agent's transcription)."""
+
+    _ARGS = {"claim": "x", "symbol": "BTC", "horizon_hours": 12,
+             "near_edge_pct": 5.0, "far_edge_pct": 10.0, "conviction": 0.99}
+
+    def _seed_file(self, conn):
+        from trading.strategies import loader
+        from trading.strategies.files import Strategy, strategies_dir
+        s = Strategy(
+            name="canon", status="test", timescale="intraday",
+            mechanism_family="flow", file_path=strategies_dir() / "canon.md",
+            data_points=[
+                {"name": "hl_cvd", "params": {"interval": "1h", "symbol": "BTC"},
+                 "weight": 0.6},
+                {"name": "ta_rsi", "params": {"interval": "1h", "symbol": "BTC"},
+                 "weight": 0.4},
+            ],
+            body_md="\n# Hypothesis\nh\n\n# Mechanism\nm\n",
+        )
+        loader.write_strategy(s, conn)
+
+    def test_bare_keys_canonicalized_and_conviction_recomputed(self, monkeypatch):
+        monkeypatch.setattr(RP, "_capture_entry_ref", lambda symbol: 100000.0)
+        conn = get_db()
+        self._seed_file(conn)
+        res = _call("register_prediction", {
+            **self._ARGS, "strategy_name": "canon",
+            "support_scores": [
+                {"data_point": "hl_cvd", "score": 0.9, "kind": "numerical"},
+                {"data_point": "ta_rsi(1h)", "score": 0.5, "kind": "narrative",
+                 "reasoning_md": "neutral RSI"},
+            ]})
+        assert res["ok"], res
+        # engine: (0.6*0.9 + 0.4*0.5) / 1.0 = 0.74 — NOT the stated 0.99
+        assert res["conviction"] == pytest.approx(0.74)
+        assert res["conviction_source"] == "engine"
+        rows = conn.execute(
+            "SELECT data_point, weight FROM support_scores WHERE prediction_id=?",
+            (res["prediction_id"],)).fetchall()
+        stored = {r["data_point"]: r["weight"] for r in rows}
+        assert stored == {"hl_cvd(interval=1h,symbol=BTC)": 0.6,
+                          "ta_rsi(interval=1h,symbol=BTC)": 0.4}
+        conv = conn.execute("SELECT conviction FROM predictions WHERE id=?",
+                            (res["prediction_id"],)).fetchone()[0]
+        assert conv == pytest.approx(0.74)
+
+    def test_unresolvable_key_refused(self, monkeypatch):
+        monkeypatch.setattr(RP, "_capture_entry_ref", lambda symbol: 100000.0)
+        conn = get_db()
+        self._seed_file(conn)
+        res = _call("register_prediction", {
+            **self._ARGS, "strategy_name": "canon",
+            "support_scores": [
+                {"data_point": "ta_nope", "score": 0.9, "kind": "numerical"}]})
+        assert "error" in res and "ta_nope" in res["error"]
+
+    def test_variants_collapsing_to_same_key_refused(self, monkeypatch):
+        monkeypatch.setattr(RP, "_capture_entry_ref", lambda symbol: 100000.0)
+        conn = get_db()
+        self._seed_file(conn)
+        res = _call("register_prediction", {
+            **self._ARGS, "strategy_name": "canon",
+            "support_scores": [
+                {"data_point": "hl_cvd", "score": 0.9, "kind": "numerical"},
+                {"data_point": "hl_cvd(1h)", "score": 0.7, "kind": "numerical"}]})
+        assert "error" in res and "duplicate" in res["error"]
+
+    def test_no_scores_keeps_stated_conviction(self, monkeypatch):
+        monkeypatch.setattr(RP, "_capture_entry_ref", lambda symbol: 100000.0)
+        conn = get_db()
+        self._seed_file(conn)
+        res = _call("register_prediction", {**self._ARGS, "strategy_name": "canon"})
+        assert res["ok"]
+        assert res["conviction"] == pytest.approx(0.99)
+        assert res["conviction_source"] == "as-stated"
