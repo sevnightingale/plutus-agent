@@ -279,3 +279,20 @@ class TestDeclaredNormalizers:
         # RSI is missing (declared normalizer, no numeric) — never LLM-scored
         assert "ta_rsi(symbol=BTC)" in res["missing"]
         assert res["conviction"] == pytest.approx(0.6)
+
+    def test_legacy_string_normalizer_falls_back_to_llm(self, monkeypatch):
+        # predict ad-libbed prose "normalizer: identity" fields for weeks
+        # before the structured spec existed — those must score via the LLM
+        # (their historical behavior), never crash or go missing.
+        s = _norm_strategy()
+        s.data_points = [{"name": "ta_vortex", "weight": 1.0,
+                          "normalizer": "vortex_crossover_strength"}]
+        monkeypatch.setattr(predict_tools, "_load_strategy", lambda n: s)
+        monkeypatch.setattr(predict_tools, "_fetch_reading",
+                            lambda dp: (1.02, "reading", None))
+        _patch_call_llm(monkeypatch, _resp_tool_call({"scores": [
+            {"dp_key": "ta_vortex", "score": 0.7, "kind": "narrative",
+             "reasoning": "crossover holding"}]}))
+        res = json.loads(predict_tools._conviction_score({"strategy_name": "norm-mix"}))
+        assert res["conviction"] == pytest.approx(0.7)
+        assert res["missing"] == []

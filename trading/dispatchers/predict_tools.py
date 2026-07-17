@@ -29,9 +29,12 @@ strategy's prose Trigger section as before.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from harness.tools.registry import registry, tool_error, tool_result
+
+logger = logging.getLogger(__name__)
 
 
 # ── cheap-model plumbing ─────────────────────────────────────────────────────
@@ -409,6 +412,15 @@ def score_strategy(strategy_name: str, regime: Optional[str] = None) -> dict:
     llm_readings = []
     for r in readings:
         spec = (r["dp"].get("normalizer") if isinstance(r["dp"], dict) else None)
+        if spec is not None and not isinstance(spec, dict):
+            # Legacy prose field (predict ad-libbed string "normalizers" for
+            # weeks before the structured spec existed; nothing consumed
+            # them). Score via the LLM exactly as those strategies always
+            # were — but loudly: write-time validation refuses non-dict
+            # specs, so the field dies at the file's next upsert.
+            logger.warning("%s: ignoring non-dict legacy normalizer %r on %s",
+                           strategy_name, spec, r["dp_key"])
+            spec = None
         if r["missing_reason"]:
             continue  # unusable reading → missing on either path
         if not spec:
