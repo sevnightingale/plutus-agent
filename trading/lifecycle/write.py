@@ -28,7 +28,7 @@ VALID_OUTCOMES = ("correct", "wrong", "ambiguous", "expired_unresolvable")
 # same conditions, inflating N toward the graduation bar (N>=15, >=2/3)
 # without independent evidence. Three allows an honest spread (e.g. a level
 # ladder) while keeping the track record statistically meaningful.
-MAX_OPEN_PER_STRATEGY = 3
+MAX_OPEN_PER_STRATEGY = queries.BASE_PREDICTION_OPEN_CAP
 
 # Incubation fast lane: a book already proving out — net expectancy above the
 # cost margin but not yet `tradeable` (under the multiplicity-deflated hurdle
@@ -38,7 +38,7 @@ MAX_OPEN_PER_STRATEGY = 3
 # extra correlation between simultaneous trials (the reason the base cap
 # exists); a bump to five keeps that bounded while roughly doubling
 # throughput for exactly the books where evidence is worth the most.
-INCUBATION_OPEN_CAP = 5
+INCUBATION_OPEN_CAP = queries.INCUBATION_PREDICTION_OPEN_CAP
 
 
 @dataclass
@@ -141,15 +141,9 @@ def record_prediction(
             "WHERE strategy_name = ? AND resolved_at IS NULL AND reached_near_at IS NULL",
             (draft.strategy_name,),
         ).fetchone()[0]
-        cap = MAX_OPEN_PER_STRATEGY
-        if open_count >= cap:
-            # Only price the fast lane when the base cap actually binds —
-            # strategy_expectancy re-reads the whole book.
-            exp = queries.strategy_expectancy(conn, draft.strategy_name)
-            if (exp["expectancy_pct"] is not None
-                    and exp["expectancy_pct"] > exp["cost_margin_pct"]
-                    and not exp["tradeable"] and not exp["decaying"]):
-                cap = INCUBATION_OPEN_CAP
+        capacity = queries.strategy_prediction_capacity(
+            conn, draft.strategy_name, open_count=open_count)
+        cap = capacity["open_cap"]
         if open_count >= cap:
             raise ValueError(
                 f"strategy {draft.strategy_name!r} already has {open_count} "

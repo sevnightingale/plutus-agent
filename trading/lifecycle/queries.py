@@ -84,6 +84,8 @@ SERIOUS_TRIAL_MIN_N = HARD_SL_MIN_N  # a sibling counts toward multiplicity only
                             # trial and must not raise the bar for leaders
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
+BASE_PREDICTION_OPEN_CAP = 3
+INCUBATION_PREDICTION_OPEN_CAP = 5
 
 
 def hard_stop_pct(
@@ -297,6 +299,46 @@ def strategy_expectancy(
     }
 
 
+def strategy_prediction_capacity(
+    conn: sqlite3.Connection,
+    strategy_name: str,
+    *,
+    open_count: Optional[int] = None,
+) -> dict:
+    """Return the effective undecided-prediction capacity for one strategy.
+
+    The base lane stays deliberately narrow because simultaneous predictions
+    from one strategy are correlated trials. A non-decaying book that is net
+    positive above costs but has not yet cleared the graduation bar gets the
+    existing incubation fast lane. Win-locked predictions do not consume a
+    slot because their outcome is already decided.
+    """
+    if open_count is None:
+        open_count = conn.execute(
+            "SELECT COUNT(*) FROM predictions "
+            "WHERE strategy_name = ? AND resolved_at IS NULL "
+            "AND reached_near_at IS NULL",
+            (strategy_name,),
+        ).fetchone()[0]
+
+    exp = strategy_expectancy(conn, strategy_name)
+    incubation = (
+        exp["expectancy_pct"] is not None
+        and exp["expectancy_pct"] > exp["cost_margin_pct"]
+        and not exp["tradeable"]
+        and not exp["decaying"]
+    )
+    cap = (INCUBATION_PREDICTION_OPEN_CAP
+           if incubation else BASE_PREDICTION_OPEN_CAP)
+    return {
+        "strategy_name": strategy_name,
+        "evidence_lane": "incubation" if incubation else "base",
+        "open_predictions": int(open_count),
+        "open_cap": cap,
+        "open_slots_remaining": max(0, cap - int(open_count)),
+    }
+
+
 def best_actionable_prediction(
     conn: sqlite3.Connection, *,
     max_age_s: float = ACTIONABLE_MAX_AGE_S, now: Optional[float] = None,
@@ -470,6 +512,13 @@ def strategies_by_timescale(
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
         r["rr"] = strategy_rr(conn, r["name"])
+        capacity = strategy_prediction_capacity(conn, r["name"])
+        r.update({
+            "evidence_lane": capacity["evidence_lane"],
+            "open_predictions": capacity["open_predictions"],
+            "open_cap": capacity["open_cap"],
+            "open_slots_remaining": capacity["open_slots_remaining"],
+        })
         raw = r.pop("regime_applicability_json", None)
         r["regime_applicability"] = json.loads(raw) if raw else {}
     return rows

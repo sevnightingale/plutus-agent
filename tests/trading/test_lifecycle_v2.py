@@ -164,8 +164,16 @@ class TestIncubationFastLane:
     def test_incubating_book_gets_wider_cap(self, conn):
         for win in [True] * 7 + [False] * 3:      # +EV at n=10 < 15: promising
             _resolved_trade(conn, "inc", win)
+        capacity = queries.strategy_prediction_capacity(conn, "inc")
+        assert capacity == {
+            "strategy_name": "inc", "evidence_lane": "incubation",
+            "open_predictions": 0, "open_cap": write.INCUBATION_OPEN_CAP,
+            "open_slots_remaining": write.INCUBATION_OPEN_CAP,
+        }
         for _ in range(write.INCUBATION_OPEN_CAP):
             write.record_prediction(conn, _draft(strategy_name="inc"))
+        capacity = queries.strategy_prediction_capacity(conn, "inc")
+        assert capacity["open_slots_remaining"] == 0
         with pytest.raises(ValueError, match=f"cap {write.INCUBATION_OPEN_CAP}"):
             write.record_prediction(conn, _draft(strategy_name="inc"))
 
@@ -174,6 +182,9 @@ class TestIncubationFastLane:
         # book gets no fast lane (more correlated trials won't save it).
         for win in [True] * 12 + [False] * 10:
             _resolved_trade(conn, "dk", win)
+        capacity = queries.strategy_prediction_capacity(conn, "dk")
+        assert capacity["evidence_lane"] == "base"
+        assert capacity["open_cap"] == write.MAX_OPEN_PER_STRATEGY
         for _ in range(write.MAX_OPEN_PER_STRATEGY):
             write.record_prediction(conn, _draft(strategy_name="dk"))
         with pytest.raises(ValueError, match=f"cap {write.MAX_OPEN_PER_STRATEGY}"):
@@ -184,6 +195,9 @@ class TestIncubationFastLane:
         # for inflating n.
         for win in [True] * 12 + [False] * 4:
             _resolved_trade(conn, "tr", win)
+        capacity = queries.strategy_prediction_capacity(conn, "tr")
+        assert capacity["evidence_lane"] == "base"
+        assert capacity["open_cap"] == write.MAX_OPEN_PER_STRATEGY
         for _ in range(write.MAX_OPEN_PER_STRATEGY):
             write.record_prediction(conn, _draft(strategy_name="tr"))
         with pytest.raises(ValueError, match=f"cap {write.MAX_OPEN_PER_STRATEGY}"):
@@ -201,6 +215,13 @@ class TestIncubationFastLane:
             "funding-flush-reversal": 1, "other-strategy": 1}
         assert counts["win_locked_by_strategy"] == {
             "funding-flush-reversal": 1}
+
+    def test_unscorable_book_fails_safe_to_base_capacity(self, conn):
+        capacity = queries.strategy_prediction_capacity(
+            conn, "funding-flush-reversal")
+        assert capacity["evidence_lane"] == "base"
+        assert capacity["open_cap"] == write.MAX_OPEN_PER_STRATEGY
+        assert capacity["open_slots_remaining"] == write.MAX_OPEN_PER_STRATEGY
 
     def test_refuses_unreasoned_narrative_score(self, conn):
         with pytest.raises(ValueError, match="reasoning"):
@@ -504,6 +525,10 @@ class TestPopulationQueries:
         assert [r["name"] for r in rows] == ["a"]
         assert rows[0]["regime_applicability"] == {"trending-up": True}
         assert rows[0]["win_rate"] == round(6 / 9, 3)
+        assert rows[0]["evidence_lane"] == "base"
+        assert rows[0]["open_predictions"] == 0
+        assert rows[0]["open_cap"] == write.MAX_OPEN_PER_STRATEGY
+        assert rows[0]["open_slots_remaining"] == write.MAX_OPEN_PER_STRATEGY
         # swing strategy not returned at the intraday timescale
         assert queries.strategies_by_timescale(conn, "swing")[0]["name"] == "b"
 

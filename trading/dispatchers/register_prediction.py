@@ -38,9 +38,11 @@ SCHEMA = {
         "thesis-break over resolvable data points (leaf {data_point, params?, "
         "op, threshold|range} or all/any) that resolves the prediction WRONG "
         "early. horizon_hours ≤ 720 (30d hard cap). kind='strategy' (default) "
-        "requires strategy_name (file-at-birth). Max 3 OPEN predictions per "
-        "strategy — concurrent predictions from one strategy are correlated "
-        "trials, not independent evidence. support_scores record the conviction "
+        "requires strategy_name (file-at-birth). The default capacity is 3 "
+        "OPEN predictions per strategy; a positive-expectancy, non-tradeable, "
+        "non-decaying incubation book may use 5. Concurrent predictions from "
+        "one strategy are correlated trials, not independent evidence. "
+        "support_scores record the conviction "
         "inputs — narrative entries REQUIRE reasoning_md (the audit trail)."
     ),
     "parameters": {
@@ -216,10 +218,13 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     near = float(args["near_edge_pct"])
     far = float(args["far_edge_pct"])
     intrinsic_rr = round(abs(far) / abs(near), 3) if near else None
+    strategy_capacity = (queries.strategy_prediction_capacity(conn, strat_name)
+                         if strat_name else None)
     return tool_result({"prediction_id": prediction_id, "ok": True,
                         "entry_ref_price": float(entry_ref_price),
                         "intrinsic_rr": intrinsic_rr,
                         "fundable_wake": fundable_wake,
+                        "strategy_capacity": strategy_capacity,
                         "slots": queries.open_slot_counts(conn)})
 
 
