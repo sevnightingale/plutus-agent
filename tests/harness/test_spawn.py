@@ -159,3 +159,29 @@ def test_tier_sentinels_resolve_against_user_config(tmp_path, monkeypatch):
     assert load_agent("plutus-l", agents_dir=tmp_path).model == "user-cheap"
     monkeypatch.setattr(cfg, "load_config", lambda: {"model": {"default": "user-model"}})
     assert load_agent("plutus-l", agents_dir=tmp_path).model == "user-model"
+
+
+class TestGenerateSplit:
+    """2026-07-17: strategy authorship moved predict → plutus-generate."""
+
+    def test_generate_recipe_loads_from_real_roster(self):
+        spec = spawn.load_agent("plutus-generate")
+        assert spec.returns == "generation_report"
+        assert "strategy-write" in spec.toolsets
+        assert "strategies:all" in spec.reads      # the global view
+        assert spec.model == "standard"
+
+    def test_predict_recipe_is_registration_only(self):
+        spec = spawn.load_agent("plutus-predict")
+        assert "strategy-write" not in spec.toolsets
+        assert "strategy_upsert" not in spec.body_md
+
+    def test_generation_report_contract(self):
+        good = {"strategies_authored": [], "registry_survey": {},
+                "population_gaps": {}}
+        assert spawn.validate_return("generation_report", good) == []
+        assert spawn.validate_return("generation_report",
+                                     {"strategies_authored": []}) != []
+
+    def test_generate_maps_to_generation_action(self):
+        assert spawn._ACTION_TYPES["plutus-generate"] == "generation"

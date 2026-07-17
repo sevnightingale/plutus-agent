@@ -177,6 +177,8 @@ RETURN_CONTRACTS: Dict[str, List[str]] = {
     "perception_report": ["updated", "failed", "notable"],
     "regime_report": ["rows", "flips"],
     "prediction_batch": ["predictions", "actionable"],
+    "generation_report": ["strategies_authored", "registry_survey",
+                          "population_gaps"],
     "ops_report": ["resolved", "wakes_enqueued"],
     "reflect_report": ["status_changes", "weight_updates", "sizing_review",
                        "seed_report"],
@@ -480,6 +482,7 @@ _ACTION_TYPES = {
     "plutus-perception": "perception",
     "plutus-regime": "regime",
     "plutus-predict": "predict",
+    "plutus-generate": "generation",
     "plutus-reflect": "reflect",
 }
 
@@ -505,10 +508,5 @@ def _record_action_run_for_spawn(name: str, sub_session: str,
         ok = bool(parsed.get("ok"))
         record_action_run(get_db(), action_type=action, agent=name,
                           ok=ok, session_name=sub_session, notes_md=notes)
-        if (action == "predict" and ok and payload
-                and payload.get("generated")):
-            record_action_run(get_db(), action_type="generation", agent=name,
-                              ok=True, session_name=sub_session,
-                              notes_md=json.dumps(payload["generated"]))
     except Exception as exc:
         logger.error("action_run record failed for %s: %s", name, exc)

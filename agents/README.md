@@ -5,14 +5,15 @@ read directly by the spawn mechanism (`harness/spawn.py`). The full picture —
 how the desk fits together, the blackboards, the strategy lifecycle — is in
 `ARCHITECTURE.md`; this file covers the roster and the recipe format.
 
-## The six agents
+## The seven agents
 
 | Agent | Role | Tier | Runs |
 |---|---|---|---|
 | **plutus-main** | Portfolio manager and operator voice — the persistent gateway session. Orchestrates everything; the only agent that spawns others | standard | always on (gateway) |
 | **plutus-perception** | The eyes — fetches every market reading, rewrites `PERCEPTION.md` | light | spawned by main |
 | **plutus-regime** | Classifies market regime per timescale, maintains `REGIME.md`, detects flips | light | spawned by main |
-| **plutus-predict** | The forward brain — evaluates strategies, registers machine-resolvable predictions, generates new strategy hypotheses | standard | spawned by main |
+| **plutus-predict** | The forward brain — evaluates the live book, registers machine-resolvable predictions, reports population gaps | standard | spawned by main |
+| **plutus-generate** | The research brain — the desk's only strategy author; surveys the evidence space, fills matrix gaps, declares missing data points | standard | spawned by main (7d floor + gap reports) |
 | **plutus-ops** | Back office + watchdog — resolves due predictions, checks trade readiness, enforces staleness floors | light | cron, every 30 min |
 | **plutus-reflect** | The backward brain — calibration review, weight tuning, strategy graduation/demotion, lessons | standard | spawned by main |
 

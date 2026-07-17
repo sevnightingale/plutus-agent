@@ -6,7 +6,7 @@ execution (if anything here contradicts it, TRADING.md wins); this document
 
 ## The thesis
 
-Plutus is a six-agent trading desk where **trading is calibration-gated**:
+Plutus is a seven-agent trading desk where **trading is calibration-gated**:
 nothing places a trade until a strategy has publicly earned the right to, on a
 machine-verified prediction record. The desk's north star is not this
 account's P&L — it is a credible, verifiable public track record (on-chain
@@ -30,7 +30,7 @@ Three design laws shape everything below:
 
 ## The desk
 
-Six agents in a **star topology**: plutus-main orchestrates; specialists
+Seven agents in a **star topology**: plutus-main orchestrates; specialists
 never spawn each other (no-nesting is enforced — the `spawn` toolset is
 main-only). Execution is NOT an agent — it is a deterministic tool main calls
 directly (see Execute). Each specialist is defined by an `agents/<name>/AGENT.md`
@@ -48,7 +48,8 @@ JSON still parses as a fallback.)
 | **plutus-main** | PM and operator voice — the persistent gateway session | wake queue, operator messages, eod | standard |
 | **plutus-perception** | eyes — refreshes PERCEPTION.md from data points | spawned when stale or pre-decision | light |
 | **plutus-regime** | classifies regime per timescale → REGIME.md | spawned on staleness / perception flips | light |
-| **plutus-predict** | forward brain — evaluates strategies, registers predictions, generates new hypotheses | spawned on beats and escalations | standard |
+| **plutus-predict** | forward brain — evaluates the live book, registers predictions | spawned on beats and escalations | standard |
+| **plutus-generate** | research brain — authors strategies, surveys the evidence space | generation floor (7d) + gap reports | standard |
 | **plutus-ops** | back office + watchdog | cron, every 30 min | light |
 | **plutus-reflect** | backward brain — weights, graduation, lessons, sizing review | staleness floor: weekly or 3 unreflected closes | standard |
 
@@ -91,7 +92,8 @@ created at first boot (wizard or gateway) and never overwritten:
   rows stay FAILED.
 
 Staleness floors (doctrine): perception 4h · regime 8h · predict 8h · reflect
-weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
+weekly or 3 unreflected closes · generation 7d (plutus-generate). Ops
+enforces the floors.
 
 ## The loop
 
@@ -124,7 +126,14 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
 
 ## The strategy lifecycle (idea → trade → learning)
 
-1. **Generate.** plutus-predict keeps the hypothesis pool full. Every
+1. **Generate.** plutus-generate — the research brain, the desk's ONLY
+   strategy author (split from predict 2026-07-17: authored-in-the-margins
+   generation had produced a TA monoculture and never used the
+   self-extension hook) — keeps the hypothesis pool full AND the evidence
+   base diverse: each session surveys the full data-point registry against
+   the live book, prefers hypotheses over under-used signal sources, and
+   declares `missing_data_points` when the data a mechanism needs doesn't
+   exist yet. Every
    hypothesis is **file-at-birth**: `strategy_upsert` writes
    `~/.plutus-agent/strategies/<name>.md` (status=test) and syncs the
    lifecycle.db mirror atomically — frontmatter declares timescale, mechanism
@@ -135,9 +144,9 @@ weekly or 3 unreflected closes · generation 7d. Ops enforces the floors.
    **self-extension hook**: sourcing that data point becomes a perception
    task. Operators can seed hypotheses through the same tool on the same
    terms (a good first conversation with Plutus).
-2. **Predict.** predict runs on the heavy model as an ORCHESTRATOR: it spends
-   its reasoning on STRATEGY GENERATION (filling gaps in the regime × timescale
-   matrix) and offloads per-strategy work to cheap scoped tools. For each
+2. **Predict.** predict is the REGISTRATION engine — an ORCHESTRATOR over
+   cheap scoped tools; it reports population gaps for main to route to
+   generate but never authors strategies itself. For each
    regime-matched strategy below its open cap (3; 5 for an *incubating* book —
    net-positive above costs but not yet clearing the deflated hurdle — so
    promising strategies build evidence faster), `predict_draft` (light model)

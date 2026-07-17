@@ -66,7 +66,7 @@ Pause execution any time with `touch ~/.plutus-agent/HALT`; resume with `rm ~/.p
 
 The tool surface is **function-shaped** — `perception`, `execution`, `reflection`, `identity` — fed by **registries + dispatchers** (data points, events, venues, accounts, alerts, identity). Sources/venues (Hyperliquid, ACP, dgclaw) are *integrations* under `trading/integrations/<name>/` that contribute registry entries; capability scales via registry depth, not tool-count bloat.
 
-The runtime is a **six-agent trading desk**: **plutus-main** (PM and operator voice) orchestrates **plutus-perception**, **plutus-regime**, **plutus-predict**, and **plutus-reflect**, with **plutus-ops** running 30-minute bookkeeping ticks. Execution is not an agent — main places trades through a deterministic tool (`desk_open_position`). Strategies must graduate on a verified prediction track record (positive simulated expectancy) before they may trade; conviction then sets position size via risk-budget bands. See `ARCHITECTURE.md` for the full picture.
+The runtime is a **seven-agent trading desk**: **plutus-main** (PM and operator voice) orchestrates **plutus-perception**, **plutus-regime**, **plutus-predict**, **plutus-generate**, and **plutus-reflect**, with **plutus-ops** running 30-minute bookkeeping ticks. Execution is not an agent — main places trades through a deterministic tool (`desk_open_position`). Strategies must graduate on a verified prediction track record (positive simulated expectancy) before they may trade; conviction then sets position size via risk-budget bands. See `ARCHITECTURE.md` for the full picture.
 
 | Layer | Path | Contents |
 |---|---|---|
@@ -85,9 +85,9 @@ Both are optional — the default install does Hyperliquid trading without them.
 
 ## Documentation
 
-- `ARCHITECTURE.md` — **the master doc**: the six-agent desk, blackboards, the loop, the strategy lifecycle, plumbing
+- `ARCHITECTURE.md` — **the master doc**: the seven-agent desk, blackboards, the loop, the strategy lifecycle, plumbing
 - `SETUP.md` — from absolute zero to a running desk (accounts, wallets, wizard, fleet) — includes the redeploy/start-over runbook
-- `agents/README.md` — the desk: six agents, blackboards, spawn recipes
+- `agents/README.md` — the desk: seven agents, blackboards, spawn recipes
 - `TRADING.md` — **canonical** trade-execution mechanics (wallets, on-chain registration, the silent-failure mode, recovery)
 - `LINEAGE.md` — upstream fork point + attribution
 - `SECURITY.md` — how to report vulnerabilities

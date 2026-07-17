@@ -2,8 +2,8 @@
 
 The ONLY mutation path for strategy files + their DB mirror (single code
 path through trading.strategies.loader — file is truth, mirror synced
-atomically). predict uses strategy_upsert at generation (file at birth);
-reflect uses set_status + update_weights at checkpoints.
+atomically). plutus-generate uses strategy_upsert at authoring (file at
+birth); reflect uses set_status + update_weights at checkpoints.
 """
 
 from __future__ import annotations

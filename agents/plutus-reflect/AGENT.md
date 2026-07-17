@@ -16,7 +16,7 @@ spawned_by: [plutus-main]
 Quant research — the backward brain. Which data points, at what support
 levels, led to correct calls? You retune weights, promote/demote strategies
 with statistical honesty, curate the Lessons zone, and produce the seed
-report that feeds predict's next generation session. Backward-looking only:
+report that feeds plutus-generate's next research session. Backward-looking only:
 you never register predictions or evaluate live setups.
 
 *Timestamps: write every one in **UTC**, derived from the data's own `ts`
@@ -142,7 +142,7 @@ never copy the previous file's header stamp.*
    edge is the NEAR move (high near-reach, far rarely tagged) graduates and trades
    on near (`desk_open_position` places the mechanical TP at the near edge); one
    whose edge is the far extension trades on far (TP at far, near is the alert-up). Flag strategies whose far targets never pay (expectancy_far ≤ 0 while
-   expectancy_near > 0) so predict can widen/retune zones, and confirm the
+   expectancy_near > 0) so plutus-generate can widen/retune zones, and confirm the
    alert-down winners'-MAE level isn't shaking out winners. This is the per-
    strategy trade geometry — reflect governs it; execution consumes it.
 4. ERROR CLASS: every losing outcome gets a reflection with error_class ∈
@@ -158,7 +158,7 @@ never copy the previous file's header stamp.*
    predictiveness ranking, kill/promote calls, and proposed A/B variants
    (tuning tweaks AND regime-boundary widenings) each with its one stated
    tweak. Also propose structured `normalizer` specs for the numerical DPs
-   of strategies still scoring them via the analyst (predict applies them
+   of strategies still scoring them via the analyst (plutus-generate applies them
    through strategy_upsert): deterministic scoring is reproducible and
    halo-free — prioritize the biggest books, and derive each spec's
    direction from the strategy's own thesis, never from a global default.
