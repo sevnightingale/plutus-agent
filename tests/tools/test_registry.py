@@ -353,6 +353,8 @@ class TestBuiltinDiscovery:
             "trading.integrations.gas",
             "trading.integrations.hyperliquid",
             "trading.integrations.macro",
+            "trading.integrations.polymarket",
+            "trading.integrations.sessions",
             "trading.integrations.ta",
 
 

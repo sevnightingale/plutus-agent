@@ -1,4 +1,4 @@
-"""Hyperliquid data points — nine read-only registrations.
+"""Hyperliquid data points — eleven read-only registrations.
 
 Symbol-level data points (``hl_price``, ``hl_candles``, ``hl_orderbook``,
 ``hl_funding_and_oi``, ``hl_universe``) hit public endpoints and need no
@@ -159,6 +159,145 @@ def hl_funding_and_oi(symbol: str) -> Dict[str, Any]:
         f"symbol '{symbol}' not in Hyperliquid universe "
         f"(call hl_universe to list)"
     )
+
+
+def _book_imbalance_calc(
+    bids: List[Dict[str, float]],
+    asks: List[Dict[str, float]],
+    band_bps: float,
+) -> Dict[str, Any]:
+    """Pure calc: signed resting-size imbalance within ±band_bps of mid.
+
+    +1.0 = all resting size in the band is bids (buy-side wall);
+    -1.0 = all asks. Raises on an empty side or an empty band — a book we
+    cannot read is missing, never neutral.
+    """
+    if not bids or not asks:
+        raise ValueError("orderbook side empty — cannot compute imbalance")
+    best_bid, best_ask = bids[0]["px"], asks[0]["px"]
+    mid = (best_bid + best_ask) / 2.0
+    band = mid * band_bps / 10_000.0
+    bid_size = sum(l["sz"] for l in bids if l["px"] >= mid - band)
+    ask_size = sum(l["sz"] for l in asks if l["px"] <= mid + band)
+    total = bid_size + ask_size
+    if total <= 0:
+        raise ValueError(f"no resting size within ±{band_bps} bps of mid")
+    return {
+        "imbalance": (bid_size - ask_size) / total,
+        "mid": mid,
+        "band_bps": band_bps,
+        "bid_size_in_band": bid_size,
+        "ask_size_in_band": ask_size,
+        "spread_bps": (best_ask - best_bid) / mid * 10_000.0,
+    }
+
+
+@register_data_point(
+    name="hl_book_imbalance",
+    category="market",
+    source="hyperliquid",
+    description=(
+        "Signed L2 resting-size imbalance within ±band_bps of mid: "
+        "(bid_size - ask_size) / (bid_size + ask_size), in [-1, +1]. "
+        "+0.6 means bids outweigh asks ~4:1 near the touch (buy-side "
+        "wall/support); negative means offer-heavy. Ephemeral and spoofable "
+        "— resting size can be pulled in one tick — so treat it as "
+        "conviction evidence, not an invalidation trigger. Compare reads at "
+        "the same band_bps only."
+    ),
+    params_schema={
+        "symbol":   {"type": "string", "required": True},
+        "band_bps": {"type": "number", "default": 50},
+    },
+    returns_schema={
+        "imbalance": "float in [-1,1]", "mid": "float", "band_bps": "float",
+        "bid_size_in_band": "float", "ask_size_in_band": "float",
+        "spread_bps": "float",
+    },
+    tags=["market", "orderbook", "order-flow", "microstructure", "hyperliquid"],
+    numeric_path="imbalance",
+)
+def hl_book_imbalance(symbol: str, band_bps: float = 50) -> Dict[str, Any]:
+    info = get_info()
+    book = info.l2_snapshot(symbol)
+    levels = book.get("levels", [[], []])
+    bids = [{"px": float(l["px"]), "sz": float(l["sz"])} for l in levels[0]]
+    asks = [{"px": float(l["px"]), "sz": float(l["sz"])} for l in levels[1]]
+    result = _book_imbalance_calc(bids, asks, float(band_bps))
+    result["symbol"] = symbol
+    result["ts_ms"] = int(book.get("time", time.time() * 1000))
+    return result
+
+
+def _funding_stats(rates: List[float], current: float) -> Dict[str, Any]:
+    """Pure calc: where does the current funding rate sit in its history?
+
+    Population mean/std over the historical hourly rates; percentile is the
+    fraction of history at or below the current rate. Raises on a sample too
+    small or degenerate for a distribution — never a fabricated z-score.
+    """
+    n = len(rates)
+    if n < 24:
+        raise ValueError(f"only {n} funding samples — need ≥ 24 for a distribution")
+    mean = sum(rates) / n
+    std = (sum((r - mean) ** 2 for r in rates) / n) ** 0.5
+    if std == 0:
+        raise ValueError("funding history has zero variance — z-score undefined")
+    return {
+        "zscore": (current - mean) / std,
+        "percentile": 100.0 * sum(1 for r in rates if r <= current) / n,
+        "current_rate": current,
+        "current_annualized_pct": current * 24 * 365 * 100.0,
+        "mean_rate": mean,
+        "std_rate": std,
+        "n_samples": n,
+    }
+
+
+@register_data_point(
+    name="hl_funding_zscore",
+    category="market",
+    source="hyperliquid",
+    description=(
+        "Current funding rate in the context of its own history: z-score and "
+        "percentile of the live hourly rate vs the trailing lookback_days of "
+        "funding_history, plus the annualized cost. A raw funding number "
+        "means nothing without this context — +0.01%/h at the 95th "
+        "percentile is a crowded-long signal; the same rate at the 50th is "
+        "noise. Positive funding = longs pay shorts (long-crowded); extreme "
+        "percentiles mark squeeze fuel."
+    ),
+    params_schema={
+        "symbol":        {"type": "string", "required": True},
+        "lookback_days": {"type": "integer", "default": 30},
+    },
+    returns_schema={
+        "zscore": "float", "percentile": "float 0-100",
+        "current_rate": "float (hourly)", "current_annualized_pct": "float",
+        "mean_rate": "float", "std_rate": "float", "n_samples": "int",
+    },
+    tags=["market", "funding", "positioning", "crowding", "hyperliquid"],
+    numeric_path="zscore",
+)
+def hl_funding_zscore(symbol: str, lookback_days: int = 30) -> Dict[str, Any]:
+    info = get_info()
+    current = hl_funding_and_oi(symbol)["funding"]
+    cursor = int((time.time() - lookback_days * 86400) * 1000)
+    rates: List[float] = []
+    # funding_history caps at 500 rows per call (30d hourly = 720) — page
+    # forward until a short batch.
+    for _ in range(10):
+        batch = info.funding_history(symbol, cursor)
+        if not batch:
+            break
+        rates.extend(float(b["fundingRate"]) for b in batch)
+        if len(batch) < 500:
+            break
+        cursor = int(batch[-1]["time"]) + 1
+    result = _funding_stats(rates, current)
+    result["symbol"] = symbol
+    result["lookback_days"] = lookback_days
+    return result
 
 
 @register_data_point(

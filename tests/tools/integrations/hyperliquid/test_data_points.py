@@ -51,7 +51,7 @@ def _import_integration():
     importlib.reload(hl_pkg)
 
 
-def test_all_nine_data_points_registered():
+def test_all_eleven_data_points_registered():
     _import_integration()
     names = {e.name for e in data_point_registry.list_all(source="hyperliquid")}
     assert names == {
@@ -59,6 +59,8 @@ def test_all_nine_data_points_registered():
         "hl_candles",
         "hl_orderbook",
         "hl_funding_and_oi",
+        "hl_book_imbalance",
+        "hl_funding_zscore",
         "hl_universe",
         "hl_holdings",
         "hl_total_equity",

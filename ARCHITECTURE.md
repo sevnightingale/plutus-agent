@@ -277,8 +277,10 @@ once in TRADING.md's glossary and computed once in code
 
 ## Plumbing
 
-- **Registries** (in `trading/perception/core/`): data points (52+ —
-  `hl_*`, `ta_*`, `macro_*`, defillama, coingecko, dgclaw…), venues,
+- **Registries** (in `trading/perception/core/`): data points (59+ —
+  `hl_*` incl. book imbalance + funding z-score, `ta_*`, `macro_*`,
+  `poly_*` (Polymarket odds), `session_context`, defillama, coingecko,
+  dgclaw…), venues,
   accounts, alerts, identity. Integrations under
   `trading/integrations/<source>/` contribute entries via decorators;
   capability scales by registry depth, not tool count.

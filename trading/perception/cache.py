@@ -52,6 +52,13 @@ _PREFIX_STALENESS_BUDGETS = {
     "ta_": 300.0,
     # Funding + OI — change slowly.
     "hl_funding_and_oi": 600.0,
+    "hl_funding_zscore": 600.0,
+    # Book microstructure — ephemeral by nature.
+    "hl_book_imbalance": 60.0,
+    # Session/liquidity context — changes on the hour.
+    "session_context": 900.0,
+    # Polymarket prediction-market odds — 15 min.
+    "poly_": 900.0,
     # On-chain — slow.
     "hl_cvd": 300.0,
     "eth_gas": 300.0,

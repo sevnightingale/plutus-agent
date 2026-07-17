@@ -24,6 +24,15 @@ from trading.integrations.ta import _calc as ta_calc
 from trading.integrations.ta import data_points as ta_dp
 from trading.integrations.flow._calc import calc_cvd
 from trading.integrations.coingecko.data_points import _historical_dominance
+from trading.integrations.hyperliquid.data_points import (
+    _book_imbalance_calc,
+    _funding_stats,
+)
+from trading.integrations.sessions.data_points import (
+    _hourly_profile,
+    _liquidity_pctile,
+    _session_label,
+)
 
 
 # ── synthetic OHLCV helpers ────────────────────────────────────────────────
@@ -229,3 +238,110 @@ class TestDominanceVelocityHistory:
         past = _historical_dominance(7)
         assert past is not None and past["btc_dominance_pct"] == 58.4
         assert _historical_dominance(30) is None  # no history that far back
+
+
+# ── book imbalance (pure calc) ─────────────────────────────────────────────
+
+
+class TestBookImbalanceCalc:
+    def _book(self, bid_szs, ask_szs, mid=100.0, step=0.01):
+        bids = [{"px": mid - step * (i + 1), "sz": s} for i, s in enumerate(bid_szs)]
+        asks = [{"px": mid + step * (i + 1), "sz": s} for i, s in enumerate(ask_szs)]
+        return bids, asks
+
+    def test_balanced_book_is_zero(self):
+        bids, asks = self._book([5.0, 5.0], [5.0, 5.0])
+        assert _book_imbalance_calc(bids, asks, 50)["imbalance"] == 0.0
+
+    def test_bid_heavy_is_positive(self):
+        bids, asks = self._book([9.0], [1.0])
+        out = _book_imbalance_calc(bids, asks, 50)
+        assert out["imbalance"] == pytest.approx(0.8)  # (9-1)/(9+1)
+        assert out["bid_size_in_band"] == 9.0
+
+    def test_band_excludes_far_levels(self):
+        # mid=100, 50 bps band = ±0.5: the size parked at ±2.0 is invisible.
+        bids = [{"px": 99.9, "sz": 3.0}, {"px": 98.0, "sz": 100.0}]
+        asks = [{"px": 100.1, "sz": 1.0}, {"px": 102.0, "sz": 100.0}]
+        out = _book_imbalance_calc(bids, asks, 50)
+        assert out["imbalance"] == pytest.approx(0.5)  # (3-1)/(3+1)
+
+    def test_empty_side_raises(self):
+        bids, _ = self._book([1.0], [1.0])
+        with pytest.raises(ValueError, match="side empty"):
+            _book_imbalance_calc(bids, [], 50)
+
+    def test_no_size_in_band_raises(self):
+        bids = [{"px": 90.0, "sz": 5.0}]
+        asks = [{"px": 110.0, "sz": 5.0}]
+        with pytest.raises(ValueError, match="no resting size"):
+            _book_imbalance_calc(bids, asks, 10)
+
+
+# ── funding z-score (pure calc) ────────────────────────────────────────────
+
+
+class TestFundingStats:
+    def test_known_distribution(self):
+        rates = [0.0] * 50 + [1.0] * 50  # mean 0.5, population std 0.5
+        out = _funding_stats(rates, 1.0)
+        assert out["zscore"] == pytest.approx(1.0)
+        assert out["percentile"] == pytest.approx(100.0)
+        assert out["current_annualized_pct"] == pytest.approx(1.0 * 24 * 365 * 100)
+        assert out["n_samples"] == 100
+
+    def test_below_mean_is_negative(self):
+        rates = [0.0] * 50 + [1.0] * 50
+        assert _funding_stats(rates, 0.0)["zscore"] == pytest.approx(-1.0)
+
+    def test_too_few_samples_raises(self):
+        with pytest.raises(ValueError, match="need ≥ 24"):
+            _funding_stats([0.1] * 23, 0.1)
+
+    def test_zero_variance_raises(self):
+        with pytest.raises(ValueError, match="zero variance"):
+            _funding_stats([0.1] * 100, 0.1)
+
+
+# ── session context (pure calcs) ───────────────────────────────────────────
+
+
+class TestSessionCalcs:
+    def test_session_boundaries(self):
+        assert _session_label(0) == "asia"
+        assert _session_label(6) == "asia"
+        assert _session_label(7) == "europe"
+        assert _session_label(13) == "eu_us_overlap"
+        assert _session_label(15) == "eu_us_overlap"
+        assert _session_label(16) == "us"
+        assert _session_label(21) == "off_hours"
+        assert _session_label(23) == "off_hours"
+
+    def _day_of_candles(self, day_offset=0):
+        # 24 hourly bars starting at UTC midnight; volume = hour index + 1.
+        base_ms = (1704067200 + day_offset * 86400) * 1000  # 2024-01-01+n 00:00Z
+        return [{"t": base_ms + h * 3600_000, "v": float(h + 1)} for h in range(24)]
+
+    def test_profile_medians_by_hour(self):
+        candles = self._day_of_candles(0) + self._day_of_candles(1)
+        profile = _hourly_profile(candles)
+        assert profile[0] == 1.0 and profile[23] == 24.0
+
+    def test_liquidity_pctile_ranks(self):
+        profile = _hourly_profile(self._day_of_candles())
+        assert _liquidity_pctile(profile, 23) == pytest.approx(100.0)
+        assert _liquidity_pctile(profile, 0) == pytest.approx(100.0 / 24)
+
+    def test_partial_profile_raises(self):
+        half_day = self._day_of_candles()[:12]
+        with pytest.raises(ValueError, match="distinct UTC hours"):
+            _hourly_profile(half_day)
+
+
+class TestNewDpCacheBudgets:
+    def test_budgets(self):
+        assert get_staleness_budget("hl_book_imbalance") == 60.0
+        assert get_staleness_budget("hl_funding_zscore") == 600.0
+        assert get_staleness_budget("session_context") == 900.0
+        assert get_staleness_budget("poly_price_ladder") == 900.0
+        assert get_staleness_budget("poly_event_odds") == 900.0
