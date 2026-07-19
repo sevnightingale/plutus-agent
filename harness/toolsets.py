@@ -450,7 +450,7 @@ TOOLSETS = {
     },
 
     "reflection": {
-        "description": "Plutus reflection — record_event (registry-dispatched: thesis/decision/reflection/conviction/...), list_event_types. Lifecycle queries join in Phase 4a-c6.",
+        "description": "ACP job inspection — acp_job_list, acp_job_history. NAME IS HISTORICAL: the v1 record_event/list_event_types surface this described died with the R1 clean-cut and was never replaced here. Reflect's writer is the separate registry toolset `reflection-write` (trading/dispatchers/reflection_write.py); reads are `lifecycle-read`.",
         "tools": _REFLECTION_TOOLS,
         "includes": [],
     },

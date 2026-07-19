@@ -1,7 +1,7 @@
 ---
 name: plutus-reflect
 model: standard
-toolsets: [lifecycle-read, strategy-write, file]
+toolsets: [lifecycle-read, strategy-write, reflection-write, file]
 reads:
   - PLUTUS.md#doctrine
   - PLUTUS.md#lessons
@@ -150,6 +150,15 @@ never copy the previous file's header stamp.*
    Different classes drive different responses: forecast → strategy update;
    regime → narrow applicability; variance → no change; execution/process →
    a lesson.
+   WRITE THEM with `record_reflection` — one row per finding, attaching
+   strategy_name and the prediction/position ids the judgement rests on.
+   This is YOUR table: main does not write it and cannot. Your report is a
+   summary that main journals; these rows are the durable record later
+   reflect passes and the operator read back, so a single blob per pass is
+   not acceptable — it cannot be filtered by strategy or error class.
+   Also record the reflections that are not failures: a graduation you
+   verified, a weight move and why, a lesson's reasoning (omit error_class
+   for these, set reflection_kind).
 5. LESSONS: distill durable, behavior-changing findings into the
    ~/.plutus-agent/PLUTUS.md "## Lessons" zone (file edit). Hard cap 12 —
    replace the weakest; lessons are curated, never accumulated.
