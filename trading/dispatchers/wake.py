@@ -30,9 +30,14 @@ def _enqueue_wake(args: Dict[str, Any]) -> str:
             reason=args.get("reason", ""),
             detail=args.get("detail", ""),
             source=args.get("source") or "plutus-ops",
+            key=args.get("key") or None,
         )
     except ValueError as exc:
         return tool_error(str(exc))
+    if record.get("suppressed"):
+        return tool_result({"ok": True, "suppressed": True,
+                            "key": record.get("key"),
+                            "held": record.get("held")})
     return tool_result({"ok": True, "enqueued": record})
 
 
@@ -61,7 +66,11 @@ registry.register(
         "description": (
             "Enqueue a wake for plutus-main (the ONLY way ops escalates — "
             "never message the operator). reason: staleness|watcher|"
-            "escalation|schedule. detail: one-paragraph digest of why."
+            "escalation|schedule. detail: one-paragraph digest of why. "
+            "ALWAYS pass `key` for a recurring condition — a staleness floor, "
+            "a dead integration — so repeats back off instead of firing every "
+            "tick; the delivered wake then carries the consecutive count, "
+            "which is the part main actually needs."
         ),
         "parameters": {
             "type": "object",
@@ -70,6 +79,16 @@ registry.register(
                            "enum": ["staleness", "watcher", "escalation", "schedule"]},
                 "detail": {"type": "string"},
                 "source": {"type": "string"},
+                "key": {
+                    "type": "string",
+                    "description": (
+                        "Stable identifier for a RECURRING condition, e.g. "
+                        "'staleness:perception' or 'integration:acp_auth'. "
+                        "Same condition → same key, every time, regardless of "
+                        "how the detail prose is worded. Omit only for "
+                        "genuinely novel one-off events."
+                    ),
+                },
             },
             "required": ["reason", "detail"],
         },

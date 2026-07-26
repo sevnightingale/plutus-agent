@@ -28,19 +28,123 @@ logger = logging.getLogger(__name__)
 
 VALID_REASONS = ("schedule", "operator", "staleness", "watcher", "escalation")
 
+# Backoff for keyed wakes. The first firing of a key is immediate; each
+# subsequent one waits twice as long as the last, capped. With ops on a
+# 30-minute tick a permanently-true condition therefore costs roughly 7 turns
+# a day instead of 48, and the escalation shows up in the wake's CONTENT (the
+# consecutive count) rather than in its frequency.
+_BACKOFF_BASE_S = 1800          # one ops tick
+_BACKOFF_MAX_S = 6 * 3600
+
 
 def _queue_path(home: Optional[Path] = None) -> Path:
     home = home if home is not None else get_hermes_home()
     return home / "wake_queue.jsonl"
 
 
+def _suppression_path(home: Optional[Path] = None) -> Path:
+    home = home if home is not None else get_hermes_home()
+    return home / "wake_suppression.json"
+
+
+def _ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
+def _backoff_for(consecutive: int) -> float:
+    """Seconds to stay quiet after the `consecutive`-th firing of a key."""
+    return min(_BACKOFF_BASE_S * (2 ** max(0, consecutive - 1)), _BACKOFF_MAX_S)
+
+
+def _consider_key(key: str, home: Optional[Path]) -> dict:
+    """Decide whether a keyed wake fires now, and update its state.
+
+    Returns ``{"fire": bool, "consecutive": int, "suppressed": int}``. State
+    lives in a sidecar rather than the queue itself because the queue is
+    drained and truncated on every turn — it cannot remember what it has
+    already said.
+    """
+    path = _suppression_path(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    now = time.time()
+    with open(path, "a+", encoding="utf-8") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        raw = f.read().strip()
+        try:
+            state = json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            logger.error("wake suppression state unreadable; resetting")
+            state = {}
+        entry = state.get(key) or {}
+        last_fired = float(entry.get("last_fired_ts") or 0.0)
+        consecutive = int(entry.get("consecutive") or 0)
+        suppressed = int(entry.get("suppressed") or 0)
+
+        # A quiet spell longer than the cap means the condition cleared and
+        # came back; treat the next one as a fresh first, loud again.
+        if last_fired and (now - last_fired) > _BACKOFF_MAX_S * 2:
+            consecutive, suppressed = 0, 0
+
+        fire = (not last_fired) or (now - last_fired) >= _backoff_for(consecutive)
+        if fire:
+            result = {"fire": True, "consecutive": consecutive + 1,
+                      "suppressed": suppressed}
+            entry = {"last_fired_ts": now, "consecutive": consecutive + 1,
+                     "suppressed": 0}
+        else:
+            result = {"fire": False, "consecutive": consecutive,
+                      "suppressed": suppressed + 1}
+            entry = {"last_fired_ts": last_fired, "consecutive": consecutive,
+                     "suppressed": suppressed + 1}
+
+        state[key] = entry
+        f.seek(0)
+        f.truncate()
+        f.write(json.dumps(state, indent=2, sort_keys=True))
+        f.flush()
+        fcntl.flock(f, fcntl.LOCK_UN)
+    return result
+
+
 def enqueue(reason: str, detail: str = "", source: str = "",
-            home: Optional[Path] = None) -> dict:
-    """Append a wake. Returns the enqueued record."""
+            key: Optional[str] = None, home: Optional[Path] = None) -> dict:
+    """Append a wake. Returns the enqueued record (or the suppression verdict).
+
+    ``key`` opts a recurring condition into backoff — pass a stable string
+    like ``"staleness:perception"``. Without it behaviour is unchanged: every
+    call appends, which is right for genuinely novel events (a watcher firing
+    on a new price is not the same wake twice).
+
+    The opt-in exists because on 2026-07-26 ops re-enqueued the same
+    perception-staleness wake every 30 minutes for eleven hours. main declined
+    all thirteen and had to keep its own tally in prose ("11th identical") —
+    the count is exactly the signal it lacked, so a fired wake now carries it.
+    """
     if reason not in VALID_REASONS:
         raise ValueError(f"wake reason must be one of {VALID_REASONS}")
+
+    if key:
+        verdict = _consider_key(key, home)
+        if not verdict["fire"]:
+            logger.info("wake suppressed: %s key=%s (%d held since last)",
+                        reason, key, verdict["suppressed"])
+            return {"ok": True, "suppressed": True, "key": key,
+                    "held": verdict["suppressed"]}
+        if verdict["consecutive"] > 1:
+            note = f"{_ordinal(verdict['consecutive'])} consecutive"
+            if verdict["suppressed"]:
+                note += f", {verdict['suppressed']} suppressed since the last"
+            detail = f"[{note}] {detail}"
+
     record = {"ts": time.time(), "reason": reason, "detail": detail,
               "source": source}
+    if key:
+        record["key"] = key
     path = _queue_path(home)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as f:
