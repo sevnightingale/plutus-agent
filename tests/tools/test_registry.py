@@ -315,6 +315,9 @@ class TestBuiltinDiscovery:
             "harness.tools.web_tools",
             # PLUTUS trading dispatchers (registry-backed agent-facing tools).
             "trading.dispatchers.account_state",
+            "trading.dispatchers.capital",
+            "trading.dispatchers.hygiene",
+            "trading.dispatchers.integrity",
 
             "trading.dispatchers.fetch_data_point",
             "trading.dispatchers.list_accounts",
