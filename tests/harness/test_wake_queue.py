@@ -34,6 +34,24 @@ class TestWakeQueue:
         assert "SL missing on-venue" in prompt
         assert "schedule the next wake" in prompt
 
+    def test_prompt_header_carries_absolute_utc_stamp(self, home):
+        """The wake header is main's live clock; relative ages are not enough.
+
+        The session anchor is stamped once per session, so in the persistent
+        gateway session it drifts. A wake is exactly when a current time
+        matters.
+        """
+        import re
+
+        wake_queue.enqueue("staleness", "perception overdue", source="plutus-ops")
+        prompt = wake_queue.format_wake_prompt(wake_queue.drain())
+        assert re.match(
+            r"\[WAKE @ "
+            r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) "
+            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC\] 1 pending trigger",
+            prompt,
+        ), f"wake header lacks an absolute UTC stamp: {prompt.splitlines()[0]!r}"
+
     def test_malformed_line_dropped_not_fatal(self, home):
         wake_queue.enqueue("watcher", "good")
         with open(wake_queue._queue_path(), "a") as f:

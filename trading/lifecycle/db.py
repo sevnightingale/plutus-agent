@@ -299,6 +299,14 @@ CREATE TABLE IF NOT EXISTS action_runs (
 """
 
 INDEXES_SQL = """
+-- The venue's tx hash is the natural key for a capital movement: it makes
+-- reconciliation against the exchange ledger idempotent (INSERT OR IGNORE),
+-- so the reconciler can run on every ops tick without duplicating history.
+-- SQLite permits repeated NULLs in a UNIQUE index, so hand-recorded movements
+-- with no hash are still allowed.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_capital_movements_tx
+    ON capital_movements(tx_hash);
+CREATE INDEX IF NOT EXISTS idx_capital_movements_ts ON capital_movements(ts);
 CREATE INDEX IF NOT EXISTS idx_dps_name_ts ON data_point_snapshots(name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_strategies_status ON strategies(status);
 CREATE INDEX IF NOT EXISTS idx_strategies_parent ON strategies(parent_strategy);

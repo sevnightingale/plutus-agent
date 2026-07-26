@@ -524,6 +524,29 @@ def record_snapshot(conn, *, name, value_json, agent, params_json=None,
     return cur.lastrowid
 
 
+def record_capital_movement(conn, *, ts, token, amount_token, movement_type,
+                            amount_usd_at_time=None, from_account=None,
+                            to_account=None, tx_hash=None, note=None,
+                            session_name=None) -> Optional[int]:
+    """Record one deposit/withdrawal/transfer. Idempotent on ``tx_hash``.
+
+    Returns the new row id, or None when the movement was already recorded —
+    which is the normal case on every reconciliation after the first, not an
+    error. The uniqueness is enforced by ux_capital_movements_tx rather than a
+    read-then-write, so concurrent reconcilers cannot both insert.
+    """
+    cur = conn.execute(
+        """INSERT OR IGNORE INTO capital_movements
+             (session_name, ts, from_account, to_account, token,
+              amount_token, amount_usd_at_time, movement_type, tx_hash, note)
+           VALUES (?,?,?,?,?,?,?,?,?,?)""",
+        (session_name, ts, from_account, to_account, token,
+         amount_token, amount_usd_at_time, movement_type, tx_hash, note),
+    )
+    conn.commit()
+    return cur.lastrowid if cur.rowcount else None
+
+
 def record_action_run(conn, *, action_type, agent, ok=True, notes_md=None,
                       session_name=None, ts=None) -> int:
     cur = conn.execute(

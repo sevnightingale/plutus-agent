@@ -10,7 +10,7 @@ reads:
   - strategies:live
   - lifecycle:open-predictions
 returns: prediction_batch
-spawned_by: [plutus-main]
+spawned_by: [plutus-main, staleness-ceiling]
 ---
 
 # Role

@@ -174,8 +174,13 @@ def parse_schedule(schedule: str) -> Dict[str, Any]:
     # ISO timestamp (contains T or looks like date)
     if 'T' in schedule or re.match(r'^\d{4}-\d{2}-\d{2}', schedule):
         try:
-            # Parse and validate
-            dt = datetime.fromisoformat(schedule.replace('Z', '+00:00'))
+            # Parse and validate. A trailing " UTC" is accepted alongside the
+            # "Z" suffix: it is what the agent naturally writes (and what this
+            # very function emits in `display` below), so refusing it made the
+            # desk fail to schedule its own wakes — observed live on
+            # 2026-07-26, "Invalid timestamp '2026-07-26 12:30 UTC'".
+            normalized = re.sub(r'\s*UTC$', '+00:00', schedule.strip(), flags=re.IGNORECASE)
+            dt = datetime.fromisoformat(normalized.replace('Z', '+00:00'))
             # Naive operator-typed timestamps are interpreted as UTC (Issue 1:
             # all machine times are UTC); timezone-aware input is converted to
             # UTC. The stored value is therefore always UTC and independent of

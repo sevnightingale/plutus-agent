@@ -102,6 +102,11 @@ def _read_zone(file_path: Path, zone: Optional[str]) -> str:
     if not zone:
         return text
     # A zone is a `## Heading` section; `#doctrine` → `## Doctrine` … next `## `.
+    # NB the `\s*$` after the heading is safe HERE and only here: the heading is
+    # not captured and the body is stripped, so whichever side of the blank run
+    # the match lands on, the result is identical. Do NOT copy this regex to a
+    # writer — live_state.replace_zone captures the heading, where the same
+    # `\s*` silently accretes blank lines into the file on every write.
     pattern = re.compile(
         rf"^##\s+{re.escape(zone.replace('-', ' '))}\s*$(.*?)(?=^##\s+|\Z)",
         re.MULTILINE | re.DOTALL | re.IGNORECASE,
@@ -158,6 +163,16 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
 
 def assemble_context(spec: AgentSpec, task_md: str) -> str:
     parts: List[str] = []
+    # State the runtime home. Without it specialists guess at their own data
+    # dir — the error log carries repeated denied reads against
+    # /root/.plutus-agent, /home/agent/.plutus-agent and ~/plutus-agent from
+    # regime and perception, each one a wasted tool turn before file_safety
+    # names the allowed roots for them.
+    parts.append(
+        f"## Runtime\nYour data dir (blackboards, strategies, lifecycle.db, "
+        f"ledger) is `{get_hermes_home()}`. Read paths under it directly; "
+        f"do not guess at another location."
+    )
     for entry in spec.reads:
         try:
             parts.append(resolve_read(entry))

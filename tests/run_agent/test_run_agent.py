@@ -827,6 +827,25 @@ class TestBuildSystemPrompt:
         assert "Session start (UTC):" in prompt
         assert "UTC" in prompt
 
+    def test_anchor_spells_out_the_weekday(self, agent):
+        """The anchor must never make the model infer the day of week.
+
+        Regression for 2026-07-26: given a bare ISO date, main inferred
+        Saturday on a Sunday and parked the sensory pipeline for eleven hours
+        on the strength of it.
+        """
+        import re
+
+        prompt = agent._build_system_prompt()
+        anchor = next(
+            line for line in prompt.splitlines() if "Session start (UTC):" in line)
+        assert re.search(
+            r"Session start \(UTC\): "
+            r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) "
+            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC",
+            anchor,
+        ), f"anchor lacks a spelled-out weekday: {anchor!r}"
+
     def test_includes_nous_subscription_prompt(self, agent, monkeypatch):
         monkeypatch.setattr(run_agent, "build_nous_subscription_prompt", lambda tool_names: "NOUS SUBSCRIPTION BLOCK")
         prompt = agent._build_system_prompt()

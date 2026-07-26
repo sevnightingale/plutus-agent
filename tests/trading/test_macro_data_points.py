@@ -6,10 +6,33 @@ We mock the context.dev call — these tests cover the classification, the
 return shape, the source-fallback loop, and fail-loud behaviour.
 """
 
+import importlib
+
 import pytest
 
 from trading.integrations.macro import _context_client as cc
 from trading.integrations.macro import data_points as dp
+
+
+@pytest.fixture(autouse=True)
+def _registry_registrations_live():
+    """Guard a latent order-dependency, not a product defect.
+
+    ``_REGISTRY`` is a module global populated by import-time decorators. A
+    test elsewhere that forces a fresh import (conftest's
+    ``_sys_modules_hygiene`` restores sys.modules afterwards) can leave this
+    worker holding a NEWLY imported registry module whose ``_REGISTRY`` is
+    empty, while this file's already-imported ``data_points`` registered into
+    the previous dict — so the lookups below KeyError depending only on which
+    worker xdist happened to schedule this file onto.
+
+    Re-apply the decorators when that has happened. Conditional because
+    ``register_data_point`` raises RegistryError on a duplicate.
+    """
+    from trading.perception.core import data_point_registry as reg
+    if "macro_vix" not in reg._REGISTRY:
+        importlib.reload(dp)
+    yield
 
 
 class TestClassify:

@@ -22,6 +22,25 @@ STALENESS_FLOORS = {
     "generation": 7 * 86400,
 }
 
+# Ceilings: the point at which the refresh stops being main's call.
+#
+# Between floor and ceiling main may defer with a reason, and that judgement
+# is worth keeping — a $74 range over 7.5h genuinely does not need six
+# perception runs, and a fixed floor is wrong in both directions (too slack on
+# FOMC day, too tight on a dead weekend). But a floor that can be declined
+# indefinitely is not a floor: on 2026-07-26 main declined perception thirteen
+# consecutive times and the desk went blind for eleven hours with FOMC two
+# days out. Past the ceiling, harness/cli/staleness_ceiling.py refreshes
+# deterministically and does not ask.
+#
+# Explicit rather than derived from the floors, so each can be tuned on its
+# own evidence.
+STALENESS_CEILINGS = {
+    "perception": 8 * 3600,
+    "regime": 16 * 3600,
+    "predict": 16 * 3600,
+}
+
 
 def _enqueue_wake(args: Dict[str, Any]) -> str:
     from harness.wake_queue import enqueue
@@ -30,9 +49,14 @@ def _enqueue_wake(args: Dict[str, Any]) -> str:
             reason=args.get("reason", ""),
             detail=args.get("detail", ""),
             source=args.get("source") or "plutus-ops",
+            key=args.get("key") or None,
         )
     except ValueError as exc:
         return tool_error(str(exc))
+    if record.get("suppressed"):
+        return tool_result({"ok": True, "suppressed": True,
+                            "key": record.get("key"),
+                            "held": record.get("held")})
     return tool_result({"ok": True, "enqueued": record})
 
 
@@ -61,7 +85,11 @@ registry.register(
         "description": (
             "Enqueue a wake for plutus-main (the ONLY way ops escalates — "
             "never message the operator). reason: staleness|watcher|"
-            "escalation|schedule. detail: one-paragraph digest of why."
+            "escalation|schedule. detail: one-paragraph digest of why. "
+            "ALWAYS pass `key` for a recurring condition — a staleness floor, "
+            "a dead integration — so repeats back off instead of firing every "
+            "tick; the delivered wake then carries the consecutive count, "
+            "which is the part main actually needs."
         ),
         "parameters": {
             "type": "object",
@@ -70,6 +98,16 @@ registry.register(
                            "enum": ["staleness", "watcher", "escalation", "schedule"]},
                 "detail": {"type": "string"},
                 "source": {"type": "string"},
+                "key": {
+                    "type": "string",
+                    "description": (
+                        "Stable identifier for a RECURRING condition, e.g. "
+                        "'staleness:perception' or 'integration:acp_auth'. "
+                        "Same condition → same key, every time, regardless of "
+                        "how the detail prose is worded. Omit only for "
+                        "genuinely novel one-off events."
+                    ),
+                },
             },
             "required": ["reason", "detail"],
         },
