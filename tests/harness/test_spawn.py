@@ -100,6 +100,20 @@ class TestAssembleContext:
         ctx = spawn.assemble_context(spec, "TASK-MARKER")
         assert ctx.index("NORTH-STAR") < ctx.index("# Role") < ctx.index("TASK-MARKER")
 
+    def test_states_the_runtime_home(self, tmp_path, monkeypatch):
+        """Specialists must not have to guess their own data dir — the error
+        log carries denied reads against /root/.plutus-agent and
+        /home/agent/.plutus-agent from agents hunting for PLUTUS.md."""
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.setattr(spawn, "get_hermes_home", lambda: home)
+        _write_agent(tmp_path, "plutus-perception")
+        spec = spawn.load_agent("plutus-perception", agents_dir=tmp_path)
+        spec.reads = []
+        ctx = spawn.assemble_context(spec, "TASK-MARKER")
+        assert str(home) in ctx
+        assert ctx.index(str(home)) < ctx.index("TASK-MARKER")
+
 
 class TestReturnContracts:
     def test_valid_payload(self):

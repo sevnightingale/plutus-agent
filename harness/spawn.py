@@ -163,6 +163,16 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
 
 def assemble_context(spec: AgentSpec, task_md: str) -> str:
     parts: List[str] = []
+    # State the runtime home. Without it specialists guess at their own data
+    # dir — the error log carries repeated denied reads against
+    # /root/.plutus-agent, /home/agent/.plutus-agent and ~/plutus-agent from
+    # regime and perception, each one a wasted tool turn before file_safety
+    # names the allowed roots for them.
+    parts.append(
+        f"## Runtime\nYour data dir (blackboards, strategies, lifecycle.db, "
+        f"ledger) is `{get_hermes_home()}`. Read paths under it directly; "
+        f"do not guess at another location."
+    )
     for entry in spec.reads:
         try:
             parts.append(resolve_read(entry))
