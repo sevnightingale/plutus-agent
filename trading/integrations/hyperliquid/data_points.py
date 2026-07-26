@@ -16,6 +16,7 @@ having to hand-roll the SQL.
 from __future__ import annotations
 
 import logging
+import math
 import time
 from typing import Any, Dict, List, Optional
 
@@ -239,9 +240,23 @@ def _funding_stats(rates: List[float], current: float) -> Dict[str, Any]:
     n = len(rates)
     if n < 24:
         raise ValueError(f"only {n} funding samples — need ≥ 24 for a distribution")
-    mean = sum(rates) / n
-    std = (sum((r - mean) ** 2 for r in rates) / n) ** 0.5
-    if std == 0:
+    # fsum, not sum: CPython gained compensated summation for `sum()` in 3.12,
+    # and 3.11 — this project's minimum — did not. A CONSTANT history therefore
+    # produced a mean a few ulps off the constant, leaving residual deviations
+    # the guard below then failed to recognise as degenerate. `[0.1] * 100`
+    # returned zscore=1.0 on 3.11 and raised on 3.12: a z-score assembled
+    # entirely out of floating-point noise, which is precisely the fabricated
+    # reading the honest-absence law exists to forbid.
+    mean = math.fsum(rates) / n
+    std = (math.fsum((r - mean) ** 2 for r in rates) / n) ** 0.5
+    # Degeneracy is relative to the data's own scale, never an exact float zero.
+    # fsum makes a constant history land on exactly 0.0 today, but any future
+    # accumulation over a large or wide-ranging book leaves residue, and the
+    # failure mode is silent — so measure the residue against the largest
+    # magnitude present. Funding runs ~1e-5/h with a real std around 1e-6, many
+    # orders above this floor, so nothing genuine is rejected.
+    scale = max((abs(r) for r in rates), default=0.0) or 1.0
+    if std <= 1e-12 * scale:
         raise ValueError("funding history has zero variance — z-score undefined")
     return {
         "zscore": (current - mean) / std,
