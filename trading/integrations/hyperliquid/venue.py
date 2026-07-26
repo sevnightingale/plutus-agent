@@ -778,6 +778,83 @@ def hl_account_state(account_name: str = "hl_trading", **_extra: Any) -> Dict[st
     }
 
 
+def hl_capital_ledger(account_name: str = "hl_trading",
+                      start_ms: int = 0,
+                      **_extra: Any) -> List[Dict[str, Any]]:
+    """Deposits, withdrawals and transfers for the account — the venue's own
+    record of money entering and leaving.
+
+    This is the source of truth for capital movements. The desk cannot derive
+    them from its own trading records: equity moves for two unrelated reasons
+    (PnL and funding events), and without the venue's ledger there is no way
+    to tell "up $50 because it traded well" from "up $50 because the operator
+    topped it up". lifecycle.db's ``capital_movements`` table existed from the
+    beginning for exactly this and had no writer, so every P&L figure the desk
+    could state was gross of unknown deposits.
+
+    Normalised to one row per movement, oldest first. ``tx_hash`` is the
+    venue's own hash and is what makes reconciliation idempotent. Funding
+    payments are deliberately excluded by the endpoint — they are trading
+    outcomes, not capital events.
+    """
+    info = get_info()
+    addr = resolve_account_address(account_name).lower()
+    raw = info.user_non_funding_ledger_updates(addr, start_ms) or []
+
+    movements: List[Dict[str, Any]] = []
+    for row in raw:
+        delta = row.get("delta") or {}
+        kind = delta.get("type")
+        token = delta.get("token") or "USDC"
+        amount = delta.get("amount")
+        if amount is None:
+            amount = delta.get("usdc")
+        if amount is None:
+            # Honest absence: an unparseable row is reported, never guessed at
+            # and never silently dropped from a financial record.
+            logger.warning("hl_capital_ledger: unparseable delta %s", delta)
+            movements.append({
+                "ts": (row.get("time") or 0) / 1000.0,
+                "tx_hash": row.get("hash"),
+                "movement_type": kind or "unknown",
+                "token": token,
+                "amount_token": None,
+                "amount_usd_at_time": None,
+                "from_account": delta.get("user"),
+                "to_account": delta.get("destination"),
+                "note": f"UNPARSED: {json.dumps(delta)[:400]}",
+            })
+            continue
+
+        amount_f = float(amount)
+        dest = (delta.get("destination") or "").lower()
+        src = (delta.get("user") or "").lower()
+        # Sign from the account's point of view: money arriving is positive.
+        # A `send` where we are the destination is a deposit; where we are the
+        # sender, a withdrawal.
+        if kind == "send" and src == addr and dest != addr:
+            amount_f = -abs(amount_f)
+        elif kind in ("withdraw", "accountClassTransfer") and dest != addr:
+            amount_f = -abs(amount_f)
+
+        usd = delta.get("usdcValue")
+        movements.append({
+            "ts": (row.get("time") or 0) / 1000.0,
+            "tx_hash": row.get("hash"),
+            "movement_type": kind or "unknown",
+            "token": token,
+            "amount_token": amount_f,
+            "amount_usd_at_time": (
+                math.copysign(float(usd), amount_f) if usd is not None else None),
+            "from_account": delta.get("user"),
+            "to_account": delta.get("destination"),
+            "note": None,
+        })
+
+    movements.sort(key=lambda m: m["ts"])
+    return movements
+
+
 # ─── Registration ─────────────────────────────────────────────────────────
 
 try:

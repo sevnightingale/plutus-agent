@@ -93,6 +93,10 @@ def _run_query(args: Dict[str, Any]) -> str:
     # name ↔ strategy_name (the underlying query functions are inconsistent)
     strategy = params.get("strategy_name", params.get("name"))
 
+    def _capital():
+        from trading.lifecycle import capital
+        return capital
+
     _QUERIES = {
         "open_predictions": lambda: queries.open_predictions(
             conn, **{k: v for k, v in params.items() if k == "limit"}),
@@ -116,6 +120,8 @@ def _run_query(args: Dict[str, Any]) -> str:
         "support_score_performance": lambda: queries.support_score_performance(
             conn, strategy),
         "last_action_runs": lambda: queries.last_action_runs(conn),
+        "net_deposits": lambda: _capital().net_deposits(conn),
+        "lifetime_pnl": lambda: _capital().lifetime_pnl(conn),
         "timescale_mix": lambda: queries.timescale_mix(conn, _epoch(params["since_ts"])),
         "sizing_performance": lambda: queries.sizing_performance(
             conn, _conviction_render_fix_ts()),
@@ -149,7 +155,9 @@ registry.register(
             "open_predictions_by_cell | mae_envelope {strategy_name?, "
             "timescale?, regime_tag?, percentile?, population?, statistic?} | "
             "support_score_performance {strategy_name?} | last_action_runs | "
-            "timescale_mix {since_ts} | sizing_performance."
+            "timescale_mix {since_ts} | sizing_performance | net_deposits "
+            "(capital in/out — the denominator every honest performance "
+            "figure needs) | lifetime_pnl (equity measured against it)."
         ),
         "parameters": {
             "type": "object",
