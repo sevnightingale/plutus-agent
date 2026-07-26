@@ -37,6 +37,12 @@ def _draft(**over):
     return write.PredictionDraft(**base)
 
 
+def _index_exists(conn, name: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name=?", (name,)
+    ).fetchone() is not None
+
+
 class TestSchema:
     def test_fresh_create_stamps_version(self, conn):
         row = conn.execute("SELECT version FROM schema_version").fetchone()
@@ -52,6 +58,60 @@ class TestSchema:
         c.close()
         with pytest.raises(RuntimeError, match="fresh-create only"):
             get_db(old)
+
+    def test_reopening_restores_an_index_added_after_creation(self, tmp_path):
+        """An at-version database must still receive newly declared indexes.
+
+        Indexes were created only on fresh create, so any index added to
+        INDEXES_SQL after a runtime's database already existed never arrived —
+        the version matched, the open path returned early, nothing else ran the
+        block. Silent, because the database keeps working without it. On
+        2026-07-26 that cost the capital reconciler its idempotency: it leans
+        entirely on ux_capital_movements_tx, the live database never got the
+        index, and the same two deposits were re-inserted every ops tick.
+
+        Dropping an index and reopening reproduces that exactly.
+        """
+        import sqlite3
+        path = tmp_path / "lifecycle.db"
+        get_db(path).close()
+
+        c = sqlite3.connect(str(path))
+        c.execute("DROP INDEX ux_capital_movements_tx")
+        c.commit()
+        assert not _index_exists(c, "ux_capital_movements_tx")
+        c.close()
+
+        conn = get_db(path)
+        assert _index_exists(conn, "ux_capital_movements_tx"), (
+            "reopening an existing database did not apply declared indexes")
+
+    def test_reopen_survives_an_index_that_cannot_be_built(self, tmp_path, caplog):
+        """Duplicates must not brick the open — loud, but not fatal.
+
+        A database that already accumulated duplicates (as the live one had)
+        cannot take the UNIQUE index. Refusing to open would strand the desk
+        over a constraint; the open continues and says so.
+        """
+        import sqlite3
+        path = tmp_path / "lifecycle.db"
+        get_db(path).close()
+
+        c = sqlite3.connect(str(path))
+        c.execute("DROP INDEX ux_capital_movements_tx")
+        for _ in range(2):
+            c.execute(
+                """INSERT INTO capital_movements (ts, token, amount_token,
+                       movement_type, tx_hash) VALUES (?,?,?,?,?)""",
+                (1.0, "USDC", 5.0, "send", "0xdupe"))
+        c.commit()
+        c.close()
+
+        with caplog.at_level("WARNING"):
+            conn = get_db(path)
+        assert conn.execute("SELECT COUNT(*) FROM capital_movements").fetchone()[0] == 2
+        assert not _index_exists(conn, "ux_capital_movements_tx")
+        assert "ux_capital_movements_tx" in caplog.text, "the failure was not logged"
 
 
 class TestTimescale:

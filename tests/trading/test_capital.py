@@ -9,31 +9,23 @@ import sqlite3
 
 import pytest
 
-from trading.lifecycle import capital, write
+from trading.lifecycle import capital, db, write
 
 
 def _conn():
+    """A connection carrying the REAL schema, built by the code under test.
+
+    This helper used to hand-write ``capital_movements`` and hand-create
+    ``ux_capital_movements_tx``. Every idempotency test below passed against
+    that invented schema while the live database carried no such index — the
+    reconciler duplicated its entire history on every ops tick and the suite
+    stayed green, because the fixture asserted the schema it wished for rather
+    than the one the code produces. A fixture that builds its own schema
+    cannot witness a schema bug.
+    """
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
-    c.executescript(
-        """
-        CREATE TABLE capital_movements (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_name TEXT,
-            ts REAL NOT NULL,
-            from_account TEXT,
-            to_account TEXT,
-            token TEXT NOT NULL,
-            amount_token REAL NOT NULL,
-            amount_usd_at_time REAL,
-            movement_type TEXT NOT NULL,
-            tx_hash TEXT,
-            note TEXT
-        );
-        CREATE UNIQUE INDEX ux_capital_movements_tx
-            ON capital_movements(tx_hash);
-        """
-    )
+    db._create_fresh(c)
     return c
 
 

@@ -386,6 +386,7 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         ).fetchone() if _has_table(conn, "schema_version") else None
         version = row["version"] if row else None
         if version == SCHEMA_VERSION:
+            _ensure_indexes(conn)
             return conn
         # Incremental migrations chain forward: v2 → v3 → v4 → v5.
         if version == 2:
@@ -398,6 +399,7 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
             _migrate_v4_to_v5(conn)
             version = 5
         if version == SCHEMA_VERSION:
+            _ensure_indexes(conn)
             logger.info("Migrated lifecycle.db → v%s at %s", SCHEMA_VERSION, db_path)
             return conn
         conn.close()
@@ -417,6 +419,45 @@ def _has_table(conn: sqlite3.Connection, name: str) -> bool:
     return conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone() is not None
+
+
+def _ensure_indexes(conn: sqlite3.Connection) -> None:
+    """Apply INDEXES_SQL to an already-existing database.
+
+    Indexes used to be created in ``_create_fresh`` and nowhere else, so an
+    index added after a runtime's database already existed never arrived: the
+    schema version was already current, the open path returned early, and no
+    other code ran the block. The bug is silent by construction — the database
+    works, just without the constraint.
+
+    It cost real correctness on 2026-07-26. ``ux_capital_movements_tx`` was
+    added that morning, and ``record_capital_movement`` rests its whole
+    idempotency on it (``INSERT OR IGNORE``, deliberately not a
+    read-then-write, so that concurrent reconcilers cannot both insert). The
+    index was still absent from the live database hours later, so the capital
+    reconciler re-inserted the same two deposits on every 30-minute ops tick:
+    twelve rows for two movements, and a reported $497.86 of lifetime deposits
+    against $82.98 of real ones — an 85% loss where the truth was 9%.
+
+    Every statement is ``CREATE ... IF NOT EXISTS``, so running this on every
+    open is cheap and idempotent. A UNIQUE index can still fail on a database
+    that already holds duplicates; that is logged loudly and the open
+    continues, because refusing to start the desk over a missing index is the
+    worse of the two failures.
+    """
+    for chunk in INDEXES_SQL.split(";"):
+        if "CREATE" not in chunk.upper():
+            continue  # trailing whitespace or a standalone comment block
+        try:
+            conn.execute(chunk)
+        except sqlite3.DatabaseError as exc:
+            # DatabaseError, not OperationalError: duplicates in an existing
+            # table raise IntegrityError, which is exactly the case this
+            # tolerance exists for.
+            name = next((w for w in chunk.split() if w.startswith(("idx_", "ux_"))),
+                        "<unnamed>")
+            logger.warning("index %s not applied: %s", name, exc)
+    conn.commit()
 
 
 def _create_fresh(conn: sqlite3.Connection) -> None:
