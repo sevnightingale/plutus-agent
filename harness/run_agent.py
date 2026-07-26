@@ -4090,8 +4090,15 @@ class AIAgent:
         # the current time from the freshest data ts. (Cron desk-agents get a
         # fresh session per run, so their anchor ≈ now; the persistent gateway
         # session does not.)
+        # The weekday is spelled out deliberately. Given a bare ISO date the
+        # model infers the day of week itself, and on 2026-07-26 it inferred
+        # Saturday on a Sunday — then declined thirteen consecutive perception
+        # staleness wakes as "same dead Saturday" and scheduled its next
+        # refresh for a "Sunday 07:00Z" that had already passed. Same failure
+        # class as the fabricated time labels this anchor was added to fix:
+        # anything the model has to derive, it can derive wrongly.
         timestamp_line = (
-            f"Session start (UTC): {now.astimezone(_timezone.utc):%Y-%m-%d %H:%M} UTC"
+            f"Session start (UTC): {now.astimezone(_timezone.utc):%A %Y-%m-%d %H:%M} UTC"
             " (anchor — derive the current time from the freshest data ts)"
         )
         if self.pass_session_id and self.session_id:

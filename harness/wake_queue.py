@@ -18,6 +18,7 @@ import fcntl
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -83,9 +84,20 @@ def peek(home: Optional[Path] = None) -> int:
 
 
 def format_wake_prompt(wakes: List[dict]) -> str:
-    """Render drained wakes as plutus-main's synthetic turn prompt."""
+    """Render drained wakes as plutus-main's synthetic turn prompt.
+
+    The header carries an ABSOLUTE UTC stamp, not just the per-wake relative
+    ages. main's only other clock is the session anchor, which is stamped once
+    when the prompt is built and rebuilt only on compaction — so in the
+    persistent gateway session (hours long, and the one session that outlives
+    a date boundary) it drifts from "now" precisely as the day wears on. A
+    wake is the moment main is asked to make a time-sensitive call, so it is
+    the moment worth handing it a live clock.
+    """
+    stamp = datetime.now(timezone.utc).strftime("%A %Y-%m-%d %H:%M")
     lines = [
-        f"[WAKE] {len(wakes)} pending trigger(s) collapsed into this turn:",
+        f"[WAKE @ {stamp} UTC] {len(wakes)} pending trigger(s) "
+        f"collapsed into this turn:",
     ]
     for w in wakes:
         age = int(time.time() - w["ts"])
