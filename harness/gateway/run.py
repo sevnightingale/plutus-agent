@@ -10962,6 +10962,16 @@ def _start_cron_ticker(
             except Exception as e:
                 logger.error("Wake-queue drain error: %s", e, exc_info=True)
 
+        # Staleness ceilings: between floor and ceiling a refresh is main's
+        # judgement; past the ceiling it is not. Deterministic, no model, one
+        # query per tick and almost always a no-op — the refresh itself runs
+        # on its own thread so it never stalls the wake drain above.
+        try:
+            from harness.cli.staleness_ceiling import tick as _ceiling_tick
+            _ceiling_tick()
+        except Exception as e:
+            logger.error("Staleness-ceiling tick error: %s", e, exc_info=True)
+
         tick_count += 1
 
         if tick_count % CHANNEL_DIR_EVERY == 0 and adapters:

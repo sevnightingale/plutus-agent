@@ -7,7 +7,7 @@ reads:
   - PERCEPTION.md
   - REGIME.md
 returns: regime_report
-spawned_by: [plutus-main]
+spawned_by: [plutus-main, staleness-ceiling]
 ---
 
 # Role

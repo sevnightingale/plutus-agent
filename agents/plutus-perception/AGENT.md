@@ -6,7 +6,7 @@ reads:
   - PLUTUS.md#doctrine
   - strategies:live
 returns: perception_report
-spawned_by: [plutus-main]
+spawned_by: [plutus-main, staleness-ceiling]
 ---
 
 # Role
