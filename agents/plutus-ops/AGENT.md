@@ -75,7 +75,15 @@ plutus-main and move on.
    These are all keyed because an upstream outage is not news twice: on
    2026-07-26 `acp agent whoami` returned 502/504 from api.acp.virtuals every
    thirty minutes, and nothing about repeating it helps the operator.
-9. Return your ops_report — exactly one per tick.
+9. SELF-CHECK: desk_integrity_check. Silent when the desk is well. For each
+   violation → enqueue_wake(reason=escalation, key="integrity:<check>",
+   detail=the violation's detail verbatim). Report the list in your
+   ops_report. You never repair and never explain it away — a violation is a
+   fact about the desk, and main decides what it means.
+   This step exists because every other beat here watches the MARKET. Nothing
+   watched the desk, and on 2026-07-26 that cost eleven blind hours plus a
+   table that had been unwritable since the day it was created.
+10. Return your ops_report — exactly one per tick.
 
 # Output contract
 

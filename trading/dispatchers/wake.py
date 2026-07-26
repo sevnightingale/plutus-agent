@@ -22,6 +22,25 @@ STALENESS_FLOORS = {
     "generation": 7 * 86400,
 }
 
+# Ceilings: the point at which the refresh stops being main's call.
+#
+# Between floor and ceiling main may defer with a reason, and that judgement
+# is worth keeping — a $74 range over 7.5h genuinely does not need six
+# perception runs, and a fixed floor is wrong in both directions (too slack on
+# FOMC day, too tight on a dead weekend). But a floor that can be declined
+# indefinitely is not a floor: on 2026-07-26 main declined perception thirteen
+# consecutive times and the desk went blind for eleven hours with FOMC two
+# days out. Past the ceiling, harness/cli/staleness_ceiling.py refreshes
+# deterministically and does not ask.
+#
+# Explicit rather than derived from the floors, so each can be tuned on its
+# own evidence.
+STALENESS_CEILINGS = {
+    "perception": 8 * 3600,
+    "regime": 16 * 3600,
+    "predict": 16 * 3600,
+}
+
 
 def _enqueue_wake(args: Dict[str, Any]) -> str:
     from harness.wake_queue import enqueue
