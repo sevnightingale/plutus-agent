@@ -47,6 +47,29 @@ class TestReplaceZone:
         LS.replace_zone(p, "live-state", f"{LS._MARKER}\n- equity_usd: $42.00")
         assert "$42.00" in _read_zone(p, "live-state")
 
+    def test_repeated_writes_are_byte_stable(self, tmp_path):
+        """The zone must not grow. Regression for the live PLUTUS.md, whose
+        `## Live State` accreted 138 blank lines — the heading group's `\\s*`
+        swallowed the blank run, the substitution wrote it back and appended
+        two more newlines, and the next write swallowed those too."""
+        p = tmp_path / "PLUTUS.md"
+        p.write_text(_PLUTUS)
+        body = f"{LS._MARKER}\n- equity_usd: $1.00"
+        LS.replace_zone(p, "live-state", body)
+        after_first = p.read_text()
+        for _ in range(5):
+            LS.replace_zone(p, "live-state", body)
+        assert p.read_text() == after_first, "zone grew across repeated writes"
+
+    def test_pre_existing_blank_run_is_not_preserved(self, tmp_path):
+        """A file already carrying the padding heals on the next write."""
+        p = tmp_path / "PLUTUS.md"
+        p.write_text(_PLUTUS.replace("## Live State\n", "## Live State\n" + "\n" * 40))
+        LS.replace_zone(p, "live-state", f"{LS._MARKER}\n- equity_usd: $1.00")
+        zone = p.read_text().split("## Live State", 1)[1].split("## Lessons")[0]
+        assert zone.count("\n\n\n") == 0, "blank run survived the rewrite"
+        assert "operator-owned — must NOT change" in p.read_text()
+
     def test_missing_file_or_zone_returns_false(self, tmp_path):
         assert LS.replace_zone(tmp_path / "nope.md", "live-state", "x") is False
         p = tmp_path / "PLUTUS.md"

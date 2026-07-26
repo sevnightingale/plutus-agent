@@ -102,6 +102,11 @@ def _read_zone(file_path: Path, zone: Optional[str]) -> str:
     if not zone:
         return text
     # A zone is a `## Heading` section; `#doctrine` → `## Doctrine` … next `## `.
+    # NB the `\s*$` after the heading is safe HERE and only here: the heading is
+    # not captured and the body is stripped, so whichever side of the blank run
+    # the match lands on, the result is identical. Do NOT copy this regex to a
+    # writer — live_state.replace_zone captures the heading, where the same
+    # `\s*` silently accretes blank lines into the file on every write.
     pattern = re.compile(
         rf"^##\s+{re.escape(zone.replace('-', ' '))}\s*$(.*?)(?=^##\s+|\Z)",
         re.MULTILINE | re.DOTALL | re.IGNORECASE,

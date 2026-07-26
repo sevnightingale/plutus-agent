@@ -45,8 +45,16 @@ def replace_zone(path: Path, zone: str, new_body: str) -> bool:
     if not path.exists():
         return False
     resolved = str(Path(path).resolve())
+    # The heading group's trailing match is HORIZONTAL whitespace only.
+    # `\s*$` here is a slow file-corrupter: under MULTILINE|DOTALL `\s` matches
+    # newlines, so a greedy `\s*` runs forward through every blank line after
+    # the heading and backtracks only far enough for `$` to sit before a
+    # newline — putting the whole blank run inside group(1). The substitution
+    # below writes group(1) back verbatim and appends "\n\n", so each refresh
+    # preserved the blanks and added two more. The live PLUTUS.md reached 138
+    # blank lines inside `## Live State` this way.
     pattern = re.compile(
-        rf"(^##\s+{re.escape(zone.replace('-', ' '))}\s*$)(.*?)(?=^##\s+|\Z)",
+        rf"(^##[ \t]+{re.escape(zone.replace('-', ' '))}[ \t]*$)(.*?)(?=^##\s+|\Z)",
         re.MULTILINE | re.DOTALL | re.IGNORECASE,
     )
     body = new_body.strip("\n")
