@@ -95,6 +95,22 @@ cd "$REPO_ROOT"
 # otherwise treat them as test paths.
 ARGS=("$@")
 
+# ── CI parity: the known-failures ledger ────────────────────────────────────
+# tests.yml deselects @tests/ci-known-failures.txt — inherited upstream debt
+# that does not pass yet. This script promises a run that matches CI, and
+# until now it did not apply the ledger: a full local run reported ~170
+# failures CI never sees, which is how a real regression hides in the noise.
+#
+# Named paths are exempt. Asking for a specific test means you want to SEE it,
+# including one you are in the middle of repairing off the ledger. Following
+# the convention already documented above, a leading `-` means flags-only and
+# so still counts as a full-suite run.
+LEDGER=()
+if [ ${#ARGS[@]} -eq 0 ] || [[ "${ARGS[0]}" == -* ]]; then
+  LEDGER=("@tests/ci-known-failures.txt")
+  echo "  (deselecting tests/ci-known-failures.txt, as CI does)"
+fi
+
 echo "▶ running pytest with $WORKERS workers, hermetic env, in $REPO_ROOT"
 echo "  (TZ=UTC LANG=C.UTF-8 PYTHONHASHSEED=0; all credential env vars unset)"
 
@@ -105,4 +121,5 @@ exec "$PYTHON" -m pytest \
   --ignore=tests/integration \
   --ignore=tests/e2e \
   -m "not integration" \
+  "${LEDGER[@]}" \
   "${ARGS[@]}"

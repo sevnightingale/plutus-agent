@@ -119,6 +119,33 @@ class TestTrixCalc:
         assert "error" not in out
 
 
+class TestRocFlatSeriesGuard:
+    """A dead-flat ROC series must read neutral, at any magnitude.
+
+    pandas accumulates variance, so a constant series returns residue rather
+    than zero (2.8e-17 at 0.1, 1.8e-12 at 12345.678). The old `== 0.0` guard
+    missed that and the thresholds collapsed onto the mean, classifying a flat
+    series overbought or oversold on arithmetic noise alone.
+    """
+
+    def _extremes(self, value, n=50):
+        from trading.integrations.ta.preprocessors.roc import ROCPreprocessor
+        return ROCPreprocessor()._analyze_roc_extremes(pd.Series([value] * n))
+
+    @pytest.mark.parametrize("value", [0.1, 0.0, 12345.678, -0.1])
+    def test_flat_series_is_neutral(self, value):
+        out = self._extremes(value)
+        assert out["condition"] == "neutral"
+        assert out["overbought_threshold"] == 0.0
+        assert out["current_streak"] == 0
+
+    def test_real_variation_is_not_flattened(self):
+        from trading.integrations.ta.preprocessors.roc import ROCPreprocessor
+        series = pd.Series([1.0 + (i % 5) for i in range(50)])
+        out = ROCPreprocessor()._analyze_roc_extremes(series)
+        assert out["overbought_threshold"] != 0.0
+
+
 class TestPsarCalc:
     def test_downtrend_reads_bearish_not_fabricated_bullish(self):
         # Pre-fix, only the long-side column was read; in a downtrend its
@@ -299,8 +326,32 @@ class TestFundingStats:
             _funding_stats([0.1] * 23, 0.1)
 
     def test_zero_variance_raises(self):
+        # 0.1 is not representable in binary, so a naive running `sum()` of a
+        # hundred copies lands a few ulps off 10.0 and the deviations from the
+        # mean come out ~1e-16 rather than 0. This test passed on CPython 3.12
+        # (compensated `sum()`) and failed on 3.11, where the guard missed and
+        # the caller was handed zscore=1.0 built from that noise.
         with pytest.raises(ValueError, match="zero variance"):
             _funding_stats([0.1] * 100, 0.1)
+
+    def test_zero_variance_raises_at_large_magnitudes(self):
+        # Residue scales with magnitude, so a guard tuned only to small numbers
+        # would let a constant book through here.
+        with pytest.raises(ValueError, match="zero variance"):
+            _funding_stats([12345.678] * 500, 12345.678)
+
+    def test_all_zero_history_raises(self):
+        with pytest.raises(ValueError, match="zero variance"):
+            _funding_stats([0.0] * 100, 0.0)
+
+    def test_tiny_but_real_variance_is_kept(self):
+        # The other direction: funding runs ~1e-5/h, and a real distribution at
+        # that scale must survive the degeneracy guard rather than be discarded
+        # as arithmetic residue.
+        rates = [1e-5 + (i % 2) * 1e-6 for i in range(100)]
+        out = _funding_stats(rates, 1.05e-5)
+        assert out["std_rate"] > 0
+        assert out["n_samples"] == 100
 
 
 # ── session context (pure calcs) ───────────────────────────────────────────

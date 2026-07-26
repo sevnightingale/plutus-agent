@@ -195,8 +195,17 @@ class ROCPreprocessor(BasePreprocessor):
         mean_roc = roc.mean()
         std_roc = roc.std()
 
-        # Guard against zero std (flat series)
-        if std_roc == 0.0:
+        # Guard against a flat series. The comparison is scale-relative, not
+        # `== 0.0`: pandas' variance is accumulated, so a genuinely constant
+        # series returns residue rather than zero (2.8e-17 for a series of
+        # 0.1, 1.8e-12 for one of 12345.678). An exact-zero guard misses that,
+        # and the thresholds below then collapse onto the mean — classifying a
+        # dead-flat series overbought or oversold on arithmetic noise.
+        # Written as `not (... > ...)` on purpose: a single-row series gives a
+        # NaN std, every NaN comparison is False, and NaN belongs in this
+        # branch too. Do not "simplify" it to `<=`.
+        std_scale = max(abs(float(mean_roc)), float(roc.abs().max() or 0.0)) or 1.0
+        if not (std_roc > 1e-12 * std_scale):
             return {
                 "condition": "neutral",
                 "overbought_threshold": 0.0,
