@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from trading.lifecycle import integrity
+from trading.lifecycle import db, integrity
 
 _HEALTHY_PLUTUS = """# PLUTUS
 
@@ -45,28 +45,31 @@ def home(tmp_path):
 
 @pytest.fixture()
 def conn():
+    """A healthy desk on the REAL schema.
+
+    This fixture hand-wrote five minimal tables until 2026-07-27. That is the
+    same shape of mistake that let the capital reconciler duplicate its whole
+    history while its idempotency test passed: a fixture that builds its own
+    schema can only ever confirm the code agrees with the fixture, and it
+    cannot express a check that needs a column the fixture never invented.
+    Build through the real creation path and seed on top of it.
+    """
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
-    c.executescript(
-        """
-        CREATE TABLE action_runs (id INTEGER PRIMARY KEY, action_type TEXT,
-                                  ts REAL, agent TEXT, session_name TEXT,
-                                  ok INTEGER, notes_md TEXT);
-        CREATE TABLE strategies (name TEXT PRIMARY KEY, status TEXT);
-        CREATE TABLE predictions (id INTEGER PRIMARY KEY, outcome TEXT);
-        CREATE TABLE positions (id INTEGER PRIMARY KEY, status TEXT);
-        CREATE TABLE capital_movements (id INTEGER PRIMARY KEY, ts REAL,
-                                        tx_hash TEXT, amount_token REAL,
-                                        amount_usd_at_time REAL,
-                                        movement_type TEXT, token TEXT);
-        """
-    )
+    db._create_fresh(c)
     now = time.time()
     for action in ("perception", "regime", "predict"):
         c.execute("INSERT INTO action_runs (action_type, ts, agent, ok) "
                   "VALUES (?,?,?,1)", (action, now - 600, "plutus-x"))
-    c.execute("INSERT INTO strategies VALUES ('s1','test')")
-    c.execute("INSERT INTO predictions (outcome) VALUES ('correct')")
+    c.execute("""INSERT INTO strategies (name, status, timescale,
+                     mechanism_family, regime_applicability_json,
+                     data_points_json, file_path, created_at, updated_at)
+                 VALUES ('s1','test','intraday','flow','{}','[]','/tmp/s1.md',?,?)""",
+              (now, now))
+    c.execute("""INSERT INTO predictions (claim_md, ts, horizon_ts, timescale,
+                     success_criteria_json, conviction, outcome)
+                 VALUES ('z',?,?,'intraday','{}',0.7,'correct')""",
+              (now, now + 3600))
     c.execute("INSERT INTO capital_movements (ts, tx_hash, amount_token, "
               "amount_usd_at_time, movement_type, token) "
               "VALUES (1.0,'0xabc',23.99,23.99,'send','USDC')")
@@ -154,7 +157,11 @@ class TestTablesAndCapital:
 
     def test_unrecorded_capital_detected(self, conn, home):
         conn.execute("DELETE FROM capital_movements")
-        conn.execute("INSERT INTO positions (status) VALUES ('closed')")
+        conn.execute(
+            """INSERT INTO positions (venue, symbol, side, size,
+                   opening_trade_id, opened_at, status)
+               VALUES ('hyperliquid','BTC','long',0.01,1,?,'closed')""",
+            (time.time(),))
         conn.commit()
         assert "capital_unrecorded" in _names(
             integrity.check_integrity(conn, home=home))
@@ -163,6 +170,65 @@ class TestTablesAndCapital:
         conn.execute("DELETE FROM capital_movements")
         conn.commit()
         assert "capital_unrecorded" not in _names(
+            integrity.check_integrity(conn, home=home))
+
+
+class TestRetirementEvidence:
+    """Retirement lowers the desk's own bar, so it must be evidence-only.
+
+    Retired books stopped counting toward the multiplicity premium on
+    2026-07-27, which is what makes the graduation hurdle reachable at all —
+    and simultaneously makes retiring a book an edit to that hurdle for every
+    sibling at its timescale. This check is the thing that stops reflect
+    lowering the bar by judgement.
+    """
+
+    def _retired_book(self, conn, name, n_correct, n_wrong):
+        """A retired strategy with a simulatable book.
+
+        Win/loss MIX drives expectancy, not the raw counts — the simulator
+        derives the stop from the whole book's MAE distribution, so an
+        all-winners book reads NEGATIVE (a 0.3 stop that every trade hits).
+        18/6 measures +1.75%; 4/20 is properly dead.
+        """
+        import time as _t
+        from trading.lifecycle import write as _w
+        conn.execute(
+            """INSERT INTO strategies (name, status, timescale, mechanism_family,
+                   regime_applicability_json, data_points_json, file_path,
+                   created_at, updated_at)
+               VALUES (?, 'retired', 'intraday', 'flow', '{}', '[]', ?, ?, ?)""",
+            (name, f"/tmp/{name}.md", _t.time(), _t.time()))
+        for outcome, mae, reached, k in (("correct", -0.3, True, n_correct),
+                                         ("wrong", -2.0, False, n_wrong)):
+            for _ in range(k):
+                pid = _w.record_prediction(conn, _w.PredictionDraft(
+                    claim_md="z", horizon_ts=_t.time() + 3600,
+                    entry_ref_price=100_000.0, near_edge_pct=1.5,
+                    far_edge_pct=3.0, conviction=0.7, agent="plutus-predict",
+                    symbol="BTC", strategy_name=name, kind="strategy"))
+                _w.resolve_prediction(conn, pid, outcome, resolved_by="r",
+                                      realized_value={"mae_pct": mae})
+                if reached:
+                    conn.execute(
+                        "UPDATE predictions SET reached_far_at=? WHERE id=?",
+                        (_t.time(), pid))
+        conn.commit()
+
+    def test_profitable_retirement_is_flagged(self, conn, home):
+        self._retired_book(conn, "cut-too-soon", 18, 6)
+        assert "retired_while_profitable" in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_genuinely_dead_retirement_is_silent(self, conn, home):
+        self._retired_book(conn, "properly-dead", 4, 20)
+        assert "retired_while_profitable" not in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_book_too_small_to_judge_is_not_flagged(self, conn, home):
+        """Below n=20 the evidence bar does not apply, either way."""
+        self._retired_book(conn, "thin", 6, 2)
+        assert "retired_while_profitable" not in _names(
             integrity.check_integrity(conn, home=home))
 
 

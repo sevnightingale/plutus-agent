@@ -532,16 +532,18 @@ class TestMultiplicity:
         assert exp["decaying"] is False
         assert exp["tradeable"] is True
 
-    def test_sibling_trials_raise_the_hurdle(self, conn):
-        self._borderline_book(conn, "cand")
-        # 30 SERIOUS sibling trials (books of ≥ SERIOUS_TRIAL_MIN_N
-        # resolutions) at the same timescale — retired status must still
-        # count (pruning can't launder multiplicity).
-        for i in range(30):
-            _strat_row(conn, f"sib{i}", status="retired")
+    def _serious_siblings(self, conn, n, status):
+        for i in range(n):
+            _strat_row(conn, f"sib{i}", status=status)
             for _ in range(queries.SERIOUS_TRIAL_MIN_N):
                 _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
                           reached_far=False)
+
+    def test_sibling_trials_raise_the_hurdle(self, conn):
+        self._borderline_book(conn, "cand")
+        # 30 SERIOUS sibling trials (books of ≥ SERIOUS_TRIAL_MIN_N
+        # resolutions) live at the same timescale.
+        self._serious_siblings(conn, 30, status="test")
         exp = queries.strategy_expectancy(conn, "cand")
         assert exp["siblings_tried"] == 31
         assert exp["multiplicity_premium_pct"] > 0
@@ -549,6 +551,35 @@ class TestMultiplicity:
         # the book itself is unchanged — only the bar moved
         assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
         assert exp["tradeable"] is False
+
+    def test_dormant_siblings_still_count(self, conn):
+        """A parked hypothesis is not a withdrawn one."""
+        self._borderline_book(conn, "cand")
+        self._serious_siblings(conn, 30, status="dormant")
+        assert queries.strategy_expectancy(conn, "cand")["siblings_tried"] == 31
+
+    def test_retired_siblings_do_not_count(self, conn):
+        """Reversed on 2026-07-27; it asserted the opposite until then.
+
+        Retired books counted on the reasoning that pruning must not launder
+        multiplicity — the purer statistic, and the reason M could only ever
+        grow. Measured on the live desk that made 81-94% of every hurdle
+        premium rather than trading cost, with nothing ever graduating; a bar
+        that rises forever eventually forbids everything.
+
+        The laundering risk is real and is closed on the other side instead:
+        retirement now requires lifetime expectancy <= 0 at n >= 20, every
+        judgement-based pruning move goes to dormancy (which still counts,
+        above), and desk_integrity_check reports any book retired while still
+        profitable. Evidence can lower this bar; judgement cannot.
+        """
+        self._borderline_book(conn, "cand")
+        self._serious_siblings(conn, 30, status="retired")
+        exp = queries.strategy_expectancy(conn, "cand")
+        assert exp["siblings_tried"] == 1
+        assert exp["multiplicity_premium_pct"] == 0.0
+        assert exp["hurdle_pct"] == exp["cost_margin_pct"]
+        assert exp["tradeable"] is True
 
     def test_thin_siblings_do_not_raise_the_hurdle(self, conn):
         # Serious-trial M: a one-resolution noise book was never an
@@ -592,7 +623,7 @@ class TestNToClear:
             _resolved(conn, "grind", far=2.0, outcome="wrong", mae=-2.0,
                       reached_far=False)
         for i in range(30):
-            _strat_row(conn, f"sib{i}", status="retired")
+            _strat_row(conn, f"sib{i}", status="test")
             for _ in range(queries.SERIOUS_TRIAL_MIN_N):
                 _resolved(conn, f"sib{i}", far=3.0, outcome="wrong", mae=-2.0,
                           reached_far=False)

@@ -139,10 +139,15 @@ def strategy_expectancy(
     strategies, some clear any fixed bar by luck. The hurdle is deflated by the
     expected best-of-M selection premium under the null,
     ``sqrt(2·ln(M)) · σ/√n`` (σ = per-trade simulated-PnL stdev, M =
-    ``siblings_tried`` — SERIOUS trials at this timescale: strategies of any
-    status INCLUDING retired whose book reached ``SERIOUS_TRIAL_MIN_N``
-    resolutions; retiring a sibling must not shrink M, but a one-resolution
-    noise book was never an independent trial and does not raise the bar).
+    ``siblings_tried`` — SERIOUS trials at this timescale: strategies in any
+    status EXCEPT ``retired`` whose book reached ``SERIOUS_TRIAL_MIN_N``
+    resolutions; a one-resolution noise book was never an independent trial
+    and does not raise the bar. Retired books were counted until 2026-07-27,
+    on the reasoning that a trial cannot be un-tried; the price was a bar that
+    only rose, and a gate that rises forever eventually forbids everything.
+    Dormant books still count — a parked hypothesis is not a withdrawn one.
+    Retirement is consequently evidence-gated and enforced by the desk's
+    integrity check, so nothing can lower this bar by judgement alone).
     A lone strategy (M=1) pays zero premium — the original bar. ``n_to_clear``
     reports the book size at which the current exp/σ/M clears the hurdle
     (None = never at this expectancy: the edge is at/below cost).
@@ -230,6 +235,24 @@ def strategy_expectancy(
     # at least SERIOUS_TRIAL_MIN_N resolutions (evidence filter matches the
     # book query above). None when the strategy row is missing — visible,
     # never guessed.
+    #
+    # RETIRED books are excluded (2026-07-27). They were counted until now, on
+    # the reasoning that a trial cannot be un-tried — statistically the purer
+    # position. The cost of that purity was a bar that could only ever rise:
+    # measured on this desk, 81-94% of every hurdle was premium rather than
+    # trading cost, and no strategy had ever graduated. A gate that rises
+    # monotonically forever eventually forbids everything, which is a design
+    # failure whatever its statistics.
+    #
+    # Excluding retired makes the bar responsive to cleaning the book, and
+    # thereby makes retirement a lever on the hurdle. That is the same vector
+    # a cell-scoped M was rejected for on 2026-07-07 ("would let a strategy
+    # narrow its declared regime to lower its own bar"), so it is closed on
+    # the other side rather than left open: retirement now requires
+    # demonstrated non-positive lifetime expectancy at n >= 20, every
+    # judgement-based pruning move goes to DORMANCY instead, and dormant books
+    # keep counting here. So the only thing that can lower this bar is
+    # evidence, and no agent can talk its way to it.
     srow = conn.execute(
         "SELECT timescale FROM strategies WHERE name=?", (strategy_name,)).fetchone()
     siblings = None
@@ -237,6 +260,7 @@ def strategy_expectancy(
         siblings = max(1, conn.execute(
             """SELECT COUNT(*) FROM strategies s
                WHERE s.timescale = ?
+                 AND s.status != 'retired'
                  AND (SELECT COUNT(*) FROM predictions p
                       WHERE p.strategy_name = s.name
                         AND p.resolved_at IS NOT NULL
@@ -501,13 +525,32 @@ def strategies_by_timescale(
     """Strategies at a timescale, with their regime cells + counters — the
     population-visibility query behind the per-(timescale × regime) cell cap
     that predict/reflect enforce as a reasoning guardrail (a strategy is
-    applicable in the SET of regime labels it declares)."""
+    applicable in the SET of regime labels it declares).
+
+    Also carries the SAMPLING counters (2026-07-27). Predict selected on
+    regime match, open slot and perception freshness only — nothing told it
+    how long a strategy had gone unsampled, so books fell out of rotation
+    silently: two sat at 17 and 23 days untouched while still `test`, neither
+    proving nor disproving themselves. The counters are visibility, not a
+    trigger; predict still needs a real reason to file.
+
+    ``days_since_last_prediction`` is None for a book that has never been
+    sampled — honestly absent rather than a sentinel age.
+
+    ``is_serious_trial`` is the one that carries a cost. A book crossing
+    SERIOUS_TRIAL_MIN_N resolutions becomes a multiplicity sibling and
+    PERMANENTLY raises the hurdle for every strategy at its timescale, so
+    sampling a stagnant book at n=9 is free — it is already paying — while
+    sampling one at n=4 charges the whole timescale. Predict sees both and
+    decides; the cost is stated, never hidden.
+    """
     marks = ",".join("?" * len(statuses))
     rows = _rows(conn.execute(
         f"""SELECT name, status, timescale, mechanism_family,
                    regime_applicability_json, n_resolved, n_correct, n_wrong
             FROM strategies WHERE timescale = ? AND status IN ({marks})
             ORDER BY status, name""", [timescale, *statuses]))
+    now = time.time()
     for r in rows:
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
@@ -519,6 +562,18 @@ def strategies_by_timescale(
             "open_cap": capacity["open_cap"],
             "open_slots_remaining": capacity["open_slots_remaining"],
         })
+        last_ts = conn.execute(
+            "SELECT MAX(ts) FROM predictions WHERE strategy_name = ?",
+            (r["name"],)).fetchone()[0]
+        r["last_prediction_ts"] = last_ts
+        r["days_since_last_prediction"] = (
+            round((now - last_ts) / 86400.0, 1) if last_ts else None)
+        r["resolutions"] = conn.execute(
+            """SELECT COUNT(*) FROM predictions
+               WHERE strategy_name = ? AND resolved_at IS NOT NULL
+                 AND realized_value_json IS NOT NULL""",
+            (r["name"],)).fetchone()[0]
+        r["is_serious_trial"] = r["resolutions"] >= SERIOUS_TRIAL_MIN_N
         raw = r.pop("regime_applicability_json", None)
         r["regime_applicability"] = json.loads(raw) if raw else {}
     return rows

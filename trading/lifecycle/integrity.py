@@ -40,6 +40,10 @@ WAKE_LOOP_CONSECUTIVE = 8
 # Runtime disk bound. The 1.2 GB accretion that motivated the original
 # maintenance beat is exactly what this catches returning.
 RUNTIME_DISK_MAX_MB = 2048
+# Resolutions a book needs before its lifetime expectancy is evidence enough
+# to retire on. Mirrors the reflect protocol's bar; kept here because this is
+# where it is ENFORCED, and retirement now moves the graduation hurdle.
+RETIREMENT_MIN_N = 20
 
 # Tables that MUST have rows on a desk that has been running. Emptiness here
 # is the signature of an unreachable table — reflections carried it for 12
@@ -250,6 +254,50 @@ def _check_runtime_disk(conn, home: Path) -> List[Dict[str, Any]]:
     return []
 
 
+def _check_retirement_evidence(conn, home: Path) -> List[Dict[str, Any]]:
+    """No book may be retired while its lifetime expectancy is still positive.
+
+    Retirement stopped being a bookkeeping move on 2026-07-27. Retired books
+    are excluded from the multiplicity count, so retiring one LOWERS the
+    graduation hurdle for every surviving strategy at its timescale — which
+    makes retirement a dial on the desk's own bar, the same vector a
+    cell-scoped M was rejected for on 2026-07-07.
+
+    The protocol closes it by allowing only one reason to retire: demonstrated
+    non-positive lifetime expectancy at n >= RETIREMENT_MIN_N. Every
+    judgement-based pruning move goes to dormancy instead, and dormant books
+    keep counting toward the bar. This check is the enforcement — a retirement
+    that does not meet the evidence bar is a violation, stated plainly, and
+    the desk cannot quietly lower its own hurdle.
+
+    Books retired before this rule existed are exempt on evidence, not on
+    date: they are reported only when the book is large enough to judge.
+    """
+    try:
+        from trading.lifecycle.queries import strategy_expectancy
+        names = [r[0] for r in conn.execute(
+            "SELECT name FROM strategies WHERE status = 'retired'")]
+    except Exception as exc:
+        return [_violation("retirement_unreadable",
+                           f"strategies: {type(exc).__name__}: {exc}")]
+    out = []
+    for name in names:
+        try:
+            e = strategy_expectancy(conn, name)
+        except Exception:
+            continue  # an unsimulatable book cannot be judged either way
+        n, exp = e.get("n") or 0, e.get("expectancy_pct")
+        if n >= RETIREMENT_MIN_N and exp is not None and exp > 0:
+            out.append(_violation(
+                "retired_while_profitable",
+                f"'{name}' is retired with lifetime expectancy {exp:+.4f}% "
+                f"over {n} resolutions — retirement requires expectancy <= 0, "
+                f"and excluding it from the multiplicity count has lowered "
+                f"the hurdle for every sibling at its timescale. Move it to "
+                f"dormant, which prunes attention without touching the bar."))
+    return out
+
+
 CHECKS: Dict[str, Callable] = {
     "blackboard_bloat": _check_blackboard_bloat,
     "blackboard_zones": _check_blackboard_zones,
@@ -258,6 +306,7 @@ CHECKS: Dict[str, Callable] = {
     "staleness_ceiling": _check_staleness_ceiling,
     "tables_reachable": _check_tables_reachable,
     "capital_recorded": _check_capital_recorded,
+    "retirement_evidence": _check_retirement_evidence,
     "wake_loop": _check_wake_loop,
     "runtime_disk": _check_runtime_disk,
 }

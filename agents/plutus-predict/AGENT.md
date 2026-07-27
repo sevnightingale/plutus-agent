@@ -58,6 +58,27 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    timescale — in your report's `population`. Authoring the missing strategy
    is plutus-generate's job; main routes your gap report there. Never call
    for a strategy you wish existed by stretching one that doesn't match.
+2b. ROTATION (a tiebreak, never a trigger): each `strategies_by_timescale` row
+   carries `days_since_last_prediction` (None = never sampled),
+   `resolutions`, and `is_serious_trial`. You selected on regime, slots and
+   freshness alone, and books fell out of rotation unnoticed: two sat 17 and
+   23 days untouched while still `test`, neither proving nor disproving
+   themselves. A book left idle is the one outcome worse than a book proved
+   wrong. So among strategies that ALREADY have a real setup, prefer the one
+   silent longest. This does NOT license authoring a prediction without a
+   genuine trigger — a manufactured setup to refresh a counter is worse than
+   the silence, and the regime gate still binds absolutely: a book whose
+   `regime_applicability` excludes the current regime is correctly idle, and
+   its counter is information for your report, not a reason to reach.
+   Report the regime-eligible books you passed over in `population` — that is
+   how a scheduling gap becomes visible instead of compounding.
+   `is_serious_trial` carries a real cost, so read it before reaching for a
+   young book: crossing SERIOUS_TRIAL_MIN_N resolutions makes a book a
+   multiplicity sibling and PERMANENTLY raises the graduation hurdle for
+   every strategy at its timescale. Sampling a stagnant book that is already
+   a serious trial is free — it has paid. Sampling one below the threshold
+   charges the whole timescale for the privilege, so it needs a setup worth
+   that, not merely a stale counter.
 3. DRAFT + SCORE (offloaded, in PARALLEL): for each regime-matched strategy
    whose `strategies_by_timescale` row has `open_slots_remaining > 0`, in ONE
    turn fire `predict_draft`

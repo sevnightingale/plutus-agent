@@ -27,7 +27,13 @@ never copy the previous file's header stamp.*
 
 1. CHECKPOINTS: lifecycle_query strategy_book + calibration per strategy
    with new resolutions. Moves (strategy_set_status):
-   - checkpoint continue (every 10 resolved): win rate ≥ 50%, else retire.
+   - checkpoint continue (every 10 resolved): win rate ≥ 50%, else make the
+     book DORMANT — never retire. Win rate was repudiated as a graduation
+     criterion for being survivorship-biased, and it is no better as a killing
+     one: a book can run 45% and be strongly positive on geometry. Since
+     2026-07-27 retirement also lowers the desk's own hurdle (see below), so a
+     win-rate trigger would let you cut the bar on a statistic the desk does
+     not otherwise trust. Dormancy prunes attention and leaves the bar alone.
    - GRADUATION to active (trade-enabling): the SINGLE gate is simulated net
      EXPECTANCY — `lifecycle_query strategy_expectancy {strategy_name}` →
      tradeable iff expectancy_pct > hurdle_pct AND n ≥ 15 AND not `decaying`.
@@ -48,13 +54,22 @@ never copy the previous file's header stamp.*
      visibility but is NOT the gate. Two hardenings you must not argue with:
      the hurdle is MULTIPLICITY-DEFLATED (`hurdle_pct` = cost margin +
      √(2·ln M)·σ/√n over the M SERIOUS sibling trials at the timescale — books
-     that reached ≥ 6 resolutions, any status INCLUDING retired; a
+     that reached ≥ 6 resolutions in any status EXCEPT retired; a
      one-resolution noise book was never an independent trial and does not
      raise the bar — the survivor of thirty real trials needs more proof than
      a lone hypothesis; a borderline book that "just misses" needs more
      resolutions, not a retry — `strategy_expectancy.n_to_clear` projects the
      book size where the current edge clears; None means the edge is at/below
      cost and needs structural work, not patience).
+     RETIRED books were counted until 2026-07-27 — the purer statistics, and
+     the reason nothing could ever graduate: M only ever grew, 81-94% of every
+     hurdle was premium rather than trading cost, and a bar that rises forever
+     eventually forbids everything. Excluding them makes the bar respond to a
+     cleaned book. DORMANT books still count: dormancy is a parked hypothesis,
+     not a withdrawn one. The consequence you must hold: RETIRING A BOOK NOW
+     LOWERS THE HURDLE FOR EVERY SIBLING AT ITS TIMESCALE, so retirement is no
+     longer bookkeeping — it is an edit to the desk's own bar, and it is
+     evidence-gated below and enforced by `desk_integrity_check`.
      M is timescale-scoped BY DESIGN — do not re-propose grouping siblings by
      regime cell: the premium counts how many chances the desk gave itself to
      find a lucky book (trials ever tried), not which strategies compete for
@@ -67,8 +82,19 @@ never copy the previous file's header stamp.*
      Expectancy is conviction-independent (pure outcome geometry), so the
      conviction-render cutover doesn't touch it. Slower is fine; graduating
      mirages is not.
-  - revoke (active → retired) ONLY when the edge is GONE at N ≥ 20:
-    expectancy_pct ≤ 0. `decaying` (trailing-10 negative) is a weight
+  - RETIREMENT — the ONLY move that removes a book from the multiplicity
+    count, and therefore the only judgement of yours that can lower the
+    desk's graduation bar. One reason permits it and no other: the edge is
+    GONE at N ≥ 20, i.e. lifetime `expectancy_pct` ≤ 0. This applies from ANY
+    status, `test` included — it was scoped `active → retired` until
+    2026-07-27, which made it unreachable on an all-`test` book and left the
+    two win-rate paths as the only ones that could fire. There is no other
+    route to `retired`. Cell overcrowding, a stale book, a mechanism you have
+    lost faith in, a tidier population — all of these are DORMANCY. If you
+    cannot point at expectancy_pct ≤ 0 over twenty or more resolutions, the
+    move is dormant, and `desk_integrity_check` will report you if you retire
+    a book whose expectancy is still positive.
+    `decaying` (trailing-10 negative) is a weight
     calibration / regime-transition problem, NOT a dead edge — demote to
     test, NEVER retire. Regime_applicability is self-declared; a strategy
     that claims the new regime should get more resolutions there, not a
@@ -83,9 +109,11 @@ never copy the previous file's header stamp.*
      regime wake.
    - POPULATION: lifecycle_query strategies_by_timescale per timescale (each
      carries its regime cells). Per (timescale × regime) cell, cap ≈ 2 active
-     + 6 test — when a cell is over capacity, retire/dormant the weakest
-     occupant (lowest win-rate or oldest-without-a-win) so a niche stays a
-     real champion/challenger contest, not a crowd. An invalidation resolves
+     + 6 test — when a cell is over capacity, make the weakest occupant
+     DORMANT (lowest win-rate or oldest-without-a-win) so a niche stays a
+     real champion/challenger contest, not a crowd. Dormant, not retired:
+     overcrowding is a statement about the cell, not evidence about the book,
+     and retirement now moves the bar. An invalidation resolves
      as 'wrong', so win-rate already counts it — no special handling.
 2. WEIGHTS: lifecycle_query support_score_performance per strategy →
    strategy_update_weights with the signed per-DP edge (avg score on

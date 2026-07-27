@@ -190,11 +190,17 @@ enforces the floors.
    which was survivorship-biased (median MFE/MAE on winners only overstates
    tradeability). Two hardenings (imported
    from the trading design notes): the hurdle is **multiplicity-deflated** — cost margin
-   + √(2·ln M)·σ/√n over the M **serious** sibling trials ever tried at the
-   timescale (books of ≥6 resolutions; retired siblings still count, but a
-   one-resolution noise book never raises the bar), so the survivor of thirty
-   real trials needs more
-   proof than a lone hypothesis. The premium shrinks with the strategy's own
+   + √(2·ln M)·σ/√n over the M **serious** sibling trials live at the
+   timescale (books of ≥6 resolutions in any status except `retired`; dormant
+   siblings still count, a one-resolution noise book never raises the bar),
+   so the survivor of thirty real trials needs more
+   proof than a lone hypothesis. Retired siblings counted until 2026-07-27,
+   which made M monotonic and the bar unreachable — 81–94% of every hurdle
+   was premium rather than trading cost and nothing had graduated. Because
+   retirement now *lowers* the bar for surviving siblings, it is evidence-only
+   (lifetime expectancy ≤ 0 at n ≥ 20, from any status), every judgement-based
+   pruning move goes to dormancy instead, and `desk_integrity_check` reports
+   any book retired while still profitable. The premium shrinks with the strategy's own
    √n, so a real edge above cost always converges —
    `strategy_expectancy.n_to_clear` projects the book size where the current
    edge clears (None = at/below cost, never) — and a **hazard check** re-simulates the

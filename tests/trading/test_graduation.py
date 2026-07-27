@@ -6,6 +6,8 @@ demote to test; dormancy/retirement are never touched (judgment moves).
 
 import time
 
+import pytest
+
 from trading.lifecycle import queries, write
 from trading.lifecycle.db import get_db
 from trading.lifecycle.graduation import sync_strategy_statuses
@@ -57,6 +59,12 @@ def _tradeable_book(conn, name):
 def _thin_book(conn, name):
     for _ in range(4):
         _resolved(conn, name, "correct", -0.3, True)
+
+
+@pytest.fixture
+def conn():
+    """The per-test runtime database (HERMES_HOME is isolated per test)."""
+    return get_db()
 
 
 class TestSync:
@@ -135,3 +143,116 @@ class TestSync:
                    for r in res["resolved"])
         assert queries.strategy_expectancy(conn, name)["tradeable"] is True
         assert parse_strategy(strategies_dir() / f"{name}.md").status == "active"
+
+
+class TestMultiplicityExcludesRetired:
+    """Retired books stop counting toward M (2026-07-27).
+
+    They counted until then — a trial cannot be un-tried, the purer statistic.
+    The price was a bar that only ever rose: measured on the live desk, 81-94%
+    of every hurdle was multiplicity premium rather than trading cost, and no
+    strategy had ever graduated. A gate that rises forever eventually forbids
+    everything.
+
+    The exclusion makes retirement an edit to the desk's own bar, so these
+    tests also pin the boundary that keeps it honest: DORMANT still counts.
+    """
+
+    def _siblings(self, conn, name):
+        return queries.strategy_expectancy(conn, name)["siblings_tried"]
+
+    def _setup(self, conn):
+        _mk_strategy(conn, "subject")
+        _tradeable_book(conn, "subject")
+        _mk_strategy(conn, "sibling")
+        _tradeable_book(conn, "sibling")
+
+    def _set_status(self, conn, name, status):
+        conn.execute("UPDATE strategies SET status=? WHERE name=?", (status, name))
+        conn.commit()
+
+    def test_retired_sibling_does_not_count(self, conn):
+        self._setup(conn)
+        assert self._siblings(conn, "subject") == 2
+        self._set_status(conn, "sibling", "retired")
+        assert self._siblings(conn, "subject") == 1
+
+    def test_dormant_sibling_still_counts(self, conn):
+        """A parked hypothesis is not a withdrawn one."""
+        self._setup(conn)
+        self._set_status(conn, "sibling", "dormant")
+        assert self._siblings(conn, "subject") == 2
+
+    def test_retiring_a_sibling_lowers_the_hurdle(self, conn):
+        """The point of the change, asserted as a number."""
+        self._setup(conn)
+        before = queries.strategy_expectancy(conn, "subject")["hurdle_pct"]
+        self._set_status(conn, "sibling", "retired")
+        after = queries.strategy_expectancy(conn, "subject")["hurdle_pct"]
+        assert after < before
+        # M=1 pays no selection premium at all — the bar falls to pure cost.
+        assert queries.strategy_expectancy(
+            conn, "subject")["multiplicity_premium_pct"] == 0
+
+    def test_a_thin_retired_book_was_never_counted_anyway(self, conn):
+        """Below SERIOUS_TRIAL_MIN_N nothing changes — the filter is evidence."""
+        _mk_strategy(conn, "subject")
+        _tradeable_book(conn, "subject")
+        _mk_strategy(conn, "noise")
+        _thin_book(conn, "noise")
+        assert self._siblings(conn, "subject") == 1
+        self._set_status(conn, "noise", "retired")
+        assert self._siblings(conn, "subject") == 1
+
+
+class TestSamplingCounters:
+    """Predict could not see that a book had fallen out of rotation.
+
+    Selection was regime match, open slot and perception freshness only, so
+    books went unsampled silently — two sat 17 and 23 days untouched while
+    still `test`, neither proving nor disproving themselves. These counters
+    are visibility; the tiebreak lives in the agent brief, not in code.
+    """
+
+    def _row(self, conn, name):
+        rows = queries.strategies_by_timescale(conn, "intraday")
+        return next(r for r in rows if r["name"] == name)
+
+    def test_never_sampled_reads_none_not_zero(self, conn):
+        """Honest absence — a book never tried is not a book tried today."""
+        _mk_strategy(conn, "untouched")
+        r = self._row(conn, "untouched")
+        assert r["days_since_last_prediction"] is None
+        assert r["last_prediction_ts"] is None
+        assert r["resolutions"] == 0
+        assert r["is_serious_trial"] is False
+
+    def test_age_is_reported_in_days(self, conn):
+        _mk_strategy(conn, "stale")
+        _resolved(conn, "stale", "correct", -0.3, True)
+        conn.execute(
+            "UPDATE predictions SET ts = ? WHERE strategy_name = 'stale'",
+            (time.time() - 17 * 86400,))
+        conn.commit()
+        assert self._row(conn, "stale")["days_since_last_prediction"] == 17.0
+
+    def test_serious_trial_flag_marks_the_multiplicity_cost(self, conn):
+        """Crossing the threshold permanently raises the bar for the timescale.
+
+        Sampling an already-serious book is free; sampling a young one charges
+        every sibling. Predict must be able to tell them apart.
+        """
+        _mk_strategy(conn, "young")
+        _thin_book(conn, "young")            # 4 resolutions, under the bar
+        _mk_strategy(conn, "seasoned")
+        _tradeable_book(conn, "seasoned")    # 16 resolutions, already paying
+        assert self._row(conn, "young")["is_serious_trial"] is False
+        assert self._row(conn, "seasoned")["is_serious_trial"] is True
+
+    def test_counters_ride_the_query_predict_already_calls(self, conn):
+        """No new plumbing: the fields arrive already regime-filtered."""
+        _mk_strategy(conn, "carried")
+        for field in ("days_since_last_prediction", "resolutions",
+                      "is_serious_trial", "regime_applicability",
+                      "open_slots_remaining"):
+            assert field in self._row(conn, "carried")
