@@ -85,15 +85,26 @@ never copy the previous file's header stamp.*
   - RETIREMENT — the ONLY move that removes a book from the multiplicity
     count, and therefore the only judgement of yours that can lower the
     desk's graduation bar. One reason permits it and no other: the edge is
-    GONE at N ≥ 20, i.e. lifetime `expectancy_pct` ≤ 0. This applies from ANY
-    status, `test` included — it was scoped `active → retired` until
-    2026-07-27, which made it unreachable on an all-`test` book and left the
-    two win-rate paths as the only ones that could fire. There is no other
-    route to `retired`. Cell overcrowding, a stale book, a mechanism you have
-    lost faith in, a tidier population — all of these are DORMANCY. If you
-    cannot point at expectancy_pct ≤ 0 over twenty or more resolutions, the
-    move is dormant, and `desk_integrity_check` will report you if you retire
-    a book whose expectancy is still positive.
+    gone at N ≥ 20 **in every regime cell**. The instrument is
+    `lifecycle_query strategy_cell_expectancy {strategy_name}` → retire only
+    on `dead: true`, which means no cell with ≥ 4 resolutions has positive
+    expectancy. **Never retire on the lifetime blend.** A blended book
+    averages conditions the strategy never trades together and describes none
+    of them: on 2026-07-27 `ema20-pivot-swing` blended to −0.004 and so met
+    the old bar, while FOUR of its five cells were positive (ranging/normal
+    +1.06) and one bad cell (trending-up/compressed) sank the average. That
+    retirement would have buried a working mechanism and lowered the hurdle
+    for every sibling on a false premise. A strategy that works in one
+    condition and fails in another is not dead — it is MIS-DECLARED, and the
+    move is to narrow it to the cell that works and dormant the rest.
+    This applies from ANY status, `test` included — it was scoped
+    `active → retired` until 2026-07-27, which made it unreachable on an
+    all-`test` book and left the two win-rate paths as the only ones that
+    could fire. There is no other route to `retired`. Cell overcrowding, a
+    stale book, a mechanism you have lost faith in, a tidier population — all
+    of these are DORMANCY. If you cannot point at `dead: true` over twenty or
+    more resolutions, the move is dormant, and `desk_integrity_check` will
+    report you if you retire a book that still has a living cell.
     `decaying` (trailing-10 negative) is a weight
     calibration / regime-transition problem, NOT a dead edge — demote to
     test, NEVER retire. Regime_applicability is self-declared; a strategy

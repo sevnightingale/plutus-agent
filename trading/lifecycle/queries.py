@@ -82,6 +82,9 @@ SERIOUS_TRIAL_MIN_N = HARD_SL_MIN_N  # a sibling counts toward multiplicity only
                             # once its book reaches this many resolutions — a
                             # one-resolution noise book is not an independent
                             # trial and must not raise the bar for leaders
+CELL_MIN_N = 4              # resolutions a regime cell needs before its
+                            # expectancy is evidence rather than noise. Below
+                            # it the cell is reported but never judged on.
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
 BASE_PREDICTION_OPEN_CAP = 3
@@ -117,6 +120,7 @@ def strategy_expectancy(
     conn: sqlite3.Connection, strategy_name: str, *,
     cost_margin: float = ESTIMATED_ROUND_TRIP_COST_PCT,
     min_n: int = GRADUATION_MIN_N,
+    regime_tag: Optional[str] = None,
 ) -> dict:
     """Simulated net expectancy — the profitability gate (graduation + entry).
 
@@ -162,12 +166,22 @@ def strategy_expectancy(
     ``tradeable`` iff ``expectancy > hurdle`` (cost margin + multiplicity
     premium) AND ``n >= min_n`` AND the stop is estimable AND not ``decaying``."""
     stop = hard_stop_pct(conn, strategy_name)
+    # ``regime_tag`` restricts the book to ONE regime cell. A blended book
+    # averages conditions the strategy never trades together, and the average
+    # describes none of them: ema20-pivot-swing measured -0.004 lifetime while
+    # four of its five cells were positive and one (trending-up/compressed,
+    # -0.429) dragged the whole thing under. Judging it on the blend was about
+    # to retire a working mechanism. The stop stays lifetime-derived on
+    # purpose — it is a property of the strategy's geometry, not of the cell,
+    # and re-deriving it per cell on 8-15 rows would be noise.
     rows = conn.execute(
-        """SELECT near_edge_pct, far_edge_pct, reached_near_at, reached_far_at,
+        f"""SELECT near_edge_pct, far_edge_pct, reached_near_at, reached_far_at,
                   realized_value_json AS rv
            FROM predictions WHERE strategy_name=? AND resolved_at IS NOT NULL
              AND realized_value_json IS NOT NULL
-           ORDER BY resolved_at, id""", (strategy_name,)).fetchall()
+             {'AND regime_tag = ?' if regime_tag else ''}
+           ORDER BY resolved_at, id""",
+        (strategy_name, regime_tag) if regime_tag else (strategy_name,)).fetchall()
 
     def _sim(book, edge_col, reached_col):
         """Run a book of rows through one exit target (far edge or near edge)."""
@@ -515,6 +529,65 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
     return {"open_total": total, "by_timescale": by_timescale,
             "by_strategy": by_strategy,
             "win_locked_by_strategy": win_locked}
+
+
+def strategy_cell_expectancy(
+    conn: sqlite3.Connection, strategy_name: str, *,
+    min_cell_n: int = CELL_MIN_N,
+) -> dict:
+    """Expectancy per REGIME CELL, and the verdict that depends on it.
+
+    A blended book averages conditions the strategy never trades together, and
+    the average describes none of them. Measured across the desk's twelve
+    multi-regime books on 2026-07-27, splitting on ``regime_tag`` moved six of
+    them from "never graduates" or four-figure sample requirements to between
+    46 and 143 — a gap far larger than the multiplicity cost of counting each
+    cell as its own trial.
+
+    The case that forced this into code: ``ema20-pivot-swing`` blended to
+    -0.004 and so met the retirement bar, while four of its five cells were
+    positive (ranging/normal +0.684) and a single bad cell
+    (trending-up/compressed, -0.429) sank the average. Retiring on the blend
+    would have buried a working mechanism AND lowered the graduation hurdle
+    for every sibling on a false premise.
+
+    Returns ``{strategy_name, blended, cells[], best_cell, dead}`` where
+    ``dead`` is True only when NO cell with at least ``min_cell_n``
+    resolutions has positive expectancy. Cells below that threshold are
+    reported with ``judged: False`` — visible, never counted. ``dead`` is None
+    when nothing is judgeable yet, which is not the same as alive and must not
+    be read as either.
+    """
+    blended = strategy_expectancy(conn, strategy_name)
+    tags = [r[0] for r in conn.execute(
+        """SELECT regime_tag FROM predictions
+           WHERE strategy_name = ? AND resolved_at IS NOT NULL
+             AND realized_value_json IS NOT NULL AND regime_tag IS NOT NULL
+           GROUP BY regime_tag ORDER BY COUNT(*) DESC""", (strategy_name,))]
+    cells = []
+    for tag in tags:
+        e = strategy_expectancy(conn, strategy_name, regime_tag=tag)
+        n = e.get("n") or 0
+        cells.append({
+            "regime_tag": tag, "n": n,
+            "expectancy_pct": e.get("expectancy_pct"),
+            "pnl_stdev_pct": e.get("pnl_stdev_pct"),
+            "win_rate": e.get("win_rate"),
+            "judged": n >= min_cell_n,
+        })
+    judged = [c for c in cells
+              if c["judged"] and c["expectancy_pct"] is not None]
+    best = max(judged, key=lambda c: c["expectancy_pct"]) if judged else None
+    return {
+        "strategy_name": strategy_name,
+        "blended_expectancy_pct": blended.get("expectancy_pct"),
+        "blended_n": blended.get("n"),
+        "cells": cells,
+        "cells_judged": len(judged),
+        "best_cell": best,
+        "dead": (None if not judged
+                 else not any(c["expectancy_pct"] > 0 for c in judged)),
+    }
 
 
 def strategies_by_timescale(

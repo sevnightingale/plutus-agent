@@ -213,6 +213,12 @@ class TestRetirementEvidence:
                     conn.execute(
                         "UPDATE predictions SET reached_far_at=? WHERE id=?",
                         (_t.time(), pid))
+                # Single-cell book. The check reads cells, not the lifetime
+                # blend, so an untagged book is unjudgeable by design — see
+                # TestRetirementIsCellAware for the multi-cell case.
+                conn.execute(
+                    "UPDATE predictions SET regime_tag='intraday/trending-up/normal'"
+                    " WHERE id=?", (pid,))
         conn.commit()
 
     def test_profitable_retirement_is_flagged(self, conn, home):
@@ -285,3 +291,52 @@ def _by_name(result, name):
     matches = [v for v in result["violations"] if v["check"] == name]
     assert matches, f"expected a {name!r} violation, got {result['violations']}"
     return matches[0]
+
+
+class TestRetirementIsCellAware:
+    """The retirement bar reads cells, not the lifetime blend.
+
+    The blended form of this check shipped hours earlier and would have
+    reported nothing while reflect retired ema20-pivot-swing — a mechanism
+    positive in four of five cells — thereby lowering the graduation hurdle
+    for every sibling on a false premise.
+    """
+
+    def _retired_mixed(self, conn, name, good_n, bad_n):
+        import time as _t
+        from trading.lifecycle import write as _w
+        conn.execute(
+            """INSERT INTO strategies (name, status, timescale, mechanism_family,
+                   regime_applicability_json, data_points_json, file_path,
+                   created_at, updated_at)
+               VALUES (?, 'retired', 'swing', 'flow', '{}', '[]', ?, ?, ?)""",
+            (name, f"/tmp/{name}.md", _t.time(), _t.time()))
+        for tag, outcome, mae, reached, k in (
+                ("swing/ranging/normal", "correct", -0.3, True, good_n),
+                ("swing/trending-up/compressed", "wrong", -2.0, False, bad_n)):
+            for _ in range(k):
+                pid = _w.record_prediction(conn, _w.PredictionDraft(
+                    claim_md="z", horizon_ts=_t.time() + 3600,
+                    entry_ref_price=100_000.0, near_edge_pct=1.5,
+                    far_edge_pct=3.0, conviction=0.7, agent="plutus-predict",
+                    symbol="BTC", strategy_name=name, kind="strategy"))
+                _w.resolve_prediction(conn, pid, outcome, resolved_by="r",
+                                      realized_value={"mae_pct": mae})
+                if reached:
+                    conn.execute(
+                        "UPDATE predictions SET reached_far_at=? WHERE id=?",
+                        (_t.time(), pid))
+                conn.execute("UPDATE predictions SET regime_tag=? WHERE id=?",
+                             (tag, pid))
+        conn.commit()
+
+    def test_a_living_cell_under_a_dead_blend_is_flagged(self, conn, home):
+        """The ema20-pivot-swing case, as a test."""
+        self._retired_mixed(conn, "ema20-shaped", good_n=14, bad_n=12)
+        names = _names(integrity.check_integrity(conn, home=home))
+        assert "retired_while_profitable" in names
+
+    def test_dead_in_every_cell_stays_silent(self, conn, home):
+        self._retired_mixed(conn, "truly-dead", good_n=0, bad_n=26)
+        assert "retired_while_profitable" not in _names(
+            integrity.check_integrity(conn, home=home))

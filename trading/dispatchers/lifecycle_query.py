@@ -110,6 +110,9 @@ def _run_query(args: Dict[str, Any]) -> str:
         "strategy_expectancy": lambda: queries.strategy_expectancy(
             conn, **{("strategy_name" if k == "name" else k): v
                      for k, v in params.items()}),
+        "strategy_cell_expectancy": lambda: queries.strategy_cell_expectancy(
+            conn, **{("strategy_name" if k == "name" else k): v
+                     for k, v in params.items()}),
         "best_actionable_prediction": lambda: queries.best_actionable_prediction(conn),
         "desk_status": lambda: _desk_status(conn),
         "strategies_by_timescale": lambda: queries.strategies_by_timescale(
@@ -148,7 +151,13 @@ registry.register(
             "recent_outcomes {limit} | calibration {strategy_name?, "
             "regime_tag?, timescale?} | strategy_stats {name} | "
             "strategy_book | strategy_expectancy {strategy_name} (the "
-            "profitability gate) | best_actionable_prediction (the fundable "
+            "profitability gate; optional regime_tag restricts the book to "
+            "one cell) | strategy_cell_expectancy {strategy_name} (the SAME "
+            "gate run per regime cell, plus `dead` — true only when NO cell "
+            "with >=4 resolutions is positive. THE retirement instrument: a "
+            "blended book averages conditions the strategy never trades "
+            "together and describes none of them) | "
+            "best_actionable_prediction (the fundable "
             "pick) | desk_status (broken vs patient: gaps to tradeable, "
             "HALT, readiness, fundable window) | "
             "strategies_by_timescale {timescale, statuses?} | "

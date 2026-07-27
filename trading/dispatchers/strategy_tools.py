@@ -41,7 +41,15 @@ UPSERT_SCHEMA = {
             "timescale": {"type": "string", "enum": ["intraday", "swing", "position"]},
             "mechanism_family": {"type": "string",
                                  "enum": ["momentum", "mean_reversion", "flow", "event", "narrative"]},
-            "regime_applicability": {"type": "object"},
+            "regime_applicability": {
+                "type": "object",
+                "description": (
+                    "EXACTLY ONE cell: {<timescale>: {direction: [one], "
+                    "volatility: [one]}} (macro instead of volatility at "
+                    "position scale). Single-element lists only — a set is "
+                    "refused. Several conditions means several hypotheses; "
+                    "author one strategy per cell."),
+            },
             "data_points": {"type": "array", "items": {"type": "object"}},
             "missing_data_points": {"type": "array", "items": {"type": "string"}},
             "parent_strategy": {"type": "string"},
@@ -84,6 +92,27 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
         created=time.strftime("%Y-%m-%d"),
         body_md="\n" + args["body"].strip() + "\n",
     )
+    # ONE CELL PER STRATEGY (2026-07-27). Refused in the writer, not merely
+    # asked for in the brief: the (timescale x regime) cap has existed as
+    # prose since the rebuild and was ignored for as long, so a rule that
+    # matters lives where it can say no. A set-valued declaration produces one
+    # book averaging several different trades, and the average describes none
+    # of them — ema20-pivot-swing blended to -0.004 and met the retirement bar
+    # while four of its five cells were positive. Several conditions means
+    # several hypotheses: author them separately.
+    wide = {ax: vals for ax, vals in (s.regime_applicability.get(s.timescale)
+                                      or {}).items() if len(vals or []) > 1}
+    if wide:
+        return tool_error(
+            f"regime_applicability declares a SET on {sorted(wide)} "
+            f"({', '.join(f'{a}={v}' for a, v in wide.items())}) — a strategy "
+            f"declares exactly ONE cell: one direction, one volatility (one "
+            f"macro at position scale). A book spanning cells averages trades "
+            f"that share no stop, target or horizon, and the average is "
+            f"evidence about nothing. If the mechanism holds in several "
+            f"conditions those are several hypotheses — author one strategy "
+            f"per cell.")
+
     known = {e.name for e in data_point_registry.list_all()} or None
     try:
         loader.write_strategy(s, get_db(), known_data_points=known)

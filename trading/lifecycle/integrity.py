@@ -274,7 +274,7 @@ def _check_retirement_evidence(conn, home: Path) -> List[Dict[str, Any]]:
     date: they are reported only when the book is large enough to judge.
     """
     try:
-        from trading.lifecycle.queries import strategy_expectancy
+        from trading.lifecycle.queries import strategy_cell_expectancy
         names = [r[0] for r in conn.execute(
             "SELECT name FROM strategies WHERE status = 'retired'")]
     except Exception as exc:
@@ -283,18 +283,22 @@ def _check_retirement_evidence(conn, home: Path) -> List[Dict[str, Any]]:
     out = []
     for name in names:
         try:
-            e = strategy_expectancy(conn, name)
+            r = strategy_cell_expectancy(conn, name)
         except Exception:
             continue  # an unsimulatable book cannot be judged either way
-        n, exp = e.get("n") or 0, e.get("expectancy_pct")
-        if n >= RETIREMENT_MIN_N and exp is not None and exp > 0:
-            out.append(_violation(
-                "retired_while_profitable",
-                f"'{name}' is retired with lifetime expectancy {exp:+.4f}% "
-                f"over {n} resolutions — retirement requires expectancy <= 0, "
-                f"and excluding it from the multiplicity count has lowered "
-                f"the hurdle for every sibling at its timescale. Move it to "
-                f"dormant, which prunes attention without touching the bar."))
+        if (r["blended_n"] or 0) < RETIREMENT_MIN_N or r["dead"] is not False:
+            continue
+        best = r["best_cell"]
+        out.append(_violation(
+            "retired_while_profitable",
+            f"'{name}' is retired, but it is not dead: "
+            f"{best['regime_tag']} runs {best['expectancy_pct']:+.4f}% over "
+            f"{best['n']} resolutions (lifetime blend "
+            f"{r['blended_expectancy_pct']:+.4f}% hides it). A strategy is "
+            f"dead when NO cell clears, not when the average does not — and "
+            f"excluding it from the multiplicity count has lowered the hurdle "
+            f"for every sibling at its timescale on a false premise. Move it "
+            f"to dormant, or narrow it to the cell that works."))
     return out
 
 

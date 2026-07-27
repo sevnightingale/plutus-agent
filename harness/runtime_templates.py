@@ -116,11 +116,21 @@ SHRINKS as the book grows, so any real edge above the 0.15% cost graduates
 given enough resolutions (strategy_expectancy reports n_to_clear — the book
 size where the current edge clears); an edge at or below cost NEVER clears —
 that is structural (scratch rate, geometry), not patience. M counts serious
-sibling books (>=6 resolutions) at the timescale, retired INCLUDED — M never
-shrinks, so retiring siblings is not a lever and must never be suggested as
-one. Decay (trailing-10 negative) demotes active->test; it never retires —
-retirement is reflect's call for genuinely dead edges (lifetime expectancy
-<= 0 at N>=20) only. Zero trades for the first weeks is the
+sibling books (>=6 resolutions) at the timescale in any status EXCEPT
+retired; dormant still counts, because a parked hypothesis is not a withdrawn
+one. Retired books were included until 2026-07-27, which made M monotonic and
+the bar unreachable — 81-94% of every hurdle was premium rather than cost and
+nothing had ever graduated. So retiring a sibling now LOWERS the bar for
+everything at that timescale, and is therefore evidence-only, never a lever
+you reach for: the sole route to retired is dead in EVERY regime cell
+(lifecycle_query strategy_cell_expectancy -> dead: true) at N>=20. Judge
+retirement on cells, NEVER on the lifetime blend — a blended book averages
+conditions the strategy never trades together and describes none of them
+(ema20-pivot-swing blended to -0.004 while four of its five cells were
+positive). Every other pruning move — overcrowding, a stale book, lost faith
+— is DORMANCY, which prunes attention without touching the bar. Decay
+(trailing-10 negative) demotes active->test; it never retires. Strategies
+declare exactly ONE cell; the writer refuses a set. Zero trades for the first weeks is the
 system WORKING, not a bottleneck to fix — never shortcut it (no hand-seeded
 active strategies, no manual graduation). The desk's records live in
 lifecycle.db via tools; the only markdown you maintain is the blackboards.

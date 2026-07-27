@@ -255,3 +255,64 @@ class TestNormalizerDeclaration:
         s.data_points[0]["normalizer"] = {"name": "not_a_normalizer"}
         with pytest.raises(ValueError, match="unknown normalizer"):
             loader.write_strategy(s, conn)
+
+
+class TestOneCellDeclaration:
+    """regime_applicability declares exactly one cell — refused in the writer.
+
+    The (timescale x regime) cap lived as prose in the reflect brief since the
+    rebuild and was ignored for as long, so this rule sits where it can say
+    no. A set-valued declaration produces one book averaging several different
+    trades: ema20-pivot-swing blended to -0.004 and met the retirement bar
+    while four of its five cells were positive.
+    """
+
+    def _tool(self):
+        import json as _json
+
+        import trading.dispatchers.strategy_tools  # noqa: F401 — registers
+        from harness.tools.registry import registry as tool_registry
+        entry = tool_registry.get_entry("strategy_upsert")
+        return lambda args: _json.loads(entry.handler(args))
+
+    def _args(self, regime):
+        # The data point is declared via the self-extension hook rather than
+        # named from the registry: _REGISTRY is populated by import-time
+        # decorators, so which entries exist depends on what else the xdist
+        # worker imported first. This test is about the cell declaration and
+        # must not inherit that coupling.
+        return {
+            "name": "one-cell-probe", "timescale": "swing",
+            "mechanism_family": "flow", "regime_applicability": regime,
+            "data_points": [{"name": "not_yet_sourced_dp",
+                             "params": {"symbol": "BTC"}, "weight": 0.4}],
+            "missing_data_points": ["not_yet_sourced_dp"],
+            "body": ("# Hypothesis\nx\n\n# Mechanism\ny\n\n"
+                     "# Trigger\nz\n\n# Invalidation\nw\n"),
+        }
+
+    def test_single_cell_is_accepted(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        res = self._tool()(self._args(
+            {"swing": {"direction": ["ranging"], "volatility": ["compressed"]}}))
+        assert res.get("ok"), res
+
+    def test_a_set_on_any_axis_is_refused(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        res = self._tool()(self._args(
+            {"swing": {"direction": ["ranging", "trending-up"],
+                       "volatility": ["compressed"]}}))
+        assert not res.get("ok")
+        assert "one cell" in res["error"].lower()
+        assert "direction" in res["error"]
+
+    def test_the_refusal_names_every_offending_axis(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        res = self._tool()(self._args(
+            {"swing": {"direction": ["ranging", "trending-up"],
+                       "volatility": ["compressed", "normal"]}}))
+        assert not res.get("ok")
+        assert "direction" in res["error"] and "volatility" in res["error"]

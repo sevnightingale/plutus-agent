@@ -256,3 +256,68 @@ class TestSamplingCounters:
                       "is_serious_trial", "regime_applicability",
                       "open_slots_remaining"):
             assert field in self._row(conn, "carried")
+
+
+class TestCellExpectancy:
+    """A blended book averages trades that share no stop, target or horizon.
+
+    ema20-pivot-swing measured -0.004 lifetime and therefore met the
+    retirement bar, while four of its five regime cells were positive and one
+    (-0.429) sank the average. Retiring on the blend would have buried a
+    working mechanism AND lowered the graduation hurdle for every sibling at
+    its timescale on a false premise.
+    """
+
+    def _mixed_book(self, conn, name, good_tag, bad_tag):
+        _mk_strategy(conn, name)
+        for _ in range(12):
+            _resolved(conn, name, "correct", -0.3, True)
+        conn.execute("UPDATE predictions SET regime_tag=? WHERE strategy_name=?",
+                     (good_tag, name))
+        for _ in range(12):
+            _resolved(conn, name, "wrong", -2.0, False)
+        conn.execute(
+            "UPDATE predictions SET regime_tag=? WHERE strategy_name=? "
+            "AND regime_tag IS NULL", (bad_tag, name))
+        conn.commit()
+
+    def test_one_bad_cell_does_not_make_a_strategy_dead(self, conn):
+        self._mixed_book(conn, "mixed", "swing/ranging/normal",
+                         "swing/trending-up/compressed")
+        r = queries.strategy_cell_expectancy(conn, "mixed")
+        assert r["dead"] is False
+        assert r["best_cell"]["regime_tag"] == "swing/ranging/normal"
+        assert r["best_cell"]["expectancy_pct"] > 0
+        # and the blend hides it — the whole point
+        assert r["blended_expectancy_pct"] < r["best_cell"]["expectancy_pct"]
+
+    def test_dead_only_when_no_cell_clears(self, conn):
+        _mk_strategy(conn, "allbad")
+        for _ in range(16):
+            _resolved(conn, "allbad", "wrong", -2.0, False)
+        conn.execute("UPDATE predictions SET regime_tag='swing/ranging/normal' "
+                     "WHERE strategy_name='allbad'")
+        conn.commit()
+        assert queries.strategy_cell_expectancy(conn, "allbad")["dead"] is True
+
+    def test_thin_cells_are_reported_but_never_judged(self, conn):
+        """Below CELL_MIN_N a cell is noise; it must not decide anything."""
+        _mk_strategy(conn, "thin")
+        for _ in range(3):
+            _resolved(conn, "thin", "correct", -0.3, True)
+        conn.execute("UPDATE predictions SET regime_tag='swing/ranging/normal' "
+                     "WHERE strategy_name='thin'")
+        conn.commit()
+        r = queries.strategy_cell_expectancy(conn, "thin")
+        assert r["cells"] and r["cells"][0]["judged"] is False
+        assert r["cells_judged"] == 0
+        # nothing judgeable is NOT the same as alive, and must not read as dead
+        assert r["dead"] is None
+
+    def test_regime_tag_filter_narrows_the_book(self, conn):
+        self._mixed_book(conn, "filt", "swing/ranging/normal",
+                         "swing/trending-up/compressed")
+        whole = queries.strategy_expectancy(conn, "filt")["n"]
+        part = queries.strategy_expectancy(
+            conn, "filt", regime_tag="swing/ranging/normal")["n"]
+        assert part < whole and part == 12

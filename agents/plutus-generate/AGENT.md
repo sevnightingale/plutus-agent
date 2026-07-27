@@ -59,7 +59,26 @@ learn. Your session is research time; spend it like research.
    an unexploited source — author the strategy (`strategy_upsert`,
    status=test, file-at-birth). Every hypothesis states its MECHANISM (who
    is on the other side and why they pay you); declares data_points +
-   weights + regime_applicability. Give every NUMERICAL data point a
+   weights + regime_applicability.
+   **ONE CELL PER STRATEGY (2026-07-27).** `regime_applicability` declares
+   exactly ONE combination — one direction, one volatility (one macro at
+   position scale). It is the cell you are authoring FOR, not the set of
+   conditions you hope the idea survives. Declaring a set was allowed until
+   now and it quietly destroyed the desk's evidence: a strategy spanning six
+   cells has one book averaging six different trades, and the average
+   describes none of them. Measured across the twelve multi-regime books,
+   splitting them moved six from "never graduates" or four-figure sample
+   requirements down to 46-143. The worst case was `ema20-pivot-swing`,
+   blended to −0.004 and therefore retirable, while four of its five cells
+   were positive.
+   If you believe a mechanism works in several conditions, that is several
+   hypotheses and they are authored SEPARATELY — the stop, the target and the
+   horizon genuinely differ between a compressed tape and an expanded one,
+   so they were never the same trade. Each pays its own multiplicity cost,
+   which is the honest accounting: you did test several ideas. Do not widen a
+   declaration to make a strategy eligible more often; eligibility is not the
+   goal, evidence is, and a wide book is evidence about nothing.
+   Give every NUMERICAL data point a
    structured `normalizer` ({name, params} — the library is in
    strategy_upsert's description): it encodes how THAT reading supports
    THIS thesis (direction included — a mean-reversion RSI inverts what a

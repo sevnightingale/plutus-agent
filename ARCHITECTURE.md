@@ -206,10 +206,22 @@ enforces the floors.
    edge clears (None = at/below cost, never) — and a **hazard check** re-simulates the
    trailing 10 resolutions: a full negative window (`decaying`) blocks
    `tradeable` immediately, so a dead edge cannot coast on its historical wins
-   (the record itself is never rewritten). Revoke when the edge is gone at N≥20
-   (expectancy ≤ 0 — reflect's call; decaying → demote to test, never retire); a book still positive but
+   (the record itself is never rewritten). Retire only when the edge is gone at
+   N≥20 in **every regime cell** (`lifecycle_query strategy_cell_expectancy` →
+   `dead: true`; decaying → demote to test, never retire). **Never on the
+   lifetime blend** — a blended book averages conditions the strategy never
+   trades together and describes none of them; on 2026-07-27 ema20-pivot-swing
+   blended to −0.004 and met the old bar while four of its five cells were
+   positive (ranging/normal +1.06). A strategy that works in one condition and
+   fails in another is mis-declared, not dead: narrow it to the cell that
+   works. Every other pruning move is **dormancy**, which prunes attention
+   without touching the bar. A book still positive but
    under the deflated hurdle is auto-demoted to test to keep earning n. No
    manual graduation, no hand-seeded actives — the bar is the bar.
+   Strategies declare **exactly one cell**: `strategy_upsert` refuses a
+   set-valued `regime_applicability`, because a book spanning cells averages
+   trades that share no stop, target or horizon. Several conditions means
+   several hypotheses, authored separately.
 5. **Fund & size.** Selection is a deterministic query
    (`best_actionable_prediction` = the argmax-EV open prediction of a
    currently-tradeable active strategy). main funds it by calling
