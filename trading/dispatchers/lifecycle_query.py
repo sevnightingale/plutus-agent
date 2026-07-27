@@ -119,6 +119,10 @@ def _run_query(args: Dict[str, Any]) -> str:
             conn, params["timescale"], **{k: tuple(v) for k, v in params.items()
                                           if k == "statuses"}),
         "cell_capacity": lambda: queries.cell_capacity(conn, **params),
+        "current_regime": lambda: queries.current_regime(conn, **params),
+        "regime_occupancy": lambda: queries.regime_occupancy(
+            conn, _epoch(params["since_ts"]),
+            **{k: v for k, v in params.items() if k == "symbol"}),
         "open_predictions_by_cell": lambda: queries.open_predictions_by_cell(conn),
         "mae_envelope": lambda: queries.mae_envelope(conn, **params),
         "support_score_performance": lambda: queries.support_score_performance(
@@ -162,6 +166,10 @@ registry.register(
             "pick) | desk_status (broken vs patient: gaps to tradeable, "
             "HALT, readiness, fundable window) | "
             "strategies_by_timescale {timescale, statuses?} | "
+            "current_regime (the live cell per timescale — CODE now knows it; "
+            "until 2026-07-27 regime existed only as markdown) | "
+            "regime_occupancy {since_ts} (how much of the window each cell "
+            "held — the instrument for judging whether cells are too fine) | "
             "cell_capacity {cap?} (occupancy of every regime cell against the "
             "admission cap — generation authors ONLY into cells with "
             "slots_remaining > 0; dormant frees a slot, retired occupies "

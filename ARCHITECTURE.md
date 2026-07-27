@@ -85,7 +85,17 @@ created at first boot (wizard or gateway) and never overwritten:
     weakest, never append past the cap.
 - **REGIME.md** — a per-timescale table (intraday / swing / position ×
   direction / volatility, macro at position scale only) with a closed label
-  vocabulary, maintained by plutus-regime. A strategy's
+  vocabulary. **The table is a RENDERING; `regime_observations` is truth**
+  (2026-07-27) — plutus-regime calls `record_regime` per timescale and the
+  board redraws itself, exactly as `sync_live_state` owns PLUTUS.md's Live
+  State zone. The `## Assessment notes` below the table stay the agent's: the
+  reasoning behind a flip is what no renderer can reconstruct. Until this
+  change the regime existed *only* as markdown, so no code could read it —
+  predict matched strategies against the tape inside its own reasoning, and
+  the desk's cell-aware surfaces stopped at the prompt boundary. Now
+  `current_regime` and `regime_occupancy` answer in code, selection is filtered
+  by `regime_eligible` rather than by judgement, and an integrity invariant
+  reports any drift between board and database. A strategy's
   `regime_applicability` refers to the regime *at its own timescale*.
 - **PERCEPTION.md** — a readings table (data point, params, value,
   fetched_at) plus a narrative panel, maintained by plutus-perception. FAILED

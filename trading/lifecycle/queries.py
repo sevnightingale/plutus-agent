@@ -616,11 +616,18 @@ def cell_capacity(conn: sqlite3.Connection, cap: int = CELL_OCCUPANCY_CAP) -> li
     for r in rows:
         for cell in strategy_cells(r["timescale"], r["ra"]):
             occ.setdefault(cell, []).append(r["name"])
+    live = current_regime(conn)
+    lit = {(ts, c.get("direction"), c.get("volatility"), c.get("macro"))
+           for ts, c in live.items()}
     out = []
     for cell, names in sorted(occ.items(), key=lambda kv: -len(kv[1])):
         out.append({
             "cell": "/".join(x for x in cell if x),
             "timescale": cell[0],
+            # Whether the tape is IN this cell right now. Generation's gap
+            # report ("lit cells that are under-populated") was narrated from
+            # the markdown board; it is computable now.
+            "lit": (cell in lit) if live else None,
             "occupants": len(names),
             "cap": cap,
             "slots_remaining": max(0, cap - len(names)),
@@ -722,6 +729,10 @@ def strategies_by_timescale(
             FROM strategies WHERE timescale = ? AND status IN ({marks})
             ORDER BY status, name""", [timescale, *statuses]))
     now = time.time()
+    live = current_regime(conn)
+    lit = live.get(timescale) or {}
+    lit_cell = ((timescale, lit.get("direction"), lit.get("volatility"),
+                 lit.get("macro")) if lit else None)
     for r in rows:
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
@@ -745,6 +756,17 @@ def strategies_by_timescale(
                  AND realized_value_json IS NOT NULL""",
             (r["name"],)).fetchone()[0]
         r["is_serious_trial"] = r["resolutions"] >= SERIOUS_TRIAL_MIN_N
+        # Eligibility is CODE's answer now (2026-07-27). Predict used to match
+        # the declared cell against REGIME.md in its own reasoning, which meant
+        # the rotation counters arrived unfiltered: a book silent 23 days
+        # because its cell was dark is correctly idle, not a scheduling gap,
+        # and telling the difference was left to judgement over a list code
+        # could filter. None when the regime is unknown — absent, not False,
+        # so a desk that has never assessed does not read as "nothing is
+        # eligible".
+        cells = strategy_cells(r["timescale"], r["regime_applicability_json"])
+        r["regime_eligible"] = (None if lit_cell is None
+                                else lit_cell in cells)
         raw = r.pop("regime_applicability_json", None)
         r["regime_applicability"] = json.loads(raw) if raw else {}
     return rows
@@ -1142,3 +1164,74 @@ def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None)
                  AND COALESCE(o.exit_reason, '') != 'naked_position_abort'
            GROUP BY conviction_band ORDER BY conviction_band""",
         {"fix_ts": fix_ts}))
+
+
+def current_regime(conn: sqlite3.Connection, symbol: str = "BTC") -> dict:
+    """The live regime per timescale — the latest observation of each.
+
+    Until 2026-07-27 this had no code answer at all: the regime existed only
+    as markdown in REGIME.md, so predict matched strategies against the tape
+    inside its own reasoning and every cell-aware surface stopped at the
+    prompt boundary.
+
+    Returns ``{timescale: {direction, volatility, macro, ts, age_h}}``, empty
+    for a timescale never assessed — absent, never guessed.
+    """
+    out = {}
+    for ts_name in ("intraday", "swing", "position"):
+        row = conn.execute(
+            """SELECT ts, direction, volatility, macro, conviction, source
+               FROM regime_observations
+               WHERE symbol = ? AND timescale = ?
+               ORDER BY ts DESC LIMIT 1""", (symbol, ts_name)).fetchone()
+        if not row:
+            continue
+        out[ts_name] = {
+            "direction": row["direction"], "volatility": row["volatility"],
+            "macro": row["macro"], "conviction": row["conviction"],
+            "source": row["source"], "ts": row["ts"],
+            "age_h": round((time.time() - row["ts"]) / 3600.0, 2),
+            "cell": "/".join(x for x in (ts_name, row["direction"],
+                                         row["volatility"], row["macro"]) if x),
+        }
+    return out
+
+
+def regime_occupancy(conn: sqlite3.Connection, since_ts: float,
+                     symbol: str = "BTC") -> list:
+    """How much of the window each cell held, by distinct observed days.
+
+    The number the accrual arithmetic needs and could previously only
+    approximate from ``predictions.regime_tag`` — which sees a cell only when
+    the desk sampled it, so a cell nothing traded in reads as never lit.
+
+    This is what makes cell GRANULARITY measurable: whether
+    direction x volatility is too fine for the desk's data rate is a question
+    about how often each cell is lit, and until now nothing could answer it.
+    """
+    rows = conn.execute(
+        """SELECT timescale, direction, volatility, macro,
+                  COUNT(DISTINCT date(ts,'unixepoch')) days, COUNT(*) n
+           FROM regime_observations
+           WHERE symbol = ? AND ts >= ?
+           GROUP BY timescale, direction, volatility, macro""",
+        (symbol, since_ts)).fetchall()
+    total = {}
+    for ts_name in ("intraday", "swing", "position"):
+        total[ts_name] = conn.execute(
+            """SELECT COUNT(DISTINCT date(ts,'unixepoch')) FROM
+               regime_observations WHERE symbol = ? AND ts >= ? AND timescale = ?""",
+            (symbol, since_ts, ts_name)).fetchone()[0]
+    out = []
+    for r in rows:
+        denom = total.get(r["timescale"]) or 0
+        out.append({
+            "cell": "/".join(x for x in (r["timescale"], r["direction"],
+                                         r["volatility"], r["macro"]) if x),
+            "timescale": r["timescale"],
+            "days_lit": r["days"],
+            "days_observed": denom,
+            "lit_fraction": round(r["days"] / denom, 3) if denom else None,
+            "observations": r["n"],
+        })
+    return sorted(out, key=lambda x: -(x["lit_fraction"] or 0))

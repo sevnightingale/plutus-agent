@@ -424,3 +424,67 @@ class TestCellCapacity:
         row = next(r for r in queries.cell_capacity(conn)
                    if r["cell"] == "intraday/ranging/normal")
         assert row["over_by"] == 2 and row["slots_remaining"] == 0
+
+
+class TestRegimeEligibility:
+    """Selection is code's answer now, not the agent's.
+
+    Predict used to match a declared cell against REGIME.md in its own
+    reasoning, so the rotation counters arrived unfiltered: a book silent 23
+    days because its cell was dark reads as a scheduling gap when it is simply
+    correctly idle. On the live desk this cut swing candidates from 65 to 9.
+    """
+
+    def _mk(self, conn, name, direction, volatility):
+        from trading.strategies.files import Strategy, strategies_dir
+        loader.write_strategy(Strategy(
+            name=name, status="test", timescale="swing",
+            mechanism_family="flow", file_path=strategies_dir() / f"{name}.md",
+            regime_applicability={"swing": {"direction": [direction],
+                                            "volatility": [volatility]}},
+            data_points=[{"name": "hl_funding", "params": {"symbol": "BTC"},
+                          "weight": 0.4}],
+            created="2026-07-27", body_md=BODY), conn)
+
+    def _row(self, conn, name):
+        return next(r for r in queries.strategies_by_timescale(conn, "swing")
+                    if r["name"] == name)
+
+    def test_matching_the_live_cell_is_eligible(self, conn):
+        from trading.lifecycle import write as w
+        w.record_regime(conn, timescale="swing", direction="ranging",
+                        volatility="compressed")
+        self._mk(conn, "in-cell", "ranging", "compressed")
+        assert self._row(conn, "in-cell")["regime_eligible"] is True
+
+    def test_a_dark_cell_is_not_eligible(self, conn):
+        from trading.lifecycle import write as w
+        w.record_regime(conn, timescale="swing", direction="ranging",
+                        volatility="compressed")
+        self._mk(conn, "elsewhere", "trending-up", "elevated")
+        assert self._row(conn, "elsewhere")["regime_eligible"] is False
+
+    def test_unknown_regime_is_None_not_False(self, conn):
+        """A desk that has never assessed must not read as 'nothing eligible'."""
+        self._mk(conn, "orphan", "ranging", "compressed")
+        assert self._row(conn, "orphan")["regime_eligible"] is None
+
+    def test_eligibility_follows_a_flip(self, conn):
+        from trading.lifecycle import write as w
+        w.record_regime(conn, timescale="swing", direction="ranging",
+                        volatility="compressed")
+        self._mk(conn, "mover", "trending-up", "normal")
+        assert self._row(conn, "mover")["regime_eligible"] is False
+        w.record_regime(conn, timescale="swing", direction="trending-up",
+                        volatility="normal", flipped=True)
+        assert self._row(conn, "mover")["regime_eligible"] is True
+
+    def test_cell_capacity_marks_what_is_lit(self, conn):
+        from trading.lifecycle import write as w
+        w.record_regime(conn, timescale="swing", direction="ranging",
+                        volatility="compressed")
+        self._mk(conn, "a", "ranging", "compressed")
+        self._mk(conn, "b", "trending-up", "normal")
+        caps = {x["cell"]: x for x in queries.cell_capacity(conn)}
+        assert caps["swing/ranging/compressed"]["lit"] is True
+        assert caps["swing/trending-up/normal"]["lit"] is False

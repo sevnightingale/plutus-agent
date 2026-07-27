@@ -302,7 +302,40 @@ def _check_retirement_evidence(conn, home: Path) -> List[Dict[str, Any]]:
     return out
 
 
+def _check_regime_board(conn, home: Path) -> List[Dict[str, Any]]:
+    """REGIME.md's table must still agree with the database.
+
+    The database became truth on 2026-07-27 and the board a rendering. That
+    arrangement has exactly one failure mode: a row lands, the render fails or
+    is bypassed, and four agents go on reading a stale table while the desk
+    believes it fresh. The Live State zone froze for a month in precisely this
+    way, with no check to notice — so the check ships with the renderer, not
+    after it.
+
+    Silent when the desk has never assessed a regime: nothing to disagree with
+    is not a disagreement.
+    """
+    try:
+        from trading.lifecycle.queries import current_regime
+        if not current_regime(conn):
+            return []
+        from trading.lifecycle.regime_board import board_matches_db
+        if board_matches_db(conn, home / "REGIME.md"):
+            return []
+    except Exception as exc:
+        return [_violation("regime_board_unreadable",
+                           f"{type(exc).__name__}: {exc}")]
+    return [_violation(
+        "regime_board_stale",
+        "REGIME.md's table disagrees with regime_observations — the board is "
+        "a rendering of the database, so either a render failed or the file "
+        "was hand-edited. Every agent reads the table as prompt text, so they "
+        "are reasoning against a regime the desk no longer believes. Re-run "
+        "record_regime, or read the notes to see who wrote over it.")]
+
+
 CHECKS: Dict[str, Callable] = {
+    "regime_board": _check_regime_board,
     "blackboard_bloat": _check_blackboard_bloat,
     "blackboard_zones": _check_blackboard_zones,
     "live_state_fresh": _check_live_state_fresh,

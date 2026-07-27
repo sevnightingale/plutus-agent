@@ -33,7 +33,7 @@ from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # ───────────────────────────────────────────────────────────────────────────
 # Schema
@@ -296,6 +296,37 @@ CREATE TABLE IF NOT EXISTS action_runs (
     ok INTEGER NOT NULL DEFAULT 1,
     notes_md TEXT
 );
+
+-- What the tape was doing, per timescale. Append-only: the current regime is
+-- the latest row per (symbol, timescale), and the history it accumulates makes
+-- cell OCCUPANCY a query instead of an inference from predictions.regime_tag
+-- (which only ever sees the cells the desk happened to sample).
+--
+-- Regime lived solely as markdown in REGIME.md until 2026-07-27 — no code
+-- anywhere could read it, so predict matched strategies to the tape in its
+-- head and every cell-aware surface stopped at the prompt boundary. Third
+-- record this month kept as freeform text with no writer, after reflections
+-- and capital_movements.
+--
+-- `symbol` is defaulted and, for now, always 'BTC'. It is here so that
+-- per-symbol regime needs no migration; nothing yet computes a second one.
+-- `source` distinguishes an observation plutus-regime made from one derived
+-- by backfill out of predictions.regime_tag, which is the regime AT
+-- REGISTRATION for sampled cells only — real evidence, but not the same thing.
+CREATE TABLE IF NOT EXISTS regime_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts REAL NOT NULL,
+    symbol TEXT NOT NULL DEFAULT 'BTC',
+    timescale TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    volatility TEXT NOT NULL,
+    macro TEXT,
+    conviction REAL,
+    flipped INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'observed',
+    session_name TEXT,
+    notes_md TEXT
+);
 """
 
 INDEXES_SQL = """
@@ -307,6 +338,8 @@ INDEXES_SQL = """
 CREATE UNIQUE INDEX IF NOT EXISTS ux_capital_movements_tx
     ON capital_movements(tx_hash);
 CREATE INDEX IF NOT EXISTS idx_capital_movements_ts ON capital_movements(ts);
+CREATE INDEX IF NOT EXISTS idx_regime_obs
+    ON regime_observations(symbol, timescale, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_dps_name_ts ON data_point_snapshots(name, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_strategies_status ON strategies(status);
 CREATE INDEX IF NOT EXISTS idx_strategies_parent ON strategies(parent_strategy);
@@ -388,7 +421,7 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         if version == SCHEMA_VERSION:
             _ensure_indexes(conn)
             return conn
-        # Incremental migrations chain forward: v2 → v3 → v4 → v5.
+        # Incremental migrations chain forward: v2 → v3 → v4 → v5 → v6.
         if version == 2:
             _migrate_v2_to_v3(conn)
             version = 3
@@ -398,6 +431,9 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         if version == 4:
             _migrate_v4_to_v5(conn)
             version = 5
+        if version == 5:
+            _migrate_v5_to_v6(conn)
+            version = 6
         if version == SCHEMA_VERSION:
             _ensure_indexes(conn)
             logger.info("Migrated lifecycle.db → v%s at %s", SCHEMA_VERSION, db_path)
@@ -405,7 +441,7 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         conn.close()
         raise RuntimeError(
             f"{db_path} has schema version {version!r}, expected {SCHEMA_VERSION}. "
-            "Migrations chain v2 → v3 → v4 → v5; a pre-v2 (v1) file is fresh-create only. "
+            "Migrations chain v2 → v3 → v4 → v5 → v6; a pre-v2 (v1) file is fresh-create only. "
             "Back up and remove the old file (see SETUP.md, 'Redeploying "
             "a fresh runtime'), then rerun."
         )
@@ -626,6 +662,74 @@ def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
             "v5 support_scores canonicalization: %s rewritten, %s unresolved "
             "(left as-is), %s uniqueness collisions (left as-is)",
             changed, unresolved, collided)
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
+    """In-place v5 → v6: regime gets a table.
+
+    Regime lived only in REGIME.md, so no code could read it — predict matched
+    strategies against the tape in its head and every cell-aware surface built
+    on 2026-07-27 stopped at the prompt boundary. Additive: one new table, no
+    existing column touched.
+
+    The rows are BACKFILLED from ``predictions.regime_tag``, which is 100%
+    populated and records the regime at registration. Marked
+    ``source='derived'`` because that is what it is — the regime for the cells
+    the desk sampled, not a reading of what the tape did — but starting empty
+    would leave occupancy unmeasurable for a month, and an honest approximation
+    beats a blind one. One row per (day, timescale, tag), which is the finest
+    grain the tags support.
+    """
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS regime_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts REAL NOT NULL,
+                symbol TEXT NOT NULL DEFAULT 'BTC',
+                timescale TEXT NOT NULL,
+                direction TEXT NOT NULL,
+                volatility TEXT NOT NULL,
+                macro TEXT,
+                conviction REAL,
+                flipped INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'observed',
+                session_name TEXT,
+                notes_md TEXT
+            );""")
+        seeded = 0
+        # `predictions.regime_tag` arrives with the fresh-create schema and no
+        # migration ever added it, so a database old enough to be walking the
+        # v2 chain does not have it. No history to derive is honest absence,
+        # not an error — seed nothing and say so.
+        has_tag = any(r["name"] == "regime_tag" for r in
+                      conn.execute("PRAGMA table_info(predictions)"))
+        if has_tag and not conn.execute(
+                "SELECT 1 FROM regime_observations LIMIT 1").fetchone():
+            rows = conn.execute(
+                """SELECT MIN(ts) ts, regime_tag FROM predictions
+                   WHERE regime_tag IS NOT NULL
+                   GROUP BY date(ts,'unixepoch'), regime_tag
+                   ORDER BY ts""").fetchall()
+            for r in rows:
+                parts = str(r["regime_tag"]).split("/")
+                if len(parts) < 3:
+                    continue          # unparseable tag — skipped, never guessed
+                ts_, direction, volatility = parts[0], parts[1], parts[2]
+                macro = parts[3] if len(parts) > 3 else None
+                conn.execute(
+                    """INSERT INTO regime_observations
+                         (ts, timescale, direction, volatility, macro, source)
+                       VALUES (?,?,?,?,?,'derived')""",
+                    (r["ts"], ts_, direction, volatility, macro))
+                seeded += 1
+        conn.execute("UPDATE schema_version SET version = 6")
+        conn.commit()
+        logger.info("v6 regime_observations: %s rows backfilled from "
+                    "predictions.regime_tag (source=derived)%s", seeded,
+                    "" if has_tag else " — no regime_tag column, nothing to derive")
     except Exception:
         conn.rollback()
         raise

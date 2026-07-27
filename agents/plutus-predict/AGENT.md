@@ -59,19 +59,24 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    is plutus-generate's job; main routes your gap report there. Never call
    for a strategy you wish existed by stretching one that doesn't match.
 2b. ROTATION (a tiebreak, never a trigger): each `strategies_by_timescale` row
-   carries `days_since_last_prediction` (None = never sampled),
-   `resolutions`, and `is_serious_trial`. You selected on regime, slots and
-   freshness alone, and books fell out of rotation unnoticed: two sat 17 and
-   23 days untouched while still `test`, neither proving nor disproving
-   themselves. A book left idle is the one outcome worse than a book proved
-   wrong. So among strategies that ALREADY have a real setup, prefer the one
-   silent longest. This does NOT license authoring a prediction without a
-   genuine trigger — a manufactured setup to refresh a counter is worse than
-   the silence, and the regime gate still binds absolutely: a book whose
-   `regime_applicability` excludes the current regime is correctly idle, and
-   its counter is information for your report, not a reason to reach.
-   Report the regime-eligible books you passed over in `population` — that is
-   how a scheduling gap becomes visible instead of compounding.
+   carries **`regime_eligible`** — computed in code against the live regime,
+   not something you re-derive from the board — plus
+   `days_since_last_prediction` (None = never sampled), `resolutions`, and
+   `is_serious_trial`. **A row with `regime_eligible: false` is out. Full
+   stop.** It is not a candidate, its silence is not a gap, and its counter is
+   not a reason to reach; it is a book correctly idle because the tape is
+   elsewhere. (`None` means the regime has never been assessed — treat it as
+   unknown, not as permission.)
+   Among the ELIGIBLE rows, books still fell out of rotation unnoticed: two sat
+   17 and 23 days untouched while still `test`, neither proving nor disproving
+   themselves, and a book left idle is the one outcome worse than a book proved
+   wrong. So among eligible strategies that ALREADY have a real setup, prefer
+   the one silent longest. This does NOT license authoring a prediction
+   without a genuine trigger — a manufactured setup to refresh a counter is
+   worse than the silence.
+   Report the ELIGIBLE books you passed over in `population` — that is how a
+   scheduling gap becomes visible instead of compounding, and it is now a real
+   signal rather than a list padded with books whose cell was dark.
    `is_serious_trial` carries a real cost, so read it before reaching for a
    young book: crossing SERIOUS_TRIAL_MIN_N resolutions makes a book a
    multiplicity sibling and PERMANENTLY raises the graduation hurdle for

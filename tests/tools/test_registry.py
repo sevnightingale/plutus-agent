@@ -331,6 +331,7 @@ class TestBuiltinDiscovery:
             "trading.dispatchers.live_state_tool",
             "trading.dispatchers.record",
             "trading.dispatchers.reflection_write",
+            "trading.dispatchers.regime_write",
             "trading.dispatchers.request_restart",
             "trading.dispatchers.resolution",
             "trading.dispatchers.spawn_tool",

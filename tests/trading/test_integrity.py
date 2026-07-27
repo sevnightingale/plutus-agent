@@ -340,3 +340,37 @@ class TestRetirementIsCellAware:
         self._retired_mixed(conn, "truly-dead", good_n=0, bad_n=26)
         assert "retired_while_profitable" not in _names(
             integrity.check_integrity(conn, home=home))
+
+
+class TestRegimeBoard:
+    """The board is a rendering; drift between it and the database is the one
+    failure mode that arrangement has, and it is how the Live State zone froze
+    for a month with nothing to notice."""
+
+    _BOARD = ("# REGIME\nupdated_at: 2026-07-27 12:15 UTC    by: plutus-regime\n\n"
+              "| timescale | direction | volatility | macro |\n|---|---|---|---|\n"
+              "| intraday | ranging | normal | — |\n"
+              "| swing | ranging | compressed | — |\n"
+              "| position | ranging | compressed | neutral |\n\n"
+              "## Assessment notes\n\nprose\n")
+
+    def test_silent_when_the_board_agrees(self, conn, home):
+        from trading.lifecycle import write as w
+        (home / "REGIME.md").write_text(self._BOARD, encoding="utf-8")
+        w.record_regime(conn, timescale="swing", direction="ranging",
+                        volatility="compressed")
+        assert "regime_board_stale" not in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_stale_board_detected(self, conn, home):
+        from trading.lifecycle import write as w
+        (home / "REGIME.md").write_text(self._BOARD, encoding="utf-8")
+        w.record_regime(conn, timescale="swing", direction="trending-down",
+                        volatility="elevated")
+        assert "regime_board_stale" in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_never_assessed_is_not_a_violation(self, conn, home):
+        (home / "REGIME.md").write_text(self._BOARD, encoding="utf-8")
+        assert "regime_board_stale" not in _names(
+            integrity.check_integrity(conn, home=home))

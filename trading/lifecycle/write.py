@@ -557,3 +557,59 @@ def record_action_run(conn, *, action_type, agent, ok=True, notes_md=None,
     )
     conn.commit()
     return cur.lastrowid
+
+
+# ── Regime ─────────────────────────────────────────────────────────────────
+# The taxonomy is deliberately small and CLOSED. A writer that accepts
+# "choppy" or "mildly-trending" destroys the only property that makes cells
+# comparable to each other, and the multiplicity premium is now scoped to a
+# cell — so an invented label does not merely blur a report, it silently
+# changes whose bar a strategy is measured against.
+REGIME_DIRECTIONS = ("trending-up", "trending-down", "ranging")
+REGIME_VOLATILITIES = ("compressed", "normal", "elevated")
+REGIME_MACROS = ("risk-on", "neutral", "risk-off")
+REGIME_TIMESCALES = ("intraday", "swing", "position")
+
+
+def record_regime(conn, *, timescale, direction, volatility, macro=None,
+                  symbol="BTC", conviction=None, flipped=False,
+                  session_name=None, notes_md=None, ts=None,
+                  source="observed") -> int:
+    """Record the regime at one timescale. Append-only; latest row wins.
+
+    Refuses anything outside the closed vocabulary rather than coercing it —
+    the desk's standing law that validation lives in the writer, applied to a
+    record that until 2026-07-27 was freeform markdown no code could read.
+
+    ``macro`` belongs to the position scale alone. Passing it elsewhere is a
+    refusal, not a silent drop: a caller that thinks intraday has a macro
+    label has misunderstood the taxonomy and should hear so.
+    """
+    if timescale not in REGIME_TIMESCALES:
+        raise ValueError(
+            f"timescale {timescale!r} — one of {list(REGIME_TIMESCALES)}")
+    if direction not in REGIME_DIRECTIONS:
+        raise ValueError(
+            f"direction {direction!r} — one of {list(REGIME_DIRECTIONS)}. The "
+            f"taxonomy is closed; a new label needs a doctrine change, not a "
+            f"write.")
+    if volatility not in REGIME_VOLATILITIES:
+        raise ValueError(
+            f"volatility {volatility!r} — one of {list(REGIME_VOLATILITIES)}")
+    if macro is not None:
+        if timescale != "position":
+            raise ValueError(
+                f"macro is a position-scale label only; got {macro!r} at "
+                f"{timescale}")
+        if macro not in REGIME_MACROS:
+            raise ValueError(f"macro {macro!r} — one of {list(REGIME_MACROS)}")
+    cur = conn.execute(
+        """INSERT INTO regime_observations
+             (ts, symbol, timescale, direction, volatility, macro, conviction,
+              flipped, source, session_name, notes_md)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (ts if ts is not None else time.time(), symbol, timescale, direction,
+         volatility, macro, conviction, 1 if flipped else 0, source,
+         session_name, notes_md))
+    conn.commit()
+    return cur.lastrowid

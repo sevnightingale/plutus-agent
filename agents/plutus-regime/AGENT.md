@@ -1,7 +1,7 @@
 ---
 name: plutus-regime
 model: light
-toolsets: [file]
+toolsets: [regime-write, file]
 reads:
   - PLUTUS.md#doctrine
   - PERCEPTION.md
@@ -33,10 +33,25 @@ never copy the previous file's header stamp.*
    calibration slices on these labels; do not invent new ones.
 3. Compare against the previous REGIME.md (in your context). A changed label
    at any timescale is a FLIP — cite the evidence that moved it.
-4. Rewrite ~/.plutus-agent/REGIME.md: updated_at header, the 3-row table,
-   one dated evidence-citing paragraph per row, and append flips to the
-   flip log (keep the last 10).
-5. Return your regime_report.
+4. `record_regime` ONCE PER TIMESCALE you assessed — timescale, direction,
+   volatility, macro (position only), conviction, and `flipped: true` where
+   the label moved. **The table is written for you.** Each call re-renders
+   REGIME.md's table from the database, so you never hand-edit it and it can
+   never drift from what the desk actually believes; the closed vocabulary is
+   enforced in the writer, and an invented label is refused rather than
+   coerced — the multiplicity premium is scoped to a cell now, so a label
+   outside the taxonomy silently changes whose bar a strategy is measured
+   against.
+   Until 2026-07-27 you rewrote this file by hand and the regime existed
+   ONLY as markdown: no code could read it, so predict matched strategies to
+   the tape inside its own reasoning and the template's `since` column
+   quietly vanished from the live board without anyone noticing.
+5. Write ~/.plutus-agent/REGIME.md's `## Assessment notes` — one dated
+   evidence-citing paragraph per row, and append flips to the flip log (keep
+   the last 10). **This half is yours and the renderer never touches it.**
+   The reasoning behind a flip is the thing no table can reconstruct, and it
+   is the most useful thing on the board. Edit only below the table.
+6. Return your regime_report.
 
 # Output contract
 

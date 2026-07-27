@@ -205,11 +205,11 @@ REGIME_MD_TEMPLATE = """\
 # REGIME
 updated_at: (never)    by: (nobody yet)
 
-| timescale | direction | volatility | macro | since |
-|---|---|---|---|---|
-| intraday | (unassessed) | (unassessed) | — | — |
-| swing | (unassessed) | (unassessed) | — | — |
-| position | (unassessed) | (unassessed) | (unassessed) | — |
+| timescale | direction | volatility | macro |
+|---|---|---|---|
+| intraday | (unassessed) | (unassessed) | — |
+| swing | (unassessed) | (unassessed) | — |
+| position | (unassessed) | (unassessed) | — |
 
 ## Assessment notes
 
