@@ -316,3 +316,52 @@ class TestOneCellDeclaration:
                        "volatility": ["compressed", "normal"]}}))
         assert not res.get("ok")
         assert "direction" in res["error"] and "volatility" in res["error"]
+
+
+class TestCellSplitMigration:
+    """scripts/split_strategies_by_cell.py — rebuilding a declaration from a tag.
+
+    The axis order is not uniform: intraday and swing tags read
+    timescale/direction/volatility, position reads
+    timescale/direction/volatility/macro but ALSO appears as
+    timescale/direction/macro when no volatility was recorded. Getting this
+    wrong silently mislabels a migrated strategy's cell, which is worse than
+    not migrating it.
+    """
+
+    def _mod(self):
+        import importlib.util
+        from pathlib import Path
+        p = (Path(__file__).resolve().parents[2]
+             / "scripts" / "split_strategies_by_cell.py")
+        spec = importlib.util.spec_from_file_location("split_by_cell", p)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        return m
+
+    def test_slug_drops_the_timescale(self):
+        assert self._mod().cell_slug("swing/ranging/compressed") == "ranging-compressed"
+
+    def test_swing_tag_maps_direction_and_volatility(self):
+        assert self._mod().cell_declaration("swing", "swing/ranging/compressed") == {
+            "swing": {"direction": ["ranging"], "volatility": ["compressed"]}}
+
+    def test_position_tag_with_macro_third(self):
+        assert self._mod().cell_declaration(
+            "position", "position/ranging/compressed/neutral") == {
+            "position": {"direction": ["ranging"], "volatility": ["compressed"],
+                         "macro": ["neutral"]}}
+
+    def test_position_tag_where_the_second_axis_is_macro(self):
+        """position/trending-down/risk-off has no volatility component."""
+        assert self._mod().cell_declaration(
+            "position", "position/trending-down/risk-off") == {
+            "position": {"direction": ["trending-down"], "macro": ["risk-off"]}}
+
+    def test_declarations_are_single_valued(self):
+        m = self._mod()
+        for tag, ts in (("swing/ranging/compressed", "swing"),
+                        ("position/ranging/compressed/neutral", "position"),
+                        ("intraday/trending-up/normal", "intraday")):
+            for axis in m.cell_declaration(ts, tag)[ts].values():
+                assert len(axis) == 1, tag
