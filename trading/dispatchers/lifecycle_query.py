@@ -118,6 +118,7 @@ def _run_query(args: Dict[str, Any]) -> str:
         "strategies_by_timescale": lambda: queries.strategies_by_timescale(
             conn, params["timescale"], **{k: tuple(v) for k, v in params.items()
                                           if k == "statuses"}),
+        "cell_capacity": lambda: queries.cell_capacity(conn, **params),
         "open_predictions_by_cell": lambda: queries.open_predictions_by_cell(conn),
         "mae_envelope": lambda: queries.mae_envelope(conn, **params),
         "support_score_performance": lambda: queries.support_score_performance(
@@ -161,6 +162,10 @@ registry.register(
             "pick) | desk_status (broken vs patient: gaps to tradeable, "
             "HALT, readiness, fundable window) | "
             "strategies_by_timescale {timescale, statuses?} | "
+            "cell_capacity {cap?} (occupancy of every regime cell against the "
+            "admission cap — generation authors ONLY into cells with "
+            "slots_remaining > 0; dormant frees a slot, retired occupies "
+            "nothing) | "
             "open_predictions_by_cell | mae_envelope {strategy_name?, "
             "timescale?, regime_tag?, percentile?, population?, statistic?} | "
             "support_score_performance {strategy_name?} | last_action_runs | "

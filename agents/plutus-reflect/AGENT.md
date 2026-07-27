@@ -118,13 +118,18 @@ never copy the previous file's header stamp.*
     rewrites the book — the record stands; only the validity ended.
    - dormancy moves on regime mismatch; dormant strategies matching the new
      regime wake.
-   - POPULATION: lifecycle_query strategies_by_timescale per timescale (each
-     carries its regime cells). Per (timescale × regime) cell, cap ≈ 2 active
-     + 6 test — when a cell is over capacity, make the weakest occupant
-     DORMANT (lowest win-rate or oldest-without-a-win) so a niche stays a
-     real champion/challenger contest, not a crowd. Dormant, not retired:
-     overcrowding is a statement about the cell, not evidence about the book,
-     and retirement now moves the bar. An invalidation resolves
+   - POPULATION: `lifecycle_query cell_capacity` — occupancy of every regime
+     cell against the admission cap of 7 test+active books. The cap is
+     ENFORCED at authoring (`strategy_upsert` refuses a full cell), so your
+     job here is the other half: DRAINING cells that are over. Take the
+     weakest occupant (lowest win-rate or oldest-without-a-win) to DORMANT,
+     which frees the slot for a better challenger while still counting toward
+     the bar. Dormant, not retired: overcrowding is a statement about the
+     cell, not evidence about the book, and retirement moves the hurdle.
+     This matters more than it used to. **M is scoped to the CELL**, so
+     occupancy IS the bar: an over-full cell taxes every book in it, and
+     draining one is the most direct thing you can do for the strategies that
+     remain. Report each cell you drained and why. An invalidation resolves
      as 'wrong', so win-rate already counts it — no special handling.
 2. WEIGHTS: lifecycle_query support_score_performance per strategy →
    strategy_update_weights with the signed per-DP edge (avg score on

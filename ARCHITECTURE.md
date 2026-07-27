@@ -190,11 +190,18 @@ enforces the floors.
    which was survivorship-biased (median MFE/MAE on winners only overstates
    tradeability). Two hardenings (imported
    from the trading design notes): the hurdle is **multiplicity-deflated** — cost margin
-   + √(2·ln M)·σ/√n over the M **serious** sibling trials live at the
-   timescale (books of ≥6 resolutions in any status except `retired`; dormant
-   siblings still count, a one-resolution noise book never raises the bar),
-   so the survivor of thirty real trials needs more
-   proof than a lone hypothesis. Retired siblings counted until 2026-07-27,
+   + √(2·ln M)·σ/√n over the M **serious** sibling trials live in the
+   strategy's own **regime cell** (books of ≥6 resolutions in any status except
+   `retired`; dormant siblings still count, a one-resolution noise book never
+   raises the bar), so the survivor of many real trials needs more
+   proof than a lone hypothesis. M is **cell-scoped since 2026-07-27**: the
+   premium prices a best-of-M selection, and the selection that actually
+   happens is among the books declaring the cell the tape is in — a strategy
+   in another cell cannot be chosen instead. Cell scope was rejected on
+   2026-07-07 because set-valued declarations would have let a strategy narrow
+   its way to a lower bar; single-cell declarations and the **cell cap
+   (7 test+active, `strategy_upsert` refuses a full cell)** removed that, and
+   the cap now bounds M by construction so the hurdle cannot run away again. Retired siblings counted until 2026-07-27,
    which made M monotonic and the bar unreachable — 81–94% of every hurdle
    was premium rather than trading cost and nothing had graduated. Because
    retirement now *lowers* the bar for surviving siblings, it is evidence-only

@@ -85,6 +85,14 @@ SERIOUS_TRIAL_MIN_N = HARD_SL_MIN_N  # a sibling counts toward multiplicity only
 CELL_MIN_N = 4              # resolutions a regime cell needs before its
                             # expectancy is evidence rather than noise. Below
                             # it the cell is reported but never judged on.
+CELL_OCCUPANCY_CAP = 7      # test+active strategies admitted per regime cell.
+                            # Admission control on generation, and the reason
+                            # the multiplicity premium can no longer run away:
+                            # M is now cell-scoped, so this bounds it by
+                            # construction. Dormant frees a slot (it parks a
+                            # hypothesis) while still counting toward M —
+                            # pruning attention stays cheap, lowering the bar
+                            # stays expensive.
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
 BASE_PREDICTION_OPEN_CAP = 3
@@ -259,27 +267,55 @@ def strategy_expectancy(
     # failure whatever its statistics.
     #
     # Excluding retired makes the bar responsive to cleaning the book, and
-    # thereby makes retirement a lever on the hurdle. That is the same vector
-    # a cell-scoped M was rejected for on 2026-07-07 ("would let a strategy
-    # narrow its declared regime to lower its own bar"), so it is closed on
-    # the other side rather than left open: retirement now requires
-    # demonstrated non-positive lifetime expectancy at n >= 20, every
-    # judgement-based pruning move goes to DORMANCY instead, and dormant books
-    # keep counting here. So the only thing that can lower this bar is
-    # evidence, and no agent can talk its way to it.
+    # thereby makes retirement a lever on the hurdle, so retirement requires
+    # demonstrated death in every cell at n >= 20, every judgement-based
+    # pruning move goes to DORMANCY instead, and dormant books keep counting
+    # here. Only evidence can lower this bar; no agent can talk its way to it.
+    #
+    # SCOPE: the strategy's own REGIME CELL, not its whole timescale
+    # (2026-07-27). The premium prices a best-of-M selection, and the
+    # selection that actually happens is among the strategies declaring the
+    # cell the tape is in — a strategy in trending-up/normal is not an
+    # alternative to one in ranging/compressed and cannot be chosen instead of
+    # it, so charging the winner for a competition that never occurred is
+    # over-conservative. Measured: cells hold 3-6 serious trials against 13-22
+    # per timescale, roughly halving the resolutions needed to graduate.
+    #
+    # Cell scope was considered and rejected on 2026-07-07 for a reason that
+    # has since been removed: `regime_applicability` was self-declared and
+    # set-valued, so a strategy could narrow its declared regime to shrink its
+    # own M. Since 2026-07-27 `strategy_upsert` refuses a set-valued
+    # declaration and the per-cell cap bounds occupancy, so M is bounded by
+    # construction and cannot be narrowed into. The residual vector — authoring
+    # into a sparsely populated cell — is self-limiting, because a sparse cell
+    # is usually sparse for being rarely lit, and a book that cannot accrue
+    # cannot graduate.
+    #
+    # A legacy multi-cell declaration counts toward EVERY cell it declares: it
+    # genuinely competes in all of them. A strategy whose cell cannot be read
+    # falls back to timescale scope, which is the conservative direction.
     srow = conn.execute(
-        "SELECT timescale FROM strategies WHERE name=?", (strategy_name,)).fetchone()
+        "SELECT timescale, regime_applicability_json FROM strategies WHERE name=?",
+        (strategy_name,)).fetchone()
     siblings = None
     if srow:
-        siblings = max(1, conn.execute(
-            """SELECT COUNT(*) FROM strategies s
+        own = strategy_cells(srow["timescale"], srow["regime_applicability_json"])
+        rows_s = conn.execute(
+            """SELECT s.name, s.timescale, s.regime_applicability_json ra
+               FROM strategies s
                WHERE s.timescale = ?
                  AND s.status != 'retired'
                  AND (SELECT COUNT(*) FROM predictions p
                       WHERE p.strategy_name = s.name
                         AND p.resolved_at IS NOT NULL
                         AND p.realized_value_json IS NOT NULL) >= ?""",
-            (srow["timescale"], SERIOUS_TRIAL_MIN_N)).fetchone()[0])
+            (srow["timescale"], SERIOUS_TRIAL_MIN_N)).fetchall()
+        if own:
+            siblings = max(1, sum(
+                1 for s in rows_s
+                if strategy_cells(s["timescale"], s["ra"]) & own))
+        else:                       # unreadable cell → conservative fallback
+            siblings = max(1, len(rows_s))
     sigma = best["pnl_stdev_pct"] if best else None
     premium = (math.sqrt(2.0 * math.log(siblings)) * sigma / math.sqrt(n)
                if siblings and sigma is not None and n else None)
@@ -529,6 +565,68 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
     return {"open_total": total, "by_timescale": by_timescale,
             "by_strategy": by_strategy,
             "win_locked_by_strategy": win_locked}
+
+
+def strategy_cells(timescale: str, regime_applicability_json) -> set:
+    """The (timescale, direction, volatility, macro) cells a strategy occupies.
+
+    Since 2026-07-27 a declaration names exactly one cell, so this returns a
+    single entry for anything authored after the rule. Legacy set-valued
+    declarations expand to their full cross-product: such a strategy really
+    does compete in every cell it declares, so it counts in all of them for
+    both the multiplicity premium and the per-cell cap.
+
+    Returns an empty set when the declaration cannot be read — callers treat
+    that as "unknown" and fall back to the conservative, wider scope rather
+    than inventing a cell.
+    """
+    try:
+        ra = regime_applicability_json
+        if isinstance(ra, str):
+            ra = json.loads(ra or "{}")
+        axes = (ra or {}).get(timescale) or {}
+    except Exception:
+        return set()
+    dirs = axes.get("direction") or [None]
+    vols = axes.get("volatility") or [None]
+    macros = axes.get("macro") or [None]
+    if dirs == [None] and vols == [None] and macros == [None]:
+        return set()
+    return {(timescale, d, v, m) for d in dirs for v in vols for m in macros}
+
+
+def cell_capacity(conn: sqlite3.Connection, cap: int = CELL_OCCUPANCY_CAP) -> list:
+    """Occupancy of every populated regime cell, against the cap.
+
+    The cap is admission control on generation, not a pruning suggestion. It
+    existed as prose in reflect's brief since the rebuild ("cap ~2 active + 6
+    test") and was never enforced anywhere, which is how 88 strategies came to
+    sit across 34 cells with 23 of them over.
+
+    Only `test` and `active` books occupy a slot. DORMANT does not: dormancy
+    parks a hypothesis and frees the niche for a new one, while still counting
+    toward the multiplicity premium — so pruning attention is cheap and
+    lowering the bar stays expensive. Retired occupies nothing and counts
+    nothing.
+    """
+    rows = conn.execute(
+        """SELECT name, timescale, status, regime_applicability_json ra
+           FROM strategies WHERE status IN ('test','active')""").fetchall()
+    occ: dict = {}
+    for r in rows:
+        for cell in strategy_cells(r["timescale"], r["ra"]):
+            occ.setdefault(cell, []).append(r["name"])
+    out = []
+    for cell, names in sorted(occ.items(), key=lambda kv: -len(kv[1])):
+        out.append({
+            "cell": "/".join(x for x in cell if x),
+            "timescale": cell[0],
+            "occupants": len(names),
+            "cap": cap,
+            "slots_remaining": max(0, cap - len(names)),
+            "over_by": max(0, len(names) - cap),
+        })
+    return out
 
 
 def strategy_cell_expectancy(

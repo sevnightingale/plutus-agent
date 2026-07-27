@@ -54,7 +54,16 @@ learn. Your session is research time; spend it like research.
      `missing_data_points` — that declaration is the desk's self-extension
      hook (sourcing it becomes a perception task). Never block a good
      hypothesis on infrastructure; never quietly substitute a worse proxy.
-3. GENERATE: for each lit (timescale × regime) cell that is under-populated,
+3. GENERATE: **first `lifecycle_query cell_capacity`.** A cell with
+   `slots_remaining: 0` is CLOSED — `strategy_upsert` will refuse it, and
+   rightly: M is scoped to the cell, so every book you add to one raises the
+   graduation hurdle for every strategy already in it. Authoring into a full
+   cell does not expand the search, it taxes the incumbents. Generation is
+   therefore demand-driven — you write for cells that are lit AND have room,
+   and when every relevant cell is full the correct output is NO new
+   strategies plus a note in your report that the population is at capacity.
+   Silence is a valid beat; a crowded niche is not a contest.
+   For each such cell that is under-populated,
    or where a winner suggests a variant, or where the evidence survey found
    an unexploited source — author the strategy (`strategy_upsert`,
    status=test, file-at-birth). Every hypothesis states its MECHANISM (who

@@ -365,3 +365,79 @@ class TestCellSplitMigration:
                         ("intraday/trending-up/normal", "intraday")):
             for axis in m.cell_declaration(ts, tag)[ts].values():
                 assert len(axis) == 1, tag
+
+
+class TestCellCapAdmission:
+    """The cap is admission control, refused in the writer.
+
+    M is cell-scoped, so every book admitted to a cell raises the graduation
+    hurdle for the others in it. The cap existed as prose in reflect's brief
+    since the rebuild and was never enforced anywhere — which is how 88
+    strategies came to sit across 34 cells with 23 of them over.
+    """
+
+    def _tool(self):
+        import json as _json
+
+        import trading.dispatchers.strategy_tools  # noqa: F401 — registers
+        from harness.tools.registry import registry as tool_registry
+        entry = tool_registry.get_entry("strategy_upsert")
+        return lambda args: _json.loads(entry.handler(args))
+
+    def _args(self, name, direction="ranging"):
+        return {
+            "name": name, "timescale": "swing", "mechanism_family": "flow",
+            "regime_applicability": {"swing": {"direction": [direction],
+                                               "volatility": ["compressed"]}},
+            "data_points": [{"name": "dp", "params": {}, "weight": 0.4}],
+            "missing_data_points": ["dp"],
+            "body": ("# Hypothesis\nx\n\n# Mechanism\ny\n\n"
+                     "# Trigger\nz\n\n# Invalidation\nw\n"),
+        }
+
+    def _fill(self, conn, call, n):
+        from trading.lifecycle.queries import CELL_OCCUPANCY_CAP
+        for i in range(min(n, CELL_OCCUPANCY_CAP)):
+            assert call(self._args(f"occupant-{i}")).get("ok")
+
+    def test_admits_until_the_cap(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        call = self._tool()
+        self._fill(conn, call, queries_cap())
+        row = next(r for r in _caps(conn) if r["cell"] == "swing/ranging/compressed")
+        assert row["slots_remaining"] == 0
+
+    def test_refuses_once_full(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        call = self._tool()
+        self._fill(conn, call, queries_cap())
+        res = call(self._args("one-too-many"))
+        assert not res.get("ok")
+        assert "full" in res["error"] and "cap" in res["error"]
+
+    def test_a_different_cell_is_unaffected(self, conn, monkeypatch):
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        call = self._tool()
+        self._fill(conn, call, queries_cap())
+        assert call(self._args("elsewhere", direction="trending-up")).get("ok")
+
+    def test_updating_an_existing_book_is_never_blocked(self, conn, monkeypatch):
+        """The cap gates admission, not maintenance."""
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
+        call = self._tool()
+        self._fill(conn, call, queries_cap())
+        assert call(self._args("occupant-0")).get("ok")
+
+
+def queries_cap():
+    from trading.lifecycle.queries import CELL_OCCUPANCY_CAP
+    return CELL_OCCUPANCY_CAP
+
+
+def _caps(conn):
+    from trading.lifecycle.queries import cell_capacity
+    return cell_capacity(conn)

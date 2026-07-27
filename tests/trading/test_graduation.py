@@ -321,3 +321,106 @@ class TestCellExpectancy:
         part = queries.strategy_expectancy(
             conn, "filt", regime_tag="swing/ranging/normal")["n"]
         assert part < whole and part == 12
+
+
+class TestCellScopedMultiplicity:
+    """M counts siblings in the strategy's own CELL, not its whole timescale.
+
+    The premium prices a best-of-M selection, and the selection that actually
+    happens is among books declaring the cell the tape is in — a strategy in
+    another cell cannot be chosen instead. Cell scope was rejected on
+    2026-07-07 because set-valued declarations would have let a strategy narrow
+    its way to a lower bar; the writer's single-cell refusal and the cell cap
+    removed that, and the cap now bounds M by construction.
+    """
+
+    def _mk_cell(self, conn, name, direction, volatility, status="test"):
+        from trading.strategies.files import Strategy, strategies_dir
+        loader.write_strategy(Strategy(
+            name=name, status=status, timescale="intraday",
+            mechanism_family="flow", file_path=strategies_dir() / f"{name}.md",
+            regime_applicability={"intraday": {"direction": [direction],
+                                               "volatility": [volatility]}},
+            data_points=[{"name": "hl_funding", "params": {"symbol": "BTC"},
+                          "weight": 0.4}],
+            created="2026-07-27", body_md=BODY), conn)
+
+    def test_a_sibling_in_another_cell_does_not_count(self, conn):
+        self._mk_cell(conn, "subject", "ranging", "normal")
+        _tradeable_book(conn, "subject")
+        self._mk_cell(conn, "elsewhere", "trending-up", "elevated")
+        _tradeable_book(conn, "elsewhere")
+        assert queries.strategy_expectancy(conn, "subject")["siblings_tried"] == 1
+
+    def test_a_sibling_in_the_same_cell_counts(self, conn):
+        self._mk_cell(conn, "subject", "ranging", "normal")
+        _tradeable_book(conn, "subject")
+        self._mk_cell(conn, "rival", "ranging", "normal")
+        _tradeable_book(conn, "rival")
+        assert queries.strategy_expectancy(conn, "subject")["siblings_tried"] == 2
+
+    def test_crowding_a_cell_raises_that_cell_s_bar_only(self, conn):
+        self._mk_cell(conn, "subject", "ranging", "normal")
+        _tradeable_book(conn, "subject")
+        lone = queries.strategy_expectancy(conn, "subject")["hurdle_pct"]
+        for i in range(4):
+            self._mk_cell(conn, f"rival{i}", "ranging", "normal")
+            _tradeable_book(conn, f"rival{i}")
+        assert queries.strategy_expectancy(conn, "subject")["hurdle_pct"] > lone
+
+    def test_legacy_multi_cell_declaration_counts_in_every_cell(self, conn):
+        """It genuinely competes in all of them."""
+        from trading.strategies.files import Strategy, strategies_dir
+        self._mk_cell(conn, "subject", "ranging", "normal")
+        _tradeable_book(conn, "subject")
+        loader.write_strategy(Strategy(
+            name="legacy-wide", status="test", timescale="intraday",
+            mechanism_family="flow",
+            file_path=strategies_dir() / "legacy-wide.md",
+            regime_applicability={"intraday": {
+                "direction": ["ranging", "trending-up"],
+                "volatility": ["normal", "elevated"]}},
+            data_points=[{"name": "hl_funding", "params": {"symbol": "BTC"},
+                          "weight": 0.4}],
+            created="2026-07-01", body_md=BODY), conn)
+        _tradeable_book(conn, "legacy-wide")
+        assert queries.strategy_expectancy(conn, "subject")["siblings_tried"] == 2
+
+    def test_retired_still_excluded_within_the_cell(self, conn):
+        self._mk_cell(conn, "subject", "ranging", "normal")
+        _tradeable_book(conn, "subject")
+        self._mk_cell(conn, "gone", "ranging", "normal")
+        _tradeable_book(conn, "gone")
+        conn.execute("UPDATE strategies SET status='retired' WHERE name='gone'")
+        conn.commit()
+        assert queries.strategy_expectancy(conn, "subject")["siblings_tried"] == 1
+
+
+class TestCellCapacity:
+    def _mk(self, conn, name, direction, status="test"):
+        from trading.strategies.files import Strategy, strategies_dir
+        loader.write_strategy(Strategy(
+            name=name, status=status, timescale="intraday",
+            mechanism_family="flow", file_path=strategies_dir() / f"{name}.md",
+            regime_applicability={"intraday": {"direction": [direction],
+                                               "volatility": ["normal"]}},
+            data_points=[{"name": "hl_funding", "params": {"symbol": "BTC"},
+                          "weight": 0.4}],
+            created="2026-07-27", body_md=BODY), conn)
+
+    def test_occupancy_counts_test_and_active_only(self, conn):
+        self._mk(conn, "a", "ranging")
+        self._mk(conn, "b", "ranging", status="active")
+        self._mk(conn, "c", "ranging", status="dormant")
+        self._mk(conn, "d", "ranging", status="retired")
+        row = next(r for r in queries.cell_capacity(conn)
+                   if r["cell"] == "intraday/ranging/normal")
+        assert row["occupants"] == 2          # dormant frees the slot
+        assert row["slots_remaining"] == queries.CELL_OCCUPANCY_CAP - 2
+
+    def test_over_cap_is_reported(self, conn):
+        for i in range(queries.CELL_OCCUPANCY_CAP + 2):
+            self._mk(conn, f"s{i}", "ranging")
+        row = next(r for r in queries.cell_capacity(conn)
+                   if r["cell"] == "intraday/ranging/normal")
+        assert row["over_by"] == 2 and row["slots_remaining"] == 0

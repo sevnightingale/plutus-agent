@@ -113,6 +113,34 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
             f"conditions those are several hypotheses — author one strategy "
             f"per cell.")
 
+    # CELL CAP (2026-07-27). Admission control, applied to NEW strategies
+    # only — an update to an existing book must never be blocked by a cell it
+    # already occupies. The cap is what bounds the multiplicity premium now
+    # that M is cell-scoped: without it, crowding a cell raises the bar for
+    # everyone already in it, which is how 88 strategies came to sit across 34
+    # cells with 23 of them over a cap that existed only as prose.
+    # Dormant frees a slot; retired occupies nothing.
+    conn = get_db()
+    existing = conn.execute("SELECT 1 FROM strategies WHERE name=?",
+                            (name,)).fetchone()
+    if not existing:
+        from trading.lifecycle.queries import (CELL_OCCUPANCY_CAP,
+                                               cell_capacity, strategy_cells)
+        want = strategy_cells(s.timescale, s.regime_applicability)
+        by_cell = {c["cell"]: c for c in cell_capacity(conn)}
+        for cell in sorted(want):
+            key = "/".join(x for x in cell if x)
+            row = by_cell.get(key)
+            if row and row["slots_remaining"] <= 0:
+                return tool_error(
+                    f"cell {key} is full — {row['occupants']} strategies "
+                    f"against a cap of {CELL_OCCUPANCY_CAP}. A niche is a "
+                    f"champion/challenger contest, not a crowd: every book "
+                    f"added to a cell raises the multiplicity hurdle for the "
+                    f"others in it. Author into a cell with room "
+                    f"(lifecycle_query cell_capacity), or wait for reflect to "
+                    f"make the weakest occupant dormant.")
+
     known = {e.name for e in data_point_registry.list_all()} or None
     try:
         loader.write_strategy(s, get_db(), known_data_points=known)

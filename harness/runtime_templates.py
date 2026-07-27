@@ -116,9 +116,15 @@ SHRINKS as the book grows, so any real edge above the 0.15% cost graduates
 given enough resolutions (strategy_expectancy reports n_to_clear — the book
 size where the current edge clears); an edge at or below cost NEVER clears —
 that is structural (scratch rate, geometry), not patience. M counts serious
-sibling books (>=6 resolutions) at the timescale in any status EXCEPT
+sibling books (>=6 resolutions) IN YOUR OWN REGIME CELL, in any status EXCEPT
 retired; dormant still counts, because a parked hypothesis is not a withdrawn
-one. Retired books were included until 2026-07-27, which made M monotonic and
+one. Cell-scoped since 2026-07-27: the premium prices a best-of-M selection,
+and the selection that actually happens is among the books declaring the cell
+the tape is in — a strategy in another cell is not an alternative and cannot
+be chosen instead of you. Occupancy IS the bar: every book admitted to your
+cell raises your hurdle, which is why the cell cap (7 test+active) exists and
+why draining a crowded cell to dormancy is the most direct thing reflect can
+do for the books that remain. Retired books were included until 2026-07-27, which made M monotonic and
 the bar unreachable — 81-94% of every hurdle was premium rather than cost and
 nothing had ever graduated. So retiring a sibling now LOWERS the bar for
 everything at that timescale, and is therefore evidence-only, never a lever
