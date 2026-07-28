@@ -36,7 +36,7 @@ never copy the previous file's header stamp.*
 2. Fetch numerical data points via fetch_data_point. A failed fetch is
    recorded as FAILED in PERCEPTION.md — never substitute a stale value,
    never copy a number from prose, never guess.
-3. Gather narrative items via web/search (news digest per watchlist symbol,
+3. Gather narrative items via web_search (news digest per watchlist symbol,
    notable macro headlines, Polymarket markets where registered). Summarize
    WHAT IS, dated and sourced — not what it means.
 4. Rewrite ~/.plutus-agent/PERCEPTION.md in its standard format: the
