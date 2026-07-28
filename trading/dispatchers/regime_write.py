@@ -22,8 +22,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from harness.tools.registry import registry
-from harness.tools.result import tool_error, tool_result
+from harness.tools.registry import registry, tool_error, tool_result
 
 RECORD_REGIME_SCHEMA = {
     "name": "record_regime",
