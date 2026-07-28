@@ -334,7 +334,13 @@ once in TRADING.md's glossary and computed once in code
 - **Toolsets** compose by name (`harness/toolsets.py`); recipes request
   function-shaped sets (perception, prediction-write, desk-execution,
   resolution…). `record()` fans out: lifecycle.db + journal always; forum
-  posts per-target with logged per-target failures.
+  posts per-target with logged per-target failures. A recipe declaring a
+  toolset that registers **no** tool refuses to spawn (2026-07-28): a
+  dispatcher that fails to import takes its toolset with it, and an agent
+  short the tool its procedure is built around does the work by hand and
+  looks healthy doing it — `record_regime` spent twelve hours that way.
+  Discovery records its import failures rather than only logging them, and
+  `desk_integrity_check`'s `tool_registry` invariant reports both.
 - **Watchers** (`plutus-watchers` pm2 process): polls registered alerts
   (position changes, total-equity changes, price ranges) into the wake
   queue — and runs the prediction resolver every ~5s (it writes

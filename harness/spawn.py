@@ -343,6 +343,33 @@ def _resolve_provider(cfg: dict) -> dict:
         raise RuntimeError(format_runtime_provider_error(exc)) from exc
 
 
+def require_resolvable_toolsets(name: str, toolsets: List[str]) -> None:
+    """Refuse to spawn an agent whose declared toolset registers no tool.
+
+    A declared toolset that resolves to nothing is a broken desk, not a lean
+    one. Unchecked, the agent spawns anyway, silently short the tool its
+    procedure is written around, and does the work by hand instead — which is
+    exactly how plutus-regime spent 2026-07-28 hand-patching REGIME.md while
+    ``record_regime`` was absent (its dispatcher imported a module that has
+    never existed) and ``regime_observations`` went stale behind the board.
+
+    Refusing is louder than coping. Where discovery has not run the registry is
+    incomplete by construction, so assert nothing rather than refuse everything.
+    """
+    from harness.tools.registry import builtin_discovery_ran, registry
+    if not builtin_discovery_ran():
+        return
+    missing = [t for t in toolsets
+               if not registry.get_tool_names_for_toolset(t)
+               and not registry.get_toolset_alias_target(t)]
+    if missing:
+        raise ValueError(
+            f"{name}: declared toolset(s) {missing} resolve to no registered "
+            f"tool. A dispatcher is missing or failed to import — check the "
+            f"discovery log for an import error before spawning."
+        )
+
+
 def spawn_agent(
     name: str,
     task_md: str,
@@ -377,6 +404,8 @@ def spawn_agent(
     toolsets = list(spec.toolsets)
     if spec.returns and "report" not in toolsets:
         toolsets.append("report")
+
+    require_resolvable_toolsets(name, toolsets)
 
     from harness.run_agent import AIAgent
     agent = AIAgent(

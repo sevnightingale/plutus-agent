@@ -334,7 +334,69 @@ def _check_regime_board(conn, home: Path) -> List[Dict[str, Any]]:
         "record_regime, or read the notes to see who wrote over it.")]
 
 
+def _check_tool_registry(conn, home: Path) -> List[Dict[str, Any]]:
+    """Every declared tool must actually exist, and every agent's toolsets resolve.
+
+    The failure this exists for is silent by construction. A dispatcher that
+    fails to import takes its toolset with it; the agent declaring that toolset
+    still spawns, just without the tool; and its procedure — written around a
+    tool that is no longer there — gets done by hand instead. Nothing errors.
+    The desk simply stops recording something and carries on looking healthy.
+
+    That is not hypothetical: `record_regime` shipped on 2026-07-27 importing
+    `harness.tools.result`, a module that has never existed. Discovery logged
+    one warning and moved on, the full suite stayed green (the discovery test
+    mocks `import_module`, so it asserts the file *says* register, never that it
+    imports), and plutus-regime spent the night hand-patching REGIME.md while
+    `regime_observations` went stale behind it.
+
+    Two assertions, both cheap: nothing failed to import, and no AGENT.md
+    declares a toolset the registry cannot serve.
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        from harness.tools.registry import (
+            builtin_discovery_ran, builtin_import_failures, registry)
+    except Exception as exc:
+        return [_violation("tool_registry_unreadable", f"{type(exc).__name__}: {exc}")]
+
+    for mod_name, err in builtin_import_failures():
+        out.append(_violation(
+            "tool_module_import_failed",
+            f"{mod_name} declares tools but failed to import ({err}). Every "
+            f"tool it registers is silently absent — any agent whose procedure "
+            f"depends on one is doing that work by hand, or not at all.",
+            "critical"))
+
+    # Where discovery has not run the registry is incomplete by construction —
+    # absence of evidence, not evidence of absence. Assert nothing rather than
+    # accuse every agent of declaring a phantom toolset.
+    if builtin_discovery_ran():
+        from harness.spawn import AGENTS_DIR, load_agent
+        for agent_dir in sorted(Path(AGENTS_DIR).glob("plutus-*")):
+            if not (agent_dir / "AGENT.md").exists():
+                continue
+            try:
+                spec = load_agent(agent_dir.name)
+            except Exception as exc:
+                out.append(_violation(
+                    "agent_spec_unreadable",
+                    f"{agent_dir.name}: {type(exc).__name__}: {exc}"))
+                continue
+            for ts in spec.toolsets:
+                if (not registry.get_tool_names_for_toolset(ts)
+                        and not registry.get_toolset_alias_target(ts)):
+                    out.append(_violation(
+                        "agent_toolset_missing",
+                        f"{agent_dir.name} declares toolset '{ts}', which "
+                        f"resolves to no registered tool. It will spawn short "
+                        f"the tools its procedure assumes.",
+                        "critical"))
+    return out
+
+
 CHECKS: Dict[str, Callable] = {
+    "tool_registry": _check_tool_registry,
     "regime_board": _check_regime_board,
     "blackboard_bloat": _check_blackboard_bloat,
     "blackboard_zones": _check_blackboard_zones,

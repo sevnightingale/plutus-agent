@@ -374,3 +374,42 @@ class TestRegimeBoard:
         (home / "REGIME.md").write_text(self._BOARD, encoding="utf-8")
         assert "regime_board_stale" not in _names(
             integrity.check_integrity(conn, home=home))
+
+
+class TestToolRegistry:
+    """A dispatcher that fails to import takes its toolset with it, and the
+    agent declaring that toolset spawns anyway — silently short the tool its
+    procedure is built around. Nothing errors; the desk just stops recording
+    something. `record_regime` shipped that way on 2026-07-27 and ran a night.
+    """
+
+    def test_import_failure_is_critical(self, conn, home):
+        from unittest.mock import patch as _patch
+        with _patch("harness.tools.registry.builtin_import_failures",
+                    return_value=[("trading.dispatchers.regime_write",
+                                   "ModuleNotFoundError: No module named 'harness.tools.result'")]):
+            out = integrity.check_integrity(conn, home=home)
+        hit = [v for v in out["violations"] if v["check"] == "tool_module_import_failed"]
+        assert hit, _names(out)
+        assert hit[0]["severity"] == "critical"
+        assert "regime_write" in hit[0]["detail"]
+
+    def test_agent_declaring_a_phantom_toolset_is_critical(self, conn, home):
+        from unittest.mock import patch as _patch
+        from harness.tools.registry import discover_builtin_tools
+        discover_builtin_tools()
+        with _patch("harness.tools.registry.registry.get_tool_names_for_toolset",
+                    return_value=[]), \
+             _patch("harness.tools.registry.registry.get_toolset_alias_target",
+                    return_value=None):
+            out = integrity.check_integrity(conn, home=home)
+        hit = [v for v in out["violations"] if v["check"] == "agent_toolset_missing"]
+        assert hit, _names(out)
+        assert hit[0]["severity"] == "critical"
+
+    def test_silent_on_the_real_tree(self, conn, home):
+        from harness.tools.registry import discover_builtin_tools
+        discover_builtin_tools()
+        out = integrity.check_integrity(conn, home=home)
+        assert "tool_module_import_failed" not in _names(out)
+        assert "agent_toolset_missing" not in _names(out)

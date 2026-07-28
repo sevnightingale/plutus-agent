@@ -5,7 +5,12 @@ import threading
 from pathlib import Path
 from unittest.mock import patch
 
-from harness.tools.registry import ToolRegistry, discover_builtin_tools
+from harness.tools.registry import (
+    ToolRegistry,
+    builtin_import_failures,
+    discover_builtin_tools,
+    registry,
+)
 
 
 def _dummy_handler(args, **kwargs):
@@ -286,6 +291,40 @@ class TestCheckFnExceptionHandling:
         available, unavailable = reg.check_tool_availability()
         assert "works" in available
         assert any(u["name"] == "crashes" for u in unavailable)
+
+
+class TestBuiltinDiscoveryImportsForReal:
+    """The inventory test below mocks ``import_module``, so it proves only that
+    a file *contains* ``registry.register(...)`` — never that the file imports.
+
+    `trading.dispatchers.regime_write` passed it for a full day while importing
+    `harness.tools.result`, a module that has never existed, and the desk ran a
+    night with `record_regime` silently absent. These two tests are the ones
+    that fail on that class of defect.
+    """
+
+    def test_every_declared_tool_module_actually_imports(self):
+        discover_builtin_tools()
+        assert builtin_import_failures() == [], (
+            "tool modules declare tools but fail to import; every tool they "
+            "register is silently missing at runtime"
+        )
+
+    def test_every_agent_declares_a_resolvable_toolset(self):
+        from harness.spawn import AGENTS_DIR, load_agent
+
+        discover_builtin_tools()
+        unresolved = []
+        for agent_dir in sorted(Path(AGENTS_DIR).glob("plutus-*")):
+            if not (agent_dir / "AGENT.md").exists():
+                continue
+            for ts in load_agent(agent_dir.name).toolsets:
+                if (not registry.get_tool_names_for_toolset(ts)
+                        and not registry.get_toolset_alias_target(ts)):
+                    unresolved.append(f"{agent_dir.name}:{ts}")
+        assert unresolved == [], (
+            f"agents declare toolsets no tool registers under: {unresolved}"
+        )
 
 
 class TestBuiltinDiscovery:

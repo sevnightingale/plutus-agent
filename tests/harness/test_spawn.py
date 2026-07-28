@@ -199,3 +199,35 @@ class TestGenerateSplit:
 
     def test_generate_maps_to_generation_action(self):
         assert spawn._ACTION_TYPES["plutus-generate"] == "generation"
+
+
+class TestToolsetResolution:
+    """A declared toolset that registers no tool must refuse, not degrade.
+
+    The regression: `record_regime`'s dispatcher failed to import, so the
+    `regime-write` toolset ceased to exist, and plutus-regime — which declares
+    it — spawned anyway with only its `file` tools. It then did the job by hand
+    for twelve hours while the database it was meant to write went stale.
+    """
+
+    def test_unresolvable_toolset_refuses(self):
+        from harness.tools.registry import discover_builtin_tools
+
+        discover_builtin_tools()
+        with pytest.raises(ValueError, match="resolve to no registered tool"):
+            spawn.require_resolvable_toolsets("plutus-regime", ["regime-write", "no-such-toolset"])
+
+    def test_real_toolset_passes(self):
+        from harness.tools.registry import discover_builtin_tools
+
+        discover_builtin_tools()
+        spawn.require_resolvable_toolsets("plutus-regime", ["regime-write", "file"])
+
+    def test_silent_when_discovery_has_not_run(self):
+        """Discovery is process-global, and another test in this worker may
+        already have run it — so the flag is patched, never assumed."""
+        from unittest.mock import patch as _patch
+
+        with _patch("harness.tools.registry.builtin_discovery_ran",
+                    return_value=False):
+            spawn.require_resolvable_toolsets("plutus-regime", ["no-such-toolset"])

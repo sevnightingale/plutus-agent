@@ -70,6 +70,37 @@ def _derive_package_prefix(tools_path: Path) -> str:
     return ".".join(reversed(parts))
 
 
+# Modules that declare tools but failed to import, from the last
+# discover_builtin_tools() run: [(module_name, "ExcType: message"), ...].
+#
+# Discovery deliberately survives a broken module — one bad file must not cost
+# the process every other tool. But a warning in a log is not a report: on
+# 2026-07-27 `trading.dispatchers.regime_write` shipped importing a module that
+# does not exist, and the desk ran ~12h with `record_regime` simply absent. The
+# agent that needed it was spawned anyway, hand-edited its markdown board, and
+# the database behind that board went stale unnoticed.
+#
+# So the failures are kept as state rather than only emitted: desk_integrity_check
+# reads this and escalates, which is the path that actually reaches a human.
+_IMPORT_FAILURES: List[tuple] = []
+
+# Whether discover_builtin_tools() has completed in this process. A populated
+# registry is NOT the same question: a test that imports two dispatchers has a
+# non-empty registry and a wildly incomplete one, and anything asserting "this
+# toolset does not exist" against that state is inventing failures.
+_DISCOVERY_RAN = False
+
+
+def builtin_import_failures() -> List[tuple]:
+    """Return ``[(module_name, error)]`` from the last discovery run."""
+    return list(_IMPORT_FAILURES)
+
+
+def builtin_discovery_ran() -> bool:
+    """Whether full built-in discovery has completed in this process."""
+    return _DISCOVERY_RAN
+
+
 def _enumerate_tool_modules(tools_path: Path) -> List[tuple]:
     """Return (module_name, file_path) for flat ``tools/*.py`` candidates.
 
@@ -177,13 +208,20 @@ def discover_builtin_tools(
         if _module_registers_tools(path)
     ]
 
+    _IMPORT_FAILURES.clear()
+
     imported: List[str] = []
     for mod_name in module_names:
         try:
             importlib.import_module(mod_name)
             imported.append(mod_name)
         except Exception as e:
-            logger.warning("Could not import tool module %s: %s", mod_name, e)
+            # A module that contains registry.register(...) and then fails to
+            # import is a defect, never a configuration choice — the tools it
+            # declares are now silently missing. Loud, and recorded.
+            logger.error("Could not import tool module %s: %s: %s",
+                         mod_name, type(e).__name__, e)
+            _IMPORT_FAILURES.append((mod_name, f"{type(e).__name__}: {e}"))
 
     # Trading integrations: import each integration package so its
     # decorator-driven registrations execute.
@@ -202,7 +240,16 @@ def discover_builtin_tools(
                     importlib.import_module(mod_name)
                     imported.append(mod_name)
                 except Exception as e:
-                    logger.warning("Could not import integration package %s: %s", mod_name, e)
+                    logger.error("Could not import integration package %s: %s: %s",
+                                 mod_name, type(e).__name__, e)
+                    _IMPORT_FAILURES.append((mod_name, f"{type(e).__name__}: {e}"))
+
+    # Only a real dual-root sweep counts as discovery. Synthetic tmp_path
+    # fixtures scan an invented tree and must not license anyone to conclude a
+    # toolset is missing from it.
+    if tools_dir is None:
+        global _DISCOVERY_RAN
+        _DISCOVERY_RAN = True
 
     return imported
 
