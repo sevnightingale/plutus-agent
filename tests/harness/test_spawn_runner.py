@@ -57,8 +57,10 @@ def test_real_roster_dry_run(home, mock_agent):
     # configured, so the sentinel passes through unresolved.
     assert init["model"] == "light"
     # Recipe toolsets + the mechanically-injected report toolset (returns:).
-    assert init["enabled_toolsets"] == ["perception", "web", "search", "file",
-                                        "report"]
+    # `search` sat in this declaration from the seven-agent rebuild until
+    # 2026-07-28 and had never been a registered toolset anywhere in the
+    # tree — the agent searches with web + file, which it already holds.
+    assert init["enabled_toolsets"] == ["perception", "web", "file", "report"]
     assert "spawn" in init["disabled_toolsets"]
     assert init["skip_context_files"] is True
 

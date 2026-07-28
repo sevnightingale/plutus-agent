@@ -1,7 +1,7 @@
 ---
 name: plutus-perception
 model: light
-toolsets: [perception, web, search, file]
+toolsets: [perception, web, file]
 reads:
   - PLUTUS.md#doctrine
   - strategies:live
