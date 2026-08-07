@@ -191,3 +191,33 @@ class TestDetectVendor:
     ])
     def test_detects_known_vendors(self, model, expected):
         assert detect_vendor(model) == expected
+
+
+# ── DeepSeek: versioned ids pass through; aliases still map ────────────
+
+class TestDeepSeekNormalization:
+    """DeepSeek's /v1/models lists versioned ids (deepseek-v4-pro/-flash);
+    deepseek-chat / deepseek-reasoner survive as legacy aliases. The
+    normalizer must send versioned ids as written — collapsing them to an
+    alias silently swaps the served model (the desk ran its standard tier
+    on flash-non-thinking for two days this way, 2026-08-05..07)."""
+
+    @pytest.mark.parametrize("model,expected", [
+        ("deepseek-v4-pro", "deepseek-v4-pro"),
+        ("deepseek-v4-flash", "deepseek-v4-flash"),
+        ("deepseek/deepseek-v4-pro", "deepseek-v4-pro"),
+        ("deepseek-v5-preview", "deepseek-v5-preview"),
+        ("deepseek-chat", "deepseek-chat"),
+        ("deepseek-reasoner", "deepseek-reasoner"),
+    ])
+    def test_versioned_and_canonical_pass_through(self, model, expected):
+        assert normalize_model_for_provider(model, "deepseek") == expected
+
+    @pytest.mark.parametrize("model,expected", [
+        ("deepseek-r1", "deepseek-reasoner"),
+        ("some-thinking-model", "deepseek-reasoner"),
+        ("kimi-k2.6", "deepseek-chat"),
+        ("glm-5.1", "deepseek-chat"),
+    ])
+    def test_aliases_still_map_by_keyword(self, model, expected):
+        assert normalize_model_for_provider(model, "deepseek") == expected

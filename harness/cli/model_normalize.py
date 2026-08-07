@@ -103,8 +103,13 @@ _MATCHING_PREFIX_STRIP_PROVIDERS: frozenset[str] = frozenset({
 # ---------------------------------------------------------------------------
 # DeepSeek special handling
 # ---------------------------------------------------------------------------
-# DeepSeek's API only recognises exactly two model identifiers.  We map
-# common aliases and patterns to the canonical names.
+# DeepSeek's /v1/models lists versioned identifiers (deepseek-v4-pro,
+# deepseek-v4-flash as of 2026-08-07); the historical ``deepseek-chat`` /
+# ``deepseek-reasoner`` names survive as accepted legacy aliases (both served
+# by v4-flash when checked). Versioned names and known aliases pass through
+# untouched; anything else maps to an alias by the keyword rules below. An
+# unknown versioned name reaching the API fails loudly there, which beats
+# silently substituting a different model.
 
 _DEEPSEEK_REASONER_KEYWORDS: frozenset[str] = frozenset({
     "reasoner",
@@ -117,14 +122,23 @@ _DEEPSEEK_REASONER_KEYWORDS: frozenset[str] = frozenset({
 _DEEPSEEK_CANONICAL_MODELS: frozenset[str] = frozenset({
     "deepseek-chat",
     "deepseek-reasoner",
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
 })
+
+# Anything carrying an explicit version is a concrete DeepSeek model id, not
+# an alias to be repaired — send it as written.
+_DEEPSEEK_VERSIONED_PREFIX = "deepseek-v"
 
 
 def _normalize_for_deepseek(model_name: str) -> str:
-    """Map any model input to one of DeepSeek's two accepted identifiers.
+    """Map a model input to an identifier DeepSeek's API accepts.
 
     Rules:
-    - Already ``deepseek-chat`` or ``deepseek-reasoner`` -> pass through.
+    - A known identifier (``deepseek-chat``, ``deepseek-reasoner``,
+      ``deepseek-v4-pro``, ``deepseek-v4-flash``) -> pass through.
+    - Any other ``deepseek-v*`` name -> pass through (concrete versioned id;
+      the API rejects a bad one loudly, which is preferable to substitution).
     - Contains any reasoner keyword (r1, think, reasoning, cot, reasoner)
       -> ``deepseek-reasoner``.
     - Everything else -> ``deepseek-chat``.
@@ -133,11 +147,11 @@ def _normalize_for_deepseek(model_name: str) -> str:
         model_name: The bare model name (vendor prefix already stripped).
 
     Returns:
-        One of ``"deepseek-chat"`` or ``"deepseek-reasoner"``.
+        A DeepSeek model identifier, versioned or alias.
     """
     bare = _strip_vendor_prefix(model_name).lower()
 
-    if bare in _DEEPSEEK_CANONICAL_MODELS:
+    if bare in _DEEPSEEK_CANONICAL_MODELS or bare.startswith(_DEEPSEEK_VERSIONED_PREFIX):
         return bare
 
     # Check for reasoner-like keywords anywhere in the name
