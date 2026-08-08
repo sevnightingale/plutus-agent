@@ -89,12 +89,25 @@ def global_panel() -> List[PanelEntry]:
     ]
 
 
+def normalize_symbol(s: str) -> str:
+    """Canonical symbol form: dex prefix lowercase, asset uppercase.
+
+    Hyperliquid names builder-dex assets "xyz:GOLD" — a blanket .upper()
+    would mangle the dex half into a symbol the venue does not know.
+    """
+    s = str(s).strip()
+    if ":" in s:
+        dex, asset = s.split(":", 1)
+        return f"{dex.lower()}:{asset.upper()}"
+    return s.upper()
+
+
 def watchlist_from_config() -> List[str]:
     """The operator watchlist (config ``trading.watchlist``), default BTC."""
     try:
         from harness.cli.config import load_config
         wl = ((load_config().get("trading") or {}).get("watchlist")) or []
-        wl = [str(s).strip().upper() for s in wl if str(s).strip()]
+        wl = [normalize_symbol(s) for s in wl if str(s).strip()]
         return wl or ["BTC"]
     except Exception:
         return ["BTC"]
@@ -112,7 +125,7 @@ def derive_tiers(conn, watchlist: List[str]) -> Dict[str, str]:
     try:
         for row in conn.execute(
                 "SELECT DISTINCT symbol FROM positions WHERE status='open'"):
-            active.add(str(row[0]).upper())
+            active.add(normalize_symbol(row[0]))
     except Exception:
         pass
     try:
@@ -123,7 +136,7 @@ def derive_tiers(conn, watchlist: List[str]) -> Dict[str, str]:
                 for dp in json.loads(dp_json) or []:
                     sym = ((dp.get("params") or {}).get("symbol"))
                     if sym:
-                        active.add(str(sym).upper())
+                        active.add(normalize_symbol(sym))
             except Exception:
                 continue
     except Exception:

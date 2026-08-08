@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 from trading.lifecycle.live_state import replace_zone
 from trading.perception import cache as perception_cache
 from trading.perception.core import data_point_registry
+from trading.perception.panels import normalize_symbol
 
 READINGS_ZONE = "Readings"
 SIDECAR_FILENAME = "perception_sweep.json"
@@ -101,7 +102,8 @@ def build_readings_body(now: Optional[float] = None) -> Dict[str, Any]:
             params = json.loads(params_json) if params_json else {}
         except json.JSONDecodeError:
             params = {}
-        symbol = str(params.get("symbol") or "").upper() or "GLOBAL"
+        raw_sym = params.get("symbol")
+        symbol = normalize_symbol(raw_sym) if raw_sym else "GLOBAL"
         groups.setdefault(symbol, []).append({
             "name": name,
             "params": {k: v for k, v in params.items() if k != "symbol"},
@@ -113,7 +115,7 @@ def build_readings_body(now: Optional[float] = None) -> Dict[str, Any]:
     failed_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
     for sym, info in (sidecar.get("symbols") or {}).items():
         for f in info.get("failed") or []:
-            failed_by_symbol.setdefault(str(sym).upper(), []).append(f)
+            failed_by_symbol.setdefault(normalize_symbol(sym), []).append(f)
     for f in (sidecar.get("global") or {}).get("failed") or []:
         failed_by_symbol.setdefault("GLOBAL", []).append(f)
 

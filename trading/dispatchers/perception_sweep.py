@@ -81,7 +81,7 @@ def _sweep(args: Dict[str, Any]) -> str:
     force_fresh = bool(args.get("force_fresh", False))
     include_global = args.get("include_global", True)
 
-    symbols = [str(s).strip().upper() for s in (args.get("symbols") or [])
+    symbols = [panels.normalize_symbol(s) for s in (args.get("symbols") or [])
                if str(s).strip()]
     if not symbols:
         symbols = panels.watchlist_from_config()
@@ -89,7 +89,7 @@ def _sweep(args: Dict[str, Any]) -> str:
     tiers = panels.derive_tiers(get_db(), symbols)
     for sym, tier in (args.get("tier_overrides") or {}).items():
         if str(tier) in ("full", "passive"):
-            tiers[str(sym).upper()] = str(tier)
+            tiers[panels.normalize_symbol(sym)] = str(tier)
 
     sid = session_id_from_context()
     kind = get_synthetic_kind()

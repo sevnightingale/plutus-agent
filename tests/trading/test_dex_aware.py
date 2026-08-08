@@ -95,3 +95,11 @@ class TestPanels:
         gold_names = [n for n, _ in panels.full_panel("xyz:GOLD")]
         assert "poly_price_ladder" in btc_names
         assert "poly_price_ladder" not in gold_names
+
+    def test_normalize_symbol_preserves_dex_case(self):
+        from trading.perception.panels import normalize_symbol
+        # A blanket .upper() would mangle the dex half — the venue knows
+        # "xyz:GOLD", not "XYZ:GOLD".
+        assert normalize_symbol("xyz:gold") == "xyz:GOLD"
+        assert normalize_symbol("XYZ:GOLD") == "xyz:GOLD"
+        assert normalize_symbol(" btc ") == "BTC"
