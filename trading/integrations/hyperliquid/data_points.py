@@ -23,6 +23,7 @@ from typing import Any, Dict, List, Optional
 from trading.perception.core.data_point_registry import register_data_point
 from trading.perception.core.compact_renderers import render_candles, render_orderbook
 
+from . import _client
 from ._client import (
     get_info,
     interval_to_ms,
@@ -48,7 +49,9 @@ logger = logging.getLogger(__name__)
 )
 def hl_price(symbol: str) -> Dict[str, Any]:
     info = get_info()
-    mids = info.all_mids()
+    # Builder-dex symbols ("xyz:GOLD") live in their dex's own mids map,
+    # keyed by the full dex-qualified name.
+    mids = info.all_mids(dex=_client.dex_of(symbol))
     if symbol not in mids:
         raise KeyError(
             f"symbol '{symbol}' not in Hyperliquid universe "
@@ -144,8 +147,7 @@ def hl_orderbook(symbol: str, depth: int = 10) -> Dict[str, Any]:
     numeric_path="funding",
 )
 def hl_funding_and_oi(symbol: str) -> Dict[str, Any]:
-    info = get_info()
-    meta, ctxs = info.meta_and_asset_ctxs()
+    meta, ctxs = _client.meta_and_ctxs(_client.dex_of(symbol))
     universe = meta.get("universe", [])
     for asset, ctx in zip(universe, ctxs):
         if asset.get("name") == symbol:

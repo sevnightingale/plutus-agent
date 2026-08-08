@@ -58,20 +58,63 @@ class HLConfigError(RuntimeError):
     """Raised when required credentials/configuration are missing."""
 
 
+def _configured_perp_dexs() -> list:
+    """Builder dexes to map at client construction (config ``trading.perp_dexs``).
+
+    Empty on a fresh install — the client then behaves exactly as before
+    (main dex only, no discovery round-trip).
+    """
+    try:
+        from harness.cli.config import load_config
+        dexs = ((load_config().get("trading") or {}).get("perp_dexs")) or []
+        return [str(d).strip() for d in dexs if str(d).strip()]
+    except Exception:
+        return []
+
+
+def dex_of(symbol: str) -> str:
+    """The builder dex a symbol belongs to: 'xyz:GOLD' → 'xyz'; else ''."""
+    return symbol.split(":", 1)[0] if ":" in symbol else ""
+
+
 def get_info() -> Info:
     """Return the singleton ``Info`` client.
 
     ``skip_ws=True`` is mandatory in daemon contexts — the constructor
     otherwise spawns a WebSocket thread per process which keeps the
     interpreter from exiting on shutdown.
+
+    Builder dexes named in config ``trading.perp_dexs`` are passed at
+    construction so the SDK's name/asset maps cover dex-qualified symbols
+    ("xyz:GOLD") — without this, ``name_to_coin`` KeyErrors on every
+    builder-dex data call. Non-empty config costs two extra HTTP calls at
+    construction (dex discovery + per-dex meta), once per process.
     """
     global _info
     if _info is None:
         with _INFO_LOCK:
             if _info is None:
-                _info = Info(constants.MAINNET_API_URL, skip_ws=True)
-                logger.debug("Hyperliquid Info client initialised (mainnet)")
+                dexs = _configured_perp_dexs()
+                _info = Info(
+                    constants.MAINNET_API_URL, skip_ws=True,
+                    perp_dexs=([""] + dexs) if dexs else None,
+                )
+                logger.debug(
+                    "Hyperliquid Info client initialised (mainnet, dexs=%s)",
+                    dexs or "main-only")
     return _info
+
+
+def meta_and_ctxs(dex: str = ""):
+    """``metaAndAssetCtxs`` for any dex.
+
+    The SDK's ``meta_and_asset_ctxs()`` covers only the main dex; builder
+    dexes need the raw request. Both shapes return ``[meta, ctxs]``.
+    """
+    info = get_info()
+    if not dex:
+        return info.meta_and_asset_ctxs()
+    return info.post("/info", {"type": "metaAndAssetCtxs", "dex": dex})
 
 
 def get_exchange() -> Exchange:

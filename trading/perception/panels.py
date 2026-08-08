@@ -33,6 +33,11 @@ _TA_SUITE = (
 )
 _TIMESCALE_INTERVALS = ("1h", "4h", "1d")
 
+# Symbols with a registered Polymarket price ladder — the ladder is a
+# crypto-market instrument; equity/commodity symbols have none and asking
+# would fail every sweep.
+POLYMARKET_SYMBOLS = frozenset({"BTC", "ETH"})
+
 
 def full_panel(symbol: str) -> List[PanelEntry]:
     """The standard sweep for one actively-worked symbol (~45 fetches)."""
@@ -57,8 +62,9 @@ def full_panel(symbol: str) -> List[PanelEntry]:
         ("ta_mfi", {"symbol": symbol, "interval": "1h"}),
         ("ta_vwap", {"symbol": symbol, "interval": "1h", "anchor": "D"}),
         ("ta_vwap", {"symbol": symbol, "interval": "1d", "anchor": "W"}),
-        ("poly_price_ladder", {"symbol": symbol}),
     ])
+    if symbol in POLYMARKET_SYMBOLS:
+        panel.append(("poly_price_ladder", {"symbol": symbol}))
     return panel
 
 
