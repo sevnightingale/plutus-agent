@@ -173,13 +173,13 @@ def get_subprocess_home() -> str | None:
     return None
 
 
-VALID_REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh")
+VALID_REASONING_EFFORTS = ("minimal", "low", "medium", "high", "xhigh", "max")
 
 
 def parse_reasoning_effort(effort: str) -> dict | None:
     """Parse a reasoning effort level into a config dict.
 
-    Valid levels: "none", "minimal", "low", "medium", "high", "xhigh".
+    Valid levels: "none", "minimal", "low", "medium", "high", "xhigh", "max".
     Returns None when the input is empty or unrecognized (caller uses default).
     Returns {"enabled": False} for "none".
     Returns {"enabled": True, "effort": <level>} for valid effort levels.
@@ -192,6 +192,25 @@ def parse_reasoning_effort(effort: str) -> dict | None:
     if effort in VALID_REASONING_EFFORTS:
         return {"enabled": True, "effort": effort}
     return None
+
+
+def resolve_seat_effort(cfg: dict, seat: str) -> str:
+    """Per-seat reasoning effort from an operator config dict.
+
+    Precedence: ``desk_efforts: {<seat>: <effort>}`` wins, then the global
+    ``agent.reasoning_effort``, else "". Returns the raw string — feed it to
+    :func:`parse_reasoning_effort`. One resolver for every consumer (spawn,
+    the gateway's plutus-main session, predict's auxiliary calls) so the
+    precedence cannot drift between them.
+    """
+    try:
+        return str(
+            (cfg.get("desk_efforts") or {}).get(seat)
+            or (cfg.get("agent") or {}).get("reasoning_effort", "")
+            or ""
+        ).strip()
+    except AttributeError:
+        return ""
 
 
 def is_termux() -> bool:

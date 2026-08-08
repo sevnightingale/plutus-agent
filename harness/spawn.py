@@ -392,8 +392,11 @@ def spawn_agent(
 
     cfg = _load_config_yaml()
     runtime = _resolve_provider(cfg)
-    from harness.constants import parse_reasoning_effort
-    effort = str(cfg.get("agent", {}).get("reasoning_effort", "")).strip()
+    from harness.constants import parse_reasoning_effort, resolve_seat_effort
+    # Effort resolution mirrors model resolution: per-seat operator pin in
+    # config.yaml `desk_efforts: {<agent-name>: <effort>}` wins, then the
+    # global agent.reasoning_effort, then provider default (nothing sent).
+    effort = resolve_seat_effort(cfg, name)
     if max_iterations is None:
         max_iterations = cfg.get("agent", {}).get("max_turns") or 90
 

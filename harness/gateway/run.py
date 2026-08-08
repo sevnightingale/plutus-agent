@@ -1301,11 +1301,12 @@ class GatewayRunner:
     def _load_reasoning_config() -> dict | None:
         """Load reasoning effort from config.yaml.
 
-        Reads agent.reasoning_effort from config.yaml. Valid: "none",
-        "minimal", "low", "medium", "high", "xhigh". Returns None to use
-        default (medium).
+        The gateway session IS plutus-main, so a per-seat pin in
+        `desk_efforts: {plutus-main: <effort>}` wins over the global
+        agent.reasoning_effort. Valid: "none", "minimal", "low", "medium",
+        "high", "xhigh", "max". Returns None to use default (medium).
         """
-        from harness.constants import parse_reasoning_effort
+        from harness.constants import parse_reasoning_effort, resolve_seat_effort
         effort = ""
         try:
             import yaml as _y
@@ -1313,7 +1314,7 @@ class GatewayRunner:
             if cfg_path.exists():
                 with open(cfg_path, encoding="utf-8") as _f:
                     cfg = _y.safe_load(_f) or {}
-                effort = str(cfg.get("agent", {}).get("reasoning_effort", "") or "").strip()
+                effort = resolve_seat_effort(cfg, "plutus-main")
         except Exception:
             pass
         result = parse_reasoning_effort(effort)

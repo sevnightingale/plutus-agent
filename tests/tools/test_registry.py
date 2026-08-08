@@ -390,6 +390,7 @@ class TestBuiltinDiscovery:
             "trading.integrations.acp.operations",
             "trading.integrations.acp.setup",
             "trading.integrations.coingecko",
+            "trading.integrations.deepseek",
             "trading.integrations.defillama",
             "trading.integrations.dgclaw",
             "trading.integrations.dgclaw.operations",

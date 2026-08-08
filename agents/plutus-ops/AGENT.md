@@ -75,11 +75,26 @@ plutus-main and move on.
    These are all keyed because an upstream outage is not news twice: on
    2026-07-26 `acp agent whoami` returned 502/504 from api.acp.virtuals every
    thirty minutes, and nothing about repeating it helps the operator.
-9. HYGIENE: runtime_hygiene. Self-gating in code — call it every tick and it
+9. PROVIDER BALANCE: fetch_data_point deepseek_balance — the model provider's
+   analogue of step 7. DeepSeek is PREPAID: an exhausted balance fails every
+   spawn in the same shape as the 2026-08-03→05 quota outage, so the meter is
+   watched instead of discovered empty. Topping up is the operator's — never
+   you.
+   - critical=true (< $2) → enqueue_wake(reason=escalation,
+     key="provider:balance_critical", detail=the reason string verbatim).
+   - fetch_failed=true AND is_current_provider=true →
+     enqueue_wake(reason=escalation, key="provider:balance_unknown",
+     detail=the reason string verbatim) — an unknown balance is not a
+     healthy balance.
+   - low=true (< $5) → enqueue_wake(reason=staleness,
+     key="provider:balance_low", detail=the reason string verbatim).
+   - otherwise silent. If is_current_provider=false the desk is not on
+     DeepSeek and only critical is worth reporting, not waking on.
+10. HYGIENE: runtime_hygiene. Self-gating in code — call it every tick and it
    sweeps roughly once a day, returning skipped=true otherwise. Report
    freed_mb when it actually ran. Journals, blackboards and the databases are
    never touched; you do not choose what goes.
-10. SELF-CHECK: desk_integrity_check. Silent when the desk is well. For each
+11. SELF-CHECK: desk_integrity_check. Silent when the desk is well. For each
    violation → enqueue_wake(reason=escalation, key="integrity:<check>",
    detail=the violation's detail verbatim). Report the list in your
    ops_report. You never repair and never explain it away — a violation is a
@@ -87,7 +102,7 @@ plutus-main and move on.
    This step exists because every other beat here watches the MARKET. Nothing
    watched the desk, and on 2026-07-26 that cost eleven blind hours plus a
    table that had been unwritable since the day it was created.
-11. Return your ops_report — exactly one per tick.
+12. Return your ops_report — exactly one per tick.
 
 # Output contract
 

@@ -239,6 +239,56 @@ class TestChatCompletionsKimi:
         assert kw["extra_body"]["thinking"] == {"type": "disabled"}
 
 
+class TestChatCompletionsDeepSeek:
+    """Direct DeepSeek honors ONLY top-level reasoning_effort (verified live
+    2026-08-08): the extra_body {"reasoning": {...}} object shape is silently
+    ignored, and "none" is a true thinking off-switch that must be SENT
+    (unlike Kimi, where thinking-off means omitting the param)."""
+
+    def test_deepseek_reasoning_effort_top_level(self, transport):
+        kw = transport.build_kwargs(
+            model="deepseek-v4-flash",
+            messages=[{"role": "user", "content": "Hi"}],
+            is_deepseek=True,
+            reasoning_config={"enabled": True, "effort": "max"},
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        assert kw["reasoning_effort"] == "max"
+        # The OpenRouter object shape must NOT ride along — DeepSeek ignores
+        # it, and sending both states two intents.
+        assert "reasoning" not in kw.get("extra_body", {})
+
+    def test_deepseek_none_is_sent_explicitly(self, transport):
+        kw = transport.build_kwargs(
+            model="deepseek-v4-flash",
+            messages=[{"role": "user", "content": "Hi"}],
+            is_deepseek=True,
+            reasoning_config={"enabled": False},
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        assert kw["reasoning_effort"] == "none"
+
+    def test_deepseek_no_config_sends_nothing(self, transport):
+        kw = transport.build_kwargs(
+            model="deepseek-v4-flash",
+            messages=[{"role": "user", "content": "Hi"}],
+            is_deepseek=True,
+            reasoning_config=None,
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        # No configured effort → omit the param so the server default applies.
+        assert "reasoning_effort" not in kw
+
+    def test_effort_not_sent_without_deepseek_flag(self, transport):
+        kw = transport.build_kwargs(
+            model="some-model",
+            messages=[{"role": "user", "content": "Hi"}],
+            reasoning_config={"enabled": True, "effort": "max"},
+            max_tokens_param_fn=lambda n: {"max_tokens": n},
+        )
+        assert "reasoning_effort" not in kw
+
+
 class TestChatCompletionsValidate:
 
     def test_none(self, transport):

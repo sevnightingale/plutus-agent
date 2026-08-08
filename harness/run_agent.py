@@ -6954,6 +6954,10 @@ class AIAgent:
             is_github_models=_is_gh,
             is_nvidia_nim=_is_nvidia,
             is_kimi=_is_kimi,
+            is_deepseek=(
+                self.provider == "deepseek"
+                or base_url_host_matches(self.base_url, "api.deepseek.com")
+            ),
             is_custom_provider=self.provider == "custom",
             ollama_num_ctx=self._ollama_num_ctx,
             provider_preferences=_prefs or None,
@@ -7024,7 +7028,7 @@ class AIAgent:
         else:
             requested_effort = "medium"
 
-        if requested_effort == "xhigh" and "high" in supported_efforts:
+        if requested_effort in ("xhigh", "max") and "high" in supported_efforts:
             requested_effort = "high"
         elif requested_effort not in supported_efforts:
             if requested_effort == "minimal" and "low" in supported_efforts:
@@ -8622,9 +8626,16 @@ class AIAgent:
         _preview_text = _summarize_user_message_for_log(user_message)
         _msg_preview = (_preview_text[:80] + "...") if len(_preview_text) > 80 else _preview_text
         _msg_preview = _msg_preview.replace("\n", " ")
+        _rc = self.reasoning_config if isinstance(self.reasoning_config, dict) else None
+        _effort_label = (
+            "default" if _rc is None
+            else "none" if _rc.get("enabled") is False
+            else _rc.get("effort") or "default"
+        )
         logger.info(
-            "conversation turn: session=%s model=%s provider=%s platform=%s history=%d msg=%r",
-            self.session_id or "none", self.model, self.provider or "unknown",
+            "conversation turn: session=%s model=%s effort=%s provider=%s platform=%s history=%d msg=%r",
+            self.session_id or "none", self.model, _effort_label,
+            self.provider or "unknown",
             self.platform or "unknown", len(conversation_history or []),
             _msg_preview,
         )

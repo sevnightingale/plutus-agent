@@ -157,6 +157,19 @@ def test_desk_models_config_overrides_recipe_model(tmp_path, monkeypatch):
     assert load_agent("plutus-x", agents_dir=tmp_path).model == "recipe-model"
 
 
+def test_desk_efforts_precedence():
+    """desk_efforts[seat] wins over agent.reasoning_effort; '' when neither."""
+    from harness.constants import resolve_seat_effort, parse_reasoning_effort
+    cfg = {"desk_efforts": {"plutus-predict": "max"},
+           "agent": {"reasoning_effort": "low"}}
+    assert resolve_seat_effort(cfg, "plutus-predict") == "max"
+    assert resolve_seat_effort(cfg, "plutus-ops") == "low"
+    assert resolve_seat_effort({}, "plutus-ops") == ""
+    # "max" is a valid parse target (DeepSeek's deepest level).
+    assert parse_reasoning_effort("max") == {"enabled": True, "effort": "max"}
+    assert parse_reasoning_effort("none") == {"enabled": False}
+
+
 def test_tier_sentinels_resolve_against_user_config(tmp_path, monkeypatch):
     """standard → model.default; light → model.light (else default)."""
     for agent, tier in (("plutus-s", "standard"), ("plutus-l", "light")):

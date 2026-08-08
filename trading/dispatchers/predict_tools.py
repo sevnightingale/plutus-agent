@@ -133,6 +133,29 @@ def _extract_json_from_message(msg) -> Optional[dict]:
 LIGHT_CALL_TIMEOUT_S = 300.0
 LIGHT_MAX_TOKENS = 8000
 LIGHT_MAX_TOKENS_CAP = 16000
+# Deep-effort overrides: at xhigh/max the thinking phase alone can exceed the
+# normal cap (25k+ reasoning tokens observed live at max), so the budget, cap,
+# and timeout all scale up. 32768 is a live-verified accepted max_tokens.
+DEEP_EFFORT_MAX_TOKENS = 16000
+DEEP_EFFORT_MAX_TOKENS_CAP = 32768
+DEEP_EFFORT_TIMEOUT_S = 600.0
+
+
+def _seat_effort() -> Optional[str]:
+    """Reasoning effort for predict's own auxiliary calls.
+
+    predict_draft/conviction_score are where the seat's heavy reasoning
+    actually happens — they must follow the plutus-predict pin in
+    `desk_efforts` (falling back to the global agent.reasoning_effort),
+    or a seat set to max would still draft and score at provider default.
+    """
+    try:
+        from harness.cli.config import load_config
+        from harness.constants import VALID_REASONING_EFFORTS, resolve_seat_effort
+        eff = resolve_seat_effort(load_config(), "plutus-predict").lower()
+        return eff if eff in VALID_REASONING_EFFORTS + ("none",) else None
+    except Exception:
+        return None
 
 
 def _structured_call(*, task: str, system: str, user: str, schema: dict,
@@ -162,13 +185,21 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
         "code fences — matching this JSON schema:\n" + json.dumps(schema)
     )
 
+    effort = _seat_effort()
+    extra_body = {"reasoning_effort": effort} if effort else None
+    budget_cap = LIGHT_MAX_TOKENS_CAP
     budget = max_tokens
+    if effort in ("xhigh", "max"):
+        budget = max(budget, DEEP_EFFORT_MAX_TOKENS)
+        budget_cap = DEEP_EFFORT_MAX_TOKENS_CAP
+        timeout = max(timeout, DEEP_EFFORT_TIMEOUT_S)
     for attempt in range(max_retries):
         resp = call_llm(
             task=task, model=_light_model(),
             messages=[{"role": "system", "content": sys_full},
                       {"role": "user", "content": user}],
             max_tokens=budget, temperature=0, timeout=timeout,
+            extra_body=extra_body,
         )
         choice = resp.choices[0]
         out = _extract_json_from_message(choice.message)
@@ -177,7 +208,7 @@ def _structured_call(*, task: str, system: str, user: str, schema: dict,
         # Reasoning model truncated before emitting the answer — give it more
         # room on the next attempt instead of burning a retry at the same budget.
         if getattr(choice, "finish_reason", None) == "length":
-            budget = min(budget * 2, LIGHT_MAX_TOKENS_CAP)
+            budget = min(budget * 2, budget_cap)
 
     raise ValueError(f"structured call returned no content in {max_retries} attempts")
 

@@ -59,6 +59,17 @@ against the *user's* config: `standard` → `model.default`, `light` →
 config.yaml pins any agent explicitly. A fresh install therefore runs the
 whole desk on whatever provider the wizard configured.
 
+**Reasoning efforts.** Orthogonal to the model tier, `desk_efforts:
+{<agent>: <effort>}` in config.yaml pins a per-seat reasoning effort
+(`none|minimal|low|medium|high|xhigh|max`), falling back to the global
+`agent.reasoning_effort`, then to the provider default (nothing sent).
+`plutus-main` is a valid key — the gateway session reads its own pin. On
+direct DeepSeek the effort goes out as the top-level `reasoning_effort`
+param (the only shape that API honors); `none` is a true thinking
+off-switch. predict's `predict_draft`/`conviction_score` auxiliary calls
+follow the `plutus-predict` pin, so the seat's heaviest reasoning cannot
+silently run at default while the seat claims max.
+
 **plutus-main is not spawned** — it *is* the gateway session (Telegram/CLI).
 Its toolsets come from `platform_toolsets` in config.yaml (the
 `plutus-agent-cli` composite carries its desk surface: spawn, record,
