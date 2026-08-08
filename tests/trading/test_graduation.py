@@ -414,7 +414,7 @@ class TestCellCapacity:
         self._mk(conn, "c", "ranging", status="dormant")
         self._mk(conn, "d", "ranging", status="retired")
         row = next(r for r in queries.cell_capacity(conn)
-                   if r["cell"] == "intraday/ranging/normal")
+                   if r["cell"] == "BTC/intraday/ranging/normal")
         assert row["occupants"] == 2          # dormant frees the slot
         assert row["slots_remaining"] == queries.CELL_OCCUPANCY_CAP - 2
 
@@ -422,7 +422,7 @@ class TestCellCapacity:
         for i in range(queries.CELL_OCCUPANCY_CAP + 2):
             self._mk(conn, f"s{i}", "ranging")
         row = next(r for r in queries.cell_capacity(conn)
-                   if r["cell"] == "intraday/ranging/normal")
+                   if r["cell"] == "BTC/intraday/ranging/normal")
         assert row["over_by"] == 2 and row["slots_remaining"] == 0
 
 
@@ -486,5 +486,5 @@ class TestRegimeEligibility:
         self._mk(conn, "a", "ranging", "compressed")
         self._mk(conn, "b", "trending-up", "normal")
         caps = {x["cell"]: x for x in queries.cell_capacity(conn)}
-        assert caps["swing/ranging/compressed"]["lit"] is True
-        assert caps["swing/trending-up/normal"]["lit"] is False
+        assert caps["BTC/swing/ranging/compressed"]["lit"] is True
+        assert caps["BTC/swing/trending-up/normal"]["lit"] is False

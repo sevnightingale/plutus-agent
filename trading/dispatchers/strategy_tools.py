@@ -50,6 +50,12 @@ UPSERT_SCHEMA = {
                     "refused. Several conditions means several hypotheses; "
                     "author one strategy per cell."),
             },
+            "symbol": {"type": "string",
+                       "description": "ONE symbol per strategy (same law as "
+                                      "one cell). Dex-qualified as the venue "
+                                      "writes them ('xyz:GOLD'). Defaults to "
+                                      "the unanimous symbol in data_points, "
+                                      "else BTC; mixed symbols are refused."},
             "data_points": {"type": "array", "items": {"type": "object"}},
             "missing_data_points": {"type": "array", "items": {"type": "string"}},
             "parent_strategy": {"type": "string"},
@@ -78,9 +84,33 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
     for dp in dps:
         if isinstance(dp, dict) and "params" in dp:
             dp["params"] = _normalize_params(dp.get("params"))
+
+    # ONE SYMBOL PER STRATEGY (2026-08-08) — the one-cell law's sibling. The
+    # declared data points must agree with the declaration: a book whose
+    # thesis names gold but whose data points read BTC is measuring the
+    # wrong market, and mixed-symbol data points are a book spanning
+    # markets it never trades together.
+    from trading.perception.panels import normalize_symbol
+    dp_syms = {normalize_symbol((dp.get("params") or {}).get("symbol"))
+               for dp in dps if isinstance(dp, dict)
+               and (dp.get("params") or {}).get("symbol")}
+    if len(dp_syms) > 1:
+        return tool_error(
+            f"data_points span symbols {sorted(dp_syms)} — one strategy is "
+            f"one hypothesis about ONE market. Author one strategy per "
+            f"symbol.")
+    symbol = (normalize_symbol(args.get("symbol")) if args.get("symbol")
+              else (next(iter(dp_syms)) if dp_syms else "BTC"))
+    if args.get("symbol") and dp_syms and symbol not in dp_syms:
+        return tool_error(
+            f"declared symbol {symbol!r} but data_points read "
+            f"{sorted(dp_syms)} — the thesis and its evidence must name the "
+            f"same market.")
+
     s = Strategy(
         name=name,
         status=args.get("status", "test"),
+        symbol=symbol,
         timescale=args["timescale"],
         mechanism_family=args["mechanism_family"],
         file_path=strategies_dir() / f"{name}.md",
@@ -129,7 +159,7 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
         want = strategy_cells(s.timescale, s.regime_applicability)
         by_cell = {c["cell"]: c for c in cell_capacity(conn)}
         for cell in sorted(want):
-            key = "/".join(x for x in cell if x)
+            key = "/".join(x for x in ((symbol,) + cell) if x)
             row = by_cell.get(key)
             if row and row["slots_remaining"] <= 0:
                 return tool_error(

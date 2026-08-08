@@ -120,14 +120,15 @@ def _sync_mirror(s: Strategy, conn: sqlite3.Connection) -> None:
     now = time.time()
     conn.execute(
         """INSERT INTO strategies (
-            name, file_path, status, timescale, mechanism_family,
+            name, file_path, status, symbol, timescale, mechanism_family,
             parent_strategy, hypothesis_md, mechanism_md,
             regime_applicability_json, data_points_json, created_at, updated_at,
             retired_at, retirement_reason
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(name) DO UPDATE SET
             file_path=excluded.file_path,
             status=excluded.status,
+            symbol=excluded.symbol,
             timescale=excluded.timescale,
             mechanism_family=excluded.mechanism_family,
             parent_strategy=excluded.parent_strategy,
@@ -140,7 +141,8 @@ def _sync_mirror(s: Strategy, conn: sqlite3.Connection) -> None:
             retirement_reason=excluded.retirement_reason
         """,
         (
-            s.name, str(s.file_path), s.status, s.timescale, s.mechanism_family,
+            s.name, str(s.file_path), s.status, s.symbol, s.timescale,
+            s.mechanism_family,
             s.parent_strategy, s.body_section("Hypothesis"),
             s.body_section("Mechanism"),
             json.dumps(s.regime_applicability, sort_keys=True),

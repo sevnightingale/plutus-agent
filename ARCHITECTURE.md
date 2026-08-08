@@ -218,7 +218,19 @@ enforces the floors.
    proof than a lone hypothesis. M is **cell-scoped since 2026-07-27**: the
    premium prices a best-of-M selection, and the selection that actually
    happens is among the books declaring the cell the tape is in — a strategy
-   in another cell cannot be chosen instead. Cell scope was rejected on
+   in another cell cannot be chosen instead. Since **2026-08-08 (the
+   multi-asset turn)** every strategy declares exactly ONE symbol (the
+   one-cell law's sibling — enforced in `strategy_upsert`, mixed-symbol
+   data points refused), cells are symbol-scoped
+   (`BTC/swing/ranging/compressed`; occupancy caps per symbol-cell; lit
+   judged against each symbol's own regime), and M counts serious trials
+   within the symbol's **CORRELATION BUCKET**
+   (`queries.CORRELATION_BUCKETS`): crypto majors are largely one trade in
+   crypto beta, so a BTC book and an ETH book stay each other's selection
+   siblings, while a gold book neither inherits crypto's premium nor pays
+   for its crowding. A symbol outside every bucket competes only with
+   itself. Regime is recorded per symbol (`record_regime` takes `symbol`;
+   REGIME.md renders one table per symbol with recent observations). Cell scope was rejected on
    2026-07-07 because set-valued declarations would have let a strategy narrow
    its way to a lower bar; single-cell declarations and the **cell cap
    (7 test+active, `strategy_upsert` refuses a full cell)** removed that, and

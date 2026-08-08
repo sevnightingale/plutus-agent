@@ -33,7 +33,7 @@ from harness.constants import get_hermes_home
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # ───────────────────────────────────────────────────────────────────────────
 # Schema
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS strategies (
     name TEXT NOT NULL UNIQUE,            -- slug == file stem under strategies/
     file_path TEXT NOT NULL,
     status TEXT NOT NULL,                 -- 'test' | 'active' | 'dormant' | 'retired'
+    symbol TEXT NOT NULL DEFAULT 'BTC',   -- one symbol per strategy (2026-08-08)
     timescale TEXT NOT NULL,              -- 'intraday' | 'swing' | 'position'
     mechanism_family TEXT NOT NULL,       -- 'momentum'|'mean_reversion'|'flow'|'event'|'narrative'
     parent_strategy TEXT,                 -- champion/challenger lineage
@@ -434,6 +435,9 @@ def get_db(path: Optional[Path] = None) -> sqlite3.Connection:
         if version == 5:
             _migrate_v5_to_v6(conn)
             version = 6
+        if version == 6:
+            _migrate_v6_to_v7(conn)
+            version = 7
         if version == SCHEMA_VERSION:
             _ensure_indexes(conn)
             logger.info("Migrated lifecycle.db → v%s at %s", SCHEMA_VERSION, db_path)
@@ -730,6 +734,50 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
         logger.info("v6 regime_observations: %s rows backfilled from "
                     "predictions.regime_tag (source=derived)%s", seeded,
                     "" if has_tag else " — no regime_tag column, nothing to derive")
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
+    """In-place v6 → v7: strategies gain a symbol (the multi-asset turn).
+
+    Additive: one column, DEFAULT 'BTC'. Backfill inspects each book's
+    declared data points — where every symbol-bearing param unanimously
+    names one symbol, that symbol is recorded; anything mixed or absent
+    stays BTC, which is what every book on this desk has ever traded.
+    Idempotent: the ALTER is skipped when the column already exists.
+    """
+    import json as _json
+    try:
+        have = any(r["name"] == "symbol" for r in
+                   conn.execute("PRAGMA table_info(strategies)"))
+        if not have:
+            conn.execute("ALTER TABLE strategies ADD COLUMN symbol TEXT "
+                         "NOT NULL DEFAULT 'BTC'")
+        relabelled = 0
+        for name, dp_json in conn.execute(
+                "SELECT name, data_points_json FROM strategies "
+                "WHERE data_points_json IS NOT NULL").fetchall():
+            try:
+                syms = {str((dp.get("params") or {}).get("symbol")).strip()
+                        for dp in _json.loads(dp_json) or []
+                        if isinstance(dp, dict)
+                        and (dp.get("params") or {}).get("symbol")}
+            except Exception:
+                continue
+            if len(syms) == 1:
+                sym = syms.pop()
+                if sym and sym != "BTC":
+                    conn.execute(
+                        "UPDATE strategies SET symbol=? WHERE name=?",
+                        (sym, name))
+                    relabelled += 1
+        conn.execute("UPDATE schema_version SET version = 7")
+        conn.commit()
+        logger.info("v7 strategies.symbol: added (default BTC), "
+                    "%s books relabelled from unanimous data-point params",
+                    relabelled)
     except Exception:
         conn.rollback()
         raise

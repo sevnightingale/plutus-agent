@@ -43,9 +43,16 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
 
 # Procedure
 
-1. ORIENT: read REGIME.md (the lit cell per timescale), PERCEPTION.md, the live
-   strategies, your open predictions, and the population — `lifecycle_query
-   strategies_by_timescale {timescale}` per timescale + `open_predictions_by_cell`.
+0. YOUR SYMBOL SCOPE: when your task names a symbol, work ONLY that
+   symbol's book — its REGIME.md section, its strategies, its predictions.
+   Unscoped, cover every symbol that has live strategies. Each strategy
+   carries one symbol; its regime eligibility is judged against ITS
+   symbol's regime table, already computed in code (`regime_eligible`) —
+   never read another symbol's tape into a strategy's setup.
+1. ORIENT: read REGIME.md (the lit cell per timescale, per your symbols),
+   PERCEPTION.md, the live strategies, your open predictions, and the
+   population — `lifecycle_query strategies_by_timescale {timescale}` per
+   timescale + `open_predictions_by_cell`.
    FRESHNESS GATE: before drafting on any strategy, `perception_freshness
    {strategy_name}` (batch them — they run in parallel). A strategy with `fresh:
    false` has STALE data — you CANNOT author it (register_prediction refuses), so

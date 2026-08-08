@@ -295,21 +295,29 @@ def strategy_expectancy(
     # genuinely competes in all of them. A strategy whose cell cannot be read
     # falls back to timescale scope, which is the conservative direction.
     srow = conn.execute(
-        "SELECT timescale, regime_applicability_json FROM strategies WHERE name=?",
+        "SELECT symbol, timescale, regime_applicability_json "
+        "FROM strategies WHERE name=?",
         (strategy_name,)).fetchone()
     siblings = None
     if srow:
         own = strategy_cells(srow["timescale"], srow["regime_applicability_json"])
+        # BUCKET SCOPE (2026-08-08): siblings are serious trials in the same
+        # CORRELATION BUCKET at this timescale — a BTC book and an ETH book
+        # are alternatives in the same selection; a gold book is not chosen
+        # instead of either and does not inherit crypto's premium.
+        bucket = sorted(bucket_of(srow["symbol"]))
+        marks_b = ",".join("?" * len(bucket))
         rows_s = conn.execute(
-            """SELECT s.name, s.timescale, s.regime_applicability_json ra
+            f"""SELECT s.name, s.timescale, s.regime_applicability_json ra
                FROM strategies s
                WHERE s.timescale = ?
+                 AND s.symbol IN ({marks_b})
                  AND s.status != 'retired'
                  AND (SELECT COUNT(*) FROM predictions p
                       WHERE p.strategy_name = s.name
                         AND p.resolved_at IS NOT NULL
                         AND p.realized_value_json IS NOT NULL) >= ?""",
-            (srow["timescale"], SERIOUS_TRIAL_MIN_N)).fetchall()
+            (srow["timescale"], *bucket, SERIOUS_TRIAL_MIN_N)).fetchall()
         if own:
             siblings = max(1, sum(
                 1 for s in rows_s
@@ -567,6 +575,32 @@ def open_slot_counts(conn: sqlite3.Connection) -> dict:
             "win_locked_by_strategy": win_locked}
 
 
+# ── Correlation buckets (2026-08-08, the multi-asset turn) ──────────────────
+# The multiplicity premium prices a best-of-M selection. Crypto majors are
+# largely ONE trade in crypto beta — counting a BTC book and an ETH book as
+# independent trials would quietly deflate the very premium the bar exists
+# to charge — so M counts serious trials within the symbol's CORRELATION
+# BUCKET, not per symbol. A symbol outside every bucket competes only with
+# itself: honest, because no cross-selection actually occurs there.
+CORRELATION_BUCKETS = {
+    "crypto": {"BTC", "ETH", "SOL", "HYPE", "DOGE", "XRP"},
+    "metals": {"xyz:GOLD", "xyz:SILVER", "xyz:PLATINUM", "xyz:PALLADIUM"},
+    "equities": {"xyz:SP500", "xyz:XYZ100", "xyz:NVDA", "xyz:TSLA",
+                 "xyz:AAPL", "xyz:MSFT", "xyz:GOOGL", "xyz:AMZN",
+                 "xyz:META"},
+    "energy": {"xyz:CL", "xyz:BRENTOIL", "xyz:NATGAS"},
+    "fx": {"xyz:EUR", "xyz:JPY", "xyz:GBP", "xyz:KRW", "xyz:DXY"},
+}
+
+
+def bucket_of(symbol: str) -> set:
+    """The symbols whose books count as selection siblings of ``symbol``."""
+    for members in CORRELATION_BUCKETS.values():
+        if symbol in members:
+            return members
+    return {symbol}
+
+
 def strategy_cells(timescale: str, regime_applicability_json) -> set:
     """The (timescale, direction, volatility, macro) cells a strategy occupies.
 
@@ -610,24 +644,34 @@ def cell_capacity(conn: sqlite3.Connection, cap: int = CELL_OCCUPANCY_CAP) -> li
     nothing.
     """
     rows = conn.execute(
-        """SELECT name, timescale, status, regime_applicability_json ra
+        """SELECT name, symbol, timescale, status,
+                  regime_applicability_json ra
            FROM strategies WHERE status IN ('test','active')""").fetchall()
     occ: dict = {}
+    symbols = sorted({r["symbol"] for r in rows})
     for r in rows:
         for cell in strategy_cells(r["timescale"], r["ra"]):
-            occ.setdefault(cell, []).append(r["name"])
-    live = current_regime(conn)
-    lit = {(ts, c.get("direction"), c.get("volatility"), c.get("macro"))
-           for ts, c in live.items()}
+            occ.setdefault((r["symbol"],) + cell, []).append(r["name"])
+    # Lit is judged against each SYMBOL's own regime — a gold cell is lit by
+    # gold's tape, not BTC's.
+    lit = set()
+    live_any = False
+    for sym in symbols:
+        live = current_regime(conn, symbol=sym)
+        live_any = live_any or bool(live)
+        for ts, c in live.items():
+            lit.add((sym, ts, c.get("direction"), c.get("volatility"),
+                     c.get("macro")))
     out = []
     for cell, names in sorted(occ.items(), key=lambda kv: -len(kv[1])):
         out.append({
             "cell": "/".join(x for x in cell if x),
-            "timescale": cell[0],
+            "symbol": cell[0],
+            "timescale": cell[1],
             # Whether the tape is IN this cell right now. Generation's gap
             # report ("lit cells that are under-populated") was narrated from
             # the markdown board; it is computable now.
-            "lit": (cell in lit) if live else None,
+            "lit": (cell in lit) if live_any else None,
             "occupants": len(names),
             "cap": cap,
             "slots_remaining": max(0, cap - len(names)),
@@ -724,15 +768,18 @@ def strategies_by_timescale(
     """
     marks = ",".join("?" * len(statuses))
     rows = _rows(conn.execute(
-        f"""SELECT name, status, timescale, mechanism_family,
+        f"""SELECT name, status, symbol, timescale, mechanism_family,
                    regime_applicability_json, n_resolved, n_correct, n_wrong
             FROM strategies WHERE timescale = ? AND status IN ({marks})
             ORDER BY status, name""", [timescale, *statuses]))
     now = time.time()
-    live = current_regime(conn)
-    lit = live.get(timescale) or {}
-    lit_cell = ((timescale, lit.get("direction"), lit.get("volatility"),
-                 lit.get("macro")) if lit else None)
+    # Eligibility is judged against each strategy's OWN symbol's regime.
+    lit_cell_by_symbol: dict = {}
+    for sym in {r["symbol"] for r in rows}:
+        lit = current_regime(conn, symbol=sym).get(timescale) or {}
+        lit_cell_by_symbol[sym] = (
+            (timescale, lit.get("direction"), lit.get("volatility"),
+             lit.get("macro")) if lit else None)
     for r in rows:
         decided = r["n_correct"] + r["n_wrong"]
         r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
@@ -765,8 +812,9 @@ def strategies_by_timescale(
         # so a desk that has never assessed does not read as "nothing is
         # eligible".
         cells = strategy_cells(r["timescale"], r["regime_applicability_json"])
-        r["regime_eligible"] = (None if lit_cell is None
-                                else lit_cell in cells)
+        _lit_cell = lit_cell_by_symbol.get(r["symbol"])
+        r["regime_eligible"] = (None if _lit_cell is None
+                                else _lit_cell in cells)
         raw = r.pop("regime_applicability_json", None)
         r["regime_applicability"] = json.loads(raw) if raw else {}
     return rows

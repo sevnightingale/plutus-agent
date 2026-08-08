@@ -37,6 +37,11 @@ RECORD_REGIME_SCHEMA = {
     "input_schema": {
         "type": "object",
         "properties": {
+            "symbol": {"type": "string",
+                       "description": "Watchlist symbol this assessment is "
+                                      "for (default BTC). Dex-qualified "
+                                      "names as the venue writes them, e.g. "
+                                      "'xyz:GOLD'."},
             "timescale": {"type": "string",
                           "enum": ["intraday", "swing", "position"]},
             "direction": {"type": "string",
@@ -64,10 +69,13 @@ def _record_regime(args: Dict[str, Any]) -> str:
     from trading.lifecycle import regime_board, write
     from trading.lifecycle.db import get_db
 
+    from trading.perception.panels import normalize_symbol
+
     conn = get_db()
     try:
         row_id = write.record_regime(
             conn,
+            symbol=normalize_symbol(args.get("symbol") or "BTC"),
             timescale=args["timescale"],
             direction=args["direction"],
             volatility=args["volatility"],

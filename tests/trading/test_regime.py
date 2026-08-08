@@ -15,9 +15,13 @@ from trading.lifecycle import db, regime_board, write
 from trading.lifecycle.db import get_db
 from trading.lifecycle.queries import current_regime, regime_occupancy
 
-# The live board, byte-for-byte, as four agents read it.
+# The live board, byte-for-byte, as four agents read it. Per-symbol
+# sections since 2026-08-08 (the multi-asset turn); the table shape within
+# a section is unchanged from the single-symbol era.
 LIVE_BOARD = """# REGIME
 updated_at: 2026-07-27 12:15 UTC    by: plutus-regime
+
+### BTC
 
 | timescale | direction | volatility | macro |
 |---|---|---|---|
@@ -56,12 +60,26 @@ class TestRenderedFormat:
                          "macro": "neutral"},
         }
         assert regime_board.render_table(
-            regime, updated_at="2026-07-27 12:15") == LIVE_BOARD
+            {"BTC": regime}, updated_at="2026-07-27 12:15") == LIVE_BOARD
 
     def test_an_unassessed_timescale_still_renders_a_row(self):
-        out = regime_board.render_table({}, updated_at="2026-07-27 12:15")
+        out = regime_board.render_table({"BTC": {}},
+                                        updated_at="2026-07-27 12:15")
         assert out.count("(unassessed)") == 6      # 3 rows x direction+vol
         assert "| position |" in out
+
+    def test_multi_symbol_board_sections(self, conn):
+        write.record_regime(conn, timescale="swing", direction="ranging",
+                            volatility="normal")
+        write.record_regime(conn, symbol="xyz:GOLD", timescale="swing",
+                            direction="trending-up", volatility="compressed")
+        assert regime_board.board_symbols(conn) == ["BTC", "xyz:GOLD"]
+        out = regime_board.render_table(
+            {s: current_regime(conn, symbol=s)
+             for s in regime_board.board_symbols(conn)})
+        assert out.index("### BTC") < out.index("### xyz:GOLD")
+        # ### heads must not trip the notes split (^##\s).
+        assert not regime_board._NOTES_RE.search(out)
 
 
 class TestBoard:

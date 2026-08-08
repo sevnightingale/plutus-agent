@@ -54,7 +54,12 @@ learn. Your session is research time; spend it like research.
      `missing_data_points` — that declaration is the desk's self-extension
      hook (sourcing it becomes a perception task). Never block a good
      hypothesis on infrastructure; never quietly substitute a worse proxy.
-3. GENERATE: **first `lifecycle_query cell_capacity`.** A cell with
+3. GENERATE: **first `lifecycle_query cell_capacity`.** Cells are
+   SYMBOL-SCOPED ("BTC/swing/ranging/compressed") and each strategy
+   declares exactly ONE symbol (`strategy_upsert`'s `symbol`, dex-qualified
+   as the venue writes it, e.g. "xyz:GOLD") beside its one cell — its data
+   points must read that same market, and mixed-symbol declarations are
+   refused. A cell with
    `slots_remaining: 0` is CLOSED — `strategy_upsert` will refuse it, and
    rightly: M is scoped to the cell, so every book you add to one raises the
    graduation hurdle for every strategy already in it. Authoring into a full

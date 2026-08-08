@@ -36,6 +36,11 @@ class Strategy:
     timescale: str
     mechanism_family: str
     file_path: Path
+    # One symbol per strategy (2026-08-08, the multi-asset turn) — the same
+    # law as one cell: a hypothesis about BTC flow is not a hypothesis about
+    # gold, and a book spanning symbols averages markets it never trades
+    # together. Dex-qualified as the venue writes them ("xyz:GOLD").
+    symbol: str = "BTC"
     parent_strategy: Optional[str] = None
     variant_tweak: Optional[str] = None
     regime_applicability: dict = field(default_factory=dict)
@@ -163,6 +168,7 @@ def parse_strategy(path: Path) -> Strategy:
         timescale=meta.get("timescale", ""),
         mechanism_family=meta.get("mechanism_family", ""),
         file_path=path,
+        symbol=str(meta.get("symbol") or "BTC"),
         parent_strategy=meta.get("parent_strategy"),
         variant_tweak=meta.get("variant_tweak"),
         regime_applicability=meta.get("regime_applicability") or {},
@@ -240,6 +246,7 @@ def render_strategy(s: Strategy) -> str:
     meta = {
         "name": s.name,
         "status": s.status,
+        "symbol": s.symbol,
         "timescale": s.timescale,
         "mechanism_family": s.mechanism_family,
         "parent_strategy": s.parent_strategy,

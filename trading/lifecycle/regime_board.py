@@ -33,19 +33,14 @@ ABSENT = "—"          # em dash, as the board has always used
 _NOTES_RE = re.compile(r"^##\s", re.MULTILINE)
 
 
-def render_table(regime: dict, updated_at: Optional[str] = None,
-                 by: str = "plutus-regime") -> str:
-    """The header + 3-row table, exactly as the live board renders it.
+def _symbol_table(regime: dict) -> list:
+    """The 3-row table body for one symbol (``current_regime()``'s shape).
 
-    ``regime`` is ``current_regime()``'s shape. A timescale with no
-    observation renders ``(unassessed)`` rather than being dropped: the board
-    always shows three rows, and an absent reading must look absent.
+    A timescale with no observation renders ``(unassessed)`` rather than
+    being dropped: the board always shows three rows, and an absent reading
+    must look absent.
     """
-    stamp = updated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
     lines = [
-        "# REGIME",
-        f"updated_at: {stamp} UTC    by: {by}",
-        "",
         "| timescale | direction | volatility | macro |",
         "|---|---|---|---|",
     ]
@@ -55,14 +50,51 @@ def render_table(regime: dict, updated_at: Optional[str] = None,
             f"| {ts} | {cell.get('direction') or '(unassessed)'} "
             f"| {cell.get('volatility') or '(unassessed)'} "
             f"| {cell.get('macro') or ABSENT} |")
-    return "\n".join(lines) + "\n"
+    return lines
 
 
-def write_board(conn, path: Optional[Path] = None, symbol: str = "BTC",
+def board_symbols(conn, window_days: float = 14.0) -> list:
+    """Symbols the board renders: any with a regime observation in the
+    window, BTC first, then alphabetical. Deterministic from the database."""
+    import time as _time
+    rows = conn.execute(
+        "SELECT DISTINCT symbol FROM regime_observations WHERE ts >= ?",
+        (_time.time() - window_days * 86400,)).fetchall()
+    syms = {str(r[0]) for r in rows} or {"BTC"}
+    return sorted(syms, key=lambda s: (s != "BTC", s))
+
+
+def render_table(regime_by_symbol: dict, updated_at: Optional[str] = None,
+                 by: str = "plutus-regime") -> str:
+    """Header + one table per symbol (``### <symbol>`` sections).
+
+    ``regime_by_symbol`` maps symbol → ``current_regime()`` shape. Since
+    2026-08-08 (the multi-asset turn) the board is per-symbol; ``### ``
+    section heads are invisible to the notes regex (``^##\\s``), so the
+    agent's ``## Assessment notes`` split is unchanged. The table shape
+    within a section is byte-identical to the old single board — four
+    agents read this as prompt text.
+    """
+    stamp = updated_at or datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    lines = [
+        "# REGIME",
+        f"updated_at: {stamp} UTC    by: {by}",
+        "",
+    ]
+    for symbol in regime_by_symbol:
+        lines.append(f"### {symbol}")
+        lines.append("")
+        lines.extend(_symbol_table(regime_by_symbol[symbol]))
+        lines.append("")
+    return "\n".join(lines).rstrip("\n") + "\n"
+
+
+def write_board(conn, path: Optional[Path] = None,
                 by: str = "plutus-regime") -> dict:
-    """Rewrite REGIME.md's table from the database, preserving the notes.
+    """Rewrite REGIME.md's tables from the database, preserving the notes.
 
-    The table is everything before the first ``## `` heading; the notes are
+    Renders every symbol with a recent observation (``board_symbols``). The
+    tables are everything before the first ``## `` heading; the notes are
     that heading onward and belong to the agent. Runs under the shared
     per-path lock and lands atomically, so a concurrent notes edit is never
     torn or lost.
@@ -80,7 +112,9 @@ def write_board(conn, path: Optional[Path] = None, symbol: str = "BTC",
         return {"ok": False, "path": str(path),
                 "error": f"{path.name} does not exist"}
 
-    table = render_table(current_regime(conn, symbol=symbol), by=by)
+    table = render_table(
+        {s: current_regime(conn, symbol=s) for s in board_symbols(conn)},
+        by=by)
     resolved = str(path.resolve())
     with file_state.lock_path(resolved):
         text = path.read_text(encoding="utf-8")
@@ -93,13 +127,14 @@ def write_board(conn, path: Optional[Path] = None, symbol: str = "BTC",
     return {"ok": True, "path": str(path), "error": None}
 
 
-def board_matches_db(conn, path: Optional[Path] = None,
-                     symbol: str = "BTC") -> bool:
-    """Does the rendered table still agree with the database?
+def board_matches_db(conn, path: Optional[Path] = None) -> bool:
+    """Do the rendered tables still agree with the database, per symbol?
 
     The Live State zone froze for a month because a writer failed and nothing
     compared the file to its source. This is the comparison, and the integrity
-    check calls it.
+    check calls it. Rows are keyed (symbol, timescale) — a ``### <symbol>``
+    head switches the current symbol; a bare table (the pre-multi-asset
+    board) reads as BTC.
     """
     from trading.lifecycle.queries import current_regime
 
@@ -111,16 +146,24 @@ def board_matches_db(conn, path: Optional[Path] = None,
         return False
     text = path.read_text(encoding="utf-8")
     rows = {}
+    section = "BTC"
     for line in text.splitlines():
-        parts = [p.strip() for p in line.strip().strip("|").split("|")]
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            section = stripped[4:].strip()
+            continue
+        if stripped.startswith("## "):
+            break                        # notes — tables end here
+        parts = [p.strip() for p in stripped.strip("|").split("|")]
         if len(parts) == 4 and parts[0] in TIMESCALES:
-            rows[parts[0]] = parts[1:]
-    live = current_regime(conn, symbol=symbol)
-    for ts in TIMESCALES:
-        cell = live.get(ts)
-        if not cell:
-            continue                     # never assessed — nothing to disagree with
-        want = [cell["direction"], cell["volatility"], cell["macro"] or ABSENT]
-        if rows.get(ts) != want:
-            return False
+            rows[(section, parts[0])] = parts[1:]
+    for symbol in board_symbols(conn):
+        live = current_regime(conn, symbol=symbol)
+        for ts in TIMESCALES:
+            cell = live.get(ts)
+            if not cell:
+                continue                 # never assessed — nothing to disagree with
+            want = [cell["direction"], cell["volatility"], cell["macro"] or ABSENT]
+            if rows.get((symbol, ts)) != want:
+                return False
     return True

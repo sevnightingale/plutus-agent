@@ -405,7 +405,7 @@ class TestCellCapAdmission:
         monkeypatch.setattr(dbmod, "get_db", lambda path=None: conn)
         call = self._tool()
         self._fill(conn, call, queries_cap())
-        row = next(r for r in _caps(conn) if r["cell"] == "swing/ranging/compressed")
+        row = next(r for r in _caps(conn) if r["cell"] == "BTC/swing/ranging/compressed")
         assert row["slots_remaining"] == 0
 
     def test_refuses_once_full(self, conn, monkeypatch):
