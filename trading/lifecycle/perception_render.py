@@ -1,0 +1,172 @@
+"""perception_render — the Readings zone of PERCEPTION.md, code-written.
+
+The regime move (DB truth, markdown rendering) applied to perception:
+readings live in the perception cache (written by every fetch), and the
+``## Readings`` zone of PERCEPTION.md becomes a rendering of that cache —
+grouped per symbol, compacted via each data point's registered
+``compact_fn``. The perception agent keeps the narrative sections; it never
+hand-writes the table again.
+
+Failures stay failures: the sweep sidecar (``perception_sweep.json``)
+records what a sweep could not fetch, and those rows render as FAILED —
+never substituted, never silently absent.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from trading.lifecycle.live_state import replace_zone
+from trading.perception import cache as perception_cache
+from trading.perception.core import data_point_registry
+
+READINGS_ZONE = "Readings"
+SIDECAR_FILENAME = "perception_sweep.json"
+
+
+def _hermes_home() -> Path:
+    from harness.constants import get_hermes_home
+    return Path(get_hermes_home())
+
+
+def sidecar_path() -> Path:
+    return _hermes_home() / SIDECAR_FILENAME
+
+
+def read_sidecar() -> Dict[str, Any]:
+    try:
+        return json.loads(sidecar_path().read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _compact(name: str, value: Any) -> str:
+    """Render a cached value small via the DP's compact_fn, else terse JSON."""
+    try:
+        entry = data_point_registry.lookup(name)
+        if entry.compact_fn is not None:
+            value = entry.compact_fn(value)
+    except Exception:
+        pass
+    try:
+        text = json.dumps(value, separators=(",", ":"), default=str)
+    except Exception:
+        text = str(value)
+    text = text.replace("|", "\\|")
+    return text if len(text) <= 300 else text[:297] + "..."
+
+
+def _age_label(fetched_at: float, now: Optional[float] = None) -> str:
+    age = max(0.0, (now or time.time()) - float(fetched_at))
+    if age < 90:
+        return f"{age:.0f}s"
+    if age < 5400:
+        return f"{age / 60:.0f}m"
+    return f"{age / 3600:.1f}h"
+
+
+def build_readings_body(now: Optional[float] = None) -> Dict[str, Any]:
+    """Build the Readings zone body from the cache + sweep sidecar.
+
+    Returns ``{"body": str, "rows": int, "failed_rows": int, "symbols": [...]}``.
+    """
+    state = perception_cache.read_perception_state()
+    entries = state.get("data_points") or {}
+    now = now or time.time()
+
+    # Group cache entries by symbol param; entries without one are Global.
+    # Cache keys are canonical — "name" or "name:{sorted-params-json}"
+    # (see cache._canonical_key); entries carry value/source/fetched_at only.
+    #
+    # The view is FRESHNESS-BOUNDED: the cache accumulates every param
+    # variant ever fetched, and rendering all of it re-creates blackboard
+    # bloat in one call (first live dry-run: 300 rows, 125KB). An entry
+    # renders only within GRACE× its own staleness budget — history stays
+    # in the cache and the snapshot table, the blackboard shows the present.
+    GRACE = 2.0
+    MIN_WINDOW_S = 900.0
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for key, ent in sorted(entries.items()):
+        if not isinstance(ent, dict) or "value" not in ent:
+            continue
+        fetched_at = float(ent.get("fetched_at") or 0)
+        budget = perception_cache.get_staleness_budget(key)
+        if (now - fetched_at) > max(GRACE * budget, MIN_WINDOW_S):
+            continue
+        name, _, params_json = key.partition(":")
+        try:
+            params = json.loads(params_json) if params_json else {}
+        except json.JSONDecodeError:
+            params = {}
+        symbol = str(params.get("symbol") or "").upper() or "GLOBAL"
+        groups.setdefault(symbol, []).append({
+            "name": name,
+            "params": {k: v for k, v in params.items() if k != "symbol"},
+            "value": ent["value"],
+            "fetched_at": float(ent.get("fetched_at") or 0),
+        })
+
+    sidecar = read_sidecar()
+    failed_by_symbol: Dict[str, List[Dict[str, Any]]] = {}
+    for sym, info in (sidecar.get("symbols") or {}).items():
+        for f in info.get("failed") or []:
+            failed_by_symbol.setdefault(str(sym).upper(), []).append(f)
+    for f in (sidecar.get("global") or {}).get("failed") or []:
+        failed_by_symbol.setdefault("GLOBAL", []).append(f)
+
+    lines: List[str] = [
+        "<!-- TOOL-RENDERED by render_perception. Do not edit by hand — "
+        "narrative belongs in the sections below this zone. -->",
+        "",
+    ]
+    rows = failed_rows = 0
+    symbols = sorted(groups.keys() | failed_by_symbol.keys(),
+                     key=lambda s: (s == "GLOBAL", s))
+    for symbol in symbols:
+        lines.append(f"### {symbol}")
+        lines.append("")
+        lines.append("| Data point | Params | Value | Age | Source |")
+        lines.append("|---|---|---|---|---|")
+        for item in groups.get(symbol, []):
+            params_txt = " ".join(
+                f"{k}={v}" for k, v in sorted(item["params"].items())) or "—"
+            try:
+                src = data_point_registry.lookup(item["name"]).source
+            except Exception:
+                src = "?"
+            lines.append(
+                f"| {item['name']} | {params_txt} "
+                f"| {_compact(item['name'], item['value'])} "
+                f"| {_age_label(item['fetched_at'], now)} | {src} |")
+            rows += 1
+        for f in failed_by_symbol.get(symbol, []):
+            params_txt = " ".join(
+                f"{k}={v}" for k, v in sorted((f.get("params") or {}).items())
+                if k != "symbol") or "—"
+            lines.append(
+                f"| {f.get('name')} | {params_txt} "
+                f"| **FAILED** — {str(f.get('error'))[:120]} | — | — |")
+            failed_rows += 1
+        lines.append("")
+
+    return {"body": "\n".join(lines).rstrip() + "\n", "rows": rows,
+            "failed_rows": failed_rows,
+            "symbols": [s for s in symbols if s != "GLOBAL"]}
+
+
+def write_readings(path: Optional[Path] = None) -> Dict[str, Any]:
+    """Render and section-replace the Readings zone of PERCEPTION.md."""
+    path = Path(path) if path else _hermes_home() / "PERCEPTION.md"
+    built = build_readings_body()
+    replaced = replace_zone(path, READINGS_ZONE, built["body"])
+    return {
+        "path": str(path),
+        "replaced": bool(replaced),
+        "rows": built["rows"],
+        "failed_rows": built["failed_rows"],
+        "symbols": built["symbols"],
+        "bytes": len(built["body"]),
+    }

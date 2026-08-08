@@ -20,14 +20,10 @@ fetch path.
 
 from __future__ import annotations
 
-import time
 from typing import Any, Dict
 
-from trading.perception import cache as perception_cache
-from trading.lifecycle.db import get_db
 from harness.gateway.session_context import get_synthetic_kind
-from trading.perception.core import data_point_registry
-from trading.dispatchers._helpers import json_dumps_compact, session_id_from_context
+from trading.dispatchers._helpers import session_id_from_context
 from harness.tools.registry import registry, tool_error, tool_result
 
 
@@ -88,98 +84,19 @@ def _fetch_data_point(args: Dict[str, Any]) -> str:
     if not name:
         return tool_error("fetch_data_point requires 'name'")
 
-    try:
-        entry = data_point_registry.lookup(name)
-    except KeyError as exc:
-        return tool_error(str(exc))
+    # The fetch path itself (cache, snapshot, param filtering) lives in
+    # trading.perception.fetch_core, shared with the batch sweep dispatcher.
+    from trading.perception.fetch_core import fetch_and_snapshot
 
-    # Filter params to the fetcher's signature — the model routinely passes
-    # contextual extras (symbol/venue on global DPs) and a raw **params call
-    # crashed the fetch. Ignored keys are reported back, never dropped
-    # silently. Filtering BEFORE the cache read also unifies cache keys.
-    ignored_params: list = []
-    if entry.fn is not None and params:
-        import inspect
-        sig = inspect.signature(entry.fn)
-        if not any(p.kind is inspect.Parameter.VAR_KEYWORD
-                   for p in sig.parameters.values()):
-            kept = {k: v for k, v in params.items() if k in sig.parameters}
-            ignored_params = sorted(set(params) - set(kept))
-            params = kept
-
-    conn = get_db()
-    sid = session_id_from_context()
-    tier = _tier_from_synthetic_kind()
-
-    # Cache lookup (unless force_fresh). Uses the per-DP staleness budget.
-    cached_entry = None
-    if not force_fresh:
-        try:
-            cached_entry = perception_cache.read_data_point(name, params=params)
-        except Exception:
-            # Cache problems are never fatal — fall through to fresh fetch.
-            cached_entry = None
-
-    if cached_entry is not None:
-        value = cached_entry["value"]
-        fetched_at = float(cached_entry.get("fetched_at", time.time()))
-        cache_source = f"perception_cache:{entry.source}"
-
-        snapshot_id = conn.execute(
-            "INSERT INTO data_point_snapshots(session_name, ts, name, params_json, value_json, source) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (sid, fetched_at, name, json_dumps_compact(params),
-             json_dumps_compact(value), cache_source),
-        ).lastrowid
-        conn.commit()
-        return tool_result({
-            "snapshot_id": snapshot_id,
-            "name": name,
-            "source": cache_source,
-            "ts": fetched_at,
-            "value": value,
-            "cache": "hit",
-            "age_s": time.time() - fetched_at,
-            **({"ignored_params": ignored_params} if ignored_params else {}),
-        })
-
-    # Cache miss (or force_fresh) → fetch from source.
-    try:
-        value = entry.fn(**params) if entry.fn else None
-    except Exception as exc:
-        return tool_error(f"data point '{name}' fetcher raised: {exc}")
-
-    ts = time.time()
-
-    snapshot_id = conn.execute(
-        "INSERT INTO data_point_snapshots(session_name, ts, name, params_json, value_json, source) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (sid, ts, name, json_dumps_compact(params),
-         json_dumps_compact(value), entry.source),
-    ).lastrowid
-    conn.commit()
-
-    # Populate the cache for downstream tiers.
-    try:
-        perception_cache.write_data_point(
-            name, value,
-            source=entry.source,
-            params=params,
-            fetched_by_tier=tier,
-        )
-    except Exception:
-        # Best-effort cache write; never fail the fetch on cache write error.
-        pass
-
-    return tool_result({
-        "snapshot_id": snapshot_id,
-        "name": name,
-        "source": entry.source,
-        "ts": ts,
-        "value": value,
-        "cache": "miss" if not force_fresh else "bypass",
-        **({"ignored_params": ignored_params} if ignored_params else {}),
-    })
+    result = fetch_and_snapshot(
+        name, params,
+        force_fresh=force_fresh,
+        session_id=session_id_from_context(),
+        tier=_tier_from_synthetic_kind(),
+    )
+    if not result.pop("ok", False):
+        return tool_error(result.get("error", f"fetch of '{name}' failed"))
+    return tool_result(result)
 
 
 registry.register(

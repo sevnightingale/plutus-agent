@@ -162,6 +162,8 @@ _DGCLAW_TOOLS: List[str] = [
 
 _PERCEPTION_TOOLS = [
     "fetch_data_point",
+    "sweep_data_points",
+    "render_perception",
     "list_data_points",
     "account_state",
     # Phase 5: agentic-blueprint write-back
