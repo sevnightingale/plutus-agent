@@ -116,6 +116,24 @@ class TestBoard:
     def test_never_assessed_does_not_read_as_drift(self, conn, tmp_path):
         assert regime_board.board_matches_db(conn, self._board(tmp_path)) is True
 
+    def test_notes_retention_keeps_newest_dated_entries(self, conn, tmp_path):
+        """The zone grew to 215KB in nine days unbounded; each re-render now
+        keeps the newest NOTES_KEEP dated entries. Undated sections (the
+        header, the flip log) survive wherever they sit."""
+        dated = "".join(
+            f"## {h:02d}:00Z Day {h} — entry\n\nbody {h}\n\n"
+            for h in range(9))                       # newest-first: 00..08
+        notes = "## Assessment notes\n\n" + dated + "## Flip Log Update\n\nflips\n"
+        p = self._board(tmp_path, body=LIVE_BOARD + "\n" + notes)
+        write.record_regime(conn, timescale="swing", direction="ranging",
+                            volatility="normal")
+        assert regime_board.write_board(conn, p)["ok"]
+        text = p.read_text()
+        assert "## Assessment notes" in text
+        assert "## Flip Log Update" in text
+        kept = [h for h in range(9) if f"## {h:02d}:00Z" in text]
+        assert kept == list(range(regime_board.NOTES_KEEP))
+
 
 class TestWriterVocabulary:
     """Closed taxonomy, enforced in the writer. M is cell-scoped now, so a

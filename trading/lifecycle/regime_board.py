@@ -8,8 +8,10 @@ from its own specification and nothing notices.
 The database is truth; this renders it. Same arrangement ``live_state.py``
 already uses for PLUTUS.md, and the same discipline: the tool owns the table,
 the agent owns the prose. ``## Assessment notes`` below the table is
-plutus-regime's and is never touched here — those notes carry the reasoning
-behind a flip, which no renderer can reconstruct.
+plutus-regime's — those notes carry the reasoning behind a flip, which no
+renderer can reconstruct — but retention is bounded: each re-render keeps
+the newest ``NOTES_KEEP`` dated entries and drops the rest (see
+``_trim_notes``). The words are the agent's; the length is the renderer's.
 
 The rendered table's SHAPE IS LOAD-BEARING. Four agents (predict, generate,
 main, regime) read REGIME.md as prompt text, so a change to the format is a
@@ -31,6 +33,33 @@ from harness.tools import file_state
 TIMESCALES = ("intraday", "swing", "position")
 ABSENT = "—"          # em dash, as the board has always used
 _NOTES_RE = re.compile(r"^##\s", re.MULTILINE)
+
+# Dated assessment entries retained in the notes zone. The agent maintains
+# notes newest-first; entries beyond this fall off at each re-render. Without
+# a bound the zone grew to 215KB in nine days — ~55k tokens riding into every
+# regime/predict/generate spawn — and per-symbol assessment only feeds it
+# faster. The flip log and other undated sections are never trimmed.
+NOTES_KEEP = 6
+_DATED_NOTE_RE = re.compile(r"^## \d{2}:\d{2}Z\s")
+
+
+def _trim_notes(notes: str, keep: int = NOTES_KEEP) -> str:
+    """Keep the newest ``keep`` dated assessment entries; drop the rest.
+
+    Sections split on ``^## ``. Dated entries (``## HH:MMZ …``) count against
+    the cap in file order — newest-first, as plutus-regime writes them.
+    Undated sections (``## Assessment notes``, the flip log) pass through
+    untouched, wherever they sit.
+    """
+    parts = re.split(r"(?=^## )", notes, flags=re.MULTILINE)
+    kept, dated = [], 0
+    for p in parts:
+        if _DATED_NOTE_RE.match(p):
+            dated += 1
+            if dated > keep:
+                continue
+        kept.append(p)
+    return "".join(kept)
 
 
 def _symbol_table(regime: dict) -> list:
@@ -119,7 +148,7 @@ def write_board(conn, path: Optional[Path] = None,
     with file_state.lock_path(resolved):
         text = path.read_text(encoding="utf-8")
         m = _NOTES_RE.search(text)
-        notes = text[m.start():] if m else ""
+        notes = _trim_notes(text[m.start():]) if m else ""
         new_text = table + ("\n" + notes if notes else "")
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_text(new_text, encoding="utf-8")

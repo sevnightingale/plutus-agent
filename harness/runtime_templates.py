@@ -128,10 +128,13 @@ strategy_expectancy.
   cost graduates given enough resolutions; `n_to_clear` reports the book size
   where the current edge clears. An edge at or below cost NEVER clears — that
   is structural (scratch rate, geometry), not patience.
-- **M is scoped to YOUR REGIME CELL**: serious sibling books (>=6 resolutions)
-  declaring the same cell, in any status EXCEPT retired. Dormant still counts
-  — a parked hypothesis is not a withdrawn one. A book in another cell is not
-  an alternative to you and cannot be funded instead of you, so it does not
+- **M is scoped to YOUR REGIME CELL, within your symbol's CORRELATION
+  BUCKET**: serious sibling books (>=6 resolutions) declaring the same cell,
+  whose symbol shares your bucket (crypto majors are one another's siblings;
+  a market outside every bucket competes only with itself), in any status
+  EXCEPT retired. Dormant still counts — a parked hypothesis is not a
+  withdrawn one. A book in another cell — or another bucket — is not an
+  alternative to you and cannot be funded instead of you, so it does not
   raise your bar.
 - **Occupancy IS the bar.** Every book admitted to your cell raises your
   hurdle. Hence the cap of 7 test+active per cell, refused at authoring, and
@@ -140,6 +143,13 @@ strategy_expectancy.
 - **One cell per strategy**; the writer refuses a set-valued declaration. A
   book spanning cells averages trades that share no stop, target or horizon,
   and the average describes none of them.
+- **One symbol per strategy (2026-08-08).** A strategy reads, predicts, and
+  trades exactly one market — declared at birth, enforced at the tool. Cells
+  are symbol-scoped: gold's book never crowds bitcoin's, and neither borrows
+  the other's evidence. Multiplicity is bucket-scoped: crypto majors count
+  as each other's trials; uncorrelated markets pay only their own way. An
+  edge is earned per symbol, never inherited — a champion cloned to a new
+  market starts its book at zero.
 
 **Retirement is the only judgment that lowers the bar** — retired books leave
 M — so it is evidence-only and never a lever you reach for.
