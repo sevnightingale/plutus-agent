@@ -85,6 +85,8 @@ def global_panel() -> List[PanelEntry]:
         ("macro_vix", {}),
         ("macro_dxy", {}),
         ("macro_cpi", {}),
+        ("macro_us10y", {}),
+        ("macro_us10y_real", {}),
         ("btc_dominance_velocity", {}),
     ]
 

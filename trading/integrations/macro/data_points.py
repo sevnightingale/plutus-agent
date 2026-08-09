@@ -222,3 +222,104 @@ def btc_etf_netflow_daily() -> Dict[str, Any]:
         "date": data.get("date"),
         "source": data.get("source"),
     }
+
+
+# ── Rates (2026-08-09, the multi-asset seeding pass) ─────────────────────────
+# Gold and equity mechanisms need the rates complex the crypto desk never
+# did: the 10y nominal yield is the equity discount-rate driver, and the 10y
+# TIPS REAL yield is gold's inverse driver (gold pays no coupon — its
+# carrying cost IS the real yield). Buckets classify level, not change;
+# strategies read direction off the snapshot history.
+
+_US10Y_BUCKETS = [
+    (float("-inf"), 3.5, "accommodative", "Long rates low — duration assets breathe. Equity multiple tailwind."),
+    (3.5, 4.25, "neutral", "Long rates mid-range. No strong valuation signal either way."),
+    (4.25, 5.0, "restrictive", "Long rates high — discount-rate pressure on equities, USD support."),
+    (5.0, _INF, "squeeze", "Long rates extreme — something usually breaks. Risk-off across duration."),
+]
+
+_US10Y_REAL_BUCKETS = [
+    (float("-inf"), 0.0, "negative", "Negative real yields — gold's strongest tailwind; cash loses purchasing power."),
+    (0.0, 1.0, "low", "Mildly positive real yields — modest carrying cost for gold, neutral."),
+    (1.0, 2.0, "elevated", "Real yields elevated — real return competes with gold; headwind."),
+    (2.0, _INF, "high", "Real yields high — strong gold headwind; TIPS pay you to wait."),
+]
+
+
+@register_data_point(
+    name="macro_us10y",
+    category="macro",
+    source="context.dev",
+    description=(
+        "US 10-Year Treasury nominal yield (%) — the discount rate on long-"
+        "duration assets. Rising = equity multiple compression + USD support; "
+        "falling = duration relief. Read live, classified "
+        "(accommodative|neutral|restrictive|squeeze)."
+    ),
+    params_schema={},
+    returns_schema={"value": "float", "rate_regime": "string", "source": "string"},
+    numeric_path="value",
+    tags=["macro", "rates", "bonds", "equities"],
+)
+def macro_us10y() -> Dict[str, Any]:
+    data = extract_value(
+        primary_url="https://www.marketwatch.com/investing/bond/tmubmusd10y?countrycode=bx",
+        fallback_urls=[
+            "https://www.cnbc.com/quotes/US10Y",
+            "https://finance.yahoo.com/quote/%5ETNX/",
+        ],
+        schema={"type": "object", "properties": {"value": {"type": "number"}}},
+        instructions=(
+            "Extract the current US 10-Year Treasury note yield as a number "
+            "in percent (e.g. 4.32)."
+        ),
+    )
+    value = float(data["value"])
+    regime = classify(value, _US10Y_BUCKETS)
+    return {
+        "value": value,
+        "rate_regime": regime["label"],
+        "narrative": regime["narrative"],
+        "source": data.get("source"),
+    }
+
+
+@register_data_point(
+    name="macro_us10y_real",
+    category="macro",
+    source="context.dev",
+    description=(
+        "US 10-Year TIPS REAL yield (%) — gold's carrying cost and inverse "
+        "driver (gold pays no coupon; when TIPS pay a real return, gold "
+        "competes against it). Read live, classified "
+        "(negative|low|elevated|high)."
+    ),
+    params_schema={},
+    returns_schema={"value": "float", "real_rate_regime": "string", "source": "string"},
+    numeric_path="value",
+    tags=["macro", "rates", "real-yield", "gold"],
+)
+def macro_us10y_real() -> Dict[str, Any]:
+    data = extract_value(
+        primary_url="https://www.cnbc.com/quotes/US10YTIP",
+        fallback_urls=[
+            "https://fred.stlouisfed.org/series/DFII10",
+            # NO nominal-yield fallback: a plausible wrong number is worse
+            # than a loud failure.
+        ],
+        schema={"type": "object", "properties": {"value": {"type": "number"}}},
+        instructions=(
+            "Extract the current US 10-Year Treasury Inflation-Protected "
+            "Securities (TIPS) REAL yield as a number in percent (e.g. "
+            "1.85). This is the inflation-adjusted yield, NOT the nominal "
+            "10-year yield."
+        ),
+    )
+    value = float(data["value"])
+    regime = classify(value, _US10Y_REAL_BUCKETS)
+    return {
+        "value": value,
+        "real_rate_regime": regime["label"],
+        "narrative": regime["narrative"],
+        "source": data.get("source"),
+    }

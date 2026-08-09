@@ -67,6 +67,22 @@ class TestMacroDPs:
         out = dp.macro_dxy()
         assert out["value"] == 99.65 and out["strength"] == "neutral"
 
+    def test_us10y(self, monkeypatch):
+        monkeypatch.setattr(dp, "extract_value",
+                            lambda *a, **k: {"value": 4.32, "source": "mw"})
+        out = dp.macro_us10y()
+        assert out["value"] == 4.32 and out["rate_regime"] == "restrictive"
+
+    def test_us10y_real(self, monkeypatch):
+        monkeypatch.setattr(dp, "extract_value",
+                            lambda *a, **k: {"value": 1.85, "source": "cnbc"})
+        out = dp.macro_us10y_real()
+        assert out["value"] == 1.85 and out["real_rate_regime"] == "elevated"
+        # Negative real yields are gold's regime, not an error.
+        monkeypatch.setattr(dp, "extract_value",
+                            lambda *a, **k: {"value": -0.4, "source": "fred"})
+        assert dp.macro_us10y_real()["real_rate_regime"] == "negative"
+
     def test_cpi(self, monkeypatch):
         monkeypatch.setattr(dp, "extract_value",
                             lambda *a, **k: {"value": 4.2, "period": "May 2026", "source": "bls"})
