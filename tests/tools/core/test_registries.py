@@ -77,17 +77,36 @@ class TestDataPointRegistry:
         with pytest.raises(KeyError):
             data_point_registry.lookup("nonexistent")
 
-    def test_duplicate_raises(self):
+    def test_duplicate_from_another_module_raises(self):
         @data_point_registry.register_data_point(
             name="dup", category="market", source="src", description="d"
         )
         def _a(): pass
 
+        def _b(): pass
+        _b.__module__ = "somewhere.else"
         with pytest.raises(data_point_registry.RegistryError):
-            @data_point_registry.register_data_point(
+            data_point_registry.register_data_point(
                 name="dup", category="market", source="src", description="d2"
-            )
-            def _b(): pass
+            )(_b)
+
+    def test_same_module_reregistration_replaces(self):
+        """A module popped from sys.modules and re-imported runs its
+        decorators again. Refusing left the registry half-populated — the
+        #18 flaky family, deterministic on CI since 2026-08-09. Same
+        defining module → replace with the fresh fn; no error."""
+        @data_point_registry.register_data_point(
+            name="reimport", category="market", source="src", description="v1"
+        )
+        def _a(): return 1
+
+        @data_point_registry.register_data_point(
+            name="reimport", category="market", source="src", description="v2"
+        )
+        def _a2(): return 2
+
+        entry = data_point_registry.lookup("reimport")
+        assert entry.description == "v2" and entry.fn() == 2
 
     def test_list_all_filters(self):
         @data_point_registry.register_data_point(

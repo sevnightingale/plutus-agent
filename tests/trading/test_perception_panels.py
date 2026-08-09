@@ -24,6 +24,29 @@ def real_registry():
     from harness.tools.registry import discover_builtin_tools
     discover_builtin_tools()
     from trading.perception.core import data_point_registry
+    if "hl_price" not in {e.name for e in data_point_registry.list_all()}:
+        # A prior test on this worker called registry.reset() while the
+        # integration modules stayed cached in sys.modules — importing them
+        # again no-ops and nothing re-registers, so discovery returns an
+        # empty registry (#18, the direction the idempotent-registration fix
+        # alone can't reach). Registration is idempotent per defining module
+        # since 2026-08-09, so re-running the decorators is safe: reload the
+        # cached modules to repopulate. Genuine ghosts still fail the test
+        # itself, which is its job.
+        import importlib
+        import pkgutil
+        import sys as _sys
+
+        import trading.integrations as ti
+        for m in pkgutil.iter_modules(ti.__path__):
+            mod = f"trading.integrations.{m.name}.data_points"
+            try:
+                if mod in _sys.modules:
+                    importlib.reload(_sys.modules[mod])
+                else:
+                    importlib.import_module(mod)
+            except Exception:
+                continue
     return data_point_registry
 
 

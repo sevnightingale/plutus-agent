@@ -75,11 +75,25 @@ def register_data_point(
         def get_funding_rate(symbol: str) -> dict: ...
     """
     def _decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        if name in _REGISTRY:
-            raise RegistryError(
-                f"Data point '{name}' already registered "
-                f"(existing source={_REGISTRY[name].source})"
-            )
+        existing = _REGISTRY.get(name)
+        if existing is not None:
+            # Idempotent for a re-import of the SAME definition: when a
+            # module is dropped from sys.modules (the test conftest's
+            # per-test hygiene does exactly this) and later re-imported, its
+            # decorators run again. Refusing made the second import die
+            # mid-module and left the registry half-populated — the #18
+            # flaky family, which turned deterministic on CI 2026-08-09.
+            # Same defining module → replace (fresh fn, same point). A
+            # DIFFERENT module claiming the name is a genuine conflict and
+            # still refuses.
+            if getattr(existing.fn, "__module__", None) == getattr(
+                    fn, "__module__", object()):
+                pass
+            else:
+                raise RegistryError(
+                    f"Data point '{name}' already registered "
+                    f"(existing source={_REGISTRY[name].source})"
+                )
         _REGISTRY[name] = DataPointEntry(
             name=name,
             category=category,
