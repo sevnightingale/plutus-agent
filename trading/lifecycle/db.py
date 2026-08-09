@@ -753,8 +753,16 @@ def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
         have = any(r["name"] == "symbol" for r in
                    conn.execute("PRAGMA table_info(strategies)"))
         if not have:
-            conn.execute("ALTER TABLE strategies ADD COLUMN symbol TEXT "
-                         "NOT NULL DEFAULT 'BTC'")
+            try:
+                conn.execute("ALTER TABLE strategies ADD COLUMN symbol TEXT "
+                             "NOT NULL DEFAULT 'BTC'")
+            except sqlite3.OperationalError as exc:
+                # check-then-ALTER is not atomic: a concurrent open can win
+                # the race between our PRAGMA and our ALTER (CI's 2-core
+                # timing produced exactly this). The loser's error IS the
+                # success condition — the column exists.
+                if "duplicate column name" not in str(exc):
+                    raise
         relabelled = 0
         for name, dp_json in conn.execute(
                 "SELECT name, data_points_json FROM strategies "
