@@ -587,7 +587,7 @@ CORRELATION_BUCKETS = {
     "metals": {"xyz:GOLD", "xyz:SILVER", "xyz:PLATINUM", "xyz:PALLADIUM"},
     "equities": {"xyz:SP500", "xyz:XYZ100", "xyz:NVDA", "xyz:TSLA",
                  "xyz:AAPL", "xyz:MSFT", "xyz:GOOGL", "xyz:AMZN",
-                 "xyz:META"},
+                 "xyz:META", "xyz:SPCX"},
     "energy": {"xyz:CL", "xyz:BRENTOIL", "xyz:NATGAS"},
     "fx": {"xyz:EUR", "xyz:JPY", "xyz:GBP", "xyz:KRW", "xyz:DXY"},
 }
