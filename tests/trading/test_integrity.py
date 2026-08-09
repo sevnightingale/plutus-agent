@@ -252,6 +252,58 @@ class TestWakeLoop:
                                      "consecutive": 2, "suppressed": 1}}))
         assert "wake_loop" not in _names(integrity.check_integrity(conn, home=home))
 
+    def test_stopped_loop_is_cleared_not_declined(self, conn, home):
+        """The counter resets only on the NEXT fire, so after the condition
+        clears the old count lingers in the state file. A key silent past
+        WAKE_LOOP_STALE_S has stopped looping — no violation (board #480)."""
+        (home / "wake_suppression.json").write_text(json.dumps({
+            "staleness:perception": {
+                "last_fired_ts": time.time() - integrity.WAKE_LOOP_STALE_S - 60,
+                "consecutive": 9, "suppressed": 0}}))
+        assert "wake_loop" not in _names(integrity.check_integrity(conn, home=home))
+
+
+class TestAppendOnly:
+    """Twice rows vanished from an append-only table via unrecorded
+    hand-repairs (board #481). Counts checkpoint to append_only_counts.json;
+    a decrease is the violation."""
+
+    def _obs(self, conn, n):
+        for i in range(n):
+            conn.execute(
+                "INSERT INTO observations (session_name, agent, ts, text_md)"
+                " VALUES ('s', 'a', ?, 'x')", (time.time() + i,))
+        conn.commit()
+
+    def test_first_run_checkpoints_silently(self, conn, home):
+        self._obs(conn, 3)
+        assert "append_only_shrunk" not in _names(
+            integrity.check_integrity(conn, home=home))
+        state = json.loads((home / "append_only_counts.json").read_text())
+        assert state["counts"]["observations"] == 3
+
+    def test_growth_is_silent(self, conn, home):
+        self._obs(conn, 2)
+        integrity.check_integrity(conn, home=home)
+        self._obs(conn, 2)
+        assert "append_only_shrunk" not in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_shrinkage_fires_and_records_the_event(self, conn, home):
+        self._obs(conn, 5)
+        integrity.check_integrity(conn, home=home)
+        conn.execute("DELETE FROM observations WHERE id > 2")
+        conn.commit()
+        v = _by_name(integrity.check_integrity(conn, home=home),
+                     "append_only_shrunk")
+        assert "observations shrank 5 → 2" in v["detail"]
+        state = json.loads((home / "append_only_counts.json").read_text())
+        ev = state["events"][-1]
+        assert (ev["table"], ev["from"], ev["to"]) == ("observations", 5, 2)
+        # The checkpoint moved with the shrink — it fires once, not forever.
+        assert "append_only_shrunk" not in _names(
+            integrity.check_integrity(conn, home=home))
+
 
 class TestFailureHandling:
     def test_a_raising_check_becomes_a_violation(self, conn, home, monkeypatch):

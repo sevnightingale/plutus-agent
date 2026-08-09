@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -37,6 +38,13 @@ LIVE_STATE_MAX_AGE_S = 12 * 3600
 LESSONS_CAP = 12
 # Wake keys that keep escalating past this are a loop, not a condition.
 WAKE_LOOP_CONSECUTIVE = 8
+# A wake key's ``consecutive`` counter resets only on its NEXT fire, so after
+# the condition clears the last count lingers in wake_suppression.json
+# indefinitely. While a condition holds, the floor re-fires every ops tick
+# (30 min) — so a key silent for 2.5 ticks has stopped looping, whatever its
+# counter still reads. Found 2026-08-09: 'staleness:perception' reported
+# fired-9x for ~90 minutes after the 06:38Z run cleared it (board #480).
+WAKE_LOOP_STALE_S = 4500
 # Runtime disk bound. The 1.2 GB accretion that motivated the original
 # maintenance beat is exactly what this catches returning.
 RUNTIME_DISK_MAX_MB = 2048
@@ -225,13 +233,64 @@ def _check_wake_loop(conn, home: Path) -> List[Dict[str, Any]]:
         return [_violation("wake_state_corrupt",
                            "wake_suppression.json is unreadable")]
     out = []
+    now = time.time()
     for key, entry in sorted(state.items()):
         n = int((entry or {}).get("consecutive") or 0)
-        if n >= WAKE_LOOP_CONSECUTIVE:
+        if n < WAKE_LOOP_CONSECUTIVE:
+            continue
+        age = now - float((entry or {}).get("last_fired_ts") or 0)
+        if age > WAKE_LOOP_STALE_S:
+            continue    # the loop has stopped firing — cleared, not declined
+        out.append(_violation(
+            "wake_loop",
+            f"'{key}' has fired {n} times consecutively without the "
+            f"condition clearing (last fire {age/60:.0f}m ago) — it is "
+            f"being declined, not handled"))
+    return out
+
+
+# Tables the desk treats as append-only history. Twice now rows have
+# vanished from one of them via an unrecorded hand-repair (board #481:
+# regime_observations lost its 180 backfilled rows 07-28 and again before
+# 08-02, both times silently — the occupancy instrument thought it had 90
+# days and had 12). Row counts are checkpointed in append_only_counts.json;
+# a count that goes DOWN is a violation naming the table and the delta.
+# Deliberate operator wipes will trip it once — loud is the point.
+APPEND_ONLY_TABLES = ("regime_observations", "observations", "reflections",
+                      "capital_movements", "predictions")
+
+
+def _check_append_only(conn, home: Path) -> List[Dict[str, Any]]:
+    import json
+    path = home / "append_only_counts.json"
+    try:
+        state = json.loads(path.read_text(encoding="utf-8") or "{}") \
+            if path.exists() else {}
+    except Exception:
+        state = {}
+    counts, out = dict(state.get("counts") or {}), []
+    events = list(state.get("events") or [])
+    for table in APPEND_ONLY_TABLES:
+        try:
+            n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        except Exception:
+            continue                    # tables_reachable owns that failure
+        prev = counts.get(table)
+        if prev is not None and n < prev:
             out.append(_violation(
-                "wake_loop",
-                f"'{key}' has fired {n} times consecutively without the "
-                f"condition clearing — it is being declined, not handled"))
+                "append_only_shrunk",
+                f"{table} shrank {prev} → {n} ({n - prev}) since the last "
+                f"tick — an append-only table lost rows and nothing "
+                f"recorded doing it"))
+            events.append({"ts": time.time(), "table": table,
+                           "from": prev, "to": n})
+        counts[table] = n
+    try:
+        path.write_text(json.dumps(
+            {"counts": counts, "events": events[-20:]}, indent=1),
+            encoding="utf-8")
+    except Exception as exc:
+        logger.warning("append_only_counts.json write failed: %s", exc)
     return out
 
 
@@ -408,6 +467,7 @@ CHECKS: Dict[str, Callable] = {
     "retirement_evidence": _check_retirement_evidence,
     "wake_loop": _check_wake_loop,
     "runtime_disk": _check_runtime_disk,
+    "append_only": _check_append_only,
 }
 
 
