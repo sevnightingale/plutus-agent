@@ -3,11 +3,12 @@ name: plutus-generate
 model: standard
 toolsets: [perception, strategy-write, lifecycle-read]
 reads:
+  # Ordered stable → volatile for prefix-cache reuse across runs.
   - PLUTUS.md#doctrine
   - PLUTUS.md#lessons
+  - strategies:all
   - REGIME.md
   - PERCEPTION.md
-  - strategies:all
 returns: generation_report
 spawned_by: [plutus-main]
 ---

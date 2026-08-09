@@ -3,11 +3,13 @@ name: plutus-predict
 model: standard
 toolsets: [perception, prediction-write, conviction, lifecycle-read]
 reads:
+  # Ordered stable → volatile for prefix-cache reuse across runs: doctrine
+  # and the book change rarely; the boards change every few hours.
   - PLUTUS.md#doctrine
   - PLUTUS.md#lessons
+  - strategies:live
   - REGIME.md
   - PERCEPTION.md
-  - strategies:live
   - lifecycle:open-predictions
 returns: prediction_batch
 spawned_by: [plutus-main, staleness-ceiling]

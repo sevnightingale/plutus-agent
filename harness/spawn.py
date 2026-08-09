@@ -133,7 +133,10 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
         from trading.strategies.loader import load_strategies, strategy_context_block
         which = entry.partition(":")[2]
         if which == "live":
-            return strategy_context_block()
+            # Compact: predict's drafting tool loads the strategy file
+            # server-side, so hypothesis prose in the spawn context was 60k+
+            # tokens of pure redundancy at 194 books (2026-08-09).
+            return strategy_context_block(compact=True)
         if which == "all":
             allof = load_strategies(("test", "active", "dormant"))
             return strategy_context_block() + "\n### Dormant\n" + "\n".join(

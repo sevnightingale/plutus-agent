@@ -117,6 +117,19 @@ class TestLoader:
         block = loader.strategy_context_block(base_dir=tmp_path)
         assert "NO" in block and "trades" in block
 
+    def test_compact_block_drops_hypothesis_keeps_orientation(self, tmp_path, conn):
+        """predict's spawn context carries the compact block — predict_draft
+        loads the strategy FILE server-side, so hypothesis prose there was
+        ~60k tokens of redundancy at 194 books (2026-08-09)."""
+        loader.write_strategy(_strategy(tmp_path), conn)
+        full = loader.strategy_context_block(base_dir=tmp_path)
+        compact = loader.strategy_context_block(base_dir=tmp_path, compact=True)
+        assert "hypothesis:" in full and "hypothesis:" not in compact
+        # Orientation survives: name, symbol, cell, weights.
+        assert "funding-flush-reversal" in compact
+        assert "BTC" in compact and "- regime:" in compact and "- weights:" in compact
+        assert len(compact) < len(full)
+
     def test_write_syncs_mirror(self, tmp_path, conn):
         loader.write_strategy(_strategy(tmp_path), conn)
         row = conn.execute(

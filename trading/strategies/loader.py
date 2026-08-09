@@ -49,10 +49,18 @@ def load_strategies(
     return out
 
 
-def strategy_context_block(base_dir: Optional[Path] = None) -> str:
+def strategy_context_block(base_dir: Optional[Path] = None,
+                           compact: bool = False) -> str:
     """The prompt-injection summary for predict/main — live strategies only.
 
     Dead strategies never pollute prediction context (locked §14.4).
+
+    ``compact`` drops the hypothesis line. At 194 books the full block
+    measured 364KB (~91k tokens) riding into every predict call — and the
+    hypothesis copy is redundant there: ``predict_draft`` loads the strategy
+    FILE server-side and feeds Hypothesis/Mechanism/Trigger to the aux call
+    itself, so predict's own context never needs the prose, only the
+    orientation row (name, symbol, cell, weights, lineage).
     """
     live = load_strategies(LIVE_STATUSES, base_dir)
     if not live:
@@ -64,17 +72,21 @@ def strategy_context_block(base_dir: Optional[Path] = None) -> str:
     for s in live:
         regime = json.dumps(s.regime_applicability, sort_keys=True)
         dps = ", ".join(f"{k}:{w:.2f}" for k, w in s.weights.items())
-        hypothesis = (s.body_section("Hypothesis") or "").strip().replace("\n", " ")
-        lines.append(
-            f"### {s.name} [{s.status}] {s.timescale}/{s.mechanism_family}\n"
+        head = (
+            f"### {s.name} [{s.status}] {s.symbol} "
+            f"{s.timescale}/{s.mechanism_family}\n"
             f"- regime: {regime}\n"
             f"- weights: {dps}\n"
             + (f"- parent: {s.parent_strategy} (tweak: {s.variant_tweak})\n"
                if s.parent_strategy else "")
             + (f"- missing data points: {', '.join(s.missing_data_points)}\n"
                if s.missing_data_points else "")
-            + f"- hypothesis: {hypothesis}\n"
         )
+        if compact:
+            lines.append(head)
+            continue
+        hypothesis = (s.body_section("Hypothesis") or "").strip().replace("\n", " ")
+        lines.append(head + f"- hypothesis: {hypothesis}\n")
     return "\n".join(lines)
 
 
