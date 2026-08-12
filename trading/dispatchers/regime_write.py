@@ -34,7 +34,14 @@ RECORD_REGIME_SCHEMA = {
         "is refused, not coerced. Call once per timescale you assessed; the "
         "latest row per timescale IS the live regime. Your assessment notes "
         "stay yours — write them into REGIME.md below the table."),
-    "input_schema": {
+    # `parameters`, never `input_schema`. get_definitions() publishes the
+    # schema as the OpenAI `function` object, and the wire key is
+    # `parameters`. `input_schema` is Anthropic's name; using it here meant
+    # the model saw an empty argument list, guessed, and the first call of
+    # every pass KeyError'd on 'timescale' (board #419, 2026-08-11 and
+    # 2026-08-12). A tool is not shipped when the handler works — it is
+    # shipped when the model can see the fields.
+    "parameters": {
         "type": "object",
         "properties": {
             "symbol": {"type": "string",
@@ -70,6 +77,14 @@ def _record_regime(args: Dict[str, Any]) -> str:
     from trading.lifecycle.db import get_db
 
     from trading.perception.panels import normalize_symbol
+
+    missing = [k for k in ("timescale", "direction", "volatility")
+               if not args.get(k)]
+    if missing:
+        return tool_error(
+            f"record_regime requires {missing} — call once per "
+            f"symbol × timescale with timescale, direction and volatility. "
+            f"Do not batch assessments into one call.")
 
     conn = get_db()
     try:

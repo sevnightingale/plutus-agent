@@ -6,6 +6,7 @@ cell-aware surface stopped at the prompt boundary. The database is truth now
 and the board is a rendering, following live_state.py.
 """
 
+import json
 import sqlite3
 import time
 
@@ -134,6 +135,17 @@ class TestBoard:
         kept = [h for h in range(9) if f"## {h:02d}:00Z" in text]
         assert kept == list(range(regime_board.NOTES_KEEP))
 
+    def test_notes_truncates_a_long_dated_entry(self, conn, tmp_path):
+        blob = "x" * (regime_board.NOTE_MAX_CHARS + 800)
+        notes = f"## Assessment notes\n\n## 16:00Z overflow\n\n{blob}\n"
+        p = self._board(tmp_path, body=LIVE_BOARD + "\n" + notes)
+        write.record_regime(conn, timescale="swing", direction="ranging",
+                            volatility="normal")
+        assert regime_board.write_board(conn, p)["ok"]
+        text = p.read_text()
+        assert "truncated by renderer" in text
+        assert len(text) < regime_board.NOTE_MAX_CHARS + 2000
+
 
 class TestWriterVocabulary:
     """Closed taxonomy, enforced in the writer. M is cell-scoped now, so a
@@ -227,3 +239,23 @@ class TestMigrationBackfill:
         assert len(rows) == 2
         assert {r["source"] for r in rows} == {"derived"}
         assert {r["direction"] for r in rows} == {"ranging", "trending-up"}
+
+
+class TestDispatcherSchema:
+    """The harness publishes `parameters`, not `input_schema`. Using the
+    Anthropic name meant the model saw an empty argument list (#419)."""
+
+    def test_schema_uses_parameters_not_input_schema(self):
+        from trading.dispatchers.regime_write import RECORD_REGIME_SCHEMA
+        assert "parameters" in RECORD_REGIME_SCHEMA
+        assert "input_schema" not in RECORD_REGIME_SCHEMA
+        req = RECORD_REGIME_SCHEMA["parameters"]["required"]
+        assert {"timescale", "direction", "volatility"} <= set(req)
+
+    def test_missing_timescale_is_a_refusal_not_a_keyerror(self):
+        from trading.dispatchers.regime_write import _record_regime
+        out = json.loads(_record_regime({"direction": "ranging",
+                                         "volatility": "normal"}))
+        assert "error" in out
+        assert "timescale" in out["error"]
+        assert "KeyError" not in out["error"]

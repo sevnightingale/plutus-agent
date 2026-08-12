@@ -121,6 +121,54 @@ class TestBlackboards:
         assert "lessons_over_cap" in _names(
             integrity.check_integrity(conn, home=home))
 
+    def test_oversized_board_detected(self, conn, home):
+        """PERCEPTION.md hit 133k and perception could not read its own file."""
+        (home / "PERCEPTION.md").write_text(
+            "# PERCEPTION\n\n" + ("row\n" * 20_000), encoding="utf-8")
+        assert "blackboard_oversized" in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_file_db_status_drift_detected(self, conn, home):
+        """The 2026-07-27 cell-split wrote dormant to the db and left the
+        file on test — predict loads from files, so the parent stayed live."""
+        from trading.strategies.files import render_strategy, Strategy
+        d = home / "strategies"
+        d.mkdir()
+        s = Strategy(name="split-parent", status="test", timescale="swing",
+                     mechanism_family="flow", file_path=d / "split-parent.md",
+                     body_md="\n# Hypothesis\nh\n\n# Mechanism\nm\n")
+        (d / "split-parent.md").write_text(render_strategy(s), encoding="utf-8")
+        conn.execute(
+            """INSERT INTO strategies (name, status, timescale, mechanism_family,
+                   regime_applicability_json, data_points_json, file_path,
+                   created_at, updated_at)
+               VALUES ('split-parent','dormant','swing','flow','{}','[]',?,?,?)""",
+            (str(d / "split-parent.md"), time.time(), time.time()))
+        conn.commit()
+        assert "file_db_status" in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_unassessed_worked_symbol_detected(self, conn, home):
+        """Regime running on BTC while GOLD books sit unmatched."""
+        from trading.lifecycle import write as w
+        w.record_regime(conn, symbol="BTC", timescale="swing",
+                        direction="ranging", volatility="normal")
+        conn.execute(
+            """INSERT INTO strategies (name, status, timescale, mechanism_family,
+                   symbol, regime_applicability_json, data_points_json,
+                   file_path, created_at, updated_at)
+               VALUES ('gold-seed','test','swing','flow','xyz:GOLD','{}','[]',
+                       '/tmp/g.md',?,?)""",
+            (time.time(), time.time()))
+        conn.commit()
+        assert "regime_symbol_unassessed" in _names(
+            integrity.check_integrity(conn, home=home))
+
+    def test_cold_desk_is_not_unassessed(self, conn, home):
+        """No regime observations at all is a cold start, not a skip."""
+        assert "regime_symbol_unassessed" not in _names(
+            integrity.check_integrity(conn, home=home))
+
 
 class TestStalenessCeiling:
     def test_breach_detected(self, conn, home):

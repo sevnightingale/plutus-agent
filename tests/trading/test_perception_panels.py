@@ -176,6 +176,9 @@ def test_sweep_and_render_round_trip(temp_home, fake_dp, monkeypatch):
     rpayload = rout.get("result", rout)
     assert rpayload["replaced"] is True
     assert rpayload["rows"] == 1 and rpayload["failed_rows"] == 1
+    off = rpayload.get("narrative_offset_line")
+    assert isinstance(off, int) and off >= 1
+    assert pmd.read_text().splitlines()[off - 1].startswith("## Narrative")
     text = pmd.read_text(encoding="utf-8")
     assert "TOOL-RENDERED" in text
     assert "### BTC" in text and "fake_price" in text
@@ -199,6 +202,30 @@ def test_render_view_is_freshness_bounded(temp_home):
     from trading.lifecycle.perception_render import build_readings_body
     body = build_readings_body()["body"]
     assert "fresh_dp" in body and "stale_dp" not in body
+
+
+def test_render_view_is_panel_bounded(temp_home, monkeypatch):
+    """Strategy-specific lookback variants stay in the cache, not the board."""
+    import time as _time
+    from trading.perception.cache import _canonical_key
+    panel_key = _canonical_key("hl_price", {"symbol": "BTC"})
+    extra_key = _canonical_key("hl_candles", {
+        "symbol": "BTC", "interval": "1h", "lookback_bars": 5})
+    now = _time.time()
+    state = {"version": 3, "updated_at": now, "data_points": {
+        panel_key: {"value": {"price": 1}, "source": "t",
+                    "fetched_at": now - 5, "ttl_s": 60},
+        extra_key: {"value": {"c": 2}, "source": "t",
+                    "fetched_at": now - 5, "ttl_s": 60},
+    }}
+    (temp_home / "perception_state.json").write_text(json.dumps(state))
+    monkeypatch.setattr(
+        "trading.lifecycle.perception_render._panel_cache_keys",
+        lambda: {panel_key})
+    from trading.lifecycle.perception_render import build_readings_body
+    body = build_readings_body()["body"]
+    assert "hl_price" in body
+    assert "hl_candles" not in body
 
 
 def test_render_refuses_missing_zone(temp_home):

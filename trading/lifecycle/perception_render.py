@@ -37,6 +37,33 @@ def sidecar_path() -> Path:
     return _hermes_home() / SIDECAR_FILENAME
 
 
+def _panel_cache_keys() -> Optional[set]:
+    """Canonical cache keys for the current watchlist panels.
+
+    Returns None when the panel cannot be built (no db, no config) so the
+    renderer falls back to the freshness bound alone — tests that seed a
+    fake cache, and a desk that has not yet swept, still render.
+    """
+    try:
+        from trading.perception import panels
+        from trading.perception.cache import _canonical_key
+        from trading.lifecycle.db import get_db
+
+        watchlist = panels.watchlist_from_config()
+        tiers = panels.derive_tiers(get_db(), watchlist)
+        keys: set = set()
+        for sym, tier in tiers.items():
+            panel = (panels.full_panel(sym) if tier == "full"
+                     else panels.passive_panel(sym))
+            for name, params in panel:
+                keys.add(_canonical_key(name, params))
+        for name, params in panels.global_panel():
+            keys.add(_canonical_key(name, params))
+        return keys
+    except Exception:
+        return None
+
+
 def read_sidecar() -> Dict[str, Any]:
     try:
         return json.loads(sidecar_path().read_text(encoding="utf-8"))
@@ -57,7 +84,11 @@ def _compact(name: str, value: Any) -> str:
     except Exception:
         text = str(value)
     text = text.replace("|", "\\|")
-    return text if len(text) <= 300 else text[:297] + "..."
+    # 160, not 300: seven full-tier symbols at 300 chars/cell made the
+    # Readings zone 118KB and PERCEPTION.md unreadable (file_read_max_chars
+    # is 100k). Compact_fn already extracted the signal; the tail is JSON
+    # furniture. History stays in the cache.
+    return text if len(text) <= 160 else text[:157] + "..."
 
 
 def _age_label(fetched_at: float, now: Optional[float] = None) -> str:
@@ -82,16 +113,26 @@ def build_readings_body(now: Optional[float] = None) -> Dict[str, Any]:
     # Cache keys are canonical — "name" or "name:{sorted-params-json}"
     # (see cache._canonical_key); entries carry value/source/fetched_at only.
     #
-    # The view is FRESHNESS-BOUNDED: the cache accumulates every param
-    # variant ever fetched, and rendering all of it re-creates blackboard
-    # bloat in one call (first live dry-run: 300 rows, 125KB). An entry
-    # renders only within GRACE× its own staleness budget — history stays
-    # in the cache and the snapshot table, the blackboard shows the present.
+    # Two bounds, both earned:
+    # - FRESHNESS: the cache accumulates every param variant ever fetched,
+    #   and rendering all of it re-creates blackboard bloat (first live
+    #   dry-run: 300 rows, 125KB). An entry renders only within GRACE× its
+    #   own staleness budget.
+    # - PANEL: strategy-specific lookback variants (hl_candles lookback=5
+    #   vs the panel's 200) stay in the cache for conviction to fetch; they
+    #   do not belong on the board. After the watchlist went seven-wide the
+    #   freshness bound alone still produced 118KB of Readings and
+    #   perception could not read_file its own blackboard.
     GRACE = 2.0
     MIN_WINDOW_S = 900.0
+    panel_keys = _panel_cache_keys()
+    if panel_keys is not None and not (panel_keys & set(entries)):
+        panel_keys = None          # fake/test cache — freshness only
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for key, ent in sorted(entries.items()):
         if not isinstance(ent, dict) or "value" not in ent:
+            continue
+        if panel_keys is not None and key not in panel_keys:
             continue
         fetched_at = float(ent.get("fetched_at") or 0)
         budget = perception_cache.get_staleness_budget(key)
@@ -164,6 +205,12 @@ def write_readings(path: Optional[Path] = None) -> Dict[str, Any]:
     path = Path(path) if path else _hermes_home() / "PERCEPTION.md"
     built = build_readings_body()
     replaced = replace_zone(path, READINGS_ZONE, built["body"])
+    narrative_line = None
+    if path.exists():
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.startswith("## Narrative") or line.startswith("## Notes"):
+                narrative_line = i
+                break
     return {
         "path": str(path),
         "replaced": bool(replaced),
@@ -171,4 +218,5 @@ def write_readings(path: Optional[Path] = None) -> Dict[str, Any]:
         "failed_rows": built["failed_rows"],
         "symbols": built["symbols"],
         "bytes": len(built["body"]),
+        "narrative_offset_line": narrative_line,
     }

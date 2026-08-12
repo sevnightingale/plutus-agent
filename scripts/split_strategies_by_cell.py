@@ -135,9 +135,10 @@ def apply(conn, items):
                 "WHERE strategy_name=? AND regime_tag=?",
                 (cell["name"], p["name"], cell["regime_tag"]))
             made += 1
-        conn.execute(
-            "UPDATE strategies SET status='dormant', updated_at=? WHERE name=?",
-            (time.time(), p["name"]))
+        # File is truth. A raw UPDATE on the mirror left 42 parents
+        # `test` on disk and `dormant` in the db (2026-07-27 → 2026-08-12).
+        loader.set_status(p["name"], "dormant", conn,
+                          reason="one-cell split: parent parked; cells inherited the book")
     conn.commit()
     return made
 

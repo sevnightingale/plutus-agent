@@ -41,6 +41,10 @@ never copy the previous file's header stamp.*
    headlines, Polymarket where registered. Update the `## Narrative — <SYM>`
    sections and `## Notes`; summarize WHAT IS, not what it means. Update the
    `updated_at` header line.
+   **Do not `read_file` PERCEPTION.md whole.** The Readings zone is the
+   tool result (`rows`, `bytes`, `narrative_offset_line`). To edit
+   narrative, `read_file` from `narrative_offset_line` with a modest
+   `limit`. A full-file read will bounce the 100k safety limit.
 5. Return your perception_report.
 
 # Output contract

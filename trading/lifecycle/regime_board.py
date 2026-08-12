@@ -39,7 +39,11 @@ _NOTES_RE = re.compile(r"^##\s", re.MULTILINE)
 # a bound the zone grew to 215KB in nine days — ~55k tokens riding into every
 # regime/predict/generate spawn — and per-symbol assessment only feeds it
 # faster. The flip log and other undated sections are never trimmed.
-NOTES_KEEP = 6
+NOTES_KEEP = 3
+# A single dated entry of 15–20KB × NOTES_KEEP still blew REGIME.md past
+# 100KB (2026-08-12). The words stay the agent's; the length is the
+# renderer's. Truncate from the tail so the lede (the verdict) survives.
+NOTE_MAX_CHARS = 4000
 _DATED_NOTE_RE = re.compile(r"^## \d{2}:\d{2}Z\s")
 
 
@@ -58,6 +62,9 @@ def _trim_notes(notes: str, keep: int = NOTES_KEEP) -> str:
             dated += 1
             if dated > keep:
                 continue
+            if len(p) > NOTE_MAX_CHARS:
+                p = (p[:NOTE_MAX_CHARS].rstrip()
+                     + "\n\n*(truncated by renderer)*\n\n")
         kept.append(p)
     return "".join(kept)
 

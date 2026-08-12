@@ -57,6 +57,12 @@ RETIREMENT_MIN_N = 20
 # is the signature of an unreachable table — reflections carried it for 12
 # reflect passes, capital_movements since inception.
 EXPECTED_NONEMPTY = ("strategies", "predictions", "action_runs")
+# Under file_read_max_chars (100k) so an agent can read its own board.
+# PERCEPTION.md hit 133k on 2026-08-12 and perception's read_file bounced.
+BLACKBOARD_MAX_CHARS = 80_000
+# A full-tier symbol with no recent observation cannot be predicted into —
+# regime_eligible is None, which predict correctly treats as "not a candidate".
+REGIME_SYMBOL_MAX_AGE_S = 24 * 3600
 
 
 def _violation(name: str, detail: str, severity: str = "warn") -> Dict[str, Any]:
@@ -82,6 +88,12 @@ def _check_blackboard_bloat(conn, home: Path) -> List[Dict[str, Any]]:
                 "blackboard_bloat",
                 f"{name} carries a run of ~{longest} blank lines — a writer is "
                 f"accreting rather than replacing"))
+        if len(text) > BLACKBOARD_MAX_CHARS:
+            out.append(_violation(
+                "blackboard_oversized",
+                f"{name} is {len(text):,} chars (cap {BLACKBOARD_MAX_CHARS:,}) "
+                f"— it no longer fits in a read_file and rides into every "
+                f"regime/predict/generate spawn"))
     return out
 
 
@@ -454,9 +466,105 @@ def _check_tool_registry(conn, home: Path) -> List[Dict[str, Any]]:
     return out
 
 
+def _check_file_db_status(conn, home: Path) -> List[Dict[str, Any]]:
+    """File-is-truth; the db is a mirror. A writer that updates one surface
+    leaves the other lying, and predict loads from files — so 42 parents
+    the 2026-07-27 cell-split marked dormant in the db stayed `test` on
+    disk and rode into every predict context for two weeks."""
+    from trading.strategies.files import parse_strategy
+
+    base = Path(home) / "strategies"
+    if not base.is_dir():
+        return []
+    db_status = {r[0]: r[1] for r in conn.execute(
+        "SELECT name, status FROM strategies")}
+    mismatches = []
+    for path in sorted(base.glob("*.md")):
+        try:
+            s = parse_strategy(path)
+        except Exception:
+            continue
+        db_s = db_status.get(s.name)
+        if db_s is not None and db_s != s.status:
+            mismatches.append(f"{s.name} file={s.status} db={db_s}")
+    if not mismatches:
+        return []
+    sample = "; ".join(mismatches[:8])
+    extra = f" (+{len(mismatches) - 8} more)" if len(mismatches) > 8 else ""
+    return [_violation(
+        "file_db_status",
+        f"{len(mismatches)} strateg(ies) disagree between file and db "
+        f"(file is truth): {sample}{extra}")]
+
+
+def _check_regime_symbols(conn, home: Path) -> List[Dict[str, Any]]:
+    """Full-tier symbols with no recent observation: predict cannot match
+    their books. Silent on a desk that has never assessed anything (cold
+    start), loud when the desk is assessing some symbols and skipping
+    others — the 2026-08-12 shape, 66 BTC rows and zero for the other six."""
+    try:
+        any_ts = conn.execute(
+            "SELECT max(ts) FROM regime_observations").fetchone()[0]
+    except Exception:
+        return []
+    if not any_ts:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT symbol FROM strategies "
+            "WHERE status IN ('test','active') AND symbol IS NOT NULL"
+        ).fetchall()
+    except Exception:
+        return []
+    worked = {str(r[0]) for r in rows if r[0]}
+    if not worked:
+        return []
+    now = time.time()
+    out = []
+    for sym in sorted(worked):
+        last = conn.execute(
+            "SELECT max(ts) FROM regime_observations WHERE symbol=?",
+            (sym,)).fetchone()[0]
+        if last is None or (now - float(last)) > REGIME_SYMBOL_MAX_AGE_S:
+            age = "never" if last is None else f"{(now - float(last))/3600:.1f}h ago"
+            out.append(_violation(
+                "regime_symbol_unassessed",
+                f"{sym} has live books but no regime observation "
+                f"({age}) — predict cannot match them"))
+    return out
+
+
+def _check_tool_schema_shape(conn, home: Path) -> List[Dict[str, Any]]:
+    """The OpenAI wire key is `parameters`. A schema published under
+    `input_schema` reaches the model as an empty argument list — which is
+    how record_regime KeyError'd on 'timescale' for two days (#419)."""
+    from harness.tools.registry import builtin_discovery_ran, registry
+
+    if not builtin_discovery_ran():
+        return []
+    out = []
+    for name in registry.get_all_tool_names():
+        schema = registry.get_schema(name) or {}
+        if "input_schema" in schema and "parameters" not in schema:
+            out.append(_violation(
+                "tool_schema_shape",
+                f"{name} publishes `input_schema` (Anthropic) instead of "
+                f"`parameters` — the model will not see its fields",
+                "critical"))
+        elif "parameters" not in schema and schema.get("name"):
+            # A few harness tools are argument-free; they still ship
+            # parameters: {type:object, properties:{}}. Flag only when
+            # the schema looks like a function but has neither key.
+            pass
+    return out
+
+
 CHECKS: Dict[str, Callable] = {
     "tool_registry": _check_tool_registry,
+    "tool_schema_shape": _check_tool_schema_shape,
     "regime_board": _check_regime_board,
+    "regime_symbols": _check_regime_symbols,
+    "file_db_status": _check_file_db_status,
     "blackboard_bloat": _check_blackboard_bloat,
     "blackboard_zones": _check_blackboard_zones,
     "live_state_fresh": _check_live_state_fresh,
