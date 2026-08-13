@@ -100,7 +100,7 @@ class TestLoader:
     def test_status_gates_context(self, tmp_path, conn):
         for name, status in [
             ("alpha-live", "active"), ("beta-test", "test"),
-            ("gamma-dorm", "dormant"), ("delta-dead", "retired"),
+            ("gamma-gone", "retired"), ("delta-dead", "retired"),
         ]:
             s = _strategy(tmp_path, name=name, status=status,
                           file_path=tmp_path / f"{name}.md")
@@ -111,7 +111,15 @@ class TestLoader:
 
         block = loader.strategy_context_block(base_dir=tmp_path)
         assert "alpha-live" in block and "beta-test" in block
-        assert "gamma-dorm" not in block and "delta-dead" not in block
+        assert "gamma-gone" not in block and "delta-dead" not in block
+
+    def test_set_status_refuses_dormant(self, tmp_path, conn):
+        s = _strategy(tmp_path, name="will-retire", status="test",
+                      file_path=tmp_path / "will-retire.md")
+        loader.write_strategy(s, conn)
+        import pytest
+        with pytest.raises(ValueError, match="dormant is abolished"):
+            loader.set_status("will-retire", "dormant", conn, base_dir=tmp_path)
 
     def test_empty_book_says_no_trades(self, tmp_path):
         block = loader.strategy_context_block(base_dir=tmp_path)

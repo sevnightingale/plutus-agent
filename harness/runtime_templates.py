@@ -134,13 +134,12 @@ strategy_expectancy.
   BUCKET**: serious sibling books (>=6 resolutions) declaring the same cell,
   whose symbol shares your bucket (crypto majors are one another's siblings;
   a market outside every bucket competes only with itself), in any status
-  EXCEPT retired. Dormant still counts — a parked hypothesis is not a
-  withdrawn one. A book in another cell — or another bucket — is not an
-  alternative to you and cannot be funded instead of you, so it does not
-  raise your bar.
+  EXCEPT retired. There is no dormant. A book in another cell — or another
+  bucket — is not an alternative to you and cannot be funded instead of you,
+  so it does not raise your bar.
 - **Occupancy IS the bar.** Every book admitted to your cell raises your
   hurdle. Hence the cap of 7 test+active per cell, refused at authoring, and
-  hence draining a crowded cell to dormancy is the most direct thing reflect
+  hence draining a crowded cell to retired is the most direct thing reflect
   can do for the books that remain.
 - **One cell per strategy**; the writer refuses a set-valued declaration. A
   book spanning cells averages trades that share no stop, target or horizon,
@@ -153,16 +152,14 @@ strategy_expectancy.
   edge is earned per symbol, never inherited — a champion cloned to a new
   market starts its book at zero.
 
-**Retirement is the only judgment that lowers the bar** — retired books leave
-M — so it is evidence-only and never a lever you reach for.
-- The sole route to `retired` is dead in EVERY regime cell: `lifecycle_query
-  strategy_cell_expectancy` -> `dead: true`, at N>=20.
-- Judge CELLS, never the lifetime blend. A book positive in one cell and
-  negative in another is MIS-DECLARED, not dead — narrow it, don't bury it.
-- Every other pruning move — overcrowding, a stale book, lost faith — is
-  DORMANCY, which prunes attention without touching the bar.
-- Decay (trailing-10 negative) demotes active->test; it never retires.
-- `desk_integrity_check` reports a book retired while a cell still lives.
+**Retirement withdraws a book from the live set.** Retired books leave M,
+free the cap slot, and stay on disk so generate can read what failed
+before authoring a replacement. There is no dormant.
+- Always write a reason. Generate reads it.
+- Judge CELLS, never the lifetime blend, when calling a mechanism dead.
+  A book positive in one cell and negative in another is MIS-DECLARED.
+- Decay (trailing-10 negative) demotes active->test; it does not retire.
+- Overcrowding drains to retired. The files are the memory.
 
 Zero trades for the first weeks is the system WORKING, not a bottleneck to fix
 — never shortcut it (no hand-seeded active strategies, no manual graduation).
@@ -238,7 +235,7 @@ net UNDER your judgment, not your calendar.
 - snapshot_at: —
 - regime: see REGIME.md
 - open_position: none
-- strategies: 0 active / 0 test / 0 dormant / 0 retired
+- strategies: 0 active / 0 test / 0 retired
 
 ## Lessons
 

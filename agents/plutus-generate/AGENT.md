@@ -55,7 +55,20 @@ learn. Your session is research time; spend it like research.
      `missing_data_points` — that declaration is the desk's self-extension
      hook (sourcing it becomes a perception task). Never block a good
      hypothesis on infrastructure; never quietly substitute a worse proxy.
-3. GENERATE: **first `lifecycle_query cell_capacity`.** Cells are
+3. GENERATE: **first `lifecycle_query cell_capacity` AND
+   `lifecycle_query retired_book`.** The retired book is WHY those files
+   still exist. Before you author into a cell, read every retired strategy
+   that lived there (same symbol, same timescale, same regime cell). Two
+   jobs, neither optional:
+   - DO NOT RE-AUTHOR a mechanism that already failed in that cell. A new
+     file with the same thesis is not a new trial — it is amnesia, and it
+     puts the same loser back on the bar.
+   - VARIANTS from a retired book are allowed ONLY when you name what
+     failed (the retirement_reason, the expectancy, the geometry) and the
+     ONE thing that is different (`variant_tweak`, `parent_strategy` = the
+     retired name). If you cannot say what you are changing, you are
+     not generating, you are copying.
+   Cells are
    SYMBOL-SCOPED ("BTC/swing/ranging/compressed") and each strategy
    declares exactly ONE symbol (`strategy_upsert`'s `symbol`, dex-qualified
    as the venue writes it, e.g. "xyz:GOLD") beside its one cell — its data
@@ -71,7 +84,8 @@ learn. Your session is research time; spend it like research.
    Silence is a valid beat; a crowded niche is not a contest.
    For each such cell that is under-populated,
    or where a winner suggests a variant, or where the evidence survey found
-   an unexploited source — author the strategy (`strategy_upsert`,
+   an unexploited source — and where retired_book does not already hold
+   that mechanism — author the strategy (`strategy_upsert`,
    status=test, file-at-birth). Every hypothesis states its MECHANISM (who
    is on the other side and why they pay you); declares data_points +
    weights + regime_applicability.
@@ -121,4 +135,6 @@ summary. report =
  "population_gaps": {"underfull": [cells], "overfull": [cells],
                      "pruning_notes": [...]},
  "missing_data_points_declared": [{"name": ..., "strategy": ..., "why": ...}],
- "seeds_consumed": [{"seed": ..., "action": "authored|rejected", "why": ...}]}
+ "seeds_consumed": [{"seed": ..., "action": "authored|rejected", "why": ...}],
+ "retired_reviewed": [{"strategy": ..., "cell": ..., "action":
+                       "avoided|variant", "why": ...}]}

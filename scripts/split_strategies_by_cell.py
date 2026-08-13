@@ -22,7 +22,7 @@ Cells already judged dead (>= CELL_MIN_N resolutions, expectancy <= 0) are
 created DORMANT: they stop consuming prediction budget but keep counting
 toward the bar, because dormancy is not evidence of death and only evidence
 may lower the hurdle. Thin cells are created as `test` to keep accruing. The
-parent is left dormant with an empty book.
+parent is left retired with an empty book.
 
 Usage:
   scripts/split_strategies_by_cell.py --dry-run
@@ -93,7 +93,7 @@ def plan(conn):
             n, exp = v.get("n") or 0, v.get("expectancy_pct")
             dead = n >= CELL_MIN_N and exp is not None and exp <= 0
             cells.append({"regime_tag": tag, "n": n, "expectancy_pct": exp,
-                          "status": "dormant" if dead else "test",
+                          "status": "retired" if dead else "test",
                           "name": f"{r['name']}{SEP}{cell_slug(tag)}"})
         out.append({"parent": r, "cells": cells})
     return out
@@ -137,8 +137,8 @@ def apply(conn, items):
             made += 1
         # File is truth. A raw UPDATE on the mirror left 42 parents
         # `test` on disk and `dormant` in the db (2026-07-27 → 2026-08-12).
-        loader.set_status(p["name"], "dormant", conn,
-                          reason="one-cell split: parent parked; cells inherited the book")
+        loader.set_status(p["name"], "retired", conn,
+                          reason="one-cell split: parent withdrawn; cells inherited the book")
     conn.commit()
     return made
 
@@ -157,7 +157,7 @@ def main() -> int:
     print(f"parents to split : {len(items)}")
     print(f"cells to create  : {len(cells)}  "
           f"(test {sum(c['status'] == 'test' for c in cells)}, "
-          f"dormant/dead {sum(c['status'] == 'dormant' for c in cells)})")
+          f"retired/dead {sum(c['status'] == 'retired' for c in cells)})")
     booked = sum(c["n"] for c in cells)
     print(f"resolutions rehomed: {booked}")
     if args.dry_run:
@@ -181,7 +181,7 @@ def main() -> int:
         conn.backup(dst)
     print(f"backup: {backup}")
     made = apply(conn, items)
-    print(f"created {made} per-cell strategies; parents left dormant")
+    print(f"created {made} per-cell strategies; parents left retired")
     return 0
 
 

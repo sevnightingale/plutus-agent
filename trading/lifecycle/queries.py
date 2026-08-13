@@ -89,10 +89,10 @@ CELL_OCCUPANCY_CAP = 7      # test+active strategies admitted per regime cell.
                             # Admission control on generation, and the reason
                             # the multiplicity premium can no longer run away:
                             # M is now cell-scoped, so this bounds it by
-                            # construction. Dormant frees a slot (it parks a
-                            # hypothesis) while still counting toward M —
-                            # pruning attention stays cheap, lowering the bar
-                            # stays expensive.
+                            # construction. Retired frees the slot AND leaves
+                            # M — withdrawn is withdrawn. Generate reads the
+                            # retired file so it does not re-author the same
+                            # loser.
 ACTIONABLE_MAX_AGE_S = 1200.0  # 20 min — NEVER fund a prediction older than this
                                # (entry conditions drift; only a fresh beat trades)
 BASE_PREDICTION_OPEN_CAP = 3
@@ -157,9 +157,9 @@ def strategy_expectancy(
     and does not raise the bar. Retired books were counted until 2026-07-27,
     on the reasoning that a trial cannot be un-tried; the price was a bar that
     only rose, and a gate that rises forever eventually forbids everything.
-    Dormant books still count — a parked hypothesis is not a withdrawn one.
-    Retirement is consequently evidence-gated and enforced by the desk's
-    integrity check, so nothing can lower this bar by judgement alone).
+    Dormant — parked, still on the bar, never woken — was abolished
+    2026-08-13: a withdrawn book is retired, and generate reads it so the
+    desk does not re-author the same loser. Only test+active raise M).
     A lone strategy (M=1) pays zero premium — the original bar. ``n_to_clear``
     reports the book size at which the current exp/σ/M clears the hurdle
     (None = never at this expectancy: the edge is at/below cost).
@@ -266,11 +266,9 @@ def strategy_expectancy(
     # monotonically forever eventually forbids everything, which is a design
     # failure whatever its statistics.
     #
-    # Excluding retired makes the bar responsive to cleaning the book, and
-    # thereby makes retirement a lever on the hurdle, so retirement requires
-    # demonstrated death in every cell at n >= 20, every judgement-based
-    # pruning move goes to DORMANCY instead, and dormant books keep counting
-    # here. Only evidence can lower this bar; no agent can talk its way to it.
+    # Excluding retired makes the bar responsive to cleaning the book.
+    # Dormant was the attempted middle (parked, still on the bar) and
+    # became a one-way tax: nothing ever woke it. Abolished 2026-08-13.
     #
     # SCOPE: the strategy's own REGIME CELL, not its whole timescale
     # (2026-07-27). The premium prices a best-of-M selection, and the
@@ -637,11 +635,9 @@ def cell_capacity(conn: sqlite3.Connection, cap: int = CELL_OCCUPANCY_CAP) -> li
     test") and was never enforced anywhere, which is how 88 strategies came to
     sit across 34 cells with 23 of them over.
 
-    Only `test` and `active` books occupy a slot. DORMANT does not: dormancy
-    parks a hypothesis and frees the niche for a new one, while still counting
-    toward the multiplicity premium — so pruning attention is cheap and
-    lowering the bar stays expensive. Retired occupies nothing and counts
-    nothing.
+    Only `test` and `active` books occupy a slot. Retired occupies
+    nothing and counts nothing — withdrawn is withdrawn. Generate reads
+    the retired files so a drained book is memory, not a ghost on the bar.
     """
     rows = conn.execute(
         """SELECT name, symbol, timescale, status,
@@ -1117,7 +1113,7 @@ def strategy_stats(conn: sqlite3.Connection, name: str) -> Optional[dict]:
     return out
 
 
-def strategy_book(conn: sqlite3.Connection, statuses: tuple = ("test", "active", "dormant")) -> list:
+def strategy_book(conn: sqlite3.Connection, statuses: tuple = ("test", "active")) -> list:
     marks = ",".join("?" * len(statuses))
     rows = _rows(conn.execute(
         f"""SELECT name, status, timescale, mechanism_family, parent_strategy,
@@ -1131,6 +1127,35 @@ def strategy_book(conn: sqlite3.Connection, statuses: tuple = ("test", "active",
         exp = strategy_expectancy(conn, r["name"])
         r["expectancy_pct"] = exp["expectancy_pct"]  # the gate
         r["tradeable"] = exp["tradeable"]
+    return rows
+
+
+def retired_book(conn: sqlite3.Connection) -> list:
+    """The graveyard generate reads before authoring.
+
+    Retired files stay on disk so the desk does not re-author a mechanism
+    that already failed, or so a variant can name what went wrong and the
+    one thing that is different. This is why the files exist — not to sit
+    on the bar.
+    """
+    rows = _rows(conn.execute(
+        """SELECT name, symbol, timescale, mechanism_family, parent_strategy,
+                  regime_applicability_json, retirement_reason,
+                  n_resolved, n_correct, n_wrong, retired_at
+           FROM strategies WHERE status = 'retired'
+           ORDER BY symbol, timescale, name"""))
+    for r in rows:
+        decided = r["n_correct"] + r["n_wrong"]
+        r["win_rate"] = round(r["n_correct"] / decided, 3) if decided else None
+        exp = strategy_expectancy(conn, r["name"])
+        r["expectancy_pct"] = exp["expectancy_pct"]
+        r["n"] = exp["n"]
+        r["decaying"] = exp["decaying"]
+        raw = r.pop("regime_applicability_json", None)
+        try:
+            r["regime_applicability"] = json.loads(raw or "{}")
+        except Exception:
+            r["regime_applicability"] = {}
     return rows
 
 

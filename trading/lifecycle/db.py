@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS strategies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,            -- slug == file stem under strategies/
     file_path TEXT NOT NULL,
-    status TEXT NOT NULL,                 -- 'test' | 'active' | 'dormant' | 'retired'
+    status TEXT NOT NULL,                 -- 'test' | 'active' | 'retired'
     symbol TEXT NOT NULL DEFAULT 'BTC',   -- one symbol per strategy (2026-08-08)
     timescale TEXT NOT NULL,              -- 'intraday' | 'swing' | 'position'
     mechanism_family TEXT NOT NULL,       -- 'momentum'|'mean_reversion'|'flow'|'event'|'narrative'

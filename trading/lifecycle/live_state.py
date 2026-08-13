@@ -103,7 +103,7 @@ def build_live_state_body(conn) -> str:
     counts = dict(conn.execute(
         "SELECT status, COUNT(*) FROM strategies GROUP BY status").fetchall())
     strategies = (f"{counts.get('active', 0)} active / {counts.get('test', 0)} test / "
-                  f"{counts.get('dormant', 0)} dormant / {counts.get('retired', 0)} retired")
+                  f"{counts.get('retired', 0)} retired")
 
     return "\n".join([
         _MARKER,

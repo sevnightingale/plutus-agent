@@ -16,7 +16,7 @@ import yaml
 
 from harness.constants import get_hermes_home
 
-VALID_STATUS = ("test", "active", "dormant", "retired")
+VALID_STATUS = ("test", "active", "retired")
 VALID_TIMESCALE = ("intraday", "swing", "position")
 VALID_FAMILY = ("momentum", "mean_reversion", "flow", "event", "narrative")
 

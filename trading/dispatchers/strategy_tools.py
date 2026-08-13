@@ -37,7 +37,7 @@ UPSERT_SCHEMA = {
         "type": "object",
         "properties": {
             "name": {"type": "string", "description": "kebab-case slug"},
-            "status": {"type": "string", "enum": ["test", "active", "dormant", "retired"]},
+            "status": {"type": "string", "enum": ["test", "active", "retired"]},
             "timescale": {"type": "string", "enum": ["intraday", "swing", "position"]},
             "mechanism_family": {"type": "string",
                                  "enum": ["momentum", "mean_reversion", "flow", "event", "narrative"]},
@@ -169,7 +169,7 @@ def _strategy_upsert(args: Dict[str, Any]) -> str:
                     f"added to a cell raises the multiplicity hurdle for the "
                     f"others in it. Author into a cell with room "
                     f"(lifecycle_query cell_capacity), or wait for reflect to "
-                    f"make the weakest occupant dormant.")
+                    f"retire the weakest occupant.")
 
     known = {e.name for e in data_point_registry.list_all()} or None
     try:
@@ -265,15 +265,16 @@ registry.register(
     schema={
         "name": "strategy_set_status",
         "description": (
-            "Change a strategy's lifecycle stage (test/active/dormant/"
-            "retired). Graduation to active is reflect's call under the "
-            "statistical bars; retirement requires a reason."
+            "Change a strategy's lifecycle stage (test/active/retired). "
+            "Graduation to active is code's. Retirement withdraws the "
+            "book from the live set (leaves M, files stay so generate "
+            "does not re-author the same loser) and requires a reason."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "name": {"type": "string"},
-                "status": {"type": "string", "enum": ["test", "active", "dormant", "retired"]},
+                "status": {"type": "string", "enum": ["test", "active", "retired"]},
                 "reason": {"type": "string"},
             },
             "required": ["name", "status"],

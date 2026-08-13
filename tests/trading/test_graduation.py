@@ -98,14 +98,13 @@ class TestSync:
         sync_strategy_statuses(conn)
         assert sync_strategy_statuses(conn) == []   # idempotent
 
-    def test_dormant_and_retired_never_touched(self):
-        # Dormancy is regime judgment, retirement is a research call — the
-        # sync must not wake or bury anything.
+    def test_retired_never_touched(self):
+        # Retirement is withdrawn — the sync must not wake a graveyard book.
         conn = get_db()
-        _mk_strategy(conn, "sleeper", status="dormant")
+        _mk_strategy(conn, "sleeper", status="retired")
         _tradeable_book(conn, "sleeper")
         assert sync_strategy_statuses(conn) == []
-        assert parse_strategy(strategies_dir() / "sleeper.md").status == "dormant"
+        assert parse_strategy(strategies_dir() / "sleeper.md").status == "retired"
 
     def test_resolver_path_promotes_on_resolution(self):
         """Both watcher and ops share resolve_open_predictions — a resolve
@@ -176,12 +175,6 @@ class TestMultiplicityExcludesRetired:
         assert self._siblings(conn, "subject") == 2
         self._set_status(conn, "sibling", "retired")
         assert self._siblings(conn, "subject") == 1
-
-    def test_dormant_sibling_still_counts(self, conn):
-        """A parked hypothesis is not a withdrawn one."""
-        self._setup(conn)
-        self._set_status(conn, "sibling", "dormant")
-        assert self._siblings(conn, "subject") == 2
 
     def test_retiring_a_sibling_lowers_the_hurdle(self, conn):
         """The point of the change, asserted as a number."""
@@ -411,11 +404,11 @@ class TestCellCapacity:
     def test_occupancy_counts_test_and_active_only(self, conn):
         self._mk(conn, "a", "ranging")
         self._mk(conn, "b", "ranging", status="active")
-        self._mk(conn, "c", "ranging", status="dormant")
+        self._mk(conn, "c", "ranging", status="retired")
         self._mk(conn, "d", "ranging", status="retired")
         row = next(r for r in queries.cell_capacity(conn)
                    if r["cell"] == "BTC/intraday/ranging/normal")
-        assert row["occupants"] == 2          # dormant frees the slot
+        assert row["occupants"] == 2          # retired frees the slot
         assert row["slots_remaining"] == queries.CELL_OCCUPANCY_CAP - 2
 
     def test_over_cap_is_reported(self, conn):

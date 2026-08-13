@@ -552,12 +552,6 @@ class TestMultiplicity:
         assert exp["expectancy_pct"] > queries.ESTIMATED_ROUND_TRIP_COST_PCT
         assert exp["tradeable"] is False
 
-    def test_dormant_siblings_still_count(self, conn):
-        """A parked hypothesis is not a withdrawn one."""
-        self._borderline_book(conn, "cand")
-        self._serious_siblings(conn, 30, status="dormant")
-        assert queries.strategy_expectancy(conn, "cand")["siblings_tried"] == 31
-
     def test_retired_siblings_do_not_count(self, conn):
         """Reversed on 2026-07-27; it asserted the opposite until then.
 

@@ -26,14 +26,14 @@ never copy the previous file's header stamp.*
 # Procedure
 
 1. CHECKPOINTS: lifecycle_query strategy_book + calibration per strategy
-   with new resolutions. Moves (strategy_set_status):
-   - checkpoint continue (every 10 resolved): win rate ≥ 50%, else make the
-     book DORMANT — never retire. Win rate was repudiated as a graduation
-     criterion for being survivorship-biased, and it is no better as a killing
-     one: a book can run 45% and be strongly positive on geometry. Since
-     2026-07-27 retirement also lowers the desk's own hurdle (see below), so a
-     win-rate trigger would let you cut the bar on a statistic the desk does
-     not otherwise trust. Dormancy prunes attention and leaves the bar alone.
+   with new resolutions. The only status move you make by hand is
+   RETIRE (`strategy_set_status` status=retired, reason required).
+   There is no dormant. Withdrawn books leave the live set and leave M;
+   the files stay so generate can read what failed.
+   - checkpoint continue (every 10 resolved): if expectancy is negative
+     and you are withdrawing the book from the live set, RETIRE it with
+     the reason (geometry, n, expectancy). Win rate alone is not a
+     reason — a book can run 45% and be strongly positive on geometry.
    - GRADUATION to active (trade-enabling): the SINGLE gate is simulated net
      EXPECTANCY — `lifecycle_query strategy_expectancy {strategy_name}` →
      tradeable iff expectancy_pct > hurdle_pct AND n ≥ 15 AND not `decaying`.
@@ -61,76 +61,28 @@ never copy the previous file's header stamp.*
      resolutions, not a retry — `strategy_expectancy.n_to_clear` projects the
      book size where the current edge clears; None means the edge is at/below
      cost and needs structural work, not patience).
-     RETIRED books were counted until 2026-07-27 — the purer statistics, and
-     the reason nothing could ever graduate: M only ever grew, 81-94% of every
-     hurdle was premium rather than trading cost, and a bar that rises forever
-     eventually forbids everything. Excluding them makes the bar respond to a
-     cleaned book. DORMANT books still count: dormancy is a parked hypothesis,
-     not a withdrawn one. The consequence you must hold: RETIRING A BOOK NOW
-     LOWERS THE HURDLE FOR EVERY SIBLING AT ITS TIMESCALE, so retirement is no
-     longer bookkeeping — it is an edit to the desk's own bar, and it is
-     evidence-gated below and enforced by `desk_integrity_check`.
-     M is timescale-scoped BY DESIGN — do not re-propose grouping siblings by
-     regime cell: the premium counts how many chances the desk gave itself to
-     find a lucky book (trials ever tried), not which strategies compete for
-     the same conditions — independent cells inflate the best-of-M fully, and
-     regime_applicability is self-declared, so a cell-scoped M would let a
-     strategy narrow its declared regime to lower its own bar. Considered and
-     rejected 2026-07-07.
-     and `decaying` (trailing-10 re-sim negative) blocks tradeable even when
-     the lifetime book still clears — a dead edge must not coast on old wins.
-     Expectancy is conviction-independent (pure outcome geometry), so the
-     conviction-render cutover doesn't touch it. Slower is fine; graduating
-     mirages is not.
-  - RETIREMENT — the ONLY move that removes a book from the multiplicity
-    count, and therefore the only judgement of yours that can lower the
-    desk's graduation bar. One reason permits it and no other: the edge is
-    gone at N ≥ 20 **in every regime cell**. The instrument is
-    `lifecycle_query strategy_cell_expectancy {strategy_name}` → retire only
-    on `dead: true`, which means no cell with ≥ 4 resolutions has positive
-    expectancy. **Never retire on the lifetime blend.** A blended book
-    averages conditions the strategy never trades together and describes none
-    of them: on 2026-07-27 `ema20-pivot-swing` blended to −0.004 and so met
-    the old bar, while FOUR of its five cells were positive (ranging/normal
-    +1.06) and one bad cell (trending-up/compressed) sank the average. That
-    retirement would have buried a working mechanism and lowered the hurdle
-    for every sibling on a false premise. A strategy that works in one
-    condition and fails in another is not dead — it is MIS-DECLARED, and the
-    move is to narrow it to the cell that works and dormant the rest.
-    This applies from ANY status, `test` included — it was scoped
-    `active → retired` until 2026-07-27, which made it unreachable on an
-    all-`test` book and left the two win-rate paths as the only ones that
-    could fire. There is no other route to `retired`. Cell overcrowding, a
-    stale book, a mechanism you have lost faith in, a tidier population — all
-    of these are DORMANCY. If you cannot point at `dead: true` over twenty or
-    more resolutions, the move is dormant, and `desk_integrity_check` will
-    report you if you retire a book that still has a living cell.
-    `decaying` (trailing-10 negative) is a weight
-    calibration / regime-transition problem, NOT a dead edge — demote to
-    test, NEVER retire. Regime_applicability is self-declared; a strategy
-    that claims the new regime should get more resolutions there, not a
-    coffin. A book still positive but under the multiplicity-deflated hurdle
-    is NOT dead — it is under-evidenced: the status sync has already demoted
-    it to test (it keeps registering predictions; the premium shrinks as √n
-    grows, so a real edge re-clears and re-promotes on its own). Funding
-    stopped the moment tradeable went false — YOUR move is the retirement
-    call ONLY for genuinely negative lifetime expectancy. Decay never
-    rewrites the book — the record stands; only the validity ended.
-   - dormancy moves on regime mismatch; dormant strategies matching the new
-     regime wake.
-   - POPULATION: `lifecycle_query cell_capacity` — occupancy of every regime
-     cell against the admission cap of 7 test+active books. The cap is
-     ENFORCED at authoring (`strategy_upsert` refuses a full cell), so your
-     job here is the other half: DRAINING cells that are over. Take the
-     weakest occupant (lowest win-rate or oldest-without-a-win) to DORMANT,
-     which frees the slot for a better challenger while still counting toward
-     the bar. Dormant, not retired: overcrowding is a statement about the
-     cell, not evidence about the book, and retirement moves the hurdle.
-     This matters more than it used to. **M is scoped to the CELL**, so
-     occupancy IS the bar: an over-full cell taxes every book in it, and
-     draining one is the most direct thing you can do for the strategies that
-     remain. Report each cell you drained and why. An invalidation resolves
-     as 'wrong', so win-rate already counts it — no special handling.
+     Retired books leave M. That is the point of withdrawing them. There is
+     no dormant: parked-and-still-on-the-bar was abolished 2026-08-13.
+     M is cell-scoped within the symbol's correlation bucket. `decaying`
+     (trailing-10 re-sim negative) blocks tradeable even when the lifetime
+     book still clears. Expectancy is conviction-independent. Slower is
+     fine; graduating mirages is not.
+  - RETIREMENT — the only off-ramp from the live book. It withdraws the
+    strategy from predict, frees the cap slot, and leaves M. The FILE
+    STAYS: generate reads `retired_book` before authoring so the desk does
+    not re-do the same loser, and so a variant can name what failed.
+    Always write a `reason`. Judge CELLS, never the lifetime blend, when
+    deciding a mechanism is dead — a book positive in one cell and
+    negative in another is MIS-DECLARED. `decaying` is a weight /
+    regime-transition problem — the status sync demotes active→test. A
+    book still positive but under the hurdle is under-evidenced: leave
+    it test.
+   - POPULATION: `lifecycle_query cell_capacity` — occupancy of every
+     regime cell against the admission cap of 7 test+active. The cap is
+     ENFORCED at authoring. Your job is the other half: DRAINING cells
+     that are over. Take the weakest occupant to RETIRED (reason:
+     overcrowding, plus why this one). That frees the slot AND leaves
+     M. Report each cell you drained and why.
 2. WEIGHTS: lifecycle_query support_score_performance per strategy →
    strategy_update_weights with the signed per-DP edge (avg score on
    correct − avg score on wrong). Narrative data points retune like any

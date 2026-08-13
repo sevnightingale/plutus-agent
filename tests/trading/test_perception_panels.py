@@ -100,10 +100,10 @@ def test_derive_tiers_strategy_reference_is_full():
     assert tiers["GOLD"] == "full"
 
 
-def test_derive_tiers_dormant_strategy_does_not_count():
+def test_derive_tiers_retired_strategy_does_not_count():
     conn = _mini_db()
     dps = json.dumps([{"name": "ta_ema", "params": {"symbol": "SOL"}}])
-    conn.execute("INSERT INTO strategies VALUES ('dormant', ?)", (dps,))
+    conn.execute("INSERT INTO strategies VALUES ('retired', ?)", (dps,))
     tiers = panels.derive_tiers(conn, ["BTC", "SOL"])
     assert tiers["SOL"] == "passive"
 

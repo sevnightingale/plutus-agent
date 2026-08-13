@@ -3,8 +3,9 @@
 The single code path for strategy lifecycle changes: every write goes through
 ``write_strategy`` / ``set_status``, which edit the file AND sync the mirror
 row in the same call. Status gates context: only test+active strategies reach
-prediction context; dormant stays on disk for regime-flip rotation; retired
-is graveyard (reflect-only).
+prediction context; retired is the graveyard generate reads before
+authoring (do not redo, or variant from what failed). There is no
+dormant — parked-and-still-on-the-bar was a one-way tax.
 """
 
 from __future__ import annotations
@@ -90,6 +91,44 @@ def strategy_context_block(base_dir: Optional[Path] = None,
     return "\n".join(lines)
 
 
+def retired_context_block(base_dir: Optional[Path] = None) -> str:
+    """Compact graveyard for generate — names, cells, book, reason.
+
+    The files stay so generate does not re-author a failed mechanism, or
+    so a variant can name what failed and the one tweak. Expectancy is
+    queried from the db when present; a missing row is honest absence.
+    """
+    retired = load_strategies(("retired",), base_dir)
+    if not retired:
+        return "## Retired\n\n(none)\n"
+    lines = [
+        "## Retired\n",
+        "Withdrawn from the live book. Read before authoring. Do not "
+        "re-author the same mechanism into the same cell unless the "
+        "variant names what failed and the one thing that is different.\n",
+    ]
+    try:
+        from trading.lifecycle.db import get_db
+        from trading.lifecycle.queries import retired_book
+        by_name = {r["name"]: r for r in retired_book(get_db())}
+    except Exception:
+        by_name = {}
+    for s in retired:
+        row = by_name.get(s.name) or {}
+        regime = json.dumps(s.regime_applicability, sort_keys=True)
+        n = row.get("n")
+        exp = row.get("expectancy_pct")
+        reason = s.retirement_reason or row.get("retirement_reason") or ""
+        lines.append(
+            f"- {s.name} [{s.symbol}] {s.timescale}/{s.mechanism_family} "
+            f"n={n} exp={exp} cell={regime}"
+            + (f" parent={s.parent_strategy}" if s.parent_strategy else "")
+            + (f" — {reason}" if reason else "")
+            + "\n"
+        )
+    return "\n".join(lines)
+
+
 def write_strategy(
     s: Strategy,
     conn: sqlite3.Connection,
@@ -114,6 +153,13 @@ def set_status(
     base_dir: Optional[Path] = None,
 ) -> Strategy:
     """Change a strategy's lifecycle stage (frontmatter edit + mirror sync)."""
+    if status == "dormant":
+        raise ValueError(
+            "dormant is abolished — retire the book (withdrawn from the "
+            "live set; generate reads it so the desk does not re-author "
+            "the same loser)")
+    if status not in ("test", "active", "retired"):
+        raise ValueError(f"status must be test|active|retired, got {status!r}")
     base = base_dir if base_dir is not None else strategies_dir()
     path = base / f"{name}.md"
     if not path.exists():

@@ -20,7 +20,7 @@ North star. (operator-owned — must NOT change)
 - snapshot_at: —
 - regime: see REGIME.md
 - open_position: none
-- strategies: 0 active / 0 test / 0 dormant / 0 retired
+- strategies: 0 active / 0 test / 0 retired
 
 ## Lessons
 
@@ -83,7 +83,7 @@ def _strategies_conn():
     c.executescript(
         "CREATE TABLE strategies(status TEXT);"
         "INSERT INTO strategies VALUES "
-        "('active'),('test'),('test'),('test'),('dormant'),('retired'),('retired');")
+        "('active'),('test'),('test'),('test'),('retired'),('retired'),('retired');")
     return c
 
 
@@ -96,7 +96,7 @@ class TestBuildBody:
         body = LS.build_live_state_body(_strategies_conn())
         assert "- equity_usd: $17.18" in body
         assert "- open_position: none" in body
-        assert "- strategies: 1 active / 3 test / 1 dormant / 2 retired" in body
+        assert "- strategies: 1 active / 3 test / 3 retired" in body
         assert LS._MARKER in body
 
     def test_equity_failure_is_honest_not_stale(self, monkeypatch):

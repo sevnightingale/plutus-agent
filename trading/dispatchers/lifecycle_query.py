@@ -107,6 +107,7 @@ def _run_query(args: Dict[str, Any]) -> str:
         "calibration": lambda: queries.calibration(conn, **params),
         "strategy_stats": lambda: queries.strategy_stats(conn, strategy),
         "strategy_book": lambda: queries.strategy_book(conn),
+        "retired_book": lambda: queries.retired_book(conn),
         "strategy_expectancy": lambda: queries.strategy_expectancy(
             conn, **{("strategy_name" if k == "name" else k): v
                      for k, v in params.items()}),
@@ -155,7 +156,9 @@ registry.register(
             "prediction {prediction_id} | open_position | "
             "recent_outcomes {limit} | calibration {strategy_name?, "
             "regime_tag?, timescale?} | strategy_stats {name} | "
-            "strategy_book | strategy_expectancy {strategy_name} (the "
+            "strategy_book | retired_book (graveyard generate reads "
+            "before authoring — n, expectancy, cell, reason) | "
+            "strategy_expectancy {strategy_name} (the "
             "profitability gate; optional regime_tag restricts the book to "
             "one cell) | strategy_cell_expectancy {strategy_name} (the SAME "
             "gate run per regime cell, plus `dead` — true only when NO cell "
@@ -172,8 +175,8 @@ registry.register(
             "held — the instrument for judging whether cells are too fine) | "
             "cell_capacity {cap?} (occupancy of every regime cell against the "
             "admission cap — generation authors ONLY into cells with "
-            "slots_remaining > 0; dormant frees a slot, retired occupies "
-            "nothing) | "
+            "slots_remaining > 0; retired occupies nothing and leaves "
+            "M) | "
             "open_predictions_by_cell | mae_envelope {strategy_name?, "
             "timescale?, regime_tag?, percentile?, population?, statistic?} | "
             "support_score_performance {strategy_name?} | last_action_runs | "

@@ -325,52 +325,26 @@ def _check_runtime_disk(conn, home: Path) -> List[Dict[str, Any]]:
     return []
 
 
-def _check_retirement_evidence(conn, home: Path) -> List[Dict[str, Any]]:
-    """No book may be retired while its lifetime expectancy is still positive.
+def _check_no_dormant(conn, home: Path) -> List[Dict[str, Any]]:
+    """Dormant is abolished. Any leftover row is a writer that did not hear.
 
-    Retirement stopped being a bookkeeping move on 2026-07-27. Retired books
-    are excluded from the multiplicity count, so retiring one LOWERS the
-    graduation hurdle for every surviving strategy at its timescale — which
-    makes retirement a dial on the desk's own bar, the same vector a
-    cell-scoped M was rejected for on 2026-07-07.
-
-    The protocol closes it by allowing only one reason to retire: demonstrated
-    non-positive lifetime expectancy at n >= RETIREMENT_MIN_N. Every
-    judgement-based pruning move goes to dormancy instead, and dormant books
-    keep counting toward the bar. This check is the enforcement — a retirement
-    that does not meet the evidence bar is a violation, stated plainly, and
-    the desk cannot quietly lower its own hurdle.
-
-    Books retired before this rule existed are exempt on evidence, not on
-    date: they are reported only when the book is large enough to judge.
+    Parked-and-still-on-the-bar was a one-way tax. Withdrawn books are
+    retired: they leave M, the files stay, generate reads them.
     """
     try:
-        from trading.lifecycle.queries import strategy_cell_expectancy
         names = [r[0] for r in conn.execute(
-            "SELECT name FROM strategies WHERE status = 'retired'")]
+            "SELECT name FROM strategies WHERE status = 'dormant'")]
     except Exception as exc:
-        return [_violation("retirement_unreadable",
+        return [_violation("dormant_unreadable",
                            f"strategies: {type(exc).__name__}: {exc}")]
-    out = []
-    for name in names:
-        try:
-            r = strategy_cell_expectancy(conn, name)
-        except Exception:
-            continue  # an unsimulatable book cannot be judged either way
-        if (r["blended_n"] or 0) < RETIREMENT_MIN_N or r["dead"] is not False:
-            continue
-        best = r["best_cell"]
-        out.append(_violation(
-            "retired_while_profitable",
-            f"'{name}' is retired, but it is not dead: "
-            f"{best['regime_tag']} runs {best['expectancy_pct']:+.4f}% over "
-            f"{best['n']} resolutions (lifetime blend "
-            f"{r['blended_expectancy_pct']:+.4f}% hides it). A strategy is "
-            f"dead when NO cell clears, not when the average does not — and "
-            f"excluding it from the multiplicity count has lowered the hurdle "
-            f"for every sibling at its timescale on a false premise. Move it "
-            f"to dormant, or narrow it to the cell that works."))
-    return out
+    if not names:
+        return []
+    sample = ", ".join(names[:8])
+    extra = f" (+{len(names) - 8} more)" if len(names) > 8 else ""
+    return [_violation(
+        "dormant_status",
+        f"{len(names)} book(s) still marked dormant (abolished 2026-08-13): "
+        f"{sample}{extra} — retire them")]
 
 
 def _check_regime_board(conn, home: Path) -> List[Dict[str, Any]]:
@@ -469,8 +443,8 @@ def _check_tool_registry(conn, home: Path) -> List[Dict[str, Any]]:
 def _check_file_db_status(conn, home: Path) -> List[Dict[str, Any]]:
     """File-is-truth; the db is a mirror. A writer that updates one surface
     leaves the other lying, and predict loads from files — so 42 parents
-    the 2026-07-27 cell-split marked dormant in the db stayed `test` on
-    disk and rode into every predict context for two weeks."""
+    the 2026-07-27 cell-split marked parents withdrawn in the db and
+    left the files on test — predict loads from files."""
     from trading.strategies.files import parse_strategy
 
     base = Path(home) / "strategies"
@@ -572,7 +546,7 @@ CHECKS: Dict[str, Callable] = {
     "staleness_ceiling": _check_staleness_ceiling,
     "tables_reachable": _check_tables_reachable,
     "capital_recorded": _check_capital_recorded,
-    "retirement_evidence": _check_retirement_evidence,
+    "no_dormant": _check_no_dormant,
     "wake_loop": _check_wake_loop,
     "runtime_disk": _check_runtime_disk,
     "append_only": _check_append_only,

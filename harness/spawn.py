@@ -138,12 +138,9 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
             # tokens of pure redundancy at 194 books (2026-08-09).
             return strategy_context_block(compact=True)
         if which == "all":
-            allof = load_strategies(("test", "active", "dormant"))
-            return strategy_context_block() + "\n### Dormant\n" + "\n".join(
-                f"- {s.name} ({s.timescale}/{s.mechanism_family}; regime "
-                f"{json.dumps(s.regime_applicability, sort_keys=True)})"
-                for s in allof if s.status == "dormant"
-            )
+            from trading.strategies.loader import retired_context_block
+            return (strategy_context_block(compact=True)
+                    + "\n" + retired_context_block())
         raise ValueError(f"unknown strategies read {entry!r}")
     if entry.startswith("lifecycle:"):
         from trading.lifecycle import queries
