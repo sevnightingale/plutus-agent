@@ -233,26 +233,82 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
         source_url="https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching",
         pricing_version="anthropic-pricing-2026-03-16",
     ),
-    # DeepSeek
+    # DeepSeek.
+    #
+    # `cache_read_cost_per_million` is not optional here the way it looks.
+    # DeepSeek caches every repeated prefix automatically and unconditionally,
+    # so `cache_read_tokens` is non-zero on essentially every call — and
+    # `estimate_usage_cost` returns status="unknown" outright when a route
+    # reports cache reads it has no price for. Between the 2026-08-05 switch to
+    # DeepSeek and 2026-08-17 the desk therefore priced NONE of its own calls:
+    # the versioned ids had no entry at all, and the two legacy aliases had an
+    # entry that bailed on the first cache hit. The bill had to be inferred
+    # from balance snapshots instead.
+    #
+    # `input_cost_per_million` is the cache-MISS rate — `normalize_usage`
+    # subtracts cache tokens out of the prompt total before it lands in
+    # `input_tokens`, so the two rates never double-count. The 31x spread
+    # between miss and hit is why prompt ORDERING dominates this bill: see
+    # `harness/spawn.py::_READ_TURNOVER`.
+    #
+    # Rates are the standard (off-peak) column. DeepSeek publishes a doubled
+    # peak band, but billing measured against our own balance snapshots on
+    # 2026-08-17 came out at a flat 0.85x of these rates across all 24 hours
+    # with no 2x band anywhere, so the standard column is what this account
+    # actually pays. Cache writes are not billed separately.
+    (
+        "deepseek",
+        "deepseek-v4-flash",
+    ): PricingEntry(
+        input_cost_per_million=Decimal("0.22"),
+        output_cost_per_million=Decimal("0.66"),
+        cache_read_cost_per_million=Decimal("0.007"),
+        cache_write_cost_per_million=Decimal("0"),
+        source="official_docs_snapshot",
+        source_url="https://api-docs.deepseek.com/quick_start/pricing",
+        pricing_version="deepseek-pricing-2026-08-17",
+    ),
+    (
+        "deepseek",
+        "deepseek-v4-pro",
+    ): PricingEntry(
+        input_cost_per_million=Decimal("0.66"),
+        output_cost_per_million=Decimal("1.98"),
+        cache_read_cost_per_million=Decimal("0.022"),
+        cache_write_cost_per_million=Decimal("0"),
+        source="official_docs_snapshot",
+        source_url="https://api-docs.deepseek.com/quick_start/pricing",
+        pricing_version="deepseek-pricing-2026-08-17",
+    ),
+    # The two legacy aliases both resolve to v4-flash on DeepSeek's side —
+    # verified live on 2026-08-07 off the `model` field of the response, which
+    # is also how we learned the harness had been silently rewriting versioned
+    # ids to `deepseek-chat` and running the whole desk on flash while
+    # config.yaml read v4-pro. They are priced as what they serve, not as what
+    # they are named.
     (
         "deepseek",
         "deepseek-chat",
     ): PricingEntry(
-        input_cost_per_million=Decimal("0.14"),
-        output_cost_per_million=Decimal("0.28"),
+        input_cost_per_million=Decimal("0.22"),
+        output_cost_per_million=Decimal("0.66"),
+        cache_read_cost_per_million=Decimal("0.007"),
+        cache_write_cost_per_million=Decimal("0"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-03-16",
+        pricing_version="deepseek-pricing-2026-08-17",
     ),
     (
         "deepseek",
         "deepseek-reasoner",
     ): PricingEntry(
-        input_cost_per_million=Decimal("0.55"),
-        output_cost_per_million=Decimal("2.19"),
+        input_cost_per_million=Decimal("0.22"),
+        output_cost_per_million=Decimal("0.66"),
+        cache_read_cost_per_million=Decimal("0.007"),
+        cache_write_cost_per_million=Decimal("0"),
         source="official_docs_snapshot",
         source_url="https://api-docs.deepseek.com/quick_start/pricing",
-        pricing_version="deepseek-pricing-2026-03-16",
+        pricing_version="deepseek-pricing-2026-08-17",
     ),
     # Google Gemini
     (
