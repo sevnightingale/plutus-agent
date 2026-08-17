@@ -458,6 +458,23 @@ CONTEXT_FILE_MAX_CHARS = 20_000
 CONTEXT_TRUNCATE_HEAD_RATIO = 0.7
 CONTEXT_TRUNCATE_TAIL_RATIO = 0.2
 
+# The identity file gets its own, much larger bound. 20k is a sane guard for a
+# dev context file the agent stumbles across (AGENTS.md, .cursorrules) — losing
+# the middle of one costs nothing. The identity is not that. PLUTUS.md IS the
+# agent, and it reached 32,688 chars, so head/tail truncation was quietly
+# delivering 18,000 of them: the whole `## Live State` zone, the whole pipeline
+# explainer, and the `## Lessons` heading plus EIGHT OF THE TWELVE lessons —
+# the desk's entire curated memory, arriving two-thirds gone with the first
+# survivor starting mid-sentence. Nobody chose that; the identity was routed
+# through a guard written for a different kind of file, then outgrew it.
+#
+# 50k is chosen to hold the file whole with real headroom, not to trim it
+# closer. Truncating an identity is a bad outcome that should stay far away,
+# and this is the most cache-friendly block in the prompt — it is stable
+# between spawns, so the extra characters are charged at the cache-hit rate
+# almost every time.
+IDENTITY_FILE_MAX_CHARS = 50_000
+
 
 # =========================================================================
 # Skills prompt cache
@@ -925,6 +942,19 @@ def _truncate_content(content: str, filename: str, max_chars: int = CONTEXT_FILE
     tail_chars = int(max_chars * CONTEXT_TRUNCATE_TAIL_RATIO)
     head = content[:head_chars]
     tail = content[-tail_chars:]
+    dropped = len(content) - head_chars - tail_chars
+    # Say it out loud. The marker below tells the AGENT, which is why this went
+    # unnoticed for as long as it did — PLUTUS.md was losing 45% of itself into
+    # this branch and no log line, no metric and none of the thirteen integrity
+    # invariants ever mentioned it. An operator finding out by reading the
+    # source is not an operator being told.
+    logger.warning(
+        "%s truncated for the prompt: dropped %d of %d chars (%.0f%%) — "
+        "kept head %d + tail %d. The middle of this file is NOT reaching the "
+        "model.",
+        filename, dropped, len(content), 100 * dropped / len(content),
+        head_chars, tail_chars,
+    )
     marker = f"\n\n[...truncated {filename}: kept {head_chars}+{tail_chars} of {len(content)} chars. Use file tools to read the full file.]\n\n"
     return head + marker + tail
 
@@ -951,7 +981,8 @@ def load_plutus_md() -> Optional[str]:
         if not content:
             return None
         content = _scan_context_content(content, "PLUTUS.md")
-        content = _truncate_content(content, "PLUTUS.md")
+        content = _truncate_content(content, "PLUTUS.md",
+                                    max_chars=IDENTITY_FILE_MAX_CHARS)
         return content
     except Exception as e:
         logger.debug("Could not read PLUTUS.md from %s: %s", plutus_path, e)

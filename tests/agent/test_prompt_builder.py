@@ -20,6 +20,7 @@ from harness.agent.prompt_builder import (
     build_context_files_prompt,
     build_environment_hints,
     CONTEXT_FILE_MAX_CHARS,
+    IDENTITY_FILE_MAX_CHARS,
     DEFAULT_AGENT_IDENTITY,
     TOOL_USE_ENFORCEMENT_GUIDANCE,
     TOOL_USE_ENFORCEMENT_MODELS,
@@ -124,6 +125,49 @@ class TestTruncateContent:
         result = _truncate_content(content, "big.md")
         assert len(result) < len(content)
         assert "truncated" in result.lower()
+
+    def test_truncation_warns_the_operator(self, caplog):
+        """Dropping half a file out of the prompt must not be a quiet event.
+
+        The in-prompt marker tells the AGENT, which is exactly why this went
+        unseen: PLUTUS.md was losing 45% of itself here and no log line, no
+        metric and none of the thirteen integrity invariants mentioned it.
+        """
+        with caplog.at_level(logging.WARNING, logger="harness.agent.prompt_builder"):
+            _truncate_content("x" * (CONTEXT_FILE_MAX_CHARS * 2), "big.md")
+        messages = [r.getMessage() for r in caplog.records]
+        assert any("big.md" in m and "truncated" in m for m in messages), (
+            f"truncation dropped content without warning; saw {messages!r}")
+
+    def test_no_warning_when_content_fits(self, caplog):
+
+        with caplog.at_level(logging.WARNING, logger="harness.agent.prompt_builder"):
+            _truncate_content("short", "small.md")
+        assert not caplog.records, "warned about a file that was not truncated"
+
+    def test_identity_bound_holds_plutus_md_whole(self):
+        """PLUTUS.md must arrive intact, not head-and-tailed.
+
+        Regression for 2026-08-17: the identity was routed through a 20k guard
+        written for stray dev context files (AGENTS.md, .cursorrules), then
+        outgrew it at 32,688 chars. Every agent was handed 18,000 of them —
+        losing the whole `## Live State` zone, the whole pipeline explainer,
+        and the `## Lessons` heading plus EIGHT OF THE TWELVE lessons, with the
+        first survivor starting mid-sentence. The desk's entire curated memory
+        arrived two-thirds gone and nothing said so.
+        """
+        assert IDENTITY_FILE_MAX_CHARS >= 50_000
+        assert IDENTITY_FILE_MAX_CHARS > CONTEXT_FILE_MAX_CHARS
+        realistic = "z" * 33_000  # the live file's size at the time of the fix
+        assert _truncate_content(
+            realistic, "PLUTUS.md", max_chars=IDENTITY_FILE_MAX_CHARS) == realistic
+
+    def test_identity_still_truncates_past_its_own_bound(self):
+        """The larger bound is headroom, not an off switch."""
+        huge = "z" * (IDENTITY_FILE_MAX_CHARS + 1_000)
+        out = _truncate_content(huge, "PLUTUS.md", max_chars=IDENTITY_FILE_MAX_CHARS)
+        assert len(out) < len(huge)
+        assert "truncated" in out.lower()
 
     def test_truncation_keeps_head_and_tail(self):
         head = "HEAD_MARKER " + "a" * 5000
