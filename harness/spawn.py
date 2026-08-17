@@ -161,6 +161,47 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
     raise ValueError(f"unknown reads entry {entry!r}")
 
 
+# How often each ``reads:`` block actually turns over. Reads are emitted
+# slowest-changing first, because the provider's context cache keeps every
+# token up to the first byte that differs from an earlier request: a block
+# rewritten every half hour, placed above one rewritten weekly, discards the
+# weekly one on every spawn. Measured 2026-08-17 — the desk was hitting 3-10%
+# on the first call of a spawn against 92-97% on later calls in the same run,
+# and the break landed at the first volatile block every time.
+#
+# The rank is turnover, not importance. Unlisted entries sort LAST on purpose:
+# a new read then costs a little cache, where defaulting it to the head would
+# silently throw away everything behind it.
+_READ_TURNOVER: Dict[str, int] = {
+    "PLUTUS.md#doctrine": 0,     # operator-owned; changes when a decision does
+    "PLUTUS.md#lessons": 1,      # reflect curates, weekly
+    "REGIME.md": 2,              # regime passes, ~4/day
+    "PERCEPTION.md": 2,          # perception sweeps, ~5/day
+    "strategies:live": 3,        # generate authors ~30 books/day
+    "strategies:all": 3,
+    "PLUTUS.md": 4,              # whole file — ranked by its Live State tail
+    "PLUTUS.md#live-state": 4,   # ops rewrites every 30 minutes
+    "ledger:today": 4,
+}
+_READ_TURNOVER_DEFAULT = 5       # lifecycle:* and anything added later
+
+
+def _ordered_reads(reads: List[str]) -> List[str]:
+    """``reads:`` sorted slowest-changing first, stable within a rank.
+
+    Sorting on ``(turnover, position)`` keeps the recipe author's ordering
+    intact among blocks that change at the same rate, so this is a cache
+    optimisation and never a reshuffle of equals.
+    """
+    return [
+        entry
+        for _, entry in sorted(
+            enumerate(reads),
+            key=lambda iv: (_READ_TURNOVER.get(iv[1], _READ_TURNOVER_DEFAULT), iv[0]),
+        )
+    ]
+
+
 def assemble_context(spec: AgentSpec, task_md: str) -> str:
     parts: List[str] = []
     # State the runtime home. Without it specialists guess at their own data
@@ -173,7 +214,7 @@ def assemble_context(spec: AgentSpec, task_md: str) -> str:
         f"ledger) is `{get_hermes_home()}`. Read paths under it directly; "
         f"do not guess at another location."
     )
-    for entry in spec.reads:
+    for entry in _ordered_reads(spec.reads):
         try:
             parts.append(resolve_read(entry))
         except Exception as exc:

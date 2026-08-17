@@ -100,6 +100,76 @@ class TestAssembleContext:
         ctx = spawn.assemble_context(spec, "TASK-MARKER")
         assert ctx.index("NORTH-STAR") < ctx.index("# Role") < ctx.index("TASK-MARKER")
 
+    def test_reads_are_ordered_slowest_changing_first(self):
+        """Volatile blocks must sit below stable ones in the spawn context.
+
+        The provider's prefix cache keeps everything up to the first byte that
+        differs from an earlier request, so a block ops rewrites every half
+        hour, placed above the doctrine, discards the doctrine on every spawn.
+        Measured 2026-08-17: desk agents hit 3-10% on the first call of a spawn
+        against 92-97% on later calls in the same run, and the break landed at
+        the first volatile block every time.
+        """
+        ops = ["PLUTUS.md#doctrine", "PLUTUS.md#live-state", "PERCEPTION.md",
+               "lifecycle:due-predictions", "lifecycle:open-position"]
+        assert spawn._ordered_reads(ops) == [
+            "PLUTUS.md#doctrine", "PERCEPTION.md", "PLUTUS.md#live-state",
+            "lifecycle:due-predictions", "lifecycle:open-position",
+        ]
+
+        predict = ["PLUTUS.md#doctrine", "PLUTUS.md#lessons", "strategies:live",
+                   "REGIME.md", "PERCEPTION.md", "lifecycle:open-predictions"]
+        got = spawn._ordered_reads(predict)
+        # The strategy book turns over faster than the blackboards (generate
+        # authors ~30 a day), so it sits below them and above lifecycle.
+        assert got.index("strategies:live") > got.index("PERCEPTION.md")
+        assert got.index("strategies:live") < got.index("lifecycle:open-predictions")
+        assert got[0] == "PLUTUS.md#doctrine"
+
+    def test_unknown_reads_sort_last(self):
+        """A read nobody ranked must default to the volatile tail.
+
+        This direction is the whole point: an unranked read placed late costs a
+        little cache, where the same read placed early would silently throw
+        away every block behind it.
+        """
+        got = spawn._ordered_reads(
+            ["lifecycle:open-position", "some-future-read", "PLUTUS.md#doctrine"])
+        assert got[0] == "PLUTUS.md#doctrine"
+        assert got[-1] == "some-future-read"
+
+    def test_ordering_is_stable_within_a_rank(self):
+        """Blocks that change at the same rate keep the recipe's own order.
+
+        This is a cache optimisation, never a reshuffle of equals — REGIME.md
+        and PERCEPTION.md are ranked together and must not swap.
+        """
+        assert spawn._ordered_reads(["REGIME.md", "PERCEPTION.md"]) == [
+            "REGIME.md", "PERCEPTION.md"]
+        assert spawn._ordered_reads(["PERCEPTION.md", "REGIME.md"]) == [
+            "PERCEPTION.md", "REGIME.md"]
+
+    def test_reads_still_precede_the_body(self, tmp_path, monkeypatch):
+        """Reordering reads must not move them below the recipe body.
+
+        plutus-regime's procedure says to read its evidence "from PERCEPTION.md
+        (in your context above)", which is only true while every read stays
+        above the body.
+        """
+        home = tmp_path / "home"
+        home.mkdir()
+        (home / "PLUTUS.md").write_text("## Doctrine\nNORTH-STAR\n", encoding="utf-8")
+        (home / "PERCEPTION.md").write_text("## Readings\nREADINGS-MARKER\n",
+                                            encoding="utf-8")
+        monkeypatch.setattr(spawn, "get_hermes_home", lambda: home)
+        _write_agent(tmp_path, "plutus-perception")
+        spec = spawn.load_agent("plutus-perception", agents_dir=tmp_path)
+        spec.reads = ["PERCEPTION.md", "PLUTUS.md#doctrine"]
+        ctx = spawn.assemble_context(spec, "TASK-MARKER")
+        assert ctx.index("NORTH-STAR") < ctx.index("READINGS-MARKER")
+        assert ctx.index("READINGS-MARKER") < ctx.index("# Role")
+        assert ctx.index("# Role") < ctx.index("TASK-MARKER")
+
     def test_states_the_runtime_home(self, tmp_path, monkeypatch):
         """Specialists must not have to guess their own data dir — the error
         log carries denied reads against /root/.plutus-agent and
