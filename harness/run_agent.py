@@ -4097,9 +4097,26 @@ class AIAgent:
         # refresh for a "Sunday 07:00Z" that had already passed. Same failure
         # class as the fabricated time labels this anchor was added to fix:
         # anything the model has to derive, it can derive wrongly.
+        # DATE resolution, not minute. The anchor was never a clock — the line
+        # below says so and the recipes repeat it — so the minutes bought
+        # nothing and cost the whole prompt behind them: every spawn stamped a
+        # different value, and the provider's prefix cache keeps only what
+        # matches up to the first differing byte. Desk agents were hitting
+        # 3-10% on their first call against 92-97% within a run (measured
+        # 2026-08-17). At date resolution the system prompt is byte-stable for
+        # the day, so the first spawn pays for it and the rest ride the cache.
+        #
+        # The spelled-out weekday stays, and is the reason this line exists:
+        # given a bare ISO date the model infers the day itself, and on
+        # 2026-07-26 it inferred Saturday on a Sunday, then declined thirteen
+        # consecutive perception staleness wakes as "the same dead Saturday".
+        # The label is load-bearing too — three AGENT.md recipes quote
+        # "Session start (UTC)" verbatim when telling the agent not to read it
+        # as a clock.
         timestamp_line = (
-            f"Session start (UTC): {now.astimezone(_timezone.utc):%A %Y-%m-%d %H:%M} UTC"
-            " (anchor — derive the current time from the freshest data ts)"
+            f"Session start (UTC): {now.astimezone(_timezone.utc):%A %Y-%m-%d}"
+            " (date anchor, not a clock — derive the current time from the"
+            " freshest data ts)"
         )
         if self.pass_session_id and self.session_id:
             timestamp_line += f"\nSession ID: {self.session_id}"

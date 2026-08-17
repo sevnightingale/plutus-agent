@@ -842,9 +842,49 @@ class TestBuildSystemPrompt:
         assert re.search(
             r"Session start \(UTC\): "
             r"(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday) "
-            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC",
+            r"\d{4}-\d{2}-\d{2}\b",
             anchor,
         ), f"anchor lacks a spelled-out weekday: {anchor!r}"
+
+    def test_anchor_carries_no_time_of_day(self, agent):
+        """The anchor must be byte-stable for the whole UTC day.
+
+        It is a date anchor, never a clock. A time-of-day component makes every
+        spawn's system prompt unique, and the provider's prefix cache keeps
+        only what matches up to the first differing byte — so a stamp near the
+        top of the prompt discards the entire prompt behind it. Desk agents
+        were measured at a 3-10% cache hit on the first call of a spawn against
+        92-97% on later calls in the same run (2026-08-17).
+        """
+        import re
+
+        anchor = next(
+            line for line in agent._build_system_prompt().splitlines()
+            if "Session start (UTC):" in line)
+        assert not re.search(r"\d{1,2}:\d{2}", anchor), (
+            f"anchor carries a time of day, which breaks the prefix cache on "
+            f"every spawn: {anchor!r}")
+
+    def test_system_prompt_is_stable_across_the_day(self, agent, monkeypatch):
+        """Two prompts built hours apart on the same UTC day must be identical.
+
+        This is the property the whole cache argument rests on; asserting the
+        anchor's format alone would not catch a second time-varying element
+        being added somewhere else in the prompt.
+        """
+        import datetime as _dt
+
+        def _at(hour, minute):
+            stamp = _dt.datetime(2026, 8, 17, hour, minute, tzinfo=_dt.timezone.utc)
+            monkeypatch.setattr(run_agent, "_hermes_now", lambda: stamp, raising=False)
+            monkeypatch.setattr("harness.clock.now", lambda: stamp)
+            agent._cached_system_prompt = None
+            return agent._build_system_prompt()
+
+        assert _at(1, 5) == _at(23, 47), (
+            "system prompt differs between two builds on the same UTC day — "
+            "something time-varying is being injected and every spawn will "
+            "miss the prefix cache")
 
     def test_includes_nous_subscription_prompt(self, agent, monkeypatch):
         monkeypatch.setattr(run_agent, "build_nous_subscription_prompt", lambda tool_names: "NOUS SUBSCRIPTION BLOCK")
