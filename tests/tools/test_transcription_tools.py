@@ -414,6 +414,7 @@ class TestTranscribeLocalCommand:
 # _transcribe_local — additional tests
 # ============================================================================
 
+@pytest.mark.usefixtures("stub_faster_whisper")
 class TestTranscribeLocalExtended:
     def test_model_reuse_on_second_call(self, tmp_path):
         """Second call with same model should NOT reload the model."""

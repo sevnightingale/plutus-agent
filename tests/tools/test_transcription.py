@@ -120,6 +120,7 @@ class TestValidateAudioFile:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("stub_faster_whisper")
 class TestTranscribeLocal:
 
     def test_successful_transcription(self, tmp_path):
@@ -252,6 +253,7 @@ class TestTranscribeAudio:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("stub_faster_whisper")
 class TestNormalizeLocalModel:
     """_normalize_local_model() maps cloud-only names to the local default."""
 

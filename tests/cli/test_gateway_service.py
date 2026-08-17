@@ -14,6 +14,27 @@ from harness.gateway.restart import (
 )
 
 
+@pytest.fixture
+def no_user_dbus_preflight(monkeypatch):
+    """Neutralise the user-D-Bus preflight for tests that are not about it.
+
+    ``_preflight_user_systemd`` returns immediately when
+    ``/run/user/<uid>/bus`` exists — the case on CI runners and desktops. On a
+    headless box with no logged-in user and linger disabled it instead shells
+    out to ``loginctl enable-linger`` through the very ``subprocess.run`` these
+    tests replace with a fake that asserts on unrecognised commands.
+
+    The outcome of four service-routing tests therefore depended on the login
+    state of the host, which is the one thing a test with a fully faked
+    subprocess layer should be immune to. They were carried as "environmental
+    baseline"; they are a missing stub. The preflight has its own hermetic
+    coverage in TestPreflightUserSystemd, so nothing is lost by silencing it
+    here.
+    """
+    monkeypatch.setattr(gateway_cli, "_preflight_user_systemd", lambda **_: None)
+
+
+@pytest.mark.usefixtures("no_user_dbus_preflight")
 class TestSystemdServiceRefresh:
     def test_systemd_install_repairs_outdated_unit_without_force(self, tmp_path, monkeypatch):
         unit_path = tmp_path / "hermes-gateway.service"
@@ -460,6 +481,7 @@ class TestGatewayServiceDetection:
 
         assert gateway_cli._is_service_running() is False
 
+@pytest.mark.usefixtures("no_user_dbus_preflight")
 class TestGatewaySystemServiceRouting:
     def test_systemd_restart_self_requests_graceful_restart_and_waits(self, monkeypatch, capsys):
         calls = []
