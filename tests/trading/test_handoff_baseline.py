@@ -121,6 +121,45 @@ class TestFundableWake:
         }
         assert wakes == []
 
+    def _strategy_file(self, name, timescale):
+        """A minimal on-disk strategy file so the freshness backstop engages
+        (it is skipped when no file exists)."""
+        from trading.strategies import files as strat_files
+        d = strat_files.strategies_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{name}.md").write_text(
+            "---\n"
+            f"name: {name}\nstatus: test\ntimescale: {timescale}\n"
+            "mechanism_family: flow\nsymbol: BTC\n"
+            "data_points:\n  - name: hl_cvd\n    params: {symbol: BTC}\n"
+            "---\n\n## Hypothesis\nx\n", encoding="utf-8")
+
+    def test_freshness_backstop_is_timescale_aware(self, monkeypatch):
+        import trading.perception.cache as cache_mod
+        from trading.perception import cache as c
+        conn = get_db()
+        now = time.time()
+        state = {"data_points": {
+            c._canonical_key("hl_cvd", {"symbol": "BTC"}):
+                {"fetched_at": now - 2000}}}   # 33 min old
+        monkeypatch.setattr(cache_mod, "read_perception_state", lambda: state)
+        self._patch(monkeypatch)
+        for name, ts in (("fi", "intraday"), ("fs", "swing")):
+            conn.execute(
+                "INSERT INTO strategies (name,file_path,status,timescale,"
+                "mechanism_family,created_at,updated_at) VALUES "
+                "(?,?,'test',?,'flow',0,0)", (name, f"{name}.md", ts))
+            conn.commit()
+            self._strategy_file(name, ts)
+        # 33-min-old reading: refused for the intraday book (floor 30 min) —
+        # and the refusal instructs a narrow refresh + re-draft, not a sweep
+        r = _call("register_prediction", {**self._ARGS, "strategy_name": "fi"})
+        assert "stale perception data" in r["error"]
+        assert "force_fresh" in r["error"] and "RE-DRAFT" in r["error"]
+        # the same reading is FRESH for a swing book (floor 4 h) — registers
+        r = _call("register_prediction", {**self._ARGS, "strategy_name": "fs"})
+        assert r.get("ok"), r
+
     def test_pilot_test_strategy_enqueues_keyed_wake(self, monkeypatch):
         from tests.trading.conftest import arm_pilot
         arm_pilot()

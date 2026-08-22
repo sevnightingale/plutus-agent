@@ -138,16 +138,18 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             missing_declared = set(strat.missing_data_points or [])
             declared = [dp for dp in (strat.data_points or [])
                         if isinstance(dp, dict) and dp.get("name") not in missing_declared]
-            stale = [e for e in fresh_mod.stale_data_points(declared)
+            stale = [e for e in fresh_mod.stale_data_points(
+                         declared, timescale=strat.timescale or None)
                      if e["reason"] == "stale"]
             if stale:
                 pts = ", ".join(f"{e['name']} ({e['age_s']}s > {e['max_age_s']}s)"
                                 for e in stale)
                 return tool_error(
                     f"stale perception data for strategy {strat_name!r} — "
-                    f"prediction refused: {pts}. Author on fresh readings: "
-                    f"return perception_stale to main so it re-runs perception, "
-                    f"then retry.")
+                    f"prediction refused: {pts}. Refresh those points with "
+                    f"fetch_data_point (force_fresh: true), then RE-DRAFT and "
+                    f"re-score on the fresh readings before registering — "
+                    f"never register a draft authored on the old ones.")
 
     try:
         horizon_hours = float(args["horizon_hours"])

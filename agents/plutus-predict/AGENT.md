@@ -57,11 +57,17 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    timescale + `open_predictions_by_cell`.
    FRESHNESS GATE: before drafting on any strategy, `perception_freshness
    {strategy_name}` (batch them — they run in parallel). A strategy with `fresh:
-   false` has STALE data — you CANNOT author it (register_prediction refuses), so
-   skip it this beat and add it to `perception_stale`. If stale data blocks the
-   strategies you needed to work, return early with `perception_stale` set so
-   main refreshes perception and re-spawns you — never invent a zone or an
-   invalidation threshold against data you couldn't read fresh.
+   false` has STALE data — you CANNOT author it (register_prediction refuses).
+   REFRESH it yourself, before drafting: for each entry in its `stale` list,
+   `fetch_data_point {name, params, force_fresh: true}` (batch the fetches —
+   a strategy declares ~7 points, seconds of work), then draft on the fresh
+   readings. The ORDER is the law: refresh, THEN draft, THEN score — never
+   draft first and refresh to satisfy the gate, and never register a draft
+   authored on the old readings. A point whose refresh FAILS goes to
+   `perception_stale` and that strategy is skipped this beat (honest absence
+   — never invent a zone against data you couldn't read fresh); only when
+   refresh failures block the strategies you needed does returning early
+   with `perception_stale` remain the right move.
 2. GAPS (report, never fill): note each lit (timescale × regime) cell that is
    UNDER-populated — no live strategy matches the current regime at that
    timescale — in your report's `population`. Authoring the missing strategy
@@ -142,6 +148,7 @@ summary. report =
  "perception_stale": [{"strategy": ..., "stale": [{"name": ..., "age_s": ...}]}],
  "escalation_findings": ["only when spawned for an ops escalation"]}
 
-`perception_stale` lists strategies you skipped because their data was too stale
-to author on — empty when everything was fresh. A non-empty list signals main to
+`perception_stale` lists strategies you skipped because their stale data could
+not be REFRESHED (fetch failures — plain staleness you refresh yourself in
+step 1) — empty when everything was fresh or freshened. A non-empty list signals main to
 refresh perception and re-spawn you.

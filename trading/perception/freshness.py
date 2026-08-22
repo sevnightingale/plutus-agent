@@ -25,14 +25,29 @@ from typing import Any, Dict, List, Optional, Sequence
 # The operator's authoring floor: predict may reason on data up to this old even
 # for fast-cache data points (their tight cache budget governs cache refresh,
 # not what is "fresh enough to forecast on").
-MIN_PREDICT_FRESHNESS_S = 1800.0  # 30 minutes
+MIN_PREDICT_FRESHNESS_S = 1800.0  # 30 minutes — the intraday floor
+
+# Timescale-aware floors (operator-set 2026-08-22): freshness is an intraday
+# concern. A swing thesis rides 4h structure and a position thesis daily
+# structure, so demanding 30-minute-fresh readings for them throttled
+# authoring (a 12.5% duty cycle against a ~4h sweep) without protecting
+# anything those horizons care about. Anchored to each timescale's ATR
+# interval (1h / 4h / 1d). An unknown or absent timescale takes the
+# strictest floor — erring stale-averse, never stale-blind.
+TIMESCALE_FLOORS_S = {
+    "intraday": MIN_PREDICT_FRESHNESS_S,   # 30 min
+    "swing": 4 * 3600.0,                   # 4 h
+    "position": 12 * 3600.0,               # 12 h
+}
 
 
-def effective_max_age(name: str) -> float:
-    """Max age (s) a data point may be and still be author-fresh for predict."""
+def effective_max_age(name: str, timescale: Optional[str] = None) -> float:
+    """Max age (s) a data point may be and still be author-fresh for predict
+    at the given strategy timescale (strictest floor when unknown)."""
     from trading.perception.cache import get_staleness_budget
 
-    return max(get_staleness_budget(name), MIN_PREDICT_FRESHNESS_S)
+    floor = TIMESCALE_FLOORS_S.get(timescale, MIN_PREDICT_FRESHNESS_S)
+    return max(get_staleness_budget(name), floor)
 
 
 def _parse_cache_key(key: str) -> tuple:
@@ -72,7 +87,8 @@ def _params_subset(declared: Dict[str, Any], stored: Dict[str, Any]) -> bool:
 
 
 def stale_data_points(
-    data_points: Sequence[dict], *, now: Optional[float] = None
+    data_points: Sequence[dict], *, now: Optional[float] = None,
+    timescale: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Return the declared data points that are missing or too stale to author on.
 
@@ -115,7 +131,7 @@ def stale_data_points(
             continue
         declared = dp.get("params")
         params = _normalize_params(declared)  # tolerate legacy string params
-        max_age = effective_max_age(name)
+        max_age = effective_max_age(name, timescale)
 
         # Freshest cache entry whose stored params superset the declared params.
         best_fetched_at: Optional[float] = None

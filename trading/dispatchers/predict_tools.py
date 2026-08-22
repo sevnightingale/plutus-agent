@@ -604,7 +604,8 @@ def _perception_freshness(args: Dict[str, Any]) -> str:
     missing_declared = set(strat.missing_data_points or [])
     declared = [dp for dp in (strat.data_points or [])
                 if isinstance(dp, dict) and dp.get("name") not in missing_declared]
-    flagged = freshness.stale_data_points(declared)
+    flagged = freshness.stale_data_points(declared,
+                                          timescale=strat.timescale or None)
     stale = [e for e in flagged if e["reason"] == "stale"]
     missing = [e for e in flagged if e["reason"] == "missing"]
     return tool_result({
