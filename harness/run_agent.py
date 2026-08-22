@@ -6953,6 +6953,8 @@ class AIAgent:
         if _ephemeral_out is not None:
             self._ephemeral_max_output_tokens = None
 
+        from harness.cli.model_normalize import sends_top_level_reasoning_effort
+
         return _ct.build_kwargs(
             model=self.model,
             messages=api_messages,
@@ -6971,9 +6973,8 @@ class AIAgent:
             is_github_models=_is_gh,
             is_nvidia_nim=_is_nvidia,
             is_kimi=_is_kimi,
-            is_deepseek=(
-                self.provider == "deepseek"
-                or base_url_host_matches(self.base_url, "api.deepseek.com")
+            sends_reasoning_effort=sends_top_level_reasoning_effort(
+                self.provider, self.base_url, self.model
             ),
             is_custom_provider=self.provider == "custom",
             ollama_num_ctx=self._ollama_num_ctx,

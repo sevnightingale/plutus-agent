@@ -181,7 +181,7 @@ class ChatCompletionsTransport(ProviderTransport):
         anthropic_max_out = params.get("anthropic_max_output")
         is_nvidia_nim = params.get("is_nvidia_nim", False)
         is_kimi = params.get("is_kimi", False)
-        is_deepseek = params.get("is_deepseek", False)
+        sends_reasoning_effort = params.get("sends_reasoning_effort", False)
         reasoning_config = params.get("reasoning_config")
 
         if ephemeral is not None and max_tokens_fn:
@@ -198,13 +198,16 @@ class ChatCompletionsTransport(ProviderTransport):
         elif anthropic_max_out is not None:
             api_kwargs["max_tokens"] = anthropic_max_out
 
-        # DeepSeek direct: top-level reasoning_effort is the ONLY control the
+        # DeepSeek models: top-level reasoning_effort is the ONLY control the
         # API honors — the extra_body {"reasoning": {...}} object shape is
         # silently ignored (verified live 2026-08-08). Vocabulary is enforced
         # server-side: none|minimal|low|medium|high|xhigh|max, with "none" a
         # true off-switch (no reasoning_content at all). Omit the param
         # entirely when no effort is configured so the server default applies.
-        if is_deepseek and reasoning_config and isinstance(reasoning_config, dict):
+        # The caller decides via sends_top_level_reasoning_effort(), which is
+        # keyed on model family AND route — the same models are reachable
+        # through more than one vendor's router.
+        if sends_reasoning_effort and reasoning_config and isinstance(reasoning_config, dict):
             if reasoning_config.get("enabled") is False:
                 api_kwargs["reasoning_effort"] = "none"
             else:

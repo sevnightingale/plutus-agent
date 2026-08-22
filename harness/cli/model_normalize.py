@@ -438,3 +438,70 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
 # Batch / convenience helpers
 # ---------------------------------------------------------------------------
 
+
+
+# ---------------------------------------------------------------------------
+# Reasoning-effort routing
+# ---------------------------------------------------------------------------
+# DeepSeek's reasoning models take thinking depth as a TOP-LEVEL
+# ``reasoning_effort`` field. The ``extra_body {"reasoning": {...}}`` object
+# other providers use is silently swallowed (verified live 2026-08-08), so a
+# route that wants the top-level form and does not get it runs at the server
+# default while the config file goes on claiming otherwise.
+#
+# This predicate answers the question that actually matters -- *does this
+# route accept top-level reasoning_effort for this model?* -- rather than the
+# proxy it replaced (``provider == "deepseek"``). The two coincided until the
+# same DeepSeek models became reachable through OpenCode, at which point the
+# proxy silently dropped every seat's configured effort.
+
+# Hosts known to accept top-level ``reasoning_effort`` for DeepSeek models.
+_DEEPSEEK_EFFORT_HOSTS: tuple[str, ...] = (
+    "api.deepseek.com",   # native; verified 2026-08-08
+    "opencode.ai",        # zen + go routers; go verified 2026-08-22
+)
+
+# Providers whose configured base URL is one of the above by definition.
+_DEEPSEEK_EFFORT_PROVIDERS: frozenset[str] = frozenset({
+    "deepseek",
+    "opencode-go",
+    "opencode-zen",
+})
+
+
+def is_deepseek_reasoning_model(model_name: str) -> bool:
+    """Return True for a bare DeepSeek model id (not an aggregator slug).
+
+    Aggregators receive ``deepseek/deepseek-v4-pro`` and speak the
+    ``extra_body`` dialect instead, so the slug form is deliberately excluded.
+    """
+    name = (model_name or "").strip().lower()
+    return name.startswith("deepseek-")
+
+
+def sends_top_level_reasoning_effort(
+    provider: str,
+    base_url: str,
+    model_name: str,
+) -> bool:
+    """Return True when ``reasoning_effort`` should ride as a top-level field.
+
+    Keyed on the model family plus the route that serves it, so moving the
+    same models to a different vendor's router keeps thinking depth wired up.
+    Where a route's support is unproven, prefer sending: an unsupported field
+    fails loudly with a 400, while omitting it fails silently at the server
+    default -- which is the failure this predicate exists to prevent.
+    """
+    if not is_deepseek_reasoning_model(model_name):
+        return False
+
+    from harness.utils import base_url_host_matches
+
+    if any(base_url_host_matches(base_url, host) for host in _DEEPSEEK_EFFORT_HOSTS):
+        return True
+
+    # No base URL configured yet (provider default will be used).
+    if not (base_url or "").strip():
+        return _normalize_provider_alias(provider) in _DEEPSEEK_EFFORT_PROVIDERS
+
+    return False

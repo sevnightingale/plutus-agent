@@ -249,7 +249,7 @@ class TestChatCompletionsDeepSeek:
         kw = transport.build_kwargs(
             model="deepseek-v4-flash",
             messages=[{"role": "user", "content": "Hi"}],
-            is_deepseek=True,
+            sends_reasoning_effort=True,
             reasoning_config={"enabled": True, "effort": "max"},
             max_tokens_param_fn=lambda n: {"max_tokens": n},
         )
@@ -262,7 +262,7 @@ class TestChatCompletionsDeepSeek:
         kw = transport.build_kwargs(
             model="deepseek-v4-flash",
             messages=[{"role": "user", "content": "Hi"}],
-            is_deepseek=True,
+            sends_reasoning_effort=True,
             reasoning_config={"enabled": False},
             max_tokens_param_fn=lambda n: {"max_tokens": n},
         )
@@ -272,7 +272,7 @@ class TestChatCompletionsDeepSeek:
         kw = transport.build_kwargs(
             model="deepseek-v4-flash",
             messages=[{"role": "user", "content": "Hi"}],
-            is_deepseek=True,
+            sends_reasoning_effort=True,
             reasoning_config=None,
             max_tokens_param_fn=lambda n: {"max_tokens": n},
         )

@@ -10,6 +10,7 @@ from harness.cli.model_normalize import (
     _DOT_TO_HYPHEN_PROVIDERS,
     _AGGREGATOR_PROVIDERS,
     detect_vendor,
+    sends_top_level_reasoning_effort,
 )
 
 
@@ -221,3 +222,52 @@ class TestDeepSeekNormalization:
     ])
     def test_aliases_still_map_by_keyword(self, model, expected):
         assert normalize_model_for_provider(model, "deepseek") == expected
+
+
+class TestSendsTopLevelReasoningEffort:
+    """The route-aware predicate that replaced the ``provider == 'deepseek'`` proxy.
+
+    Regression guard for 2026-08-22: the same DeepSeek models became reachable
+    through OpenCode Go, the provider-string check went False, and every seat's
+    configured reasoning effort was built and then silently dropped while
+    config.yaml went on reading correctly.
+    """
+
+    def test_native_deepseek_route(self):
+        assert sends_top_level_reasoning_effort(
+            "deepseek", "https://api.deepseek.com/v1", "deepseek-v4-flash"
+        )
+
+    def test_deepseek_models_through_opencode_go(self):
+        for model in ("deepseek-v4-flash", "deepseek-v4-pro"):
+            assert sends_top_level_reasoning_effort(
+                "opencode-go", "https://opencode.ai/zen/go/v1", model
+            ), model
+
+    def test_non_deepseek_models_on_the_same_router_are_excluded(self):
+        for model in ("glm-5.3", "kimi-k3", "minimax-m3"):
+            assert not sends_top_level_reasoning_effort(
+                "opencode-go", "https://opencode.ai/zen/go/v1", model
+            ), model
+
+    def test_aggregator_slug_form_is_excluded(self):
+        # Aggregators speak the extra_body {"reasoning": {...}} dialect.
+        assert not sends_top_level_reasoning_effort(
+            "openrouter", "https://openrouter.ai/api/v1", "deepseek/deepseek-v4-pro"
+        )
+
+    def test_provider_default_applies_when_no_base_url_configured(self):
+        assert sends_top_level_reasoning_effort("deepseek", "", "deepseek-v4-flash")
+        assert sends_top_level_reasoning_effort("opencode-go", "", "deepseek-v4-pro")
+        assert not sends_top_level_reasoning_effort("custom", "", "deepseek-v4-pro")
+
+    def test_hostname_lookalike_does_not_match(self):
+        # base_url_host_matches, not substring containment.
+        for url in (
+            "https://evil.com/opencode.ai/v1",
+            "https://opencode.ai.evil/v1",
+            "https://evil.com/api.deepseek.com/v1",
+        ):
+            assert not sends_top_level_reasoning_effort(
+                "custom", url, "deepseek-v4-flash"
+            ), url
