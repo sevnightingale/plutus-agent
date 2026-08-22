@@ -274,15 +274,10 @@ def test_position_alert_silent_when_flat(monkeypatch):
 
 # ── Regression: the 2026-08-16 descriptor leak ──────────────────────────
 #
-# get_db() returns a NEW sqlite connection per call and no caller closes it.
-# In short-lived subagent processes the OS reclaims at exit; the watcher
-# daemon runs for days, so these two pollers leaked one descriptor per tick
-# until the process hit its 1024 limit. It then began reporting
-# "watcher_state corrupt" — it could no longer open its own state file —
-# which reads as a data fault, so it went unexamined for six days and 1,326
-# log lines while the alert path was intermittently blind.
-#
-# These tests assert the pollers CLOSE what they open, on every exit path.
+# These two pollers leaked one lifecycle.db descriptor per tick inside the
+# watcher daemon. Full account in ``integrity._check_watcher_fds``, the
+# invariant that now guards the class. Asserted here: the pollers CLOSE what
+# they open, on every exit path.
 
 
 class _ConnTracker:
@@ -318,9 +313,7 @@ def track_db(monkeypatch):
 
 
 def test_prediction_resolution_closes_its_connection(monkeypatch, track_db):
-    info = MagicMock()
-    info.all_mids.return_value = {"BTC": "111000"}
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    _mids(monkeypatch, 111_000)
 
     alerts.poll_hl_prediction_resolution(state={})
 
@@ -332,9 +325,7 @@ def test_prediction_resolution_closes_its_connection(monkeypatch, track_db):
 
 
 def test_position_alert_closes_its_connection(monkeypatch, track_db):
-    info = MagicMock()
-    info.all_mids.return_value = {"BTC": "100000"}
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    _mids(monkeypatch, 100_000)
 
     alerts.poll_hl_position_alert(state={})
 
@@ -347,12 +338,10 @@ def test_position_alert_closes_its_connection(monkeypatch, track_db):
 
 def test_position_alert_closes_on_the_flat_early_return(monkeypatch, track_db):
     """The early return that fires most often — flat desk, no open position."""
-    info = MagicMock()
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
-
     fired, state = alerts.poll_hl_position_alert(state={})
 
     assert fired == [] and state == {}
+    assert track_db.conns, "poller never opened a connection — test is not exercising the path"
     assert not track_db.leaked, (
         "connection leaked on the flat early-return path — the one the "
         "daemon takes on almost every 5-second tick while the desk is flat"

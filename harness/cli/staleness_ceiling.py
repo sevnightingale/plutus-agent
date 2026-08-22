@@ -139,8 +139,17 @@ def tick(background: bool = True) -> None:
         if not _in_flight.acquire(blocking=False):
             return
         try:
+            from contextlib import closing
+
             from trading.lifecycle.db import get_db
-            enforce_once(get_db())
+
+            # closing(): this runs on the gateway's 60s ticker and
+            # enforce_once returns early on the almost-always not-todo path.
+            # get_db() hands back a fresh connection every call — unclosed
+            # here, it is the same daemon-lifetime leak that blinded the
+            # watcher for six days, one minute at a time.
+            with closing(get_db()) as conn:
+                enforce_once(conn)
         except Exception:
             logger.exception("staleness ceiling tick failed")
         finally:

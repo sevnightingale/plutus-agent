@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from harness.utils import base_url_host_matches
+
 # ---------------------------------------------------------------------------
 # Vendor prefix mapping
 # ---------------------------------------------------------------------------
@@ -456,27 +458,29 @@ def normalize_model_for_provider(model_input: str, target_provider: str) -> str:
 # proxy silently dropped every seat's configured effort.
 
 # Hosts known to accept top-level ``reasoning_effort`` for DeepSeek models.
+# Base URLs for registered providers are resolved through
+# ``harness.cli.providers.get_provider`` rather than listed a second time
+# here — that module is the declared single source of truth for provider
+# identity, and a parallel table is the exact defect this predicate exists
+# to fix, one layer over.
 _DEEPSEEK_EFFORT_HOSTS: tuple[str, ...] = (
     "api.deepseek.com",   # native; verified 2026-08-08
     "opencode.ai",        # zen + go routers; go verified 2026-08-22
 )
 
-# Providers whose configured base URL is one of the above by definition.
-_DEEPSEEK_EFFORT_PROVIDERS: frozenset[str] = frozenset({
-    "deepseek",
-    "opencode-go",
-    "opencode-zen",
-})
 
+def _is_bare_deepseek_model(model_name: str) -> bool:
+    """True for a bare DeepSeek model id, excluding the aggregator slug form.
 
-def is_deepseek_reasoning_model(model_name: str) -> bool:
-    """Return True for a bare DeepSeek model id (not an aggregator slug).
+    Named for what it checks. It does NOT verify the model reasons — a
+    non-reasoning ``deepseek-`` model would take a 400, which under this
+    module's prefer-to-send doctrine is the intended loud failure.
 
     Aggregators receive ``deepseek/deepseek-v4-pro`` and speak the
-    ``extra_body`` dialect instead, so the slug form is deliberately excluded.
+    ``extra_body`` dialect instead, so the slug form is excluded.
     """
-    name = (model_name or "").strip().lower()
-    return name.startswith("deepseek-")
+    name = (model_name or "").strip()
+    return "/" not in name and detect_vendor(name) == "deepseek"
 
 
 def sends_top_level_reasoning_effort(
@@ -492,16 +496,19 @@ def sends_top_level_reasoning_effort(
     fails loudly with a 400, while omitting it fails silently at the server
     default -- which is the failure this predicate exists to prevent.
     """
-    if not is_deepseek_reasoning_model(model_name):
+    if not _is_bare_deepseek_model(model_name):
         return False
 
-    from harness.utils import base_url_host_matches
+    effective = (base_url or "").strip()
+    if not effective:
+        # No explicit base URL: the request will go to the provider's own
+        # default, so ask the registry what that is instead of guessing.
+        try:
+            from harness.cli.providers import get_provider
 
-    if any(base_url_host_matches(base_url, host) for host in _DEEPSEEK_EFFORT_HOSTS):
-        return True
+            pdef = get_provider(_normalize_provider_alias(provider))
+            effective = getattr(pdef, "base_url", "") or ""
+        except Exception:
+            return False
 
-    # No base URL configured yet (provider default will be used).
-    if not (base_url or "").strip():
-        return _normalize_provider_alias(provider) in _DEEPSEEK_EFFORT_PROVIDERS
-
-    return False
+    return any(base_url_host_matches(effective, h) for h in _DEEPSEEK_EFFORT_HOSTS)

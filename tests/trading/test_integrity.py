@@ -426,15 +426,47 @@ class TestToolRegistry:
 class TestWatcherFds:
     """The 17th invariant — descriptor pressure in the watcher daemon.
 
-    Added 2026-08-22 after two Hyperliquid pollers leaked one lifecycle.db
-    connection per tick for six days. The daemon hit its limit and reported
-    'watcher_state corrupt', which reads as a data fault and is not one.
+    The full account of what it catches and why lives in
+    ``integrity._check_watcher_fds``, where the invariant is enforced.
     """
 
     def test_skipped_for_a_home_that_is_not_the_live_runtime(self, conn, home):
         """Scoping guard: it inspects a live host process, so a temp home
         must not drag the machine's state into a unit test's verdict."""
         assert integrity._check_watcher_fds(conn, home) == []
+
+
+    def test_pm2_deployment_is_found_when_systemd_is_not(self, monkeypatch):
+        """The OSS tree runs the daemon under pm2, the manor under systemd.
+
+        Hardcoding either makes the invariant dead on every install using the
+        other — a check that cannot go red, reading as coverage.
+        """
+        import json as _json
+        import subprocess as _sp
+
+        def _fake(args, **kw):
+            if args and args[0] == "systemctl":
+                return type("R", (), {"stdout": "", "returncode": 1})()
+            if args and args[0] == "pm2":
+                return type("R", (), {
+                    "stdout": _json.dumps(
+                        [{"name": "plutus-watchers", "pid": 4242}]),
+                    "returncode": 0})()
+            raise AssertionError(f"unexpected command {args}")
+
+        monkeypatch.setattr(_sp, "run", _fake)
+        assert integrity._watcher_pid() == 4242
+
+    def test_pid_is_none_when_no_process_manager_knows_the_daemon(
+        self, monkeypatch
+    ):
+        import subprocess as _sp
+
+        monkeypatch.setattr(
+            _sp, "run",
+            lambda *a, **k: type("R", (), {"stdout": "", "returncode": 1})())
+        assert integrity._watcher_pid() is None
 
     def test_reports_unknown_rather_than_clear_when_it_cannot_look(
         self, conn, home, monkeypatch
@@ -448,10 +480,6 @@ class TestWatcherFds:
         monkeypatch.setattr(
             _sp, "run", lambda *a, **k: type("R", (), {"stdout": "4242"})()
         )
-
-        class _UnreadableFdDir:
-            def iterdir(self):
-                raise OSError("permission denied")
 
         class _FakeProc:
             """Stands in for Path('/proc'); /proc/<pid>/fd refuses to be read."""

@@ -175,8 +175,8 @@ def poll_hl_prediction_resolution(
 
         # closing(): this runs in the watcher daemon, which lives for days.
         # get_db() hands back a fresh connection every call and no caller
-        # closes it; in a long-lived process that is a file-descriptor leak
-        # with an ugly failure mode (see the module docstring note below).
+        # closes it; in a long-lived process that is a descriptor leak whose
+        # symptom lies. Full account in integrity._check_watcher_fds.
         with closing(get_db()) as conn:
             n_open = conn.execute(
                 "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"

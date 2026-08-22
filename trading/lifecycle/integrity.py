@@ -22,6 +22,7 @@ open is worse than none at all.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -48,9 +49,14 @@ WAKE_LOOP_STALE_S = 4500
 # Runtime disk bound. The 1.2 GB accretion that motivated the original
 # maintenance beat is exactly what this catches returning.
 RUNTIME_DISK_MAX_MB = 2048
-# Watcher-daemon fd ceiling. The daemon is the estate's only long-lived
-# holder of lifecycle.db connections, so it is where an unclosed get_db()
-# shows up first. Soft limit is typically 1024; warn well before it.
+# Watcher-daemon fd ceiling. The daemon is a long-lived holder of
+# lifecycle.db connections, so an unclosed get_db() shows up here first.
+# Soft limit is typically 1024. The bound is set against a MEASURED healthy
+# baseline, not reasoned down from the limit: a fixed daemon holds 6
+# descriptors steady (measured 2026-08-22, flat across a 7-minute watch,
+# against 416 and climbing before the leak was closed). 250 is therefore
+# ~40x headroom over health and well under the limit — a breach means a
+# leak, not a busy day.
 WATCHER_FD_MAX = 250
 # Resolutions a book needs before its lifetime expectancy is evidence enough
 # to retire on. Mirrors the reflect protocol's bar; kept here because this is
@@ -538,6 +544,43 @@ def _check_tool_schema_shape(conn, home: Path) -> List[Dict[str, Any]]:
 
 
 
+
+def _watcher_pid() -> Optional[int]:
+    """PID of the watcher daemon, or None if no process manager knows it.
+
+    Deployment-agnostic on purpose. The manor runs the daemon as a systemd
+    unit; the OSS tree runs it under pm2 (``ecosystem.config.js``, and
+    ``harness/watchers/run.py``'s own docstring). A check hardcoded to one of
+    them is dead on every install using the other, which is a check that
+    cannot go red pretending to be coverage.
+    """
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["systemctl", "show", "-p", "MainPID", "--value", "plutus-watchers"],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+        pid = int(out or 0)
+        if pid > 0:
+            return pid
+    except Exception as exc:
+        logger.debug("systemd watcher pid lookup failed: %s", exc)
+
+    try:
+        out = subprocess.run(
+            ["pm2", "jlist"], capture_output=True, text=True, timeout=5)
+        if out.returncode == 0:
+            for proc in json.loads(out.stdout):
+                if proc.get("name") == "plutus-watchers":
+                    pid = int((proc.get("pid") or 0))
+                    if pid > 0:
+                        return pid
+    except Exception as exc:
+        logger.debug("pm2 watcher pid lookup failed: %s", exc)
+
+    return None
+
+
 def _check_watcher_fds(conn, home: Path) -> List[Dict[str, Any]]:
     """Descriptor pressure in the watcher daemon.
 
@@ -571,17 +614,14 @@ def _check_watcher_fds(conn, home: Path) -> List[Dict[str, Any]]:
     pid_path = Path("/proc")
     if not pid_path.exists():
         return []
-    try:
-        import subprocess
-        out = subprocess.run(
-            ["systemctl", "show", "-p", "MainPID", "--value", "plutus-watchers"],
-            capture_output=True, text=True, timeout=5).stdout.strip()
-        pid = int(out or 0)
-    except Exception as exc:
-        logger.debug("watcher pid lookup failed: %s", exc)
+    pid = _watcher_pid()
+    if pid is None:
+        # NOT all-clear, but not a violation either: a stopped daemon is a
+        # different check's business, and shouting here would fire on every
+        # install where the daemon is simply down. The distinction that
+        # matters — "we asked both process managers and neither knows it" —
+        # is what _watcher_pid() already logs.
         return []
-    if pid <= 0:
-        return []          # not running — a different check's business
     fd_dir = pid_path / str(pid) / "fd"
     try:
         n = len(list(fd_dir.iterdir()))
