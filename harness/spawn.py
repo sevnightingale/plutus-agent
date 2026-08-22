@@ -575,6 +575,35 @@ _ACTION_TYPES = {
 }
 
 
+# Report fields that must survive into action_runs WHOLE. On 2026-08-20..21
+# predict named a real blocker in escalation_findings three beats running and
+# the naive dumps(payload)[:400] stored an unparseable prefix that could
+# truncate the fields out entirely — the writer worked, no reader could exist
+# (board #657). The integrity invariant agent_escalations reads what this
+# preserves.
+_ESCALATION_KEYS = ("escalation_findings", "perception_stale")
+
+
+def _report_notes(payload: Dict[str, Any]) -> str:
+    """notes_md for an action_run: ALWAYS valid JSON, escalation fields whole.
+
+    The escalation keys are kept in full (items bounded at 1000 chars, lists
+    at 20 — findings are prose, not bulk data); everything else rides as a
+    400-char summary string, matching the old cap. The untruncated report
+    survives in the ledger transcript either way.
+    """
+    doc: Dict[str, Any] = {}
+    for k in _ESCALATION_KEYS:
+        v = payload.get(k)
+        if v:
+            items = v if isinstance(v, list) else [v]
+            doc[k] = [(i if isinstance(i, str) else json.dumps(i, default=str))[:1000]
+                      for i in items[:20]]
+    rest = {k: v for k, v in payload.items() if k not in _ESCALATION_KEYS}
+    doc["summary"] = json.dumps(rest, default=str)[:400]
+    return json.dumps(doc, default=str)
+
+
 def _record_action_run_for_spawn(name: str, sub_session: str,
                                  parsed: Dict[str, Any]) -> None:
     """A specialist run IS the action the staleness floors track.
@@ -592,7 +621,7 @@ def _record_action_run_for_spawn(name: str, sub_session: str,
         from trading.lifecycle.write import record_action_run
 
         payload = parsed.get("payload") if isinstance(parsed.get("payload"), dict) else None
-        notes = json.dumps(payload, default=str)[:400] if payload else None
+        notes = _report_notes(payload) if payload else None
         ok = bool(parsed.get("ok"))
         record_action_run(get_db(), action_type=action, agent=name,
                           ok=ok, session_name=sub_session, notes_md=notes)

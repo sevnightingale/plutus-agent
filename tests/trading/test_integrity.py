@@ -504,3 +504,81 @@ class TestWatcherFds:
 
         assert out, "an unreadable fd table must produce a violation, not silence"
         assert "UNKNOWN" in out[0]["detail"]
+
+
+class TestAgentEscalations:
+    """The reader for specialist escalation reports (board #657) — fires on
+    consecutive reported blockage, silent on health, blind to legacy rows."""
+
+    def _run(self, conn, notes_list, ok=1):
+        now = time.time()
+        for i, notes in enumerate(notes_list):
+            conn.execute(
+                "INSERT INTO action_runs (action_type, ts, agent, ok, notes_md)"
+                " VALUES ('predict', ?, 'plutus-predict', ?, ?)",
+                (now - 60 * (len(notes_list) - i), ok, notes))
+        conn.commit()
+
+    def _fire(self, conn, home):
+        return [v for v in integrity._check_agent_escalations(conn, home)
+                if v["check"] == "agent_escalations"]
+
+    def test_two_consecutive_findings_fire(self, conn, home):
+        self._run(conn, [
+            json.dumps({"escalation_findings": ["SWEEP-MANIFEST GAP: ..."],
+                        "summary": "{}"}),
+            json.dumps({"escalation_findings": ["still blocked"],
+                        "summary": "{}"})])
+        v = self._fire(conn, home)
+        assert len(v) == 1 and "still blocked" in v[0]["detail"]
+
+    def test_single_finding_is_silent(self, conn, home):
+        self._run(conn, [
+            json.dumps({"escalation_findings": [], "summary": "{}"}),
+            json.dumps({"escalation_findings": ["one-off"], "summary": "{}"})])
+        assert self._fire(conn, home) == []
+
+    def test_legacy_truncated_rows_are_skipped(self, conn, home):
+        # pre-fix rows are unparseable JSON prefixes — never counted, so two
+        # of them plus one clean report stays silent rather than crashing
+        self._run(conn, [
+            '{"predictions": [{"id": 1, "claim',
+            '{"predictions": [{"id": 2',
+            json.dumps({"escalation_findings": [], "summary": "{}"})])
+        assert self._fire(conn, home) == []
+
+    def test_perception_refresh_failures_fire_independently(self, conn, home):
+        self._run(conn, [
+            json.dumps({"perception_stale": [{"strategy": "s", "stale": []}],
+                        "summary": "{}"}),
+            json.dumps({"perception_stale": [{"strategy": "s", "stale": []}],
+                        "summary": "{}"})])
+        v = self._fire(conn, home)
+        assert len(v) == 1 and "refresh failures" in v[0]["detail"]
+
+
+class TestReportNotes:
+    """The writer half of board #657: notes_md must stay parseable with the
+    escalation fields whole, however large the rest of the report."""
+
+    def test_findings_survive_a_large_report(self):
+        from harness.spawn import _report_notes
+        payload = {"predictions": [{"claim": "x" * 200}] * 20,
+                   "escalation_findings": ["THE BLOCKER: " + "y" * 500]}
+        doc = json.loads(_report_notes(payload))
+        assert doc["escalation_findings"][0].startswith("THE BLOCKER")
+        assert len(doc["summary"]) <= 400   # the rest stays bounded
+
+    def test_items_and_lists_are_bounded(self):
+        from harness.spawn import _report_notes
+        payload = {"escalation_findings": ["z" * 5000] * 50}
+        doc = json.loads(_report_notes(payload))
+        assert len(doc["escalation_findings"]) == 20
+        assert all(len(i) <= 1000 for i in doc["escalation_findings"])
+
+    def test_dict_items_serialize(self):
+        from harness.spawn import _report_notes
+        payload = {"perception_stale": [{"strategy": "s", "stale": [1, 2]}],
+                   "actionable": None}
+        doc = json.loads(_report_notes(payload))
+        assert "strategy" in doc["perception_stale"][0]

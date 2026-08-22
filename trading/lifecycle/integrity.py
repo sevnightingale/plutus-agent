@@ -643,6 +643,63 @@ def _check_watcher_fds(conn, home: Path) -> List[Dict[str, Any]]:
     return []
 
 
+# Consecutive parseable predict reports that must carry an escalation before
+# agent_escalations fires — one report can be a transient (a single feed
+# lagging); two in a row is a condition.
+ESCALATION_CONSECUTIVE_N = 2
+
+
+def _check_agent_escalations(conn, home: Path) -> List[Dict[str, Any]]:
+    """A specialist saying "I am blocked" must reach the operator loop.
+
+    plutus-predict's report contract carries ``escalation_findings`` and
+    ``perception_stale`` precisely so a blocked beat can say so — and on
+    2026-08-20..21 it did, three beats running, naming the sweep-manifest gap
+    exactly, into a column nothing read. Every run was ok=1 so every watchdog
+    saw health (board #657 — the writer worked, the READER was missing: the
+    same family as reflections and capital_movements, from the other side).
+
+    This is the reader. The newest ESCALATION_CONSECUTIVE_N parseable ok=1
+    predict rows all carrying non-empty escalation_findings — or all carrying
+    non-empty perception_stale, which since #658 means refresh FAILURES
+    rather than plain staleness — is a violation, which ops escalates into
+    main's wake queue like any other. Legacy prefix-truncated rows do not
+    parse and are skipped; they age out of the window on their own.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT notes_md FROM action_runs "
+            "WHERE action_type = 'predict' AND ok = 1 "
+            "ORDER BY ts DESC LIMIT 10").fetchall()
+    except Exception as exc:
+        return [_violation("agent_escalations_unreadable",
+                           f"action_runs: {type(exc).__name__}: {exc}")]
+    reports: List[Dict[str, Any]] = []
+    for r in rows:
+        try:
+            doc = json.loads(r[0] or "")
+        except (ValueError, TypeError):
+            continue
+        if isinstance(doc, dict):
+            reports.append(doc)
+        if len(reports) >= ESCALATION_CONSECUTIVE_N:
+            break
+    if len(reports) < ESCALATION_CONSECUTIVE_N:
+        return []
+    out = []
+    for key, label in (("escalation_findings", "escalation findings"),
+                       ("perception_stale", "perception refresh failures")):
+        if all(doc.get(key) for doc in reports):
+            newest = reports[0][key]
+            sample = newest[0] if isinstance(newest, list) and newest else newest
+            out.append(_violation(
+                "agent_escalations",
+                f"plutus-predict reported {label} on "
+                f"{ESCALATION_CONSECUTIVE_N} consecutive runs and nothing has "
+                f"acted — newest: {str(sample)[:300]}"))
+    return out
+
+
 CHECKS: Dict[str, Callable] = {
     "tool_registry": _check_tool_registry,
     "tool_schema_shape": _check_tool_schema_shape,
@@ -661,6 +718,7 @@ CHECKS: Dict[str, Callable] = {
     "runtime_disk": _check_runtime_disk,
     "append_only": _check_append_only,
     "watcher_fds": _check_watcher_fds,
+    "agent_escalations": _check_agent_escalations,
 }
 
 
