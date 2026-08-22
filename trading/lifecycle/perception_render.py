@@ -84,11 +84,11 @@ def _compact(name: str, value: Any) -> str:
     except Exception:
         text = str(value)
     text = text.replace("|", "\\|")
-    # 160, not 300: seven full-tier symbols at 300 chars/cell made the
-    # Readings zone 118KB and PERCEPTION.md unreadable (file_read_max_chars
-    # is 100k). Compact_fn already extracted the signal; the tail is JSON
+    # 120, not 160: seven full-tier symbols at 160 chars/cell still made the
+    # Readings zone 69KB and PERCEPTION.md ride over the 80k cap (read_file
+    # limit). Compact_fn already extracted the signal; the tail is JSON
     # furniture. History stays in the cache.
-    return text if len(text) <= 160 else text[:157] + "..."
+    return text if len(text) <= 120 else text[:117] + "..."
 
 
 def _age_label(fetched_at: float, now: Optional[float] = None) -> str:

@@ -228,6 +228,32 @@ def test_render_view_is_panel_bounded(temp_home, monkeypatch):
     assert "hl_candles" not in body
 
 
+def test_render_cell_cap_keeps_blackboard_under_read_limit(temp_home):
+    """Long JSON values truncate at the cell cap (80k-file lesson).
+
+    Seven full-tier symbols at 160 chars/cell made PERCEPTION.md ride over
+    the 80k read_file cap. The cell cap must stay tight enough that the
+    rendered Readings zone stays comfortably under it.
+    """
+    import time as _time
+    from trading.perception.cache import _canonical_key
+    from trading.lifecycle.perception_render import build_readings_body
+    key = _canonical_key("hl_price", {"symbol": "BTC"})
+    now = _time.time()
+    big = {"price": 1.0, "payload": "x" * 500}
+    state = {"version": 3, "updated_at": now, "data_points": {
+        key: {"value": big, "source": "t",
+              "fetched_at": now - 5, "ttl_s": 60},
+    }}
+    (temp_home / "perception_state.json").write_text(__import__("json").dumps(state))
+    body = build_readings_body()["body"]
+    # The long cell is truncated with an ellipsis, not dumped in full.
+    assert ("x" * 500) not in body
+    assert "..." in body
+    # And the whole zone stays well under the 80k read cap for a wide board.
+    assert len(body) < 40_000
+
+
 def test_render_refuses_missing_zone(temp_home):
     from trading.dispatchers.perception_sweep import _render
     (temp_home / "PERCEPTION.md").write_text("# no zone here\n", encoding="utf-8")
