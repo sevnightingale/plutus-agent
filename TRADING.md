@@ -126,7 +126,7 @@ healthy, says anything about whether trading *works* (that's `hl_trade_readiness
 1. Plutus calls `place_order(venue="hyperliquid", thesis_id=..., conviction=..., side=...,
    symbol=..., ref_price=..., sl=..., tp=...)`.
 2. The venue dispatcher resolves account balance, computes size from the conviction
-   multiplier (or uses explicit `size`), floors it to the asset's `szDecimals` (the
+   notional band (or uses explicit `size`), floors it to the asset's `szDecimals` (the
    SDK *rejects* finer precision rather than rounding), and calls the HL SDK signing
    with the **API-wallet key**.
 3. Hyperliquid verifies the API wallet is a **registered** signer for the master → accepts

@@ -41,14 +41,19 @@ Plutus's impulse.
 **Hard constraints.**
 - One position at a time (cross-margin law, not preference).
 - Trades only from ACTIVE strategies clearing the global conviction
-  threshold: 0.50. Graduation is the binary gate; conviction above the
-  threshold sets SIZE via the risk-budget bands — the % of equity risked if the
-  stop hits (0.50–0.60 → 1% · 0.60–0.70 → 3% · 0.70–0.80 → 7% · 0.80–1.00 →
-  12%); size = budget × equity ÷ stop-distance, capped at 10X leverage. Sets
-  size, never whether to trade.
+  threshold: 0.50 — unless the operator arms the PILOT sentinel
+  (`~/.plutus-agent/PILOT`), which opens a second lane: the highest-conviction
+  fresh TEST-book prediction may fund when no graduated candidate exists.
+  Graduation is the binary gate on the evidence-backed lane; conviction above
+  the threshold sets SIZE via the notional bands — position size as a multiple
+  of equity (0.50–0.65 → 0.5× · 0.65–0.80 → 1× · 0.80–1.00 → 5×), floored at
+  the venue's $10 minimum, capped at 10X leverage. Sets size, never whether
+  to trade.
 - plutus-main makes NO trading decisions — orchestrator and scribe only.
   SELECTION is a query (best_actionable_prediction = the argmax-EV open
-  prediction of a currently-tradeable active strategy); main FUNDS it by calling
+  prediction of a currently-tradeable active strategy, falling back to the
+  highest-conviction fresh test-book prediction when PILOT is armed and the
+  graduated lane is empty); main FUNDS it by calling
   desk_open_position DIRECTLY (execution is a deterministic tool, not a
   sub-agent) UNLESS a mechanical guard blocks: a position is already open, the
   trade path is not READY (hl_trade_readiness), or HALT is set. There is no
@@ -57,8 +62,8 @@ Plutus's impulse.
   Because selection is a DB query, not a handoff payload, a dropped handoff
   cannot silently lose a fundable prediction.
 - No applicable graduated strategy in this regime → predictions only, NO
-  trades. Patience is structural; coverage accumulates by living through
-  regimes.
+  trades — unless PILOT is armed, where the pilot lane above applies.
+  Patience is structural; coverage accumulates by living through regimes.
 - Every trade carries an on-venue stop. A naked position is a critical
   failure.
 - Invalidation ≠ stop-loss. Thesis-break exits and risk exits are different

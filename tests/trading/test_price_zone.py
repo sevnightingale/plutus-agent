@@ -465,6 +465,48 @@ class TestBestActionable:
                         near_edge_pct=1.5, far_edge_pct=3.0)
         assert queries.best_actionable_prediction(conn)["id"] == fresh
 
+    def _arm_pilot(self):
+        from harness.constants import get_hermes_home
+        home = get_hermes_home()
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "PILOT").touch()
+
+    def test_pilot_lane_picks_highest_conviction_test_book(self, conn):
+        self._arm_pilot()
+        _strat_row(conn, "t1", status="test")
+        _strat_row(conn, "t2", status="test")
+        _record(conn, strategy_name="t1", kind="strategy", conviction=0.62)
+        top = _record(conn, strategy_name="t2", kind="strategy", conviction=0.71)
+        best = queries.best_actionable_prediction(conn)
+        assert best is not None and best["id"] == top and best["lane"] == "pilot"
+
+    def test_pilot_lane_respects_conviction_threshold_and_recency(self, conn):
+        self._arm_pilot()
+        _strat_row(conn, "t", status="test")
+        _record(conn, strategy_name="t", kind="strategy", conviction=0.45)
+        _record(conn, strategy_name="t", kind="strategy", conviction=0.9,
+                ts=time.time() - 3600)     # fresh-enough gate applies to pilot too
+        assert queries.best_actionable_prediction(conn) is None
+
+    def test_graduated_lane_outranks_pilot(self, conn):
+        self._arm_pilot()
+        _strat_row(conn, "good")
+        for _ in range(12):
+            _resolved(conn, "good", far=3.0, outcome="correct", mae=-0.3, reached_far=True)
+        for _ in range(4):
+            _resolved(conn, "good", far=3.0, outcome="wrong", mae=-2.0, reached_far=False)
+        grad = _record(conn, strategy_name="good", kind="strategy",
+                       near_edge_pct=1.5, far_edge_pct=3.0)
+        _strat_row(conn, "t", status="test")
+        _record(conn, strategy_name="t", kind="strategy", conviction=0.99)
+        best = queries.best_actionable_prediction(conn)
+        assert best["id"] == grad and best["lane"] == "graduated"
+
+    def test_pilot_lane_dead_when_not_armed(self, conn):
+        _strat_row(conn, "t", status="test")
+        _record(conn, strategy_name="t", kind="strategy", conviction=0.9)
+        assert queries.best_actionable_prediction(conn) is None
+
 
 class TestCostMargin:
     """The expectancy gate is net of estimated round-trip execution cost —

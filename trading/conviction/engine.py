@@ -24,28 +24,29 @@ GLOBAL_CONVICTION_THRESHOLD = 0.50  # operator-set 2026-06-10: graduation is
 # threshold is the SIZING dial, not a veto. Reflect reviews sizing-vs-
 # performance and these retune with evidence.
 
-# Conviction-banded RISK BUDGET — the fraction of unified account equity
-# (hl_account_state equity_usd) to risk on a trade if its stop hits. Sizing is
-# risk-based: size = (risk_budget × equity) / stop_distance, so a wider stop
-# auto-shrinks the position and risk-per-trade is constant within a band.
-# Superlinear by design — calibrated conviction earns meaningfully more.
-# Bands are half-open [lo, hi); conviction 1.0 takes the top band.
-#
-# PROVISIONAL: tuned on the post-2026-06-25 conviction substrate (render fix at
-# 10:42:57Z) with ~zero post-fix resolved trades — reflect recalibrates with
-# evidence, and should validate the 0.80+ hit rate before the top band runs at
-# full size. See PLANNING-trade-execution-collapse.md.
-RISK_BUDGET_BANDS = (
-    (0.50, 0.60, 0.01),   # 1%
-    (0.60, 0.70, 0.03),   # 3%
-    (0.70, 0.80, 0.07),   # 7%
-    (0.80, 1.00, 0.12),   # 12%
+# Conviction-banded NOTIONAL — position size as a multiple of unified account
+# equity (hl_account_state equity_usd). Sizing is notional-based (operator-set
+# 2026-08-22, replacing the risk-budget bands): notional = multiple × equity,
+# so exposure scales with the account and compounds automatically. The stop
+# still derives from volatility and is still placed as an on-venue bracket —
+# it just no longer drives size, so loss-at-stop varies with stop width
+# (loss = multiple × stop_distance × equity). Superlinear by design —
+# calibrated conviction earns meaningfully more. Bands are half-open [lo, hi);
+# conviction 1.0 takes the top band.
+NOTIONAL_BANDS = (
+    (0.50, 0.65, 0.5),    # 0.5× equity
+    (0.65, 0.80, 1.0),    # 1× equity
+    (0.80, 1.00, 5.0),    # 5× equity
 )
 
-# Liquidation backstop: leverage = risk_budget / stop_distance is derived and
-# capped here (binds only on pathologically tight stops, where it reduces size —
-# erring safe). With one position in unified (cross) margin, notional/equity IS
-# leverage, so this also caps position size as a % of equity.
+# Hyperliquid rejects orders below $10 notional. Sizing floors the computed
+# notional here (and records the deviation) rather than refusing — the floor
+# only binds when equity × 0.5 < $10, i.e. under ~$20 of equity.
+MIN_NOTIONAL_USD = 10.0
+
+# Liquidation backstop. With one position in unified (cross) margin,
+# notional/equity IS leverage; the top band (5×) sits well inside this cap,
+# which remains as a guard against future band retunes.
 MAX_LEVERAGE = 10.0
 
 # Weight-update discipline (inherited, evidence-tested in v1)
@@ -54,19 +55,19 @@ WEIGHT_CAP = 0.30
 WEIGHT_SUM_MAX = 1.0
 
 
-def target_risk_budget(conviction: Optional[float]) -> Optional[float]:
-    """Band lookup → fraction of equity to risk if the stop hits.
+def target_notional_multiple(conviction: Optional[float]) -> Optional[float]:
+    """Band lookup → position notional as a multiple of equity.
 
     Below the global threshold → None (no trade). Conviction 1.0 takes the top
-    band. Size is then ``(target_risk_budget(conviction) × equity) /
-    stop_distance_pct``, capped at ``MAX_LEVERAGE``.
+    band. Size is then ``target_notional_multiple(conviction) × equity``,
+    floored at ``MIN_NOTIONAL_USD`` and capped at ``MAX_LEVERAGE`` × equity.
     """
     if conviction is None or conviction < GLOBAL_CONVICTION_THRESHOLD:
         return None
-    for lo, hi, budget in RISK_BUDGET_BANDS:
+    for lo, hi, multiple in NOTIONAL_BANDS:
         if lo <= conviction < hi:
-            return budget
-    return RISK_BUDGET_BANDS[-1][2]
+            return multiple
+    return NOTIONAL_BANDS[-1][2]
 
 
 @dataclass

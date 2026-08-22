@@ -264,20 +264,28 @@ enforces the floors.
    several hypotheses, authored separately.
 5. **Fund & size.** Selection is a deterministic query
    (`best_actionable_prediction` = the argmax-EV open prediction of a
-   currently-tradeable active strategy). main funds it by calling
+   currently-tradeable active strategy; when the operator's PILOT sentinel is
+   armed and the graduated lane is empty, the highest-conviction fresh
+   test-book prediction qualifies instead — graduation gates the evidence-
+   backed lane, the pilot gates existence, and every pilot decision is tagged
+   so calibration can slice the two forever). main funds it by calling
    `desk_open_position` directly (mechanical — flat · trade-ready · not-HALT).
-   Sizing is RISK-BASED: conviction sets a risk BUDGET (% of equity risked if the
-   stop hits — 0.50–0.60 → 1% · 0.60–0.70 → 3% · 0.70–0.80 → 7% · 0.80–1.00 →
-   12%), and size = budget × equity ÷ stop-distance, capped at 10X leverage — so
-   a wider stop auto-shrinks the position and risk-per-trade is constant per band.
+   Sizing is NOTIONAL-BASED (operator-set 2026-08-22): conviction sets position
+   size as a MULTIPLE of equity — 0.50–0.65 → 0.5× · 0.65–0.80 → 1× ·
+   0.80–1.00 → 5× — floored at the venue's $10 minimum, capped at 10X
+   leverage. Exposure scales with the account and compounds automatically; the
+   stop still derives from the risk envelope and is still bracketed on-venue,
+   so loss-at-stop = multiple × stop-distance (recorded per trade as
+   `risk_at_stop_pct` for reflect's sizing review).
 6. **Execute.** `desk_open_position` is deterministic code, not an agent: it
    derives the hard SL from the strategy's empirical risk envelope
    (`mae_envelope` all-resolutions MAE percentile; ATR fallback while thin), the
    target from the edge the strategy **graduated on** (`best_target` — near or
    far, a fixed zone level; the gate's geometry and the placed bracket always
    match), and the size from
-   the risk budget; it enforces every mechanical guard in-tool (HALT ·
-   one-position · staleness · ACTIVE status · trade-path readiness) and applies
+   the notional band; it enforces every mechanical guard in-tool (HALT ·
+   one-position · staleness · ACTIVE status, or TEST under an armed PILOT ·
+   trade-path readiness) and applies
    the per-setup expectancy gate (RR > (1−p)/p at the
    live price, p = wins/n including scratches — refusing negative-EV setups),
    then places via

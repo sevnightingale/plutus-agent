@@ -77,33 +77,39 @@ class TestUpdateWeights:
         assert out == {k: round(v, 4) for k, v in W.items()}
 
 
-class TestTargetRiskBudget:
+class TestTargetNotionalMultiple:
     def test_bands(self):
-        rb = engine.target_risk_budget
-        assert rb(0.49) is None           # below the gate: no trade
-        assert rb(None) is None
-        assert rb(0.50) == 0.01
-        assert rb(0.599) == 0.01
-        assert rb(0.60) == 0.03
-        assert rb(0.70) == 0.07
-        assert rb(0.80) == 0.12
-        assert rb(1.0) == 0.12            # top band is inclusive
+        nm = engine.target_notional_multiple
+        assert nm(0.49) is None           # below the gate: no trade
+        assert nm(None) is None
+        assert nm(0.50) == 0.5
+        assert nm(0.649) == 0.5
+        assert nm(0.65) == 1.0
+        assert nm(0.799) == 1.0
+        assert nm(0.80) == 5.0
+        assert nm(1.0) == 5.0             # top band is inclusive
 
     def test_bands_cover_threshold_to_one(self):
         """The band table starts at the gate and tiles [threshold, 1.0]."""
-        assert engine.RISK_BUDGET_BANDS[0][0] == engine.GLOBAL_CONVICTION_THRESHOLD
-        for (_, hi, _), (lo, _, _) in zip(engine.RISK_BUDGET_BANDS,
-                                          engine.RISK_BUDGET_BANDS[1:]):
+        assert engine.NOTIONAL_BANDS[0][0] == engine.GLOBAL_CONVICTION_THRESHOLD
+        for (_, hi, _), (lo, _, _) in zip(engine.NOTIONAL_BANDS,
+                                          engine.NOTIONAL_BANDS[1:]):
             assert hi == lo               # no gaps, no overlaps
 
     def test_superlinear(self):
-        """Budgets grow superlinearly — calibrated conviction earns more."""
-        budgets = [b for _, _, b in engine.RISK_BUDGET_BANDS]
-        gaps = [b - a for a, b in zip(budgets, budgets[1:])]
+        """Multiples grow superlinearly — calibrated conviction earns more."""
+        multiples = [m for _, _, m in engine.NOTIONAL_BANDS]
+        gaps = [b - a for a, b in zip(multiples, multiples[1:])]
         assert all(g2 > g1 for g1, g2 in zip(gaps, gaps[1:]))  # widening steps
+
+    def test_top_band_inside_leverage_cap(self):
+        assert engine.NOTIONAL_BANDS[-1][2] < engine.MAX_LEVERAGE
 
     def test_max_leverage(self):
         assert engine.MAX_LEVERAGE == 10.0
+
+    def test_min_notional(self):
+        assert engine.MIN_NOTIONAL_USD == 10.0
 
 
 class TestNormalizers:

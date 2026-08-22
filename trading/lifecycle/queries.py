@@ -436,7 +436,10 @@ def best_actionable_prediction(
     count as non-wins, matching expectancy. Returns the argmax-EV one
     (tiebreak: earliest). None when nothing qualifies — zero active/tradeable
     strategies or nothing fresh — so the desk correctly stays idle. The live tool
-    re-checks EV against the actual fill price; this only picks the candidate id."""
+    re-checks EV against the actual fill price; this only picks the candidate id.
+    When the PILOT sentinel is armed and the graduated lane is empty, a second
+    lane selects the highest-conviction fresh test-book prediction (see the
+    pilot block below) — the result carries ``lane`` so main can say which."""
     now = now if now is not None else time.time()
     cutoff = now - max_age_s
     rows = _rows(conn.execute(
@@ -472,10 +475,37 @@ def best_actionable_prediction(
         if ev <= 0:
             continue
         cand = {**r, "ev_pct": round(ev, 4), "p_win": round(p, 3),
-                "stop_pct": stop, "reward_pct": reward, "target": target}
+                "stop_pct": stop, "reward_pct": reward, "target": target,
+                "lane": "graduated"}
         if best is None or ev > best["ev_pct"]:
             best = cand
-    return best
+    if best is not None:
+        return best
+
+    # PILOT lane (operator mandate 2026-08-22, armed via ~/.plutus-agent/PILOT):
+    # when no graduated candidate exists, the highest-CONVICTION fresh
+    # prediction from a TEST book qualifies — conviction above the global
+    # threshold is the bar, argmax conviction the selection (tiebreak:
+    # earliest). No EV gate here: evidence-empty books have no calibration,
+    # and desk_open_position re-gates RR at the live price with a neutral
+    # prior. The graduated lane always wins when it has a candidate.
+    from harness.constants import get_hermes_home
+    if not (get_hermes_home() / "PILOT").exists():
+        return None
+    from trading.conviction.engine import GLOBAL_CONVICTION_THRESHOLD
+    pilot_rows = _rows(conn.execute(
+        """SELECT pr.id, pr.strategy_name, pr.symbol, pr.conviction,
+                  pr.near_edge_pct, pr.far_edge_pct, pr.timescale, pr.regime_tag,
+                  pr.ts
+           FROM predictions pr
+           JOIN strategies s ON s.name = pr.strategy_name
+           WHERE pr.resolved_at IS NULL AND s.status = 'test'
+             AND pr.conviction >= ? AND pr.ts >= ?
+           ORDER BY pr.conviction DESC, pr.ts ASC
+           LIMIT 1""", (GLOBAL_CONVICTION_THRESHOLD, cutoff)))
+    if pilot_rows:
+        return {**pilot_rows[0], "lane": "pilot"}
+    return None
 
 
 def desk_gaps(conn: sqlite3.Connection, limit: int = 5) -> dict:

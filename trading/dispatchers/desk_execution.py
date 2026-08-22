@@ -128,6 +128,17 @@ def _halt_reason():
         return ""
 
 
+def _pilot_armed() -> bool:
+    """Operator pilot mandate (Sev, 2026-08-22): while armed, a TEST-book
+    prediction above the global conviction threshold may fund — graduation
+    gates size-with-evidence, the pilot gates existence. Armed by touching
+    ``~/.plutus-agent/PILOT`` (the HALT pattern, inverted); disarm with rm.
+    Every pilot decision is tagged ``pilot: true`` so reflect and calibration
+    can slice pilot trades from graduated trades forever."""
+    from harness.constants import get_hermes_home
+    return (get_hermes_home() / "PILOT").exists()
+
+
 def _fresh_price(symbol: str) -> float:
     """Live mark price, fetched server-side (never from a stale LLM view)."""
     from trading.perception.core import data_point_registry
@@ -200,7 +211,8 @@ def _sl_rests_on_venue(state, symbol, sl_order_id, sl_price=None) -> bool:
 
 
 def _desk_open(args: Dict[str, Any]) -> str:
-    from trading.conviction.engine import MAX_LEVERAGE, target_risk_budget
+    from trading.conviction.engine import (MAX_LEVERAGE, MIN_NOTIONAL_USD,
+                                           target_notional_multiple)
     from trading.dispatchers._helpers import session_id_from_context
     from trading.integrations.hyperliquid.venue import hl_account_state, hl_place_order
     from trading.lifecycle import queries, write
@@ -259,18 +271,28 @@ def _desk_open(args: Dict[str, Any]) -> str:
     # Expectancy gate: the strategy must be ACTIVE (graduated — status is the
     # binary gate, not just a selection filter), tradeable, AND this setup must
     # be +EV at the LIVE price (RR > (1−p)/p — the staleness + worth-it gate).
+    # PILOT lane (operator mandate 2026-08-22): while ~/.plutus-agent/PILOT
+    # exists, a TEST book may fund too — graduation keeps gating the evidence-
+    # backed lane, the pilot gates existence. Retired books never fund.
     if not strategy_name:
         return tool_result({"ok": False, "refused": "prediction has no strategy — cannot gate"})
     srow = conn.execute("SELECT status FROM strategies WHERE name=?",
                         (strategy_name,)).fetchone()
     status = srow["status"] if srow else None
+    pilot_trade = False
     if status != "active":
-        return tool_result({"ok": False,
-                            "refused": "strategy not ACTIVE — only graduated "
-                                       "strategies fund",
-                            "strategy": strategy_name, "status": status})
+        if _pilot_armed() and status == "test":
+            pilot_trade = True
+        else:
+            return tool_result({"ok": False,
+                                "refused": "strategy not ACTIVE — only graduated "
+                                           "strategies fund"
+                                           + (" (pilot lane takes test books "
+                                              "only)" if _pilot_armed() else
+                                              " (pilot not armed)"),
+                                "strategy": strategy_name, "status": status})
     exp = queries.strategy_expectancy(conn, strategy_name)
-    if not exp["tradeable"]:
+    if not pilot_trade and not exp["tradeable"]:
         return tool_result({"ok": False, "refused": "strategy not tradeable",
                             "expectancy_pct": exp["expectancy_pct"], "n": exp["n"],
                             "hurdle_pct": exp["hurdle_pct"],
@@ -287,7 +309,11 @@ def _desk_open(args: Dict[str, Any]) -> str:
     # p counts scratches as non-wins (wins/n) so the gate's p is consistent
     # with expectancy, which carries scratches at PnL 0 — the scratch-free
     # win_rate overstates the hit rate the book actually delivers.
-    p = (exp["wins"] / exp["n"]) if exp["n"] else None
+    # A pilot book with no resolved history gets a NEUTRAL prior (p=0.5): the
+    # threshold then reads "reward must beat stop plus round-trip costs" —
+    # the gate still kills fee-thin setups without demanding history the
+    # book cannot have yet.
+    p = (exp["wins"] / exp["n"]) if exp["n"] else (0.5 if pilot_trade else None)
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0
     # rr > (1−p)/p is p·reward > (1−p)·stop; the extra term charges the
@@ -302,8 +328,8 @@ def _desk_open(args: Dict[str, Any]) -> str:
                             "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
                             "p_win": round(p, 3), "tp_target": tp_target})
 
-    budget = target_risk_budget(conviction)
-    if budget is None:
+    multiple = target_notional_multiple(conviction)
+    if multiple is None:
         return tool_result({"ok": False, "refused": "conviction below global threshold",
                             "conviction": conviction})
 
@@ -321,13 +347,18 @@ def _desk_open(args: Dict[str, Any]) -> str:
         return tool_result({"ok": False, "refused": "trade path not READY",
                             "reason": readiness.get("reason")})
     sizing: Dict[str, Any] = {
-        "mode": "risk_based", "risk_budget": budget, "stop_pct": stop_pct,
+        "mode": "notional_based", "notional_multiple": multiple,
+        "stop_pct": stop_pct,
+        # loss-at-stop as a fraction of equity — reflect's sizing-review raw
+        # material now that risk varies with stop width by design
+        "risk_at_stop_pct": round(multiple * stop_pct, 3),
         "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
+        "pilot": pilot_trade,
         "current_price": current}
 
     # PRE-ENTRY (flat) equity BEFORE the fill (Issue 3): the denominator for
     # sizing + realized leverage. In-position equity_breakdown double-counts
-    # collateral, so this MUST read flat. Risk-based sizing NEEDS it — a failure
+    # collateral, so this MUST read flat. Notional sizing NEEDS it — a failure
     # blocks the open (can't size honestly without equity; honest absence).
     entry_account_value = leverage = None
     sizing_warning = None
@@ -354,8 +385,13 @@ def _desk_open(args: Dict[str, Any]) -> str:
 
     if entry_account_value is None:
         return tool_error(f"cannot size: pre-fill equity unavailable ({sizing_warning})")
-    # Risk-based: size to lose exactly the budget if the stop hits; cap leverage.
-    notional = (budget * entry_account_value) / (stop_pct / 100.0)
+    # Notional-based: position = multiple × equity (operator bands, 2026-08-22).
+    # Floor at the venue minimum ($10 — HL rejects below it; the deviation is
+    # recorded and only binds under ~$20 equity), cap at the leverage backstop.
+    notional = multiple * entry_account_value
+    if notional < MIN_NOTIONAL_USD:
+        notional = MIN_NOTIONAL_USD
+        sizing["min_notional_floored"] = True
     if notional > MAX_LEVERAGE * entry_account_value:
         notional = MAX_LEVERAGE * entry_account_value
         sizing["leverage_capped"] = True
@@ -411,6 +447,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
         params={"sl": sl, "tp": tp, "sl_order_id": fill.get("sl_order_id"),
                 "tp_order_id": fill.get("tp_order_id"),
                 "entry_delta_pct": entry_delta_pct, "sizing": sizing,
+                "pilot": pilot_trade,
                 "alert_near_px": alert_near_px,
                 "alert_adverse_px": alert_adverse_px})
     trade_id = write.record_trade(

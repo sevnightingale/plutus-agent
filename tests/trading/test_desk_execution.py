@@ -96,10 +96,12 @@ class TestOpen:
         pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
         r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "flow long"})
         assert r["ok"], r
-        assert r["sizing"]["mode"] == "risk_based"
+        assert r["sizing"]["mode"] == "notional_based"
         assert r["sl"]["price"] < 100_000.0 < r["tp"]["price"]   # long: SL below, TP (far) above
         assert r["sl"]["on_venue"] is True
-        assert r["sizing"]["risk_budget"] == 0.07                # conviction 0.72 band
+        assert r["sizing"]["notional_multiple"] == 1.0           # conviction 0.72 band
+        assert r["sizing"]["notional_usd"] == 1000.0             # 1× the $1000 equity
+        assert r["sizing"]["pilot"] is False
         assert mock_venue["place"]["slippage"] == 0.003          # ±0.3% cap
         assert r["sizing"]["leverage"] is not None
         pos = queries.open_position(get_db())
@@ -158,6 +160,64 @@ class TestExpectancyGate:
         assert r["ok"] is False, r
         assert r["refused"] == "setup below expectancy gate"
         assert r["p_win"] == pytest.approx(0.375)
+
+
+class TestPilotLane:
+    """The operator pilot mandate (2026-08-22): armed via the PILOT sentinel,
+    a TEST book above the conviction threshold may fund; graduation keeps
+    gating the evidence-backed lane. Retired books never fund."""
+
+    def _arm(self):
+        from harness.constants import get_hermes_home
+        home = get_hermes_home()
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "PILOT").touch()
+
+    def test_test_book_refused_when_not_armed(self, mock_venue):
+        pid = _seed_strategy("tb", "test", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False and "pilot not armed" in r["refused"]
+
+    def test_pilot_funds_test_book_and_tags_it(self, mock_venue):
+        self._arm()
+        pid = _seed_strategy("tb", "test", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["sizing"]["pilot"] is True
+        dec = get_db().execute(
+            "SELECT params_json FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
+        assert json.loads(dec[0])["pilot"] is True
+
+    def test_pilot_neutral_prior_on_empty_book(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.dispatchers.desk_execution as mod
+        # an evidence-empty book has no MAE envelope; the live path falls back
+        # to ATR — stubbed here so the test exercises the p=0.5 prior, not TA
+        monkeypatch.setattr(mod, "_derive_stop_pct",
+                            lambda *a: (2.0, "stubbed stop"))
+        pid = _seed_strategy("empty", "test", [])
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r          # 3% far edge vs 2% stop clears the p=0.5 gate
+        assert r["sizing"]["pilot"] is True
+
+    def test_pilot_never_funds_retired(self, mock_venue):
+        self._arm()
+        pid = _seed_strategy("dead", "retired", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False and "pilot lane takes test books only" in r["refused"]
+
+    def test_min_notional_floor(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.integrations.hyperliquid.venue as venue
+        monkeypatch.setattr(venue, "hl_account_state",
+                            lambda **k: {"equity_usd": 8.0,
+                                         "open_perp_positions": [],
+                                         "open_orders": [{"coin": "BTC", "oid": "sl9"}]})
+        pid = _seed_strategy("tiny", "test", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["sizing"]["min_notional_floored"] is True
+        assert r["sizing"]["notional_usd"] == 10.0   # conviction 0.72 → 1× $8, floored
 
 
 class TestMechanicalGuards:
