@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from contextlib import closing
 from typing import Any, Dict, List, Optional, Tuple
 
 from trading.perception.core.alert_registry import register_alert
@@ -172,29 +173,33 @@ def poll_hl_prediction_resolution(
         from trading.dispatchers.resolution import _fetch, _fetch_extreme
         from .outcomes import path_stats
 
-        conn = get_db()
-        n_open = conn.execute(
-            "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
-        ).fetchone()[0]
-        if not n_open:
-            return [], state or {}
+        # closing(): this runs in the watcher daemon, which lives for days.
+        # get_db() hands back a fresh connection every call and no caller
+        # closes it; in a long-lived process that is a file-descriptor leak
+        # with an ugly failure mode (see the module docstring note below).
+        with closing(get_db()) as conn:
+            n_open = conn.execute(
+                "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
+            ).fetchone()[0]
+            if not n_open:
+                return [], state or {}
 
-        # The prediction backing the open position — the only resolution main
-        # needs woken for (take-profit reached, or thesis broken → exit).
-        funded = conn.execute(
-            """SELECT t.prediction_id FROM theses t
-               JOIN decisions d ON d.thesis_id = t.id
-               JOIN trades tr ON tr.decision_id = d.id
-               JOIN positions p ON p.opening_trade_id = tr.id
-               WHERE p.status = 'open' LIMIT 1"""
-        ).fetchone()
-        funded_pid = funded["prediction_id"] if funded else None
+            # The prediction backing the open position — the only resolution
+            # main needs woken for (take-profit reached, or thesis broken).
+            funded = conn.execute(
+                """SELECT t.prediction_id FROM theses t
+                   JOIN decisions d ON d.thesis_id = t.id
+                   JOIN trades tr ON tr.decision_id = d.id
+                   JOIN positions p ON p.opening_trade_id = tr.id
+                   WHERE p.status = 'open' LIMIT 1"""
+            ).fetchone()
+            funded_pid = funded["prediction_id"] if funded else None
 
-        raw = get_info().all_mids()
-        mids = {k: float(v) for k, v in raw.items()}
-        res = resolver.resolve_open_predictions(
-            conn, mids=mids, path_stats_fn=path_stats,
-            fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
+            raw = get_info().all_mids()
+            mids = {k: float(v) for k, v in raw.items()}
+            res = resolver.resolve_open_predictions(
+                conn, mids=mids, path_stats_fn=path_stats,
+                fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme)
     except Exception as exc:
         logger.warning("hl_prediction_resolution poll failed: %s", exc)
         return [], state or {}
@@ -253,11 +258,13 @@ def poll_hl_position_alert(
         from trading.lifecycle import queries
         from trading.lifecycle.db import get_db
 
-        conn = get_db()
-        pos = queries.open_position(conn)
-        if pos is None:
-            return [], {}        # flat → clear fired state
-        params = _opening_decision_params(conn, pos["id"])
+        # closing(): same daemon-lifetime leak as above, and this alert polls
+        # on a 5-second throttle — the fastest leak of the two.
+        with closing(get_db()) as conn:
+            pos = queries.open_position(conn)
+            if pos is None:
+                return [], {}        # flat → clear fired state
+            params = _opening_decision_params(conn, pos["id"])
         near_px = params.get("alert_near_px")
         adverse_px = params.get("alert_adverse_px")
         if near_px is None and adverse_px is None:

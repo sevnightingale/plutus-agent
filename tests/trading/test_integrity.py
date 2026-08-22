@@ -421,3 +421,58 @@ class TestToolRegistry:
         out = integrity.check_integrity(conn, home=home)
         assert "tool_module_import_failed" not in _names(out)
         assert "agent_toolset_missing" not in _names(out)
+
+
+class TestWatcherFds:
+    """The 17th invariant — descriptor pressure in the watcher daemon.
+
+    Added 2026-08-22 after two Hyperliquid pollers leaked one lifecycle.db
+    connection per tick for six days. The daemon hit its limit and reported
+    'watcher_state corrupt', which reads as a data fault and is not one.
+    """
+
+    def test_skipped_for_a_home_that_is_not_the_live_runtime(self, conn, home):
+        """Scoping guard: it inspects a live host process, so a temp home
+        must not drag the machine's state into a unit test's verdict."""
+        assert integrity._check_watcher_fds(conn, home) == []
+
+    def test_reports_unknown_rather_than_clear_when_it_cannot_look(
+        self, conn, home, monkeypatch
+    ):
+        """A check that cannot resolve its target must not say all-clear."""
+        import subprocess as _sp
+
+        from harness import constants
+
+        monkeypatch.setattr(constants, "get_hermes_home", lambda: home)
+        monkeypatch.setattr(
+            _sp, "run", lambda *a, **k: type("R", (), {"stdout": "4242"})()
+        )
+
+        class _UnreadableFdDir:
+            def iterdir(self):
+                raise OSError("permission denied")
+
+        class _FakeProc:
+            """Stands in for Path('/proc'); /proc/<pid>/fd refuses to be read."""
+
+            def exists(self):
+                return True
+
+            def __truediv__(self, other):
+                return self
+
+            def iterdir(self):
+                raise OSError("permission denied")
+
+            def __str__(self):
+                return "/proc/4242/fd"
+
+        monkeypatch.setattr(
+            integrity, "Path", lambda *a, **k: _FakeProc()
+        )
+
+        out = integrity._check_watcher_fds(conn, home)
+
+        assert out, "an unreadable fd table must produce a violation, not silence"
+        assert "UNKNOWN" in out[0]["detail"]

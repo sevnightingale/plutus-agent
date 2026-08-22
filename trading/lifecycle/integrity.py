@@ -48,6 +48,10 @@ WAKE_LOOP_STALE_S = 4500
 # Runtime disk bound. The 1.2 GB accretion that motivated the original
 # maintenance beat is exactly what this catches returning.
 RUNTIME_DISK_MAX_MB = 2048
+# Watcher-daemon fd ceiling. The daemon is the estate's only long-lived
+# holder of lifecycle.db connections, so it is where an unclosed get_db()
+# shows up first. Soft limit is typically 1024; warn well before it.
+WATCHER_FD_MAX = 250
 # Resolutions a book needs before its lifetime expectancy is evidence enough
 # to retire on. Mirrors the reflect protocol's bar; kept here because this is
 # where it is ENFORCED, and retirement now moves the graduation hurdle.
@@ -533,6 +537,72 @@ def _check_tool_schema_shape(conn, home: Path) -> List[Dict[str, Any]]:
     return out
 
 
+
+def _check_watcher_fds(conn, home: Path) -> List[Dict[str, Any]]:
+    """Descriptor pressure in the watcher daemon.
+
+    ``get_db()`` hands back a NEW sqlite connection every call and no caller
+    closes it. In the short-lived subagent processes that is invisible: the
+    OS reclaims at exit. The watcher daemon runs for days, so an unclosed
+    connection on a polling path leaks one descriptor per tick.
+
+    It matters because of HOW it fails. On 2026-08-16 two Hyperliquid pollers
+    exhausted the limit and the daemon began logging "watcher_state corrupt"
+    — it could no longer open its own state file. That reads like a data
+    problem, so it sat for six days and 1,326 log lines while the alert path
+    was intermittently blind. This invariant names the real cause before the
+    misleading symptom appears.
+
+    Linux-only by construction (/proc); silently skipped elsewhere.
+
+    Scoped to the REAL runtime home. This is the one invariant that inspects
+    a live host process rather than the database in front of it, so running
+    it against a temp home would make a unit test's verdict depend on the
+    state of whatever machine it runs on.
+    """
+    try:
+        from harness.constants import get_hermes_home
+        if home.resolve() != get_hermes_home().resolve():
+            return []          # not the live runtime — nothing to inspect
+    except Exception as exc:
+        logger.debug("runtime home resolution failed: %s", exc)
+        return []
+
+    pid_path = Path("/proc")
+    if not pid_path.exists():
+        return []
+    try:
+        import subprocess
+        out = subprocess.run(
+            ["systemctl", "show", "-p", "MainPID", "--value", "plutus-watchers"],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+        pid = int(out or 0)
+    except Exception as exc:
+        logger.debug("watcher pid lookup failed: %s", exc)
+        return []
+    if pid <= 0:
+        return []          # not running — a different check's business
+    fd_dir = pid_path / str(pid) / "fd"
+    try:
+        n = len(list(fd_dir.iterdir()))
+    except OSError as exc:
+        # Cannot read another process's fd table (permissions). A check that
+        # cannot resolve its target must not report all-clear.
+        return [_violation(
+            "watcher_fds",
+            f"could not read {fd_dir} ({exc}) — descriptor pressure UNKNOWN, "
+            f"not verified clear")]
+    if n > WATCHER_FD_MAX:
+        return [_violation(
+            "watcher_fds",
+            f"plutus-watchers holds {n} descriptors (bound {WATCHER_FD_MAX}) — "
+            f"a polling path is opening lifecycle.db without closing it; "
+            f"expect 'watcher_state corrupt' next, which will look like a "
+            f"data fault and is not one",
+            severity="error")]
+    return []
+
+
 CHECKS: Dict[str, Callable] = {
     "tool_registry": _check_tool_registry,
     "tool_schema_shape": _check_tool_schema_shape,
@@ -550,6 +620,7 @@ CHECKS: Dict[str, Callable] = {
     "wake_loop": _check_wake_loop,
     "runtime_disk": _check_runtime_disk,
     "append_only": _check_append_only,
+    "watcher_fds": _check_watcher_fds,
 }
 
 
