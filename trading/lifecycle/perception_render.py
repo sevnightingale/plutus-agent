@@ -92,11 +92,14 @@ def _compact(name: str, value: Any) -> str:
     except Exception:
         text = str(value)
     text = text.replace("|", "\\|")
-    # 120, not 160: seven full-tier symbols at 160 chars/cell still made the
-    # Readings zone 69KB and PERCEPTION.md ride over the 80k cap (read_file
-    # limit). Compact_fn already extracted the signal; the tail is JSON
-    # furniture. History stays in the cache.
-    return text if len(text) <= 120 else text[:117] + "..."
+    # 70, not 120: the 120 cap was tuned for a narrower watchlist, then the
+    # board went seven-wide + declared_panel lookback variants pushed the
+    # peak-freshness Readings zone to 92KB, riding PERCEPTION.md over the 80k
+    # read_file cap into every regime/predict/generate spawn (escalated twice
+    # 2026-08-22 09:10Z + 10:03Z). Measured live (501-row board): cap 70 ->
+    # total file ~79KB, under 80K. Compact_fn already extracted the signal;
+    # the tail is JSON furniture. History stays in the cache.
+    return text if len(text) <= 70 else text[:67] + "..."
 
 
 def _age_label(fetched_at: float, now: Optional[float] = None) -> str:
