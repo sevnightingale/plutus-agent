@@ -101,7 +101,7 @@ class TestOpen:
         assert r["sl"]["on_venue"] is True
         assert r["sizing"]["notional_multiple"] == 1.0           # conviction 0.72 band
         assert r["sizing"]["notional_usd"] == 1000.0             # 1× the $1000 equity
-        assert r["sizing"]["pilot"] is False
+        assert r["pilot"] is False
         assert mock_venue["place"]["slippage"] == 0.003          # ±0.3% cap
         assert r["sizing"]["leverage"] is not None
         pos = queries.open_position(get_db())
@@ -168,10 +168,8 @@ class TestPilotLane:
     gating the evidence-backed lane. Retired books never fund."""
 
     def _arm(self):
-        from harness.constants import get_hermes_home
-        home = get_hermes_home()
-        home.mkdir(parents=True, exist_ok=True)
-        (home / "PILOT").touch()
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
 
     def test_test_book_refused_when_not_armed(self, mock_venue):
         pid = _seed_strategy("tb", "test", _TRADEABLE_BOOK)
@@ -183,7 +181,7 @@ class TestPilotLane:
         pid = _seed_strategy("tb", "test", _TRADEABLE_BOOK)
         r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
         assert r["ok"], r
-        assert r["sizing"]["pilot"] is True
+        assert r["pilot"] is True
         dec = get_db().execute(
             "SELECT params_json FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
         assert json.loads(dec[0])["pilot"] is True
@@ -198,7 +196,7 @@ class TestPilotLane:
         pid = _seed_strategy("empty", "test", [])
         r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
         assert r["ok"], r          # 3% far edge vs 2% stop clears the p=0.5 gate
-        assert r["sizing"]["pilot"] is True
+        assert r["pilot"] is True
 
     def test_pilot_never_funds_retired(self, mock_venue):
         self._arm()

@@ -121,6 +121,23 @@ class TestFundableWake:
         }
         assert wakes == []
 
+    def test_pilot_test_strategy_enqueues_keyed_wake(self, monkeypatch):
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
+        conn = get_db()
+        conn.execute(
+            "INSERT INTO strategies (name,file_path,status,timescale,"
+            "mechanism_family,created_at,updated_at) VALUES "
+            "('pw','pw.md','test','intraday','flow',0,0)")
+        conn.commit()
+        wakes = self._patch(monkeypatch)
+        res = _call("register_prediction", {**self._ARGS, "strategy_name": "pw"})
+        assert res["ok"] and res["fundable_wake"] is True
+        assert len(wakes) == 1
+        # the pilot lane's wake opts into keyed backoff — a beat can register
+        # ten of these, and main needs one nudge, not ten
+        assert wakes[0]["key"] == "fundable:pilot"
+
 
 class TestSupportScoreCanonicalization:
     """Repairs from the 2026-07-16 audit: canonical DP keys, declared weights

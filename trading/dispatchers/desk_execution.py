@@ -128,15 +128,9 @@ def _halt_reason():
         return ""
 
 
-def _pilot_armed() -> bool:
-    """Operator pilot mandate (Sev, 2026-08-22): while armed, a TEST-book
-    prediction above the global conviction threshold may fund — graduation
-    gates size-with-evidence, the pilot gates existence. Armed by touching
-    ``~/.plutus-agent/PILOT`` (the HALT pattern, inverted); disarm with rm.
-    Every pilot decision is tagged ``pilot: true`` so reflect and calibration
-    can slice pilot trades from graduated trades forever."""
-    from harness.constants import get_hermes_home
-    return (get_hermes_home() / "PILOT").exists()
+# The pilot mandate's sentinel probe lives in trading/lifecycle/queries.py
+# (pilot_armed / strategy_fundable) — one owner for the gate, the selection
+# lane, the wake enqueue, and the status surfaces.
 
 
 def _fresh_price(symbol: str) -> float:
@@ -212,6 +206,7 @@ def _sl_rests_on_venue(state, symbol, sl_order_id, sl_price=None) -> bool:
 
 def _desk_open(args: Dict[str, Any]) -> str:
     from trading.conviction.engine import (MAX_LEVERAGE, MIN_NOTIONAL_USD,
+                                           PILOT_NEUTRAL_P,
                                            target_notional_multiple)
     from trading.dispatchers._helpers import session_id_from_context
     from trading.integrations.hyperliquid.venue import hl_account_state, hl_place_order
@@ -281,15 +276,15 @@ def _desk_open(args: Dict[str, Any]) -> str:
     status = srow["status"] if srow else None
     pilot_trade = False
     if status != "active":
-        if _pilot_armed() and status == "test":
+        armed = queries.pilot_armed()
+        if armed and status == "test":
             pilot_trade = True
         else:
+            why = (" (pilot lane takes test books only)" if armed
+                   else " (pilot not armed)")
             return tool_result({"ok": False,
                                 "refused": "strategy not ACTIVE — only graduated "
-                                           "strategies fund"
-                                           + (" (pilot lane takes test books "
-                                              "only)" if _pilot_armed() else
-                                              " (pilot not armed)"),
+                                           "strategies fund" + why,
                                 "strategy": strategy_name, "status": status})
     exp = queries.strategy_expectancy(conn, strategy_name)
     if not pilot_trade and not exp["tradeable"]:
@@ -309,11 +304,12 @@ def _desk_open(args: Dict[str, Any]) -> str:
     # p counts scratches as non-wins (wins/n) so the gate's p is consistent
     # with expectancy, which carries scratches at PnL 0 — the scratch-free
     # win_rate overstates the hit rate the book actually delivers.
-    # A pilot book with no resolved history gets a NEUTRAL prior (p=0.5): the
+    # A pilot book with no resolved history gets the neutral prior: the
     # threshold then reads "reward must beat stop plus round-trip costs" —
     # the gate still kills fee-thin setups without demanding history the
     # book cannot have yet.
-    p = (exp["wins"] / exp["n"]) if exp["n"] else (0.5 if pilot_trade else None)
+    p = ((exp["wins"] / exp["n"]) if exp["n"]
+         else (PILOT_NEUTRAL_P if pilot_trade else None))
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0
     # rr > (1−p)/p is p·reward > (1−p)·stop; the extra term charges the
@@ -353,7 +349,6 @@ def _desk_open(args: Dict[str, Any]) -> str:
         # material now that risk varies with stop width by design
         "risk_at_stop_pct": round(multiple * stop_pct, 3),
         "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
-        "pilot": pilot_trade,
         "current_price": current}
 
     # PRE-ENTRY (flat) equity BEFORE the fill (Issue 3): the denominator for
@@ -518,6 +513,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
         "ok": True,
         "position_id": position_id,
         "thesis_id": thesis_id,
+        "pilot": pilot_trade,
         # verified means CONFIRMED ON-VENUE. "response_only" = the venue
         # accepted the bracket but the open-orders re-read wasn't available —
         # the stop almost certainly rests (atomic bulk order), it just wasn't

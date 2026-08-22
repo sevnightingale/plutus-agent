@@ -120,10 +120,12 @@ far inflates win rate but kills expectancy; a too-wide far never resolves early.
    trials rather than stacking one.
 5. ACTIONABLE (advisory only): you no longer SELECT what to fund — main does
    that with a deterministic query (best_actionable_prediction = the argmax-EV
-   open prediction of a currently-tradeable active strategy). For visibility,
+   open prediction of a currently-tradeable active strategy, with a pilot lane
+   over test books when the operator's PILOT sentinel is armed). For visibility,
    report the highest-conviction live setup from an ACTIVE strategy clearing the
-   global threshold (0.50), or null. Test-status strategies are never actionable;
-   conviction drives position SIZE (the risk-budget bands), never the trade
+   global threshold (0.50), or null. Test-status strategies are actionable only
+   through the pilot lane, and selection is main's either way;
+   conviction drives position SIZE (the notional bands), never the trade
    decision — the funding gate is expectancy, applied downstream.
 6. Return your prediction_batch.
 

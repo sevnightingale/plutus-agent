@@ -166,9 +166,9 @@ def _round_sz_for_hl(symbol: str, sz: float) -> float:
     """Floor size to the asset's szDecimals (from the SDK's cached meta).
 
     The SDK's float_to_wire REJECTS (never rounds) a size finer than the
-    asset allows — a raw risk-derived size like 0.00025113643744465553 BTC
+    asset allows — a raw derived size like 0.00025113643744465553 BTC
     kills the order at the wire. Floor, never round-half-up: rounding up
-    would breach the risk budget the size was derived from.
+    would breach the notional band the size was derived from.
     """
     info = get_info()
     decimals = info.asset_to_sz_decimals[info.coin_to_asset[info.name_to_coin[symbol]]]

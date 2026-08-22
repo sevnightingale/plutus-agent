@@ -466,10 +466,8 @@ class TestBestActionable:
         assert queries.best_actionable_prediction(conn)["id"] == fresh
 
     def _arm_pilot(self):
-        from harness.constants import get_hermes_home
-        home = get_hermes_home()
-        home.mkdir(parents=True, exist_ok=True)
-        (home / "PILOT").touch()
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
 
     def test_pilot_lane_picks_highest_conviction_test_book(self, conn):
         self._arm_pilot()
@@ -705,6 +703,23 @@ class TestDeskGaps:
         assert "good" in names and "shy" in names
         assert [b["strategy"] for b in g["status_mismatches"]] == ["shy"]
         assert g["actionable_window_s"] == queries.ACTIONABLE_MAX_AGE_S
+
+    def test_fundable_now_counts_test_books_under_pilot(self, conn):
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
+        _strat_row(conn, "t", status="test")
+        _record(conn, strategy_name="t", kind="strategy", conviction=0.7)
+        g = queries.desk_gaps(conn)
+        # the observability surface must agree with the funding surface: with
+        # the pilot armed, a fresh test-book prediction counts as fundable
+        assert g["fundable_now"]["count"] == 1
+
+    def test_strategy_fundable_predicate(self, conn):
+        assert queries.strategy_fundable("active") is True
+        assert queries.strategy_fundable("test", pilot=False) is False
+        assert queries.strategy_fundable("test", pilot=True) is True
+        assert queries.strategy_fundable("retired", pilot=True) is False
+        assert queries.strategy_fundable(None, pilot=True) is False
 
     def test_fundable_now_counts_fresh_active_predictions(self, conn):
         _strat_row(conn, "good")

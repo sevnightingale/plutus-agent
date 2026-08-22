@@ -20,7 +20,7 @@ Three design laws shape everything below:
    (the strategy's resolved book run through the actual trade geometry, at N≥15)
    clearing a multiplicity-deflated hurdle, and not currently decaying —
    is the only yes/no on trading. Above the global conviction threshold (0.50),
-   conviction is a *sizing dial* — risk-budget bands — never a veto.
+   conviction is a *sizing dial* — notional bands — never a veto.
 2. **Honest absence.** Failed readings stay FAILED and are treated as missing;
    nothing is defaulted, mocked, or silently fallen back.
 3. **Records live in lifecycle.db, via tools.** Predictions, decisions,

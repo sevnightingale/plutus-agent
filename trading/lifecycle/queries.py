@@ -18,6 +18,29 @@ def _rows(cur) -> list:
     return [dict(r) for r in cur.fetchall()]
 
 
+def pilot_armed() -> bool:
+    """Operator pilot mandate (Sev, 2026-08-22): while ``~/.plutus-agent/PILOT``
+    exists, a TEST-book prediction above the global conviction threshold may
+    fund — graduation gates the evidence-backed lane, the pilot gates
+    existence. Armed by touching the file, disarmed by removing it (the HALT
+    pattern, inverted). SINGLE OWNER of the sentinel probe: the funding gate,
+    the selection lane, the fundable-window wake, and the status surfaces all
+    call this — a second inline ``.exists()`` is the drift this function
+    exists to prevent."""
+    from harness.constants import get_hermes_home
+    return (get_hermes_home() / "PILOT").exists()
+
+
+def strategy_fundable(status: Optional[str], *, pilot: Optional[bool] = None) -> bool:
+    """The fundability predicate every funded-trade surface shares: ACTIVE
+    always; TEST under an armed pilot; nothing else, ever (retired books do
+    not fund). Pass ``pilot`` when the caller already probed the sentinel."""
+    if status == "active":
+        return True
+    armed = pilot_armed() if pilot is None else pilot
+    return bool(armed) and status == "test"
+
+
 def _percentile(sorted_vals: list, q: float):
     """Nearest-rank percentile of a pre-sorted list (no numpy)."""
     if not sorted_vals:
@@ -419,6 +442,13 @@ def strategy_prediction_capacity(
     }
 
 
+# One column list for both selection lanes — main consumes the result
+# regardless of lane, so the two queries must return the same shape.
+_ACTIONABLE_COLS = ("pr.id, pr.strategy_name, pr.symbol, pr.conviction, "
+                    "pr.near_edge_pct, pr.far_edge_pct, pr.timescale, "
+                    "pr.regime_tag, pr.ts")
+
+
 def best_actionable_prediction(
     conn: sqlite3.Connection, *,
     max_age_s: float = ACTIONABLE_MAX_AGE_S, now: Optional[float] = None,
@@ -443,9 +473,7 @@ def best_actionable_prediction(
     now = now if now is not None else time.time()
     cutoff = now - max_age_s
     rows = _rows(conn.execute(
-        """SELECT pr.id, pr.strategy_name, pr.symbol, pr.conviction,
-                  pr.near_edge_pct, pr.far_edge_pct, pr.timescale, pr.regime_tag,
-                  pr.ts
+        f"""SELECT {_ACTIONABLE_COLS}
            FROM predictions pr
            JOIN strategies s ON s.name = pr.strategy_name
            WHERE pr.resolved_at IS NULL AND s.status = 'active' AND pr.ts >= ?
@@ -482,21 +510,16 @@ def best_actionable_prediction(
     if best is not None:
         return best
 
-    # PILOT lane (operator mandate 2026-08-22, armed via ~/.plutus-agent/PILOT):
-    # when no graduated candidate exists, the highest-CONVICTION fresh
-    # prediction from a TEST book qualifies — conviction above the global
-    # threshold is the bar, argmax conviction the selection (tiebreak:
-    # earliest). No EV gate here: evidence-empty books have no calibration,
-    # and desk_open_position re-gates RR at the live price with a neutral
-    # prior. The graduated lane always wins when it has a candidate.
-    from harness.constants import get_hermes_home
-    if not (get_hermes_home() / "PILOT").exists():
+    # PILOT lane: when no graduated candidate exists, the highest-CONVICTION
+    # fresh prediction from a TEST book qualifies — argmax conviction,
+    # tiebreak earliest. No EV gate here: evidence-empty books have no
+    # calibration, and desk_open_position re-gates RR at the live price with
+    # a neutral prior. The graduated lane always wins when it has a candidate.
+    if not pilot_armed():
         return None
     from trading.conviction.engine import GLOBAL_CONVICTION_THRESHOLD
     pilot_rows = _rows(conn.execute(
-        """SELECT pr.id, pr.strategy_name, pr.symbol, pr.conviction,
-                  pr.near_edge_pct, pr.far_edge_pct, pr.timescale, pr.regime_tag,
-                  pr.ts
+        f"""SELECT {_ACTIONABLE_COLS}
            FROM predictions pr
            JOIN strategies s ON s.name = pr.strategy_name
            WHERE pr.resolved_at IS NULL AND s.status = 'test'
@@ -538,12 +561,17 @@ def desk_gaps(conn: sqlite3.Connection, limit: int = 5) -> dict:
     open_total = conn.execute(
         "SELECT COUNT(*) FROM predictions WHERE resolved_at IS NULL"
     ).fetchone()[0]
+    # fundable_now must agree with best_actionable_prediction's lanes — with
+    # the pilot armed, test books count too, or this surface reports 0 while
+    # the desk funds a trade.
+    fundable_statuses = ("active", "test") if pilot_armed() else ("active",)
     fresh = conn.execute(
-        """SELECT COUNT(*), MIN(? - pr.ts) FROM predictions pr
+        f"""SELECT COUNT(*), MIN(? - pr.ts) FROM predictions pr
            JOIN strategies s ON s.name = pr.strategy_name
-           WHERE pr.resolved_at IS NULL AND s.status = 'active'
+           WHERE pr.resolved_at IS NULL
+             AND s.status IN ({','.join('?' * len(fundable_statuses))})
              AND pr.ts >= ?""",
-        (now, now - ACTIONABLE_MAX_AGE_S)).fetchone()
+        (now, *fundable_statuses, now - ACTIONABLE_MAX_AGE_S)).fetchone()
     return {
         "strategy_counts": counts,
         "closest_to_tradeable": books[:limit],
@@ -1235,8 +1263,10 @@ def timescale_mix(conn: sqlite3.Connection, since_ts: float) -> dict:
 def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None) -> list:
     """Closed-position performance per conviction band (floored to 0.1 — the
     sizing dial's input), with the leverage actually realized at entry —
-    reflect's evidence for retuning the conviction→RISK-BUDGET bands (realized
-    risk per trade ≈ leverage × stop-distance ≈ the R-multiples reported here).
+    reflect's evidence for retuning the conviction→NOTIONAL bands (loss per
+    stop-out ≈ notional-multiple × stop-distance; ``risk_at_stop_pct`` on the
+    decision's sizing block records it per trade). Split by ``pilot`` so the
+    operator-mandate lane never pollutes the graduated lane's evidence.
     Rows with no opening-decision conviction group under NULL; shown, never dropped.
 
     ``fix_ts`` (epoch seconds, Issue 4 cutover) excludes positions whose opening
@@ -1250,6 +1280,7 @@ def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None)
     have dragged the 0.7 band's stats)."""
     return _rows(conn.execute(
         """SELECT CAST(d.conviction * 10 AS INT) / 10.0 AS conviction_band,
+                  COALESCE(json_extract(d.params_json, '$.pilot'), 0) AS pilot,
                   COUNT(*) AS n,
                   SUM(CASE WHEN o.realized_pnl_usd > 0 THEN 1 ELSE 0 END) AS wins,
                   ROUND(AVG(p.leverage), 2) AS avg_leverage,
@@ -1265,7 +1296,8 @@ def sizing_performance(conn: sqlite3.Connection, fix_ts: Optional[float] = None)
            WHERE p.status='closed'
                  AND (:fix_ts IS NULL OR d.ts IS NULL OR d.ts >= :fix_ts)
                  AND COALESCE(o.exit_reason, '') != 'naked_position_abort'
-           GROUP BY conviction_band ORDER BY conviction_band""",
+           GROUP BY conviction_band, pilot
+           ORDER BY conviction_band, pilot""",
         {"fix_ts": fix_ts}))
 
 

@@ -61,6 +61,7 @@ def _desk_status(conn) -> Dict[str, Any]:
 
     out = queries.desk_gaps(conn)
     out["halt"] = (get_hermes_home() / "HALT").exists()
+    out["pilot"] = queries.pilot_armed()
     out["open_position"] = queries.open_position(conn)
     try:
         from trading.integrations.hyperliquid.data_points import hl_trade_readiness

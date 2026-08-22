@@ -49,6 +49,12 @@ MIN_NOTIONAL_USD = 10.0
 # which remains as a guard against future band retunes.
 MAX_LEVERAGE = 10.0
 
+# Neutral win-rate prior for pilot-lane trades on evidence-empty books: the
+# RR gate then requires reward to beat stop plus round-trip costs, without
+# demanding history the book cannot have yet. A policy constant like the
+# bands — retuned by the operator, not by reflect.
+PILOT_NEUTRAL_P = 0.5
+
 # Weight-update discipline (inherited, evidence-tested in v1)
 WEIGHT_ALPHA = 0.05
 WEIGHT_CAP = 0.30

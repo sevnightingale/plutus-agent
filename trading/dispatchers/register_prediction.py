@@ -245,15 +245,25 @@ def _register_prediction(args: Dict[str, Any]) -> str:
     if strat_name:
         srow = conn.execute("SELECT status FROM strategies WHERE name=?",
                             (strat_name,)).fetchone()
-        if srow and srow["status"] == "active":
+        # strategy_fundable, not status == "active": under an armed pilot a
+        # test-book prediction is fundable for the same window, and without
+        # this wake the pilot lane silently starves whenever main is asleep.
+        if srow and queries.strategy_fundable(srow["status"]):
             try:
                 from harness.wake_queue import enqueue
+                # A test-book wake (pilot lane) is a RECURRING condition — a
+                # beat can register ten of them — so it opts into keyed
+                # backoff. An active-book wake stays always-append: rare, and
+                # each one is genuinely novel.
                 enqueue(reason="schedule",
                         detail=(f"fundable prediction #{prediction_id} registered "
-                                f"(strategy {strat_name}, ACTIVE) — actionable "
+                                f"(strategy {strat_name}, {srow['status'].upper()})"
+                                f" — actionable "
                                 f"window {int(queries.ACTIONABLE_MAX_AGE_S // 60)} "
                                 f"min from registration"),
-                        source="plutus-predict")
+                        source="plutus-predict",
+                        key=("fundable:pilot" if srow["status"] == "test"
+                             else None))
                 fundable_wake = True
             except Exception as exc:
                 logger.warning("fundable-window wake enqueue failed: %s", exc)
