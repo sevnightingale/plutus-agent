@@ -273,3 +273,204 @@ def test_perception_toolset_carries_the_new_tools(real_registry):
     from harness.toolsets import TOOLSETS
     assert {"sweep_data_points", "render_perception"} <= set(
         TOOLSETS["perception"]["tools"])
+
+
+# ── Regression: the declared/swept drift that starved predict ────────────
+#
+# Full account in ``panels.declared_panel``. In short: the hand-written panel
+# and the agent-authored book drift, and when they do, registrations are
+# refused and strategies stop accumulating evidence without being judged.
+
+
+@pytest.fixture
+def empty_registry(monkeypatch):
+    """Registry NOT yet discovered — the fail-open path, chosen explicitly."""
+    from trading.perception.core import data_point_registry as reg
+
+    monkeypatch.setattr(reg, "list_all", lambda *a, **k: [])
+    return reg
+
+
+def _book_conn(rows):
+    """A strategies table built by the REAL schema path.
+
+    ``db._create_fresh`` rather than a hand-written CREATE TABLE: the
+    2026-07-26 scar in test_capital.py is that a fixture asserting the schema
+    it wishes for cannot witness a schema bug. The live table has 23 columns
+    with NOT NULL on file_path/timescale/mechanism_family/created_at, so a
+    hand-built four-column stand-in is a different table that happens to
+    answer the queries the test writes.
+    """
+    import json
+    import sqlite3
+
+    from trading.lifecycle import db
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    db._create_fresh(conn)
+    now = 1787000000.0
+    for i, (name, status, symbol, dps) in enumerate(rows):
+        conn.execute(
+            "INSERT INTO strategies (name, file_path, status, timescale,"
+            " mechanism_family, symbol, data_points_json, created_at,"
+            " updated_at) VALUES (?,?,?,?,?,?,?,?,?)",
+            (name, f"/tmp/{name}.md", status, "intraday", "momentum",
+             symbol, json.dumps(dps), now + i, now + i))
+    conn.commit()
+    return conn
+
+
+_OBV = {"name": "ta_obv",
+        "params": {"symbol": "BTC", "interval": "1h", "lookback_bars": 200}}
+
+
+def test_declared_panel_picks_up_what_the_standard_panel_misses(real_registry):
+    """The exact shape that was dropped: a TA point WITH lookback_bars, where
+    full_panel fetches only symbol+interval."""
+    from trading.perception import panels
+
+    conn = _book_conn([("s1", "test", "BTC", [_OBV])])
+    assert ("ta_obv", {"symbol": "BTC", "interval": "1h",
+                       "lookback_bars": 200}) in panels.declared_panel(conn, "BTC")
+
+
+def test_declared_panel_does_not_duplicate_the_standard_panel(real_registry):
+    from trading.perception import panels
+
+    already = panels.full_panel("BTC")[0]          # ("hl_price", {...})
+    conn = _book_conn([("s1", "test", "BTC",
+                        [{"name": already[0], "params": dict(already[1])}])])
+    assert panels.declared_panel(conn, "BTC") == []
+
+
+def test_declared_panel_ignores_other_symbols_books(real_registry):
+    from trading.perception import panels
+
+    conn = _book_conn([("eth_book", "test", "ETH", [
+        {"name": "ta_obv", "params": {"symbol": "ETH", "interval": "1h",
+                                      "lookback_bars": 200}}])])
+    assert panels.declared_panel(conn, "BTC") == []
+
+
+def test_declared_panel_matches_an_unnormalised_symbol(real_registry):
+    """Nothing normalises on the WRITE side — files.py stores frontmatter
+    verbatim and the v7 migration copied symbols out of params — so an exact
+    SQL match would return nothing, silently, for a row reading 'btc'."""
+    from trading.perception import panels
+
+    conn = _book_conn([("odd", "test", "btc", [_OBV])])
+    assert panels.declared_panel(conn, "BTC"), "un-normalised symbol was dropped"
+
+
+def test_declared_panel_rewrites_a_stale_symbol_param(real_registry):
+    """Clone variants carry the parent's symbol; fetching another symbol's
+    tape into this panel is the one thing predict's recipe forbids."""
+    from trading.perception import panels
+
+    conn = _book_conn([("cloned", "test", "xyz:GOLD", [_OBV])])  # says BTC
+    extra = panels.declared_panel(conn, "xyz:GOLD")
+    assert extra and all(p.get("symbol") == "xyz:GOLD" for _, p in extra)
+
+
+def test_declared_panel_injects_a_missing_symbol(real_registry):
+    """Some books declare the point with NO symbol at all, which fetches
+    nothing: "missing 1 required positional argument: 'symbol'"."""
+    from trading.perception import panels
+
+    conn = _book_conn([("no_symbol", "test", "BTC", [
+        {"name": "ta_obv", "params": {"interval": "1h", "lookback_bars": 200}}])])
+    extra = dict(panels.declared_panel(conn, "BTC"))
+    assert extra["ta_obv"]["symbol"] == "BTC"
+
+
+def test_declared_panel_survives_string_params(real_registry):
+    """Strategy files sometimes store `params: symbol=BTC` as a YAML STRING.
+    dict() on that raises, and the raise would escape declared_panel and kill
+    the whole sweep — all seven symbols — over one malformed book."""
+    from trading.perception import panels
+
+    conn = _book_conn([("yaml_str", "test", "BTC",
+                        [{"name": "ta_obv",
+                          "params": "symbol=BTC,interval=1h,lookback_bars=200"}])])
+    extra = dict(panels.declared_panel(conn, "BTC"))
+    assert extra["ta_obv"]["lookback_bars"] == "200"
+
+
+def test_declared_panel_is_bounded_and_says_so(real_registry, caplog):
+    """The book is agent-authored and unbounded. A silent cap reads as
+    "covered everything" when it did not."""
+    import logging
+
+    from trading.perception import panels
+
+    dps = [{"name": "ta_obv",
+            "params": {"symbol": "BTC", "interval": "1h", "lookback_bars": n}}
+           for n in range(1000)]
+    conn = _book_conn([("greedy", "test", "BTC", dps)])
+    with caplog.at_level(logging.WARNING):
+        out = panels.declared_panel(conn, "BTC")
+    assert len(out) == panels.MAX_DECLARED_PER_SYMBOL
+    assert any("dropped at the" in r.message for r in caplog.records), \
+        "truncation must be logged, not silent"
+
+
+def test_declared_panel_skips_retired_books(real_registry):
+    from trading.perception import panels
+
+    conn = _book_conn([("dead", "retired", "BTC", [_OBV])])
+    assert panels.declared_panel(conn, "BTC") == []
+
+
+def test_declared_panel_fails_open_when_registry_not_discovered(empty_registry):
+    """The registry fills only on dispatcher discovery. Filtering against an
+    empty one would drop every entry — silently — which is the failure this
+    module exists to remove."""
+    from trading.perception import panels
+
+    conn = _book_conn([("s1", "test", "BTC",
+                        [{"name": "not_a_real_data_point", "params": {}}])])
+    assert panels.declared_panel(conn, "BTC"), "fail-open path dropped everything"
+
+
+def test_panel_for_is_the_single_builder_both_consumers_use(real_registry):
+    """The sweep fetches the panel and perception_render filters the Readings
+    zone to it. Built separately they drift, and on 2026-08-22 they did — 242
+    readings fetched, cached, then dropped from PERCEPTION.md."""
+    from trading.perception import panels
+
+    conn = _book_conn([("s1", "test", "BTC", [_OBV])])
+    full = panels.panel_for(conn, "BTC", "full")
+    assert ("ta_obv", {"symbol": "BTC", "interval": "1h",
+                       "lookback_bars": 200}) in full
+    # the standard panel is included whole, and the extras ride on top
+    assert len(full) == len(panels.full_panel("BTC")) + len(
+        panels.declared_panel(conn, "BTC"))
+    # passive tier takes no declared extras
+    assert panels.panel_for(conn, "BTC", "passive") == list(panels.passive_panel("BTC"))
+
+
+def test_partially_populated_registry_says_what_it_dropped(monkeypatch, caplog):
+    """The fail-open guard catches a WHOLLY empty registry. A partially
+    imported one — a single integration failing on a missing dep — is
+    non-empty, so the filter engages and drops every ta_* entry. Measured: a
+    26-entry registry yields 3 extras instead of 242, with no signal."""
+    import logging
+
+    from trading.perception import panels
+    from trading.perception.core import data_point_registry as reg
+
+    monkeypatch.setattr(reg, "list_all", lambda *a, **k: [object()])
+
+    def _only_hl_price(name):
+        if name == "hl_price":
+            raise KeyError(name)
+        raise KeyError(name)
+
+    monkeypatch.setattr(reg, "lookup", _only_hl_price)
+    conn = _book_conn([("s1", "test", "BTC", [_OBV])])
+    with caplog.at_level(logging.WARNING):
+        out = panels.declared_panel(conn, "BTC")
+    assert out == []
+    assert any("unregistered" in r.message for r in caplog.records), \
+        "a silent mass drop is the failure this module exists to remove"

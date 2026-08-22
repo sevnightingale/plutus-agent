@@ -49,14 +49,22 @@ def _panel_cache_keys() -> Optional[set]:
         from trading.perception.cache import _canonical_key
         from trading.lifecycle.db import get_db
 
+        from contextlib import closing
+
         watchlist = panels.watchlist_from_config()
-        tiers = panels.derive_tiers(get_db(), watchlist)
         keys: set = set()
-        for sym, tier in tiers.items():
-            panel = (panels.full_panel(sym) if tier == "full"
-                     else panels.passive_panel(sym))
-            for name, params in panel:
-                keys.add(_canonical_key(name, params))
+        # panels.panel_for is the SINGLE panel builder, shared with the
+        # sweep. Built separately the two drift: on 2026-08-22 the sweep
+        # gained the book's declared extras and this renderer did not, so
+        # 242 readings were fetched, cached, and then filtered out of the
+        # Readings zone — invisible to the agent that needed them.
+        # closing(): get_db() hands back an unclosed handle and this runs
+        # on every render.
+        with closing(get_db()) as conn:
+            tiers = panels.derive_tiers(conn, watchlist)
+            for sym, tier in tiers.items():
+                for name, params in panels.panel_for(conn, sym, tier):
+                    keys.add(_canonical_key(name, params))
         for name, params in panels.global_panel():
             keys.add(_canonical_key(name, params))
         return keys

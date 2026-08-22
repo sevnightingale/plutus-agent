@@ -72,6 +72,8 @@ RENDER_SCHEMA = {
 
 
 def _sweep(args: Dict[str, Any]) -> str:
+    from contextlib import closing
+
     from trading.perception import panels
     from trading.perception.fetch_core import fetch_and_snapshot
     from trading.lifecycle.db import get_db
@@ -86,10 +88,20 @@ def _sweep(args: Dict[str, Any]) -> str:
     if not symbols:
         symbols = panels.watchlist_from_config()
 
-    tiers = panels.derive_tiers(get_db(), symbols)
-    for sym, tier in (args.get("tier_overrides") or {}).items():
-        if str(tier) in ("full", "passive"):
-            tiers[panels.normalize_symbol(sym)] = str(tier)
+    # ONE connection for the whole sweep, closed on the way out. get_db()
+    # opens a fresh handle per call and no caller closes it; this runs on a
+    # loop over the watchlist, so a per-symbol open is the daemon leak that
+    # blinded the watcher for six days (2026-08-16..22), reintroduced.
+    # Tier overrides are applied INSIDE, so the declared-panel query runs
+    # only for symbols that will actually use it.
+    with closing(get_db()) as _conn:
+        tiers = panels.derive_tiers(_conn, symbols)
+        for sym, tier in (args.get("tier_overrides") or {}).items():
+            if str(tier) in ("full", "passive"):
+                tiers[panels.normalize_symbol(sym)] = str(tier)
+        panel_by_symbol = {
+            sym: panels.panel_for(_conn, sym, tiers.get(sym, "passive"))
+            for sym in symbols}
 
     sid = session_id_from_context()
     kind = get_synthetic_kind()
@@ -111,10 +123,14 @@ def _sweep(args: Dict[str, Any]) -> str:
     per_symbol: Dict[str, Any] = {}
     for sym in symbols:
         tier = tiers.get(sym, "passive")
-        panel = (panels.full_panel(sym) if tier == "full"
-                 else panels.passive_panel(sym))
+        # panel_for = standard tier + whatever the live book declares that
+        # the hand-written panel misses; see panels.declared_panel for why
+        # the two drift and what it cost.
+        panel = panel_by_symbol.get(sym) or []
+        extra = max(0, len(panel) - len(panels.full_panel(sym))) \
+            if tier == "full" else 0
         result = run_panel(panel)
-        per_symbol[sym] = {"tier": tier, **result}
+        per_symbol[sym] = {"tier": tier, "declared_extra": extra, **result}
 
     global_result = run_panel(panels.global_panel()) if include_global \
         else {"ok": 0, "failed": []}
