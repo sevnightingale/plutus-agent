@@ -51,7 +51,6 @@ dependencies = [
   # pandas_ta imports pkg_resources at load; setuptools>=81 removed it. Pin
   # below 81 so a fresh resolve doesn't break TA data points at import time.
   "setuptools<81",
-  "context-dev>=0.34",  # web scrape/extract backend for macro data points
 ]
 
 [project.optional-dependencies]

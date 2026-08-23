@@ -1,16 +1,17 @@
-"""Macro data points — direct context.dev web.extract DPs + classification.
+"""Macro data points — free deterministic sources + classification.
 
-The DPs read one number from a canonical source via context.dev, classify it
-into a regime bucket deterministically, and expose it at numeric_path 'value'.
-We mock the context.dev call — these tests cover the classification, the
-return shape, the source-fallback loop, and fail-loud behaviour.
+The DPs read one number from a free structured source (Yahoo chart API, FRED
+CSV, BLS public API, ECB rates, Farside-via-Jina), classify it into a regime
+bucket deterministically, and expose it at numeric_path 'value'. We mock the
+network — these tests cover the classification, the return shape, the
+source-fallback chain, fail-loud behaviour, and the deterministic parsers.
 """
 
 import importlib
 
 import pytest
 
-from trading.integrations.macro import _context_client as cc
+from trading.integrations.macro import _sources as src
 from trading.integrations.macro import data_points as dp
 
 
@@ -54,45 +55,45 @@ class TestClassify:
 
 class TestMacroDPs:
     def test_vix(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 16.18, "source": "marketwatch"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 16.18, "source": "yahoo:^VIX"})
         out = dp.macro_vix()
         assert out["value"] == 16.18
         assert out["risk_regime"] == "moderate"
-        assert out["source"] == "marketwatch"
+        assert out["source"] == "yahoo:^VIX"
 
     def test_dxy(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 99.65, "source": "mw"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 99.65, "source": "yahoo:DX-Y.NYB"})
         out = dp.macro_dxy()
         assert out["value"] == 99.65 and out["strength"] == "neutral"
 
     def test_us10y(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 4.32, "source": "mw"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 4.32, "source": "fred:DGS10"})
         out = dp.macro_us10y()
         assert out["value"] == 4.32 and out["rate_regime"] == "restrictive"
 
     def test_us10y_real(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 1.85, "source": "cnbc"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 1.85, "source": "fred:DFII10"})
         out = dp.macro_us10y_real()
         assert out["value"] == 1.85 and out["real_rate_regime"] == "elevated"
         # Negative real yields are gold's regime, not an error.
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": -0.4, "source": "fred"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": -0.4, "source": "fred:DFII10"})
         assert dp.macro_us10y_real()["real_rate_regime"] == "negative"
 
     def test_cpi(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 4.2, "period": "May 2026", "source": "bls"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 4.2, "period": "May 2026", "source": "bls:CUUR0000SA0"})
         out = dp.macro_cpi()
         assert out["value"] == 4.2 and out["regime"] == "elevated"
         assert out["period"] == "May 2026"
 
     def test_etf_netflow(self, monkeypatch):
-        monkeypatch.setattr(dp, "extract_value",
-                            lambda *a, **k: {"value": 53.608, "date": "15 Jun 2026", "source": "farside"})
+        monkeypatch.setattr(dp, "first_of",
+                            lambda *a, **k: {"value": 53.608, "date": "15 Jun 2026", "source": "farside:btc"})
         out = dp.btc_etf_netflow_daily()
         assert out["value"] == 53.608 and out["flow_regime"] == "flat"
         assert out["date"] == "15 Jun 2026"
@@ -105,52 +106,102 @@ class TestMacroDPs:
             assert extract_numeric({"value": 42.0, "x": "y"}, e.numeric_path) == 42.0
 
 
-class TestExtractValueFallback:
-    def test_falls_through_to_next_source(self, monkeypatch):
+class TestFirstOfFallback:
+    def test_falls_through_to_next_source(self):
         calls = []
 
-        class FakeResp:
-            def __init__(self, data):
-                self.data = data
+        def down():
+            calls.append("u1")
+            raise RuntimeError("first source down")
 
-        class FakeWeb:
-            def extract(self, *, url, schema, instructions, timeout_ms):
-                calls.append(url)
-                if url == "u1":
-                    raise RuntimeError("first source down")
-                return FakeResp({"value": 5.0})
+        def up():
+            calls.append("u2")
+            return {"value": 5.0}
 
-        class FakeClient:
-            web = FakeWeb()
-
-        monkeypatch.setattr(cc, "get_context_client", lambda: FakeClient())
-        out = cc.extract_value("u1", {"type": "object"}, "instr", fallback_urls=["u2"])
+        out = src.first_of([("u1", down), ("u2", up)])
         assert out == {"value": 5.0, "source": "u2"}
         assert calls == ["u1", "u2"]
 
-    def test_raises_when_all_sources_fail(self, monkeypatch):
-        class FakeWeb:
-            def extract(self, **k):
-                raise RuntimeError("down")
+    def test_raises_when_all_sources_fail(self):
+        def down():
+            raise RuntimeError("down")
 
-        class FakeClient:
-            web = FakeWeb()
+        with pytest.raises(RuntimeError, match="every macro source failed"):
+            src.first_of([("u1", down), ("u2", down)])
 
-        monkeypatch.setattr(cc, "get_context_client", lambda: FakeClient())
+    def test_non_numeric_value_is_treated_as_failure(self):
+        # A source that "succeeds" without a numeric value must not win.
         with pytest.raises(RuntimeError):
-            cc.extract_value("u1", {}, "instr")
+            src.first_of([("u1", lambda: {"value": None}),
+                          ("u2", lambda: {})])
 
-    def test_empty_data_is_treated_as_failure(self, monkeypatch):
-        class FakeResp:
-            data = {}  # context.dev returned nothing useful
 
-        class FakeWeb:
-            def extract(self, **k):
-                return FakeResp()
+class TestParsers:
+    def test_fred_latest_skips_missing_observations(self, monkeypatch):
+        csv = "DATE,DGS10\n2026-08-19,4.65\n2026-08-20,4.69\n2026-08-21,.\n"
+        monkeypatch.setattr(src, "_http_get", lambda *a, **k: csv)
+        out = src.fred_latest("DGS10")
+        assert out == {"value": 4.69, "date": "2026-08-20"}
 
-        class FakeClient:
-            web = FakeWeb()
+    def test_fred_latest_raises_on_empty_series(self, monkeypatch):
+        monkeypatch.setattr(src, "_http_get", lambda *a, **k: "DATE,DGS10\n2026-08-20,.\n")
+        with pytest.raises(RuntimeError, match="no observations"):
+            src.fred_latest("DGS10")
 
-        monkeypatch.setattr(cc, "get_context_client", lambda: FakeClient())
-        with pytest.raises(RuntimeError):
-            cc.extract_value("u1", {}, "instr")
+    def test_flow_number_forms(self):
+        assert src._flow_number("306.7") == 306.7
+        assert src._flow_number("(27,528)") == -27528.0
+        assert src._flow_number("1,066") == 1066.0
+        assert src._flow_number("-") == 0.0
+        assert src._flow_number("") == 0.0
+
+    def test_farside_reads_last_dated_row_total_column(self, monkeypatch):
+        md = "\n".join([
+            "| Seed | IBIT | FBTC | Total |",
+            "| --- | --- | --- | --- |",
+            "| Total | 62,426 | 10,185 | 53,775 |",  # all-time row — must be ignored
+            "| 20 Aug 2026 | 503.0 | 64.7 | 606.3 |",
+            "| 21 Aug 2026 | 239.3 | 30.2 | (307.5) |",
+        ])
+        monkeypatch.setattr(src, "_http_get", lambda *a, **k: md)
+        out = src.farside_btc_netflow()
+        assert out == {"value": -307.5, "date": "21 Aug 2026"}
+
+    def test_farside_raises_when_no_dated_rows(self, monkeypatch):
+        monkeypatch.setattr(src, "_http_get", lambda *a, **k: "| Total | 1 | 2 |\n")
+        with pytest.raises(RuntimeError, match="no dated rows"):
+            src.farside_btc_netflow()
+
+    def test_bls_cpi_yoy_computes_from_index(self, monkeypatch):
+        resp = {
+            "status": "REQUEST_SUCCEEDED",
+            "Results": {"series": [{"data": [
+                {"year": "2026", "period": "M07", "periodName": "July", "value": "333.918"},
+                {"year": "2026", "period": "M06", "periodName": "June", "value": "333.952"},
+                {"year": "2025", "period": "M07", "periodName": "July", "value": "323.048"},
+            ]}]},
+        }
+        monkeypatch.setattr(src, "_http_post_json", lambda *a, **k: resp)
+        out = src.bls_cpi_yoy()
+        assert out["period"] == "July 2026"
+        assert out["value"] == pytest.approx((333.918 / 323.048 - 1) * 100, abs=0.01)
+
+    def test_bls_cpi_yoy_raises_without_year_ago_index(self, monkeypatch):
+        resp = {
+            "status": "REQUEST_SUCCEEDED",
+            "Results": {"series": [{"data": [
+                {"year": "2026", "period": "M07", "periodName": "July", "value": "333.918"},
+            ]}]},
+        }
+        monkeypatch.setattr(src, "_http_post_json", lambda *a, **k: resp)
+        with pytest.raises(RuntimeError, match="year-ago"):
+            src.bls_cpi_yoy()
+
+    def test_synthetic_dxy_matches_known_rates(self, monkeypatch):
+        # Rates observed 2026-08-21; ICE DXY printed ~98.3 that day.
+        rates = {"rates": {"EUR": 0.85477, "JPY": 158.7, "GBP": 0.73228,
+                           "CAD": 1.374, "SEK": 9.4559, "CHF": 0.79947}}
+        import json
+        monkeypatch.setattr(src, "_http_get", lambda *a, **k: json.dumps(rates))
+        value = src.synthetic_dxy()["value"]
+        assert 95.0 < value < 101.0

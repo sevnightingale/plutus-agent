@@ -665,23 +665,6 @@ wheels = [
 ]
 
 [[package]]
-name = "context-dev"
-version = "0.34.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "anyio" },
-    { name = "distro" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "sniffio" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/4b/a5/f12d7beee98eef5090105f42ca25068f5c89e66e99bd6c39ccba9573070e/context_dev-0.34.0.tar.gz", hash = "sha256:3b6c0a10b6cfe654937e40b360d45cfc3305c4f3fa2237f491049b7df1f63afb", size = 288284, upload-time = "2026-06-08T21:22:37.934Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cf/f5/4d5f9d6512326e8e6ca53026acc7698117a152da0cc609b5d18dfbb55047/context_dev-0.34.0-py3-none-any.whl", hash = "sha256:00fa40cc093d6caf70fbead8e634a1e3ce877aaa6f04a12daf698b569b9915ad", size = 188500, upload-time = "2026-06-08T21:22:36.713Z" },
-]
-
-[[package]]
 name = "croniter"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3002,7 +2985,6 @@ version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
-    { name = "context-dev" },
     { name = "edge-tts" },
     { name = "exa-py" },
     { name = "fal-client" },
@@ -3136,7 +3118,6 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'messaging'", specifier = ">=3.13.3,<4" },
     { name = "anthropic", specifier = ">=0.39.0,<1" },
     { name = "boto3", marker = "extra == 'bedrock'", specifier = ">=1.35.0,<2" },
-    { name = "context-dev", specifier = ">=0.34" },
     { name = "croniter", marker = "extra == 'cron'", specifier = ">=6.0.0,<7" },
     { name = "daytona", marker = "extra == 'daytona'", specifier = ">=0.148.0,<1" },
     { name = "debugpy", marker = "extra == 'dev'", specifier = ">=1.8.0,<2" },
