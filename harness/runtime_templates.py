@@ -42,17 +42,25 @@ Plutus's impulse.
 - One position at a time (cross-margin law, not preference).
 - Trades only from ACTIVE strategies clearing the global conviction
   threshold: 0.50 — unless the operator arms the PILOT sentinel
-  (`~/.plutus-agent/PILOT`), which opens a second lane: the highest-conviction
-  fresh TEST-book prediction may fund when no graduated candidate exists.
+  (`~/.plutus-agent/PILOT`), which opens a second lane: the best fresh
+  TEST-book prediction may fund when no graduated candidate exists, ranked
+  by CALIBRATED conviction (since 2026-08-24 — the reflect-trained model's
+  P(correct); raw conviction stays the candidate floor, and a scored
+  candidate must clear 0.50 calibrated too).
   Graduation is the binary gate on the evidence-backed lane; conviction above
   the threshold sets SIZE via the notional bands — position size as a multiple
   of equity (0.50–0.65 → 0.5× · 0.65–0.80 → 1× · 0.80–1.00 → 5×), floored at
   the venue's $10 minimum, capped at 10X leverage. Sets size, never whether
-  to trade.
+  to trade. **The number the bands read is the CALIBRATED conviction** where
+  the model can score the prediction (2026-08-24 wire-in; falls back to raw
+  when it cannot, recorded as calibration_used=false); the pilot RR gate's
+  prior is likewise the calibrated p rather than a neutral 0.5. Decision
+  rows carry the effective number; the prediction row keeps raw so the
+  calibration loop never trains on its own output.
 - plutus-main makes NO trading decisions — orchestrator and scribe only.
   SELECTION is a query (best_actionable_prediction = the argmax-EV open
   prediction of a currently-tradeable active strategy, falling back to the
-  highest-conviction fresh test-book prediction when PILOT is armed and the
+  best-calibrated fresh test-book prediction when PILOT is armed and the
   graduated lane is empty); main FUNDS it by calling
   desk_open_position DIRECTLY (execution is a deterministic tool, not a
   sub-agent) UNLESS a mechanical guard blocks: a position is already open, the
