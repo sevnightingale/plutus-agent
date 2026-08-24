@@ -75,21 +75,28 @@ plutus-main and move on.
    These are all keyed because an upstream outage is not news twice: on
    2026-07-26 `acp agent whoami` returned 502/504 from api.acp.virtuals every
    thirty minutes, and nothing about repeating it helps the operator.
-9. PROVIDER BALANCE: fetch_data_point deepseek_balance — the model provider's
-   analogue of step 7. DeepSeek is PREPAID: an exhausted balance fails every
-   spawn in the same shape as the 2026-08-03→05 quota outage, so the meter is
-   watched instead of discovered empty. Topping up is the operator's — never
-   you.
-   - critical=true (< $2) → enqueue_wake(reason=escalation,
+9. PROVIDER METER: fetch the meter for the CONFIGURED provider — the model
+   provider's analogue of step 7. Which data point depends on model.provider:
+   - provider=deepseek → fetch_data_point deepseek_balance. DeepSeek is
+     PREPAID: an exhausted balance fails every spawn in the same shape as
+     the 2026-08-03→05 quota outage. critical = < $2, low = < $5.
+   - provider=opencode-go → fetch_data_point opencode_go_usage. The plan is
+     a SUBSCRIPTION with quota windows (rolling/weekly/monthly percent
+     used); the monthly window's exhaustion IS the 2026-08-03→05 outage.
+     critical = any window ≥ 95%, low = any window ≥ 80%; the reason
+     carries the reset time.
+   Both DPs return the same verdict contract, so the wake rules are shared.
+   Remedy is the operator's — never you.
+   - critical=true → enqueue_wake(reason=escalation,
      key="provider:balance_critical", detail=the reason string verbatim).
    - fetch_failed=true AND is_current_provider=true →
      enqueue_wake(reason=escalation, key="provider:balance_unknown",
-     detail=the reason string verbatim) — an unknown balance is not a
-     healthy balance.
-   - low=true (< $5) → enqueue_wake(reason=staleness,
+     detail=the reason string verbatim) — an unknown meter is not a
+     healthy meter.
+   - low=true → enqueue_wake(reason=staleness,
      key="provider:balance_low", detail=the reason string verbatim).
-   - otherwise silent. If is_current_provider=false the desk is not on
-     DeepSeek and only critical is worth reporting, not waking on.
+   - otherwise silent. If is_current_provider=false the fetched meter is a
+     dormant fallback and only critical is worth reporting, not waking on.
 10. HYGIENE: runtime_hygiene. Self-gating in code — call it every tick and it
    sweeps roughly once a day, returning skipped=true otherwise. Report
    freed_mb when it actually ran. Journals, blackboards and the databases are
