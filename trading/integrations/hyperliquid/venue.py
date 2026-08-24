@@ -528,6 +528,7 @@ def hl_close_position(
     symbol: str,
     position_id: int,
     slippage: float = DEFAULT_MARKET_SLIPPAGE,
+    opened_at: Optional[float] = None,
     **_extra: Any,
 ) -> Dict[str, Any]:
     """Market-close the live HL position for ``symbol``.
@@ -551,7 +552,7 @@ def hl_close_position(
         # already flat: an on-venue SL/TP fired, or it was closed out-of-band.
         # Recover the actual closing fill from venue history so the books
         # settle on real numbers; raise if none can be found (no fabrication).
-        normalized = _recover_flat_close(symbol)
+        normalized = _recover_flat_close(symbol, opened_at=opened_at)
     else:
         normalized = _normalize_response(resp)
     if cancel_warnings:
@@ -559,12 +560,27 @@ def hl_close_position(
     return normalized
 
 
-def _recover_flat_close(symbol: str) -> Dict[str, Any]:
+def _recover_flat_close(
+    symbol: str, *, opened_at: Optional[float] = None,
+) -> Dict[str, Any]:
     """Settle a close when the venue is already flat (bracket fired or closed
-    out-of-band): pull the most recent fill for the coin from venue history.
+    out-of-band): recover the closing fill(s) for the coin from venue history.
 
     Without this, every on-venue SL/TP fire left the lifecycle.db position
     permanently open — and the one-position law then deadlocked the desk.
+
+    A trigger does NOT always fill in one piece. On 2026-08-23 a TP on 0.0316
+    ETH filled as 0.0126 + 0.019, both stamped the same second; this function
+    took ``max(fills, key=time)`` and reported 0.0126 as the whole close, so
+    the ``trades`` row recorded 40% of the position. Realized PnL survived only
+    because ``outcomes`` computes from ``user_fills_by_time`` rather than from
+    ``trades`` — the ledger was wrong where nothing happened to be reading it.
+
+    So: aggregate every CLOSING fill for the coin since the position opened,
+    size-weighted on price. ``opened_at`` (epoch seconds) is the boundary that
+    keeps a previous position's fills out of this one's arithmetic; without it
+    we fall back to the burst of closing fills sharing the latest fill's
+    timestamp, which is the multi-fill trigger case and nothing wider.
     """
     info = get_info()
     addr = resolve_account_address("hl_trading")
@@ -574,16 +590,43 @@ def _recover_flat_close(symbol: str) -> Dict[str, Any]:
             f"venue reports no open {symbol} position and no {symbol} fills "
             "in recent history — cannot settle the close; reconcile manually"
         )
-    last = max(fills, key=lambda f: f.get("time", 0))
+
+    closing = [f for f in fills
+               if str(f.get("dir", "")).strip().lower().startswith("close")]
+    # An unrecognised `dir` vocabulary must not silently zero the close: fall
+    # back to the whole history rather than to an empty set.
+    candidates = closing or fills
+
+    if opened_at is not None:
+        since_ms = float(opened_at) * 1000.0
+        scoped = [f for f in candidates if float(f.get("time", 0)) >= since_ms]
+    else:
+        latest_ms = max(float(f.get("time", 0)) for f in candidates)
+        scoped = [f for f in candidates
+                  if float(f.get("time", 0)) == latest_ms]
+    if not scoped:
+        scoped = [max(candidates, key=lambda f: f.get("time", 0))]
+
+    total_sz = sum(float(f["sz"]) for f in scoped)
+    if total_sz <= 0:
+        raise RuntimeError(
+            f"recovered {symbol} closing fills sum to zero size — "
+            "cannot settle the close; reconcile manually"
+        )
+    avg_px = sum(float(f["px"]) * float(f["sz"]) for f in scoped) / total_sz
+    last = max(scoped, key=lambda f: f.get("time", 0))
+    pnls = [f.get("closedPnl") for f in scoped if f.get("closedPnl") is not None]
+
     return {
         "already_flat": True,
-        "fill_price": float(last["px"]),
-        "size": float(last["sz"]),
+        "fill_price": avg_px,
+        "size": total_sz,
         "order_id": str(last.get("oid")) if last.get("oid") is not None else None,
         "fill_id": str(last.get("tid")) if last.get("tid") is not None else None,
         "slippage_bp": None,
-        "closed_pnl": last.get("closedPnl"),
+        "closed_pnl": sum(float(p) for p in pnls) if pnls else None,
         "fill_time_ms": last.get("time"),
+        "fill_count": len(scoped),
     }
 
 

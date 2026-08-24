@@ -521,24 +521,56 @@ def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[st
     current = total_eq["equity_usd"]
 
     conn = get_db()
-    cutoff_ms = int((time.time() - lookback_days * 86400) * 1000)
+    # ``data_point_snapshots.ts`` is epoch SECONDS (fetch_core writes
+    # ``time.time()``). This cutoff was milliseconds, so ``ts >= cutoff`` was
+    # false for every row ever written and the query returned nothing: peak
+    # collapsed to ``current``, drawdown to 0.00%, and the alert built on it
+    # could not fire. A safety instrument that says all-clear by construction
+    # is worse than none. (Found 2026-08-24.)
+    cutoff_s = time.time() - lookback_days * 86400
     rows = conn.execute(
         "SELECT value_json, ts FROM data_point_snapshots "
         "WHERE name = 'hl_total_equity' AND ts >= ? "
         "ORDER BY ts ASC",
-        (cutoff_ms,),
+        (cutoff_s,),
     ).fetchall()
 
     import json as _json
     samples = []
+    skipped = 0
     for r in rows:
         try:
             payload = _json.loads(r["value_json"])
-            if payload.get("account_name") == account_name:
-                samples.append(float(payload.get("equity_usd", 0)))
         except Exception:
             continue
-    samples.append(current)
+        # An account IS its address. ``account_name`` is a label callers have
+        # passed inconsistently ("plutus-main", "hyperliquid", "plutus-trader"
+        # all resolve to the same wallet), and matching on it fragments one
+        # account's equity history into three that each look flat.
+        payload_addr = payload.get("address")
+        same = (payload_addr == addr if payload_addr and addr
+                else payload.get("account_name") == account_name)
+        if not same:
+            continue
+        # Only FLAT readings are comparable. The formula above double-counts
+        # while a position is open (the ``TODO(verify-live)`` on
+        # ``equity_breakdown``): on 2026-07-04 spot $73.52 and perp $73.46 were
+        # the same USDC, and equity read $146.99 on a ~$73 account. Thirty of
+        # the seventy-five snapshots on file are inflated that way, and taking
+        # them as peaks manufactures a 50% drawdown out of a flat account.
+        # Sampling only where the measure is valid is the honest reading until
+        # the formula itself is settled against a live position.
+        perp = payload.get("perp_account_value")
+        if perp is None or float(perp) > 0:
+            skipped += 1
+            continue
+        samples.append(float(payload.get("equity_usd", 0)))
+
+    # The current reading is subject to the same distortion, so say so rather
+    # than quietly comparing an inflated present against a flat past.
+    in_position = float(total_eq.get("perp_account_value") or 0) > 0
+    if not in_position:
+        samples.append(current)
 
     peak = max(samples) if samples else current
     drawdown_usd = peak - current
@@ -550,6 +582,8 @@ def hl_drawdown_from_peak(account_name: str, lookback_days: int = 90) -> Dict[st
         "drawdown_usd": drawdown_usd,
         "drawdown_pct": drawdown_pct,
         "samples": len(samples),
+        "samples_skipped_in_position": skipped,
+        "reading_in_position": in_position,
         "lookback_days": lookback_days,
     }
 

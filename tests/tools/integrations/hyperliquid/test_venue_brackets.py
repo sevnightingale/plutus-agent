@@ -457,3 +457,80 @@ class TestClosePositionCancelsBrackets:
         assert any("RPC down" in w for w in res.get("cancel_warnings", []))
         # Close still proceeds
         mock_ex.market_close.assert_called_once()
+
+
+class TestRecoverFlatCloseAggregatesFills:
+    """A trigger may fill in pieces; the recovered close must be the whole.
+
+    The 2026-08-23 ETH TP filled 0.0126 + 0.019 on 0.0316, both stamped the
+    same second. Taking the most recent fill recorded 40% of the position.
+    """
+
+    _FILLS = [
+        {"coin": "ETH", "dir": "Open Long", "sz": "0.0316", "px": "2374.8",
+         "time": 1787461822000, "closedPnl": "0.0", "oid": 1, "tid": 11},
+        {"coin": "ETH", "dir": "Close Long", "sz": "0.0126", "px": "2484.9",
+         "time": 1787491160000, "closedPnl": "1.38726", "oid": 2, "tid": 12},
+        {"coin": "ETH", "dir": "Close Long", "sz": "0.019", "px": "2484.9",
+         "time": 1787491160000, "closedPnl": "2.0919", "oid": 3, "tid": 13},
+        {"coin": "BTC", "dir": "Close Long", "sz": "9.9", "px": "60000.0",
+         "time": 1787491199000, "closedPnl": "-5.0", "oid": 4, "tid": 14},
+    ]
+
+    def _patch(self, monkeypatch, fills):
+        import trading.integrations.hyperliquid.venue as venue
+
+        class _Info:
+            def user_fills(self, _addr):
+                return fills
+
+        monkeypatch.setattr(venue, "get_info", lambda: _Info())
+        monkeypatch.setattr(venue, "resolve_account_address", lambda _n: "0xabc")
+        return venue
+
+    def test_multi_fill_close_sums_size_and_weights_price(self, monkeypatch):
+        venue = self._patch(monkeypatch, self._FILLS)
+        out = venue._recover_flat_close("ETH", opened_at=1787461823.0 - 1)
+        assert out["size"] == pytest.approx(0.0316)
+        assert out["fill_price"] == pytest.approx(2484.9)
+        assert out["closed_pnl"] == pytest.approx(3.47916)
+        assert out["fill_count"] == 2
+        assert out["already_flat"] is True
+
+    def test_other_coins_never_enter_the_arithmetic(self, monkeypatch):
+        venue = self._patch(monkeypatch, self._FILLS)
+        out = venue._recover_flat_close("ETH", opened_at=1787461822.0)
+        assert out["size"] == pytest.approx(0.0316)
+
+    def test_a_previous_positions_fills_are_excluded_by_opened_at(self, monkeypatch):
+        prior = {"coin": "ETH", "dir": "Close Long", "sz": "5.0", "px": "1000.0",
+                 "time": 1787000000000, "closedPnl": "1.0", "oid": 0, "tid": 9}
+        venue = self._patch(monkeypatch, [prior] + self._FILLS)
+        out = venue._recover_flat_close("ETH", opened_at=1787461822.0)
+        assert out["size"] == pytest.approx(0.0316)
+
+    def test_without_opened_at_it_takes_the_latest_burst(self, monkeypatch):
+        venue = self._patch(monkeypatch, self._FILLS[:3])
+        out = venue._recover_flat_close("ETH")
+        assert out["size"] == pytest.approx(0.0316)
+        assert out["fill_count"] == 2
+
+    def test_single_fill_close_is_unchanged(self, monkeypatch):
+        one = [self._FILLS[0], self._FILLS[1]]
+        venue = self._patch(monkeypatch, one)
+        out = venue._recover_flat_close("ETH", opened_at=1787461822.0)
+        assert out["size"] == pytest.approx(0.0126)
+        assert out["fill_price"] == pytest.approx(2484.9)
+        assert out["fill_count"] == 1
+
+    def test_no_fills_at_all_still_raises(self, monkeypatch):
+        venue = self._patch(monkeypatch, [])
+        with pytest.raises(RuntimeError, match="reconcile manually"):
+            venue._recover_flat_close("ETH", opened_at=1.0)
+
+    def test_unknown_dir_vocabulary_falls_back_rather_than_zeroing(self, monkeypatch):
+        odd = [{"coin": "ETH", "dir": "", "sz": "0.0316", "px": "2484.9",
+                "time": 1787491160000, "closedPnl": "3.47916", "oid": 2, "tid": 12}]
+        venue = self._patch(monkeypatch, odd)
+        out = venue._recover_flat_close("ETH", opened_at=1787461822.0)
+        assert out["size"] == pytest.approx(0.0316)
