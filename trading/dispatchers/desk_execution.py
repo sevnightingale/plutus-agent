@@ -651,7 +651,8 @@ def _desk_close(args: Dict[str, Any]) -> str:
         return tool_error(f"position {position_id} is not the open position")
 
     try:
-        close = hl_close_position(symbol=pos["symbol"], position_id=position_id)
+        close = hl_close_position(symbol=pos["symbol"], position_id=position_id,
+                                  opened_at=pos.get("opened_at"))
     except Exception as exc:
         return tool_error(f"venue close failed: {type(exc).__name__}: {exc}")
 

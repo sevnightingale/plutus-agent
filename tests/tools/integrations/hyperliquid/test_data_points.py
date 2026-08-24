@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 
+import time
 import pytest
 
 from trading.perception.core import data_point_registry, account_registry, venue_registry, alert_registry
@@ -205,3 +206,105 @@ def test_hl_total_equity_loud_fails_without_address(monkeypatch):
     from trading.integrations.hyperliquid.data_points import hl_total_equity
     with pytest.raises(_client.HLConfigError):
         hl_total_equity("hl_trading")
+
+
+class TestDrawdownFromPeak:
+    """The peak must come from real history, and only from valid readings.
+
+    Two faults sat on top of each other. The lookback cutoff was computed in
+    MILLISECONDS against a ``ts`` column stored in SECONDS, so the query
+    matched no row ever written: peak collapsed to the current reading and
+    drawdown was 0.00% by construction — an alert that could not fire. Fixing
+    the units alone then surfaced the second fault, because
+    ``equity_usd = spot_usdc + perp_account_value`` double-counts while a
+    position is open (2026-07-04: spot $73.52 + perp $73.46 = $146.99 on a
+    ~$73 account), which manufactures a 50% drawdown out of a flat account.
+    """
+
+    def _fixture(self, monkeypatch, rows, current):
+        import json as _json
+        import trading.integrations.hyperliquid.data_points as dp
+
+        addr = "0xabc"
+
+        class _Conn:
+            def execute(self, _sql, params):
+                cutoff = params[0]
+                assert cutoff < 1e12, (
+                    "cutoff must be epoch SECONDS; a millisecond cutoff "
+                    "matches nothing and silently zeroes the drawdown"
+                )
+                kept = [r for r in rows if r["ts"] >= cutoff]
+                out = [{"value_json": _json.dumps(r["v"]), "ts": r["ts"]}
+                       for r in kept]
+
+                class _Cur:
+                    def fetchall(self_inner):
+                        return out
+
+                return _Cur()
+
+        monkeypatch.setattr(dp, "resolve_account_address", lambda _n: addr)
+        monkeypatch.setattr(dp, "get_info", lambda: object())
+        monkeypatch.setattr(dp, "hl_total_equity", lambda _n: {
+            "account_name": "hl_trading", "address": addr,
+            "equity_usd": current["equity_usd"],
+            "perp_account_value": current.get("perp_account_value", 0.0)})
+        import trading.lifecycle.db as dbmod
+        monkeypatch.setattr(dbmod, "get_db", lambda: _Conn())
+        return dp
+
+    @staticmethod
+    def _row(ts, equity, perp=0.0, addr="0xabc"):
+        return {"ts": ts, "v": {"account_name": "hl_trading", "address": addr,
+                                "equity_usd": equity, "spot_usdc": equity,
+                                "perp_account_value": perp}}
+
+    def test_history_is_actually_read(self, monkeypatch):
+        now = time.time()
+        dp = self._fixture(monkeypatch, [
+            self._row(now - 10 * 86400, 100.0),
+            self._row(now - 5 * 86400, 120.0),
+        ], {"equity_usd": 90.0})
+        out = dp.hl_drawdown_from_peak("hl_trading")
+        assert out["samples"] == 3
+        assert out["peak_equity_usd"] == pytest.approx(120.0)
+        assert out["drawdown_pct"] == pytest.approx(25.0)
+
+    def test_in_position_readings_never_become_the_peak(self, monkeypatch):
+        now = time.time()
+        dp = self._fixture(monkeypatch, [
+            self._row(now - 9 * 86400, 73.5),
+            self._row(now - 8 * 86400, 146.99, perp=73.46),   # double-counted
+            self._row(now - 7 * 86400, 75.1),
+        ], {"equity_usd": 78.5})
+        out = dp.hl_drawdown_from_peak("hl_trading")
+        assert out["peak_equity_usd"] == pytest.approx(78.5)
+        assert out["drawdown_pct"] == pytest.approx(0.0)
+        assert out["samples_skipped_in_position"] == 1
+
+    def test_a_reading_taken_in_position_says_so_and_is_not_compared(self, monkeypatch):
+        now = time.time()
+        dp = self._fixture(monkeypatch, [self._row(now - 2 * 86400, 100.0)],
+                           {"equity_usd": 198.0, "perp_account_value": 99.0})
+        out = dp.hl_drawdown_from_peak("hl_trading")
+        assert out["reading_in_position"] is True
+        assert out["samples"] == 1          # the inflated present is excluded
+        assert out["peak_equity_usd"] == pytest.approx(100.0)
+
+    def test_identity_is_the_address_not_the_label(self, monkeypatch):
+        now = time.time()
+        rows = [self._row(now - 3 * 86400, 200.0, addr="0xother"),
+                self._row(now - 2 * 86400, 100.0)]
+        dp = self._fixture(monkeypatch, rows, {"equity_usd": 90.0})
+        out = dp.hl_drawdown_from_peak("hl_trading")
+        assert out["peak_equity_usd"] == pytest.approx(100.0)
+
+    def test_outside_the_lookback_is_excluded(self, monkeypatch):
+        now = time.time()
+        dp = self._fixture(monkeypatch, [
+            self._row(now - 200 * 86400, 500.0),
+            self._row(now - 2 * 86400, 100.0),
+        ], {"equity_usd": 90.0})
+        out = dp.hl_drawdown_from_peak("hl_trading", lookback_days=90)
+        assert out["peak_equity_usd"] == pytest.approx(100.0)

@@ -89,6 +89,12 @@ def global_panel() -> List[PanelEntry]:
         ("macro_us10y", {}),
         ("macro_us10y_real", {}),
         ("btc_dominance_velocity", {}),
+        # The account is not symbol-scoped, so no per-symbol panel reaches it
+        # and it was on no poller at all: between 2026-08-06 and 2026-08-24
+        # nothing wrote an equity snapshot, the balance drifted $3.40 behind
+        # the venue, and every surface reading it said $75 with conviction.
+        # hl_drawdown_from_peak derives from this history too.
+        ("hl_total_equity", {"account_name": "hl_trading"}),
     ]
 
 
