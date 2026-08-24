@@ -233,6 +233,17 @@ def _desk_open(args: Dict[str, Any]) -> str:
     symbol = args.get("symbol") or pred["symbol"]
     side = args.get("side") or ("long" if (far or 0) > 0 else "short")
     conviction = float(args.get("conviction", pred["conviction"]))
+    # CALIBRATED conviction (wired in 2026-08-24): the newest reflect-saved
+    # model scores this prediction, and the calibrated probability drives the
+    # sizing bands and the pilot lane's prior below. Raw conviction stays the
+    # stored/registered value — the training loop must keep learning from the
+    # uncalibrated signal. Absence (no artifact, unscorable row) falls back
+    # to raw, on the record.
+    from trading.calibration.live import calibrated_conviction
+    _cal = calibrated_conviction(conn, pred["id"])
+    conviction_calibrated = _cal["p"] if _cal else None
+    conviction_effective = (conviction_calibrated
+                            if conviction_calibrated is not None else conviction)
     strategy_name = pred.get("strategy_name")
     timescale = pred.get("timescale")
     thesis = args.get("thesis_md") or ""
@@ -304,12 +315,13 @@ def _desk_open(args: Dict[str, Any]) -> str:
     # p counts scratches as non-wins (wins/n) so the gate's p is consistent
     # with expectancy, which carries scratches at PnL 0 — the scratch-free
     # win_rate overstates the hit rate the book actually delivers.
-    # A pilot book with no resolved history gets the neutral prior: the
-    # threshold then reads "reward must beat stop plus round-trip costs" —
-    # the gate still kills fee-thin setups without demanding history the
-    # book cannot have yet.
+    # A pilot book gets the CALIBRATED probability as its prior when the
+    # model can score it (wired in 2026-08-24 — replacing a fabricated
+    # neutral 0.5 with a measured estimate), falling back to neutral when
+    # calibration is absent. Graduated books keep their own measured wins/n.
     p = ((exp["wins"] / exp["n"]) if exp["n"]
-         else (PILOT_NEUTRAL_P if pilot_trade else None))
+         else ((conviction_calibrated or PILOT_NEUTRAL_P)
+               if pilot_trade else None))
     reward_pct = abs(tp - current) / current * 100.0
     rr = reward_pct / stop_pct if stop_pct else 0.0
     # rr > (1−p)/p is p·reward > (1−p)·stop; the extra term charges the
@@ -324,10 +336,12 @@ def _desk_open(args: Dict[str, Any]) -> str:
                             "rr": round(rr, 3), "rr_threshold": round(threshold, 3),
                             "p_win": round(p, 3), "tp_target": tp_target})
 
-    multiple = target_notional_multiple(conviction)
+    multiple = target_notional_multiple(conviction_effective)
     if multiple is None:
         return tool_result({"ok": False, "refused": "conviction below global threshold",
-                            "conviction": conviction})
+                            "conviction": conviction,
+                            "conviction_calibrated": conviction_calibrated,
+                            "calibration_used": conviction_calibrated is not None})
 
     # Trade-path readiness (TRADING.md fact #3): an unregistered/expired agent
     # wallet makes every order fail SILENTLY on-venue — refuse loudly here
@@ -344,6 +358,10 @@ def _desk_open(args: Dict[str, Any]) -> str:
                             "reason": readiness.get("reason")})
     sizing: Dict[str, Any] = {
         "mode": "notional_based", "notional_multiple": multiple,
+        "conviction_raw": conviction,
+        "conviction_calibrated": conviction_calibrated,
+        "calibration_used": conviction_calibrated is not None,
+        "calibration_version": (_cal or {}).get("version"),
         "stop_pct": stop_pct,
         # loss-at-stop as a fraction of equity — reflect's sizing-review raw
         # material now that risk varies with stop width by design
@@ -435,10 +453,14 @@ def _desk_open(args: Dict[str, Any]) -> str:
         conn, prediction_id=pred["id"], symbol=symbol, text_md=thesis,
         agent="plutus-main", sl_price=sl, sl_rationale_md=sl_rationale,
         session_name=session)
+    # The decision carries the EFFECTIVE conviction — the number that chose
+    # the band — so sizing_performance slices by what was actually used; the
+    # raw registration value rides in sizing["conviction_raw"], and the
+    # prediction row keeps raw untouched for the training loop.
     decision_id = write.record_decision(
         conn, thesis_id=thesis_id,
         action="open_long" if side == "long" else "open_short",
-        agent="plutus-main", conviction=conviction,
+        agent="plutus-main", conviction=conviction_effective,
         params={"sl": sl, "tp": tp, "sl_order_id": fill.get("sl_order_id"),
                 "tp_order_id": fill.get("tp_order_id"),
                 "entry_delta_pct": entry_delta_pct, "sizing": sizing,

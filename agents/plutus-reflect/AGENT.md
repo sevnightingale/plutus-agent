@@ -99,10 +99,17 @@ never copy the previous file's header stamp.*
    trained on the whole resolved record with purged walk-forward
    validation — chronological folds where training rows must have
    RESOLVED before the fold opens, so it can never grade itself on
-   labels it peeked at. It is REPORT-ONLY today: the artifact it writes
-   is not consumed by live scoring; graduation and expectancy never see
-   it. HOW TO READ IT (Brier = mean squared error of the probability;
-   lower is better):
+   labels it peeked at. It is LIVE since 2026-08-24 (operator-approved
+   after four consecutive significant runs): the newest artifact you
+   save is consumed at funding time — pilot-lane selection ranks by the
+   calibrated probability and the sizing bands read it (decision rows
+   carry the effective number; raw stays on the prediction so you never
+   train on the model's own output). Graduation and expectancy still
+   never see it. This raises the stakes of every fit: a degraded
+   artifact now sizes real positions — if oos quality drops sharply or
+   significance is lost, say so LOUDLY in your report and propose the
+   operator consider un-wiring. HOW TO READ IT (Brier = mean squared
+   error of the probability; lower is better):
    - oos: model_lr vs the three baselines. The one that matters is
      baseline_conviction_isotonic — the current engine's conviction given
      a fair 1-D recalibration. model_gbm is a challenger; if it ever
@@ -112,10 +119,11 @@ never copy the previous file's header stamp.*
      your sizing-review commentary accordingly.
    - trend: the tool compares to its own previous artifact (n_delta,
      brier_delta). You narrate the trajectory; you never compute it.
-   - verdict.lr_beats_isotonic_significant: the phase-2 gate. The run
-     where trend.significance_flipped_true is true, ESCALATE: put a
-     proposal in your report that the desk wire conviction_calibrated
-     into the sizing bands (operator decision, like band retunes).
+   - verdict.lr_beats_isotonic_significant: the phase-2 gate — MET, and
+     the wire-in is live (2026-08-24). Watch the INVERSE now: a run
+     where this goes false, or brier_delta degrades sharply, means live
+     sizing is riding a model that stopped earning it — escalate a
+     proposal to un-wire (operator decision, like band retunes).
    Include a "calibration" object in your report (see contract). Never
    hand-copy its numbers into weight updates — the tool owns the
    arithmetic, you own the narration.

@@ -42,6 +42,56 @@ def _regime_parts(tag: Optional[str]) -> tuple:
     return direction, vol
 
 
+def feature_row(p, scores_df, dp_names) -> dict:
+    """The ONE feature-row builder — training (build_frame) and live scoring
+    (trading.calibration.live) both call this, so the two paths cannot drift
+    (the 2026-08-22 panel lesson). ``p`` needs attributes ts / timescale /
+    regime_tag / near_edge_pct / far_edge_pct / horizon_ts /
+    mechanism_family; ``scores_df`` is that prediction's support_scores rows
+    (columns score / weight / base) or None; ``dp_names`` fixes the per-DP
+    column set. Book-prior columns are NOT built here — each caller computes
+    them leak-free for its own timeframe."""
+    row: dict = {
+        "abs_near": abs(p.near_edge_pct),
+        "abs_far": abs(p.far_edge_pct) if p.far_edge_pct is not None else np.nan,
+        "zone_rr": (abs(p.far_edge_pct) / abs(p.near_edge_pct))
+        if p.far_edge_pct and p.near_edge_pct else np.nan,
+        "horizon_h": (p.horizon_ts - p.ts) / 3600.0,
+        "direction_up": 1.0 if p.near_edge_pct > 0 else 0.0,
+    }
+    for t in _TIMESCALES:
+        row[f"tsc_{t}"] = 1.0 if p.timescale == t else 0.0
+    rd, rv = _regime_parts(p.regime_tag)
+    for d in _REGIME_DIRECTIONS:
+        row[f"regime_{d}"] = 1.0 if rd == d else 0.0
+    for v in _REGIME_VOLS:
+        row[f"vol_{v}"] = 1.0 if rv == v else 0.0
+    for f in _FAMILIES:
+        row[f"fam_{f}"] = 1.0 if p.mechanism_family == f else 0.0
+
+    if scores_df is not None and len(scores_df):
+        sc = scores_df["score"].to_numpy(dtype=float)
+        w = scores_df["weight"].fillna(0.0).to_numpy(dtype=float)
+        row["n_scored"] = float(len(sc))
+        row["score_wmean"] = float(np.average(sc, weights=w)) if w.sum() > 0 \
+            else float(sc.mean())
+        row["score_min"] = float(sc.min())
+        row["score_max"] = float(sc.max())
+        row["frac_extreme_hi"] = float((sc >= 0.9).mean())
+        row["frac_low"] = float((sc <= 0.2).mean())
+        per_base = scores_df.groupby("base")["score"].mean()
+    else:
+        row.update({"n_scored": 0.0, "score_wmean": np.nan, "score_min": np.nan,
+                    "score_max": np.nan, "frac_extreme_hi": np.nan,
+                    "frac_low": np.nan})
+        per_base = pd.Series(dtype=float)
+    for name in dp_names:
+        present = name in per_base.index
+        row[f"dp_{name}"] = float(per_base[name]) if present else np.nan
+        row[f"has_{name}"] = 1.0 if present else 0.0
+    return row
+
+
 def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
     """One row per resolved strategy prediction; ``y`` = 1 iff outcome correct.
 
@@ -78,44 +128,8 @@ def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
             "meta_strategy": p.strategy_name,
             "y": 1.0 if p.outcome == "correct" else 0.0,
             "conviction_stored": p.conviction,
-            "abs_near": abs(p.near_edge_pct),
-            "abs_far": abs(p.far_edge_pct) if p.far_edge_pct is not None else np.nan,
-            "zone_rr": (abs(p.far_edge_pct) / abs(p.near_edge_pct))
-            if p.far_edge_pct and p.near_edge_pct else np.nan,
-            "horizon_h": (p.horizon_ts - p.ts) / 3600.0,
-            "direction_up": 1.0 if p.near_edge_pct > 0 else 0.0,
         }
-        for t in _TIMESCALES:
-            row[f"tsc_{t}"] = 1.0 if p.timescale == t else 0.0
-        rd, rv = _regime_parts(p.regime_tag)
-        for d in _REGIME_DIRECTIONS:
-            row[f"regime_{d}"] = 1.0 if rd == d else 0.0
-        for v in _REGIME_VOLS:
-            row[f"vol_{v}"] = 1.0 if rv == v else 0.0
-        for f in _FAMILIES:
-            row[f"fam_{f}"] = 1.0 if p.mechanism_family == f else 0.0
-
-        ss = by_pred.get(p.id)
-        if ss is not None and len(ss):
-            sc = ss["score"].to_numpy(dtype=float)
-            w = ss["weight"].fillna(0.0).to_numpy(dtype=float)
-            row["n_scored"] = float(len(sc))
-            row["score_wmean"] = float(np.average(sc, weights=w)) if w.sum() > 0 \
-                else float(sc.mean())
-            row["score_min"] = float(sc.min())
-            row["score_max"] = float(sc.max())
-            row["frac_extreme_hi"] = float((sc >= 0.9).mean())
-            row["frac_low"] = float((sc <= 0.2).mean())
-            per_base = ss.groupby("base")["score"].mean()
-        else:
-            row.update({"n_scored": 0.0, "score_wmean": np.nan, "score_min": np.nan,
-                        "score_max": np.nan, "frac_extreme_hi": np.nan,
-                        "frac_low": np.nan})
-            per_base = pd.Series(dtype=float)
-        for name in dp_names:
-            present = name in per_base.index
-            row[f"dp_{name}"] = float(per_base[name]) if present else np.nan
-            row[f"has_{name}"] = 1.0 if present else 0.0
+        row.update(feature_row(p, by_pred.get(p.id), dp_names))
         rows.append(row)
 
     frame = pd.DataFrame(rows).sort_values("ts").reset_index(drop=True)

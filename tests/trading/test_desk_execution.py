@@ -685,3 +685,72 @@ class TestAdopt:
         r = _call("desk_adopt_position",
                   {"prediction_id": pid, "thesis_md": "t"})
         assert "already has an open position" in r["error"]
+
+
+class TestCalibratedSizing:
+    """Calibrated conviction drives the bands and the pilot prior
+    (wired in 2026-08-24); absence falls back to raw, on the record."""
+
+    def _arm(self):
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
+
+    def _stub_cal(self, monkeypatch, p):
+        import trading.calibration.live as live
+        monkeypatch.setattr(
+            live, "calibrated_conviction",
+            lambda conn, pid: ({"p": p, "version": "test-v", "trained_at": 0.0}
+                               if p is not None else None))
+
+    def test_calibrated_conviction_picks_the_band(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.dispatchers.desk_execution as mod
+        monkeypatch.setattr(mod, "_derive_stop_pct", lambda *a: (1.0, "s"))
+        self._stub_cal(monkeypatch, 0.55)          # raw 0.72 would take 1×
+        pid = _seed_strategy("cal1", "test", [])
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["sizing"]["notional_multiple"] == 0.5   # 0.55 band, not raw's 1×
+        assert r["sizing"]["conviction_calibrated"] == 0.55
+        assert r["sizing"]["conviction_raw"] == 0.72
+        assert r["sizing"]["calibration_used"] is True
+        dec = get_db().execute(
+            "SELECT conviction FROM decisions ORDER BY id DESC LIMIT 1").fetchone()
+        assert dec[0] == pytest.approx(0.55)       # the number that chose the band
+
+    def test_calibrated_below_threshold_refuses(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.dispatchers.desk_execution as mod
+        # stop 1.0 vs far 3.0: rr=3.0 clears even the p=0.42-tightened RR
+        # threshold, so the refusal under test is the BAND one specifically.
+        monkeypatch.setattr(mod, "_derive_stop_pct", lambda *a: (1.0, "s"))
+        self._stub_cal(monkeypatch, 0.42)
+        pid = _seed_strategy("cal2", "test", [])
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r.get("ok") is False, r
+        assert r["refused"] == "conviction below global threshold"
+        assert r["calibration_used"] is True and r["conviction_calibrated"] == 0.42
+
+    def test_absent_calibration_falls_back_to_raw(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.dispatchers.desk_execution as mod
+        monkeypatch.setattr(mod, "_derive_stop_pct", lambda *a: (2.0, "s"))
+        self._stub_cal(monkeypatch, None)
+        pid = _seed_strategy("cal3", "test", [])
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["sizing"]["notional_multiple"] == 1.0   # raw 0.72 band
+        assert r["sizing"]["calibration_used"] is False
+
+    def test_calibrated_prior_feeds_pilot_rr_gate(self, mock_venue, monkeypatch):
+        self._arm()
+        import trading.dispatchers.desk_execution as mod
+        monkeypatch.setattr(mod, "_derive_stop_pct", lambda *a: (2.6, "s"))
+        # far edge 3.0 vs stop 2.6: rr ~1.15 fails at p=0.5 (threshold >1)
+        # but clears at a calibrated p=0.62 — the measured prior opens the
+        # gate the fabricated neutral one kept shut.
+        self._stub_cal(monkeypatch, 0.62)
+        pid = _seed_strategy("cal4", "test", [])
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        assert r["sizing"]["rr"] < 1.2

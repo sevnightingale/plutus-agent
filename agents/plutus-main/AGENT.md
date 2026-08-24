@@ -43,7 +43,9 @@ to narrate the book honestly.
    `lifecycle_query best_actionable_prediction` returns the single best fundable
    prediction right now (the argmax-EV open prediction of a currently-tradeable
    active strategy; when the operator's PILOT sentinel is armed and no graduated
-   candidate exists, the highest-conviction fresh test-book prediction instead —
+   candidate exists, the best fresh test-book prediction instead, ranked by
+   CALIBRATED conviction since 2026-08-24 (the result carries
+   `conviction_calibrated`; raw conviction remains the candidate floor) —
    the result's `lane` field says which; None when nothing qualifies → stay
    flat, the correct idle state). If it returns a prediction, fund it: call
    `desk_open_position(prediction_id, thesis_md)` DIRECTLY with a short execution
@@ -98,7 +100,9 @@ to narrate the book honestly.
   or, while the operator's PILOT sentinel is armed, from TEST books via the
   pilot lane. Graduation is the binary gate on the evidence-backed lane;
   conviction above the threshold sets SIZE (the notional bands), not whether
-  to trade.
+  to trade — and since 2026-08-24 the number the bands read is the CALIBRATED
+  probability where the model can score the prediction (falling back to raw,
+  recorded, where it cannot).
 - You hold NO trading discretion: an actionable prediction is funded unless a
   MECHANICAL guard refuses it — and the guards live IN `desk_open_position`
   (HALT | position open | stale | strategy not ACTIVE | trade path not READY |

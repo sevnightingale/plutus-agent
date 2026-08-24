@@ -764,3 +764,50 @@ class TestHazard:
         assert exp["recent"]["expectancy_pct"] > 0
         assert exp["decaying"] is False
         assert exp["tradeable"] is True
+
+
+class TestPilotCalibratedRanking:
+    """The pilot lane ranks by CALIBRATED conviction (wired in 2026-08-24);
+    raw stays the candidate floor; absence degrades to raw, on the record."""
+
+    def _arm(self):
+        from tests.trading.conftest import arm_pilot
+        arm_pilot()
+
+    def _stub(self, monkeypatch, mapping):
+        import trading.calibration.live as live
+        monkeypatch.setattr(
+            live, "calibrated_conviction",
+            lambda conn, pid: ({"p": mapping[pid], "version": "test-v",
+                                "trained_at": 0.0}
+                               if mapping.get(pid) is not None else None))
+
+    def test_calibrated_ranking_beats_raw(self, conn, monkeypatch):
+        self._arm()
+        _strat_row(conn, "t1", status="test")
+        _strat_row(conn, "t2", status="test")
+        raw_hi = _record(conn, strategy_name="t1", kind="strategy", conviction=0.9)
+        raw_lo = _record(conn, strategy_name="t2", kind="strategy", conviction=0.6)
+        # The model inverts the raw order: the 0.6-raw prediction calibrates
+        # higher — it must win, and the anti-calibrated 0.9 must lose.
+        self._stub(monkeypatch, {raw_hi: 0.52, raw_lo: 0.61})
+        best = queries.best_actionable_prediction(conn)
+        assert best["id"] == raw_lo and best["lane"] == "pilot"
+        assert best["conviction_calibrated"] == 0.61
+        assert best["calibration_version"] == "test-v"
+
+    def test_calibrated_below_threshold_is_filtered(self, conn, monkeypatch):
+        self._arm()
+        _strat_row(conn, "t", status="test")
+        pid = _record(conn, strategy_name="t", kind="strategy", conviction=0.9)
+        self._stub(monkeypatch, {pid: 0.42})   # model says worse than a coin
+        assert queries.best_actionable_prediction(conn) is None
+
+    def test_no_artifact_degrades_to_raw_argmax(self, conn, monkeypatch):
+        self._arm()
+        _strat_row(conn, "t", status="test")
+        lo = _record(conn, strategy_name="t", kind="strategy", conviction=0.6)
+        hi = _record(conn, strategy_name="t", kind="strategy", conviction=0.8)
+        self._stub(monkeypatch, {lo: None, hi: None})
+        best = queries.best_actionable_prediction(conn)
+        assert best["id"] == hi and best["calibration"] == "unavailable"

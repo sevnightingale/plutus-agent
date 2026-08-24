@@ -147,3 +147,71 @@ class TestDispatcher:
         assert second["trend"]["n_delta"] == 0
         assert second["trend"]["brier_delta"] == pytest.approx(0.0, abs=1e-9)
         assert second["trend"]["significance_flipped_true"] in (True, False)
+
+
+class TestLiveScoring:
+    """The wired-in path: one prediction, scored from the newest artifact."""
+
+    def _fit_artifact(self, conn):
+        # fit_and_save needs only the frame — skip the walk-forward (it is
+        # exercised by TestWalkForward/TestDispatcher and too slow per-test).
+        frame = F.build_frame(conn)
+        return frame, FIT.fit_and_save(frame, {})
+
+    def test_scores_unresolved_prediction(self, tmp_path):
+        from trading.calibration import live
+        conn = get_db(tmp_path / "lifecycle.db")
+        _seed(conn)
+        self._fit_artifact(conn)
+        pid = write.record_prediction(conn, write.PredictionDraft(
+            claim_md="live", ts=NOW, horizon_ts=NOW + 6 * 3600.0,
+            entry_ref_price=100_000.0, near_edge_pct=1.0, far_edge_pct=2.0,
+            conviction=0.9, agent="plutus-predict", symbol="BTC",
+            strategy_name="cal-s", kind="strategy",
+            regime_tag="intraday/ranging/normal",
+            support_scores=[
+                write.SupportScore(data_point="dp_alpha", score=0.95,
+                                   kind="numerical", weight=0.5),
+                write.SupportScore(data_point="dp_noise", score=0.5,
+                                   kind="numerical", weight=0.5)]))
+        out = live.calibrated_conviction(conn, pid)
+        assert out is not None
+        assert 0.0 < out["p"] < 1.0
+        assert out["version"] == FIT.ARTIFACT_VERSION
+        # dp_alpha ~0.95 on a model that learned alpha drives outcomes:
+        # the calibrated number should read favorably despite nothing else.
+        assert out["p"] > 0.5
+        conn.close()
+
+    def test_parity_with_training_frame(self, tmp_path):
+        """The live row and the batch frame must score IDENTICALLY for the
+        same resolved prediction — the one-builder guarantee, asserted."""
+        import pandas as pd
+        from trading.calibration import live
+        conn = get_db(tmp_path / "lifecycle.db")
+        _seed(conn)
+        frame, _ = self._fit_artifact(conn)
+        spec = FIT.load_artifact()["spec"]
+        i = len(frame) // 2
+        pid = int(frame.iloc[i]["meta_id"])
+        p_batch = float(FIT.predict_from_artifact(
+            spec, frame.iloc[[i]][F.feature_columns(frame)])[0])
+        p_live = live.calibrated_conviction(conn, pid)["p"]
+        assert p_live == pytest.approx(p_batch, abs=1e-4)
+        conn.close()
+
+    def test_absent_artifact_reads_none(self, tmp_path):
+        from trading.calibration import live
+        conn = get_db(tmp_path / "lifecycle.db")
+        _seed(conn, n=2)
+        pid = conn.execute("SELECT id FROM predictions LIMIT 1").fetchone()[0]
+        assert live.calibrated_conviction(conn, pid) is None
+        conn.close()
+
+    def test_missing_prediction_reads_none(self, tmp_path):
+        from trading.calibration import live
+        conn = get_db(tmp_path / "lifecycle.db")
+        _seed(conn)
+        self._fit_artifact(conn)
+        assert live.calibrated_conviction(conn, 10**9) is None
+        conn.close()

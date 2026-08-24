@@ -510,11 +510,16 @@ def best_actionable_prediction(
     if best is not None:
         return best
 
-    # PILOT lane: when no graduated candidate exists, the highest-CONVICTION
-    # fresh prediction from a TEST book qualifies — argmax conviction,
-    # tiebreak earliest. No EV gate here: evidence-empty books have no
-    # calibration, and desk_open_position re-gates RR at the live price with
-    # a neutral prior. The graduated lane always wins when it has a candidate.
+    # PILOT lane: when no graduated candidate exists, the best fresh TEST-book
+    # prediction qualifies — ranked by CALIBRATED conviction (the wired-in
+    # model, 2026-08-24) because raw conviction is anti-calibrated at the top
+    # (0.9–1.0 bucket hit 35% at N=1009). Raw stays the candidate floor: it is
+    # the registration-side threshold semantics. A scored candidate must ALSO
+    # clear the global threshold on its calibrated probability, keeping
+    # selection consistent with the sizing refusal downstream. When no
+    # artifact exists the lane degrades to the raw argmax, and says so.
+    # No EV gate here: desk_open_position re-gates RR at the live price.
+    # The graduated lane always wins when it has a candidate.
     if not pilot_armed():
         return None
     from trading.conviction.engine import GLOBAL_CONVICTION_THRESHOLD
@@ -525,9 +530,26 @@ def best_actionable_prediction(
            WHERE pr.resolved_at IS NULL AND s.status = 'test'
              AND pr.conviction >= ? AND pr.ts >= ?
            ORDER BY pr.conviction DESC, pr.ts ASC
-           LIMIT 1""", (GLOBAL_CONVICTION_THRESHOLD, cutoff)))
-    if pilot_rows:
-        return {**pilot_rows[0], "lane": "pilot"}
+           LIMIT 25""", (GLOBAL_CONVICTION_THRESHOLD, cutoff)))
+    if not pilot_rows:
+        return None
+    from trading.calibration.live import calibrated_conviction
+    scored, unscored = [], []
+    for r in pilot_rows:
+        cal = calibrated_conviction(conn, r["id"])
+        if cal is None:
+            unscored.append(r)
+        elif cal["p"] >= GLOBAL_CONVICTION_THRESHOLD:
+            scored.append({**r, "conviction_calibrated": cal["p"],
+                           "calibration_version": cal["version"]})
+    if scored:
+        scored.sort(key=lambda r: (-r["conviction_calibrated"],
+                                   -r["conviction"], r["ts"]))
+        return {**scored[0], "lane": "pilot"}
+    if unscored and len(unscored) == len(pilot_rows):
+        # Calibration unavailable across the board (no artifact yet) — the
+        # pre-wire-in behaviour, named rather than silent.
+        return {**unscored[0], "lane": "pilot", "calibration": "unavailable"}
     return None
 
 
