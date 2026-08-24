@@ -141,10 +141,16 @@ def get_exchange() -> Exchange:
 
         wallet = Account.from_key(key)
         master_address = os.getenv("ACP_AGENT_WALLET") or None
+        # Same perp_dexs mirroring as get_info(): without it the Exchange's
+        # coin map covers only the main dex and every dex-qualified order
+        # ("xyz:GOLD") KeyErrors at signing — perceivable but untradeable
+        # (cost two pilot entries, 2026-08-23/24).
+        dexs = _configured_perp_dexs()
         _exchange = Exchange(
             wallet,
             constants.MAINNET_API_URL,
             account_address=master_address,
+            perp_dexs=([""] + dexs) if dexs else None,
         )
         _exchange_addr = key
         logger.info(
