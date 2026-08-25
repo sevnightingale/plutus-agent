@@ -24,7 +24,7 @@ def test_position_status_change_open(monkeypatch):
             {"position": {"coin": "BTC", "szi": "0.01", "entryPx": "80000"}}
         ]
     }
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    monkeypatch.setattr(_client, "get_info", lambda: info_mock)
 
     fired, new_state = alerts.poll_hl_position_status_change(state={"positions": {}})
     assert len(fired) == 1
@@ -36,7 +36,7 @@ def test_position_status_change_open(monkeypatch):
 def test_position_status_change_close(monkeypatch):
     info_mock = MagicMock()
     info_mock.user_state.return_value = {"assetPositions": []}
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    monkeypatch.setattr(_client, "get_info", lambda: info_mock)
 
     prev = {"positions": {"BTC": {"szi": 0.01, "entry_px": 80000}}}
     fired, new_state = alerts.poll_hl_position_status_change(state=prev)
@@ -53,7 +53,7 @@ def test_position_status_change_size_change(monkeypatch):
             {"position": {"coin": "BTC", "szi": "0.02", "entryPx": "80000"}}
         ]
     }
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    monkeypatch.setattr(_client, "get_info", lambda: info_mock)
 
     prev = {"positions": {"BTC": {"szi": 0.01, "entry_px": 80000}}}
     fired, _ = alerts.poll_hl_position_status_change(state=prev)
@@ -70,7 +70,7 @@ def test_position_status_change_no_diff(monkeypatch):
             {"position": {"coin": "BTC", "szi": "0.01", "entryPx": "80000"}}
         ]
     }
-    monkeypatch.setattr(_client, "get_info", lambda: info_mock); monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
+    monkeypatch.setattr(_client, "get_info", lambda: info_mock)
 
     prev = {"positions": {"BTC": {"szi": 0.01, "entry_px": "80000"}}}
     fired, _ = alerts.poll_hl_position_status_change(state=prev)
@@ -90,7 +90,6 @@ def _equity_info_mock(monkeypatch, spot_usdc: str, perp_account_value: str):
         "balances": [{"coin": "USDC", "total": spot_usdc}]
     }
     monkeypatch.setattr(_client, "get_info", lambda: info_mock)
-    monkeypatch.setattr(alerts, "get_info", lambda: info_mock)
     monkeypatch.setattr(data_points, "get_info", lambda: info_mock)
     return info_mock
 
@@ -157,7 +156,7 @@ def test_prediction_resolution_paper_is_silent(monkeypatch):
     pid = write.record_prediction(conn, _zone_draft())  # near +5%, far +10% (110k)
     info = MagicMock()
     info.all_mids.return_value = {"BTC": "111000"}  # above the far edge → target
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(_client, "get_info", lambda: info)
     monkeypatch.setattr(outcomes, "path_stats",
                         lambda *a, **k: {"mfe_pct": 11.0, "mae_pct": -1.0})
 
@@ -184,7 +183,7 @@ def test_prediction_resolution_funded_wakes(monkeypatch):
 
     info = MagicMock()
     info.all_mids.return_value = {"BTC": "111000"}  # above the far edge → target
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(_client, "get_info", lambda: info)
     monkeypatch.setattr(outcomes, "path_stats", lambda *a, **k: {"mfe_pct": 11.0})
 
     fired, _ = alerts.poll_hl_prediction_resolution(state={})
@@ -197,7 +196,7 @@ def test_prediction_resolution_no_open_skips_network(monkeypatch):
     from trading.lifecycle.db import get_db
     get_db()  # fresh, no predictions
     info = MagicMock()
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(_client, "get_info", lambda: info)
     fired, _ = alerts.poll_hl_prediction_resolution(state={})
     assert fired == []
     info.all_mids.assert_not_called()  # no open predictions → no price fetch
@@ -228,7 +227,7 @@ def _open_with_alerts(side, near_px, adverse_px, symbol="BTC"):
 def _mids(monkeypatch, price):
     info = MagicMock()
     info.all_mids.return_value = {"BTC": str(price)}
-    monkeypatch.setattr(alerts, "get_info", lambda: info)
+    monkeypatch.setattr(_client, "get_info", lambda: info)
 
 
 def test_position_alert_near_long(monkeypatch):
@@ -238,6 +237,26 @@ def test_position_alert_near_long(monkeypatch):
     assert {f["kind"] for f in fired} == {"near"}
     assert fired[0]["position_id"] == posid
     assert state["position_id"] == posid and "near" in state["fired"]
+
+
+def test_position_alert_reads_a_builder_dex_position(monkeypatch):
+    """Before the merged read this was a KeyError, swallowed by the poll's
+    own except — so the near/adverse judgment wake was silently dead for
+    every dex-qualified symbol, which is five of the seven watched."""
+    posid = _open_with_alerts("long", near_px=4700.0, adverse_px=4600.0,
+                              symbol="xyz:GOLD")
+    info = MagicMock()
+    # The venue answers per dex: the builder symbol is absent from the main
+    # map and present only in its own.
+    info.all_mids.side_effect = lambda dex="": (
+        {"xyz:GOLD": "4720.0"} if dex == "xyz" else {"BTC": "100000.0"})
+    monkeypatch.setattr(_client, "_configured_perp_dexs", lambda: ["xyz"])
+    monkeypatch.setattr(_client, "get_info", lambda: info)
+
+    fired, state = alerts.poll_hl_position_alert(state={})
+    assert {f["kind"] for f in fired} == {"near"}
+    assert fired[0]["coin"] == "xyz:GOLD"
+    assert fired[0]["position_id"] == posid
 
 
 def test_position_alert_adverse_long(monkeypatch):

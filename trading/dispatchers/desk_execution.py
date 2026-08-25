@@ -23,9 +23,21 @@ closing decision/trade, computes the outcome row.
 from __future__ import annotations
 
 import json
+import logging
+import time
 from typing import Any, Dict
 
 from harness.tools.registry import registry, tool_error, tool_result
+
+logger = logging.getLogger(__name__)
+
+# Post-entry verification: how many times to re-ask the venue whether the stop
+# is resting, and how long to wait between asks. A venue that has accepted an
+# order need not list it in the same second; force-closing on the first empty
+# read cost position #15 (xyz:GOLD, 2026-08-25) — though the root cause there
+# was reading one dex, this is the second line of defence.
+_NAKED_VERIFY_ATTEMPTS = 3
+_NAKED_VERIFY_BACKOFF_S = 0.5
 
 OPEN_SCHEMA = {
     "name": "desk_open_position",
@@ -493,17 +505,35 @@ def _desk_open(args: Dict[str, Any]) -> str:
     naked = sl is not None and sl_leg_warned
     position_on_venue = None
     venue_verified = False
-    try:
-        st = hl_account_state()
-        position_on_venue = any((pp or {}).get("coin") == symbol
-                                for pp in (st.get("open_perp_positions") or []))
-        orders = st.get("open_orders")
-        if sl is not None and orders is not None:
+    # SETTLE-AND-RETRY. The stop is placed and read back within the same
+    # second, and a venue that has accepted an order need not list it yet.
+    # An absence read once is not an absence: re-ask before force-closing a
+    # position that may be properly bracketed. Only a READABLE absence that
+    # survives every attempt aborts; an unreadable state still leaves the
+    # response verdict standing.
+    for attempt in range(_NAKED_VERIFY_ATTEMPTS):
+        try:
+            st = hl_account_state()
+            position_on_venue = any((pp or {}).get("coin") == symbol
+                                    for pp in (st.get("open_perp_positions") or []))
+            orders = st.get("open_orders")
+            if sl is None or orders is None:
+                break
             rests = _sl_rests_on_venue(st, symbol, sl_order_id, sl_price=sl)
             naked = not rests
             venue_verified = rests
-    except Exception:
-        pass  # can't verify on-venue — the response verdict stands
+            if rests:
+                break
+            logger.warning(
+                "post-entry verify: no SL resting for %s at %s (attempt %d/%d)",
+                symbol, sl, attempt + 1, _NAKED_VERIFY_ATTEMPTS)
+        except Exception as exc:
+            # Can't verify on-venue — the response verdict stands, but say so.
+            logger.warning("post-entry verify unreadable (attempt %d/%d): %s",
+                           attempt + 1, _NAKED_VERIFY_ATTEMPTS, exc)
+            break
+        if attempt + 1 < _NAKED_VERIFY_ATTEMPTS:
+            time.sleep(_NAKED_VERIFY_BACKOFF_S)
 
     if naked:
         abort_close = json.loads(_desk_close(

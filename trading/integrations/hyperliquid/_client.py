@@ -117,6 +117,80 @@ def meta_and_ctxs(dex: str = ""):
     return info.post("/info", {"type": "metaAndAssetCtxs", "dex": dex})
 
 
+def _dexs_to_read() -> list:
+    """Every dex an account-wide read must cover: main first, then builders.
+
+    A read that omits this is a read of ONE dex. Hyperliquid documents the
+    ``dex`` parameter's default as "the first perp dex" — not "all of them" —
+    so ``user_state``/``frontend_open_orders``/``all_mids`` called bare answer
+    a narrower question than the caller asked. Measured 2026-08-25: main-dex
+    ``all_mids()`` returns 950 symbols, none of them ``xyz:``.
+    """
+    return [""] + _configured_perp_dexs()
+
+
+def merged_all_mids() -> dict:
+    """Mid prices across every configured dex, in one map.
+
+    Builder-dex keys arrive already qualified ("xyz:GOLD"), so the merge
+    cannot collide with a main-dex symbol.
+    """
+    info = get_info()
+    mids: dict = {}
+    for dex in _dexs_to_read():
+        mids.update(info.all_mids(dex=dex))
+    return mids
+
+
+def merged_user_state(address: str) -> dict:
+    """``clearinghouseState`` across every configured dex.
+
+    Each perp dex keeps its OWN clearinghouse: positions live in the dex they
+    were opened on, and so does their margin. ``assetPositions`` is therefore
+    concatenated and ``marginSummary.accountValue`` SUMMED — a builder-dex
+    position's margin is invisible to the main-dex read, which understates
+    equity exactly while a dex trade is open. The per-dex breakdown rides
+    along in ``account_value_by_dex`` so the arithmetic stays auditable.
+
+    Fields other than the two the desk consumes are taken from the main dex,
+    which is the only one whose shape is guaranteed present.
+    """
+    info = get_info()
+    merged: dict = {}
+    positions: list = []
+    by_dex: dict = {}
+    for dex in _dexs_to_read():
+        state = info.user_state(address, dex) or {}
+        if not merged:
+            merged = dict(state)
+        positions.extend(state.get("assetPositions") or [])
+        try:
+            by_dex[dex or "main"] = float(
+                (state.get("marginSummary") or {}).get("accountValue") or 0.0)
+        except (TypeError, ValueError):
+            by_dex[dex or "main"] = 0.0
+    merged["assetPositions"] = positions
+    summary = dict(merged.get("marginSummary") or {})
+    summary["accountValue"] = str(sum(by_dex.values()))
+    merged["marginSummary"] = summary
+    merged["account_value_by_dex"] = by_dex
+    return merged
+
+
+def merged_open_orders(address: str) -> list:
+    """``frontendOpenOrders`` across every configured dex.
+
+    A stop resting on a builder dex is invisible to the bare call — which is
+    how a correctly bracketed position was force-closed as naked on
+    2026-08-25 (position #15, xyz:GOLD).
+    """
+    info = get_info()
+    orders: list = []
+    for dex in _dexs_to_read():
+        orders.extend(info.frontend_open_orders(address, dex) or [])
+    return orders
+
+
 def get_exchange() -> Exchange:
     """Return the singleton ``Exchange`` client; loud-fail without ``HL_API_WALLET_KEY``."""
     global _exchange, _exchange_addr

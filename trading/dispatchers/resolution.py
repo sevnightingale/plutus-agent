@@ -66,12 +66,15 @@ def _resolve_due(args: Dict[str, Any]) -> str:
     from trading.dispatchers._helpers import session_id_from_context
     from trading.lifecycle import resolver, write
     from trading.lifecycle.db import get_db
-    from trading.integrations.hyperliquid._client import get_info
+    from trading.integrations.hyperliquid._client import merged_all_mids
     from trading.integrations.hyperliquid.outcomes import path_stats
 
     conn = get_db()
     try:
-        raw = get_info().all_mids()
+        # Across every configured dex — the bare call returns main-dex mids
+        # only, leaving builder-dex predictions with no live price to classify
+        # against and no way to resolve short of the horizon backstop.
+        raw = merged_all_mids()
         mids = {k: float(v) for k, v in raw.items()}
     except Exception as exc:
         return tool_error(f"could not fetch prices (all_mids): {exc}")
@@ -85,12 +88,20 @@ def _resolve_due(args: Dict[str, Any]) -> str:
         conn, mids=mids, path_stats_fn=path_stats,
         fetch_fn=_fetch, fetch_extreme_fn=_fetch_extreme, deep=True)
     marked = res.get("marked_near", [])
+    unreadable = res.get("unresolvable_invalidations", [])
+    note = (f"{len(res['resolved'])} resolved, {len(marked)} near-locked "
+            f"of {res['open_count']} open")
+    if unreadable:
+        # Loud by construction: a thesis-break nothing can read is a
+        # prediction the desk cannot judge, and it reads exactly like a
+        # thesis that is holding.
+        note += (" — UNREADABLE INVALIDATION on "
+                 + ", ".join(str(u["prediction_id"]) for u in unreadable))
     write.record_action_run(
         conn, action_type="resolution", agent="plutus-ops",
-        session_name=session_id_from_context(),
-        notes_md=f"{len(res['resolved'])} resolved, {len(marked)} near-locked "
-                 f"of {res['open_count']} open")
+        session_name=session_id_from_context(), notes_md=note)
     return tool_result({"resolved": res["resolved"], "marked_near": marked,
+                        "unresolvable_invalidations": unreadable,
                         "open_count": res["open_count"]})
 
 

@@ -1,5 +1,6 @@
 """lifecycle.db v2 — schema, writers, criteria, queries."""
 
+import json
 import time
 
 import pytest
@@ -705,3 +706,145 @@ class TestWatchdogSource:
                                 agent="plutus-regime", ts=150.0)
         last = queries.last_action_runs(conn)
         assert last == {"perception": 200.0, "regime": 150.0}
+
+
+@pytest.fixture(autouse=True)
+def _data_points_registered():
+    """The binder reads params off the live data-point registry, which is
+    populated by importing the integrations — as it is in any real process."""
+    import trading.integrations.hyperliquid.data_points  # noqa: F401
+
+
+class TestInvalidationSymbolBinding:
+    """A prediction knows what it is about; its criteria must too.
+
+    ``validate`` checked that a leaf's data point was registered and
+    numerically resolvable, but never that the data point's own REQUIRED
+    params were present. ``{"data_point": "hl_price", "op": "lte",
+    "threshold": 88.9}`` — no symbol — passed registration and then failed at
+    every fetch forever. Measured 2026-08-25: 20 of 99 predictions carrying
+    machine invalidation were unreadable, three of them describing theses that
+    had already broken.
+    """
+
+    def test_missing_required_param_is_named(self):
+        from trading.lifecycle import criteria
+        assert criteria.missing_required_params("hl_price", None) == ["symbol"]
+        assert criteria.missing_required_params(
+            "hl_price", {"symbol": "BTC"}) == []
+
+    def test_bind_fills_from_the_prediction_symbol(self):
+        from trading.lifecycle import criteria
+        leaf = {"data_point": "hl_price", "op": "lte", "threshold": 88.9}
+        bound = criteria.bind_symbol(leaf, "xyz:BRENTOIL")
+        assert bound["params"] == {"symbol": "xyz:BRENTOIL"}
+        assert leaf.get("params") is None          # input untouched
+
+    def test_bind_never_overrides_an_explicit_symbol(self):
+        # A leaf may deliberately watch a DIFFERENT instrument than the one
+        # being predicted — an equity thesis invalidated by a dollar move.
+        from trading.lifecycle import criteria
+        leaf = {"data_point": "hl_price", "op": "lte", "threshold": 100.0,
+                "params": {"symbol": "BTC"}}
+        assert criteria.bind_symbol(leaf, "xyz:GOLD")["params"]["symbol"] == "BTC"
+
+    def test_bind_walks_combinators(self):
+        from trading.lifecycle import criteria
+        tree = {"any": [{"data_point": "hl_price", "op": "lte", "threshold": 1.0},
+                        {"all": [{"data_point": "hl_price", "op": "gte",
+                                  "threshold": 2.0}]}]}
+        bound = criteria.bind_symbol(tree, "ETH")
+        assert bound["any"][0]["params"]["symbol"] == "ETH"
+        assert bound["any"][1]["all"][0]["params"]["symbol"] == "ETH"
+
+    def test_validate_refuses_an_unbindable_leaf(self):
+        from trading.lifecycle import criteria
+        problems = criteria.validate(
+            {"data_point": "hl_candles", "op": "lte", "threshold": 1.0},
+            known_data_points={"hl_candles"}, resolvable_data_points={"hl_candles"})
+        # hl_candles requires interval as well — no prediction field supplies
+        # it, so the leaf is refused rather than accepted and left dead.
+        assert any("interval" in p for p in problems), problems
+
+    def test_registration_binds_the_symbol_into_the_stored_row(self, tmp_path):
+        from trading.lifecycle import write
+        from trading.lifecycle.db import get_db
+        conn = get_db()
+        pid = write.record_prediction(conn, write.PredictionDraft(
+            claim_md="brent coil", horizon_ts=time.time() + 3600,
+            entry_ref_price=92.0, near_edge_pct=0.9, far_edge_pct=2.1,
+            conviction=0.7, agent="plutus-predict", symbol="xyz:BRENTOIL",
+            strategy_name="brentS", kind="strategy",
+            invalidation_criteria={"data_point": "hl_price", "op": "lte",
+                                   "threshold": 88.9}))
+        stored = json.loads(conn.execute(
+            "SELECT invalidation_criteria_json FROM predictions WHERE id=?",
+            (pid,)).fetchone()[0])
+        assert stored["params"]["symbol"] == "xyz:BRENTOIL"
+
+
+class TestUnreadableInvalidationIsLoud:
+    """'Unresolvable' and 'not met' are different answers.
+
+    The resolver tested only ``== "correct"``, under a bare
+    ``except Exception: pass``. An invalidation nothing could read was
+    therefore indistinguishable from a thesis that was holding, and three
+    broken theses rode toward horizon unseen.
+    """
+
+    def _row(self, inv, symbol="xyz:BRENTOIL"):
+        from trading.lifecycle import write
+        from trading.lifecycle.db import get_db
+        conn = get_db()
+        pid = write.record_prediction(conn, write.PredictionDraft(
+            claim_md="c", horizon_ts=time.time() + 3600, entry_ref_price=92.0,
+            near_edge_pct=0.9, far_edge_pct=2.1, conviction=0.7,
+            agent="plutus-predict", symbol=symbol, strategy_name="brentS",
+            kind="strategy"))
+        conn.execute("UPDATE predictions SET invalidation_criteria_json=? "
+                     "WHERE id=?", (json.dumps(inv), pid))
+        conn.commit()
+        return conn, pid
+
+    def test_legacy_symbolless_row_resolves_after_binding(self):
+        """The live case: BRENT at 87.88 against an lte-88.9 thesis-break.
+
+        The row was written before the check existed, so it carries no symbol.
+        Binding at resolution revives it — no hand-edited row.
+        """
+        from trading.lifecycle import resolver
+        conn, pid = self._row({"data_point": "hl_price", "op": "lte",
+                               "threshold": 88.9})
+        seen = {}
+
+        def fetch(dp, params):
+            seen["params"] = params
+            return 87.88 if (params or {}).get("symbol") == "xyz:BRENTOIL" else None
+
+        res = resolver.resolve_open_predictions(
+            conn, mids={"xyz:BRENTOIL": 87.88}, path_stats_fn=lambda *a, **k: {},
+            fetch_fn=fetch, fetch_extreme_fn=None)
+        assert seen["params"] == {"symbol": "xyz:BRENTOIL"}
+        assert [r["prediction_id"] for r in res["resolved"]] == [pid]
+        assert res["resolved"][0]["mode"] == "invalidated"
+
+    def test_unreadable_invalidation_is_reported_not_swallowed(self):
+        from trading.lifecycle import resolver
+        conn, pid = self._row({"data_point": "hl_price", "op": "lte",
+                               "threshold": 88.9})
+        res = resolver.resolve_open_predictions(
+            conn, mids={"xyz:BRENTOIL": 92.0}, path_stats_fn=lambda *a, **k: {},
+            fetch_fn=lambda dp, params: None,      # the venue will not answer
+            fetch_extreme_fn=None)
+        assert [u["prediction_id"] for u in res["unresolvable_invalidations"]] == [pid]
+        assert res["resolved"] == []               # still open, but SEEN
+
+    def test_readable_and_unmet_is_not_reported(self):
+        from trading.lifecycle import resolver
+        conn, pid = self._row({"data_point": "hl_price", "op": "lte",
+                               "threshold": 88.9})
+        res = resolver.resolve_open_predictions(
+            conn, mids={"xyz:BRENTOIL": 92.0}, path_stats_fn=lambda *a, **k: {},
+            fetch_fn=lambda dp, params: 92.0, fetch_extreme_fn=None)
+        assert res["unresolvable_invalidations"] == []
+        assert res["resolved"] == []

@@ -86,6 +86,15 @@ def _validate_node(node, problems, known_dps, resolvable_dps, path):
             f"data point (list_data_points shows resolvable: true)"
         )
 
+    if isinstance(dp, str):
+        for missing in missing_required_params(dp, node.get("params")):
+            problems.append(
+                f"{path}: data_point {dp!r} requires param {missing!r}, which "
+                f"the leaf does not supply — resolution could never read it "
+                f"(20 of 99 predictions carried an unreadable invalidation "
+                f"before this was checked, 2026-08-25)"
+            )
+
     op = node.get("op")
     if op not in _OPS:
         problems.append(f"{path}: op must be one of {_OPS}, got {op!r}")
@@ -113,6 +122,75 @@ def _validate_node(node, problems, known_dps, resolvable_dps, path):
             problems.append(
                 f"{path}: {op} requires baseline {{value, ts}} from registration time"
             )
+
+
+def _params_schema(data_point: str) -> Optional[dict]:
+    """The data point's declared params, or None when the registry can't say.
+
+    None and {} are different answers and the distinction is load-bearing: {}
+    means "registered, takes no required params", None means "could not look
+    it up". A helper that collapsed the two would silently disable the binder
+    on any install where the integrations had not been imported — the same
+    can't-tell-reads-as-all-clear shape this module exists to close. An
+    unregistered NAME is the validator's own problem to report (it holds
+    known_data_points), so this stays quiet about that case and loud about
+    everything else.
+    """
+    from trading.perception.core import data_point_registry
+    try:
+        return data_point_registry.lookup(data_point).params_schema or {}
+    except KeyError:
+        return None
+    except Exception as exc:      # registry unreadable — never silently pass
+        logger.warning("params schema for %r unreadable: %s", data_point, exc)
+        return None
+
+
+def missing_required_params(data_point: str, params: Optional[dict]) -> list:
+    """Required param names the leaf does not supply. Empty = readable.
+
+    The gap that made this necessary: ``validate`` checked that a leaf's data
+    point was registered and numerically resolvable, but never that the data
+    point's own required params were present. ``{"data_point": "hl_price",
+    "op": "lte", "threshold": 88.9}`` — no symbol — passed registration and
+    then failed at every fetch forever, silently.
+    """
+    schema = _params_schema(data_point)
+    if schema is None:
+        return []                 # can't tell — the name check owns this case
+    supplied = params or {}
+    return [name for name, spec in schema.items()
+            if isinstance(spec, dict) and spec.get("required")
+            and supplied.get(name) in (None, "")]
+
+
+def bind_symbol(criteria: Any, symbol: Optional[str]) -> Any:
+    """Fill each leaf's ``params.symbol`` from the prediction's own symbol.
+
+    A prediction knows what it is about; a leaf that omits the symbol is not
+    ambiguous, it is unfinished. Binding is idempotent and never overrides an
+    explicit symbol — a leaf may deliberately watch a DIFFERENT instrument
+    than the one being predicted (an equity thesis invalidated by a move in
+    the dollar), and that must survive.
+
+    ONE builder, TWO call sites: write-time normalisation and resolution.
+    Splitting them is how the last derived-panel fix had to be redone.
+    """
+    if not symbol or not isinstance(criteria, (dict, list)):
+        return criteria
+    if isinstance(criteria, list):
+        return [bind_symbol(c, symbol) for c in criteria]
+    for key in ("all", "any"):
+        if key in criteria:
+            return {key: [bind_symbol(c, symbol) for c in criteria[key]]}
+    dp = criteria.get("data_point")
+    if not isinstance(dp, str):
+        return criteria
+    if "symbol" not in missing_required_params(dp, criteria.get("params")):
+        return criteria
+    bound = dict(criteria)
+    bound["params"] = {**(criteria.get("params") or {}), "symbol": symbol}
+    return bound
 
 
 def validate_json(criteria_json: str, **kwargs) -> list:

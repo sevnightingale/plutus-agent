@@ -21,6 +21,8 @@ from trading.perception.core.venue_registry import register_venue, RegistryError
 from ._client import (
     get_info,
     get_exchange,
+    merged_open_orders,
+    merged_user_state,
     resolve_account_address,
     HLConfigError,
 )
@@ -791,10 +793,12 @@ def hl_account_state(account_name: str = "hl_trading", **_extra: Any) -> Dict[st
     margin is drawn from the unified balance only while positions are
     open), ``withdrawable_usd`` is what could leave the venue right now.
     """
-    info = get_info()
     addr = resolve_account_address(account_name)
-    state = info.user_state(addr)
-    open_orders = info.frontend_open_orders(addr)
+    # Account-WIDE reads span every configured dex: a builder-dex position and
+    # its resting brackets live in that dex's own clearinghouse, invisible to
+    # the bare (main-dex) call.
+    state = merged_user_state(addr)
+    open_orders = merged_open_orders(addr)
 
     from .data_points import hl_drawdown_from_peak, hl_total_equity
     # HLConfigError (missing credentials) propagates — a fabricated $0
@@ -817,6 +821,10 @@ def hl_account_state(account_name: str = "hl_trading", **_extra: Any) -> Dict[st
             if float((ap.get("position") or {}).get("szi", 0)) != 0
         ],
         "open_orders": open_orders,
+        # Per-dex margin breakdown: each perp dex holds its own account value,
+        # and the sum is what `perp_account_value` reports. Surfaced so the
+        # arithmetic is auditable on the first live builder-dex position.
+        "account_value_by_dex": state.get("account_value_by_dex") or {},
         "drawdown": drawdown,
     }
 
