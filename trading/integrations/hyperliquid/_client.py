@@ -142,6 +142,18 @@ def merged_all_mids() -> dict:
     return mids
 
 
+def mids_for(symbol: str) -> dict:
+    """The mid map for ONE symbol's dex — the targeted read.
+
+    Callers that already know which instrument they care about should ask its
+    dex and nothing else: ``merged_all_mids`` fetches every dex to hand back a
+    map they use one key from, which on a 5-second poll is thousands of
+    needless calls a day. Every venue read goes through this module, so the
+    SDK client stays a single seam.
+    """
+    return get_info().all_mids(dex=dex_of(symbol))
+
+
 def merged_user_state(address: str) -> dict:
     """``clearinghouseState`` across every configured dex.
 
@@ -155,24 +167,23 @@ def merged_user_state(address: str) -> dict:
     Fields other than the two the desk consumes are taken from the main dex,
     which is the only one whose shape is guaranteed present.
     """
-    info = get_info()
-    merged: dict = {}
-    positions: list = []
-    by_dex: dict = {}
-    for dex in _dexs_to_read():
-        state = info.user_state(address, dex) or {}
-        if not merged:
-            merged = dict(state)
-        positions.extend(state.get("assetPositions") or [])
+    def _account_value(state: dict) -> float:
         try:
-            by_dex[dex or "main"] = float(
-                (state.get("marginSummary") or {}).get("accountValue") or 0.0)
+            return float((state.get("marginSummary") or {}).get("accountValue") or 0.0)
         except (TypeError, ValueError):
-            by_dex[dex or "main"] = 0.0
-    merged["assetPositions"] = positions
-    summary = dict(merged.get("marginSummary") or {})
-    summary["accountValue"] = str(sum(by_dex.values()))
-    merged["marginSummary"] = summary
+            return 0.0
+
+    info = get_info()
+    # Main dex first (_dexs_to_read guarantees it), so its response supplies
+    # the envelope every other field is read from.
+    states = {dex or "main": info.user_state(address, dex) or {}
+              for dex in _dexs_to_read()}
+    merged = dict(next(iter(states.values())))
+    by_dex = {name: _account_value(st) for name, st in states.items()}
+    merged["assetPositions"] = [ap for st in states.values()
+                                for ap in (st.get("assetPositions") or [])]
+    merged["marginSummary"] = {**(merged.get("marginSummary") or {}),
+                               "accountValue": str(sum(by_dex.values()))}
     merged["account_value_by_dex"] = by_dex
     return merged
 

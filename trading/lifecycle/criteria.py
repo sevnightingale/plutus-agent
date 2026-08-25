@@ -24,6 +24,7 @@ The deadline is the prediction's own ``horizon_ts`` — never repeated here.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from typing import Any, Callable, Optional
@@ -164,6 +165,44 @@ def missing_required_params(data_point: str, params: Optional[dict]) -> list:
             and supplied.get(name) in (None, "")]
 
 
+def iter_leaves(criteria: Any):
+    """Yield every leaf node in a criteria tree, walking the combinators.
+
+    The ONE walker. ``bind_symbol`` had its own and the calibration cohort
+    predicate was about to grow a third — the shape the panel/manifest drift
+    lesson warns about, where a fix that leaves a second builder standing is
+    only half a fix.
+    """
+    if isinstance(criteria, list):
+        for child in criteria:
+            yield from iter_leaves(child)
+        return
+    if not isinstance(criteria, dict):
+        return
+    for key in ("all", "any"):
+        if key in criteria:
+            yield from iter_leaves(criteria[key])
+            return
+    if isinstance(criteria.get("data_point"), str):
+        yield criteria
+
+
+def unreadable_leaves(criteria: Any) -> list:
+    """Leaves that could never be evaluated as written: (data_point, missing).
+
+    Empty means every leaf supplies what its data point requires. Callers use
+    this to refuse a registration, to explain one, or to identify rows written
+    before the check existed.
+    """
+    out = []
+    for leaf in iter_leaves(criteria):
+        dp = leaf["data_point"]
+        missing = missing_required_params(dp, leaf.get("params"))
+        if missing:
+            out.append((dp, missing))
+    return out
+
+
 def bind_symbol(criteria: Any, symbol: Optional[str]) -> Any:
     """Fill each leaf's ``params.symbol`` from the prediction's own symbol.
 
@@ -174,22 +213,16 @@ def bind_symbol(criteria: Any, symbol: Optional[str]) -> Any:
     the dollar), and that must survive.
 
     ONE builder, TWO call sites: write-time normalisation and resolution.
-    Splitting them is how the last derived-panel fix had to be redone.
+    Splitting them is how the last derived-panel fix had to be redone. The
+    caller's tree is never mutated — a copy is bound and returned.
     """
     if not symbol or not isinstance(criteria, (dict, list)):
         return criteria
-    if isinstance(criteria, list):
-        return [bind_symbol(c, symbol) for c in criteria]
-    for key in ("all", "any"):
-        if key in criteria:
-            return {key: [bind_symbol(c, symbol) for c in criteria[key]]}
-    dp = criteria.get("data_point")
-    if not isinstance(dp, str):
-        return criteria
-    if "symbol" not in missing_required_params(dp, criteria.get("params")):
-        return criteria
-    bound = dict(criteria)
-    bound["params"] = {**(criteria.get("params") or {}), "symbol": symbol}
+    bound = copy.deepcopy(criteria)
+    for leaf in iter_leaves(bound):
+        if "symbol" in missing_required_params(leaf["data_point"],
+                                               leaf.get("params")):
+            leaf["params"] = {**(leaf.get("params") or {}), "symbol": symbol}
     return bound
 
 

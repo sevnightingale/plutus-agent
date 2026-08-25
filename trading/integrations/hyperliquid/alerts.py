@@ -30,7 +30,8 @@ from harness.watchers.price_alerts import (
     should_fire,
 )
 
-from ._client import merged_all_mids, merged_user_state, HLConfigError
+from ._client import (merged_all_mids, merged_user_state, mids_for,
+                      HLConfigError)
 
 logger = logging.getLogger(__name__)
 
@@ -272,7 +273,11 @@ def poll_hl_position_alert(
         if near_px is None and adverse_px is None:
             return [], state or {}
         side, symbol = pos["side"], pos["symbol"]
-        price = float(merged_all_mids()[symbol])
+        # SYMBOL-scoped, not account-wide: this poll knows which instrument it
+        # is watching, so it asks that instrument's dex and nothing else. A
+        # merged read here would double the HTTP load of a 5-second poll
+        # (~17k extra calls a day) to fetch a map it uses one key from.
+        price = float(mids_for(symbol)[symbol])
     except Exception as exc:
         logger.warning("hl_position_alert poll failed: %s", exc)
         return [], state or {}

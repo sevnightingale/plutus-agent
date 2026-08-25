@@ -183,3 +183,21 @@ class TestMergedAccountReads:
         with patch.object(_client, "get_info", return_value=fake):
             with pytest.raises(RuntimeError):
                 _client.merged_user_state("0xabc")
+
+    def test_mids_for_asks_one_dex_not_all(self, monkeypatch):
+        # The targeted read: a caller that knows its symbol must not pay for
+        # an account-wide fetch. hl_position_alert polls every 5 seconds.
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.all_mids.return_value = {"xyz:GOLD": "4610.0"}
+        with patch.object(_client, "get_info", return_value=fake):
+            assert _client.mids_for("xyz:GOLD")["xyz:GOLD"] == "4610.0"
+        fake.all_mids.assert_called_once_with(dex="xyz")
+
+    def test_mids_for_main_dex_symbol(self, monkeypatch):
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.all_mids.return_value = {"BTC": "64900.0"}
+        with patch.object(_client, "get_info", return_value=fake):
+            _client.mids_for("BTC")
+        fake.all_mids.assert_called_once_with(dex="")

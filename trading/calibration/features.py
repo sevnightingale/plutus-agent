@@ -103,6 +103,10 @@ def has_unreadable_invalidation(criteria_json: Optional[str]) -> bool:
     row can be in that state. The predicate therefore selects exactly the
     legacy cohort and nothing else, needs no history edit and no cutover
     timestamp, and cannot drift out of sync with what it describes.
+
+    Knowledge of criteria SHAPE lives in trading.lifecycle.criteria and is
+    borrowed, not restated — this module owns training-set policy, not the
+    grammar.
     """
     if not criteria_json:
         return False                    # no machine invalidation is not a defect
@@ -111,21 +115,7 @@ def has_unreadable_invalidation(criteria_json: Optional[str]) -> bool:
         node = json.loads(criteria_json)
     except (TypeError, ValueError):
         return True
-    return _any_leaf_unreadable(node, criteria_mod)
-
-
-def _any_leaf_unreadable(node, criteria_mod) -> bool:
-    if isinstance(node, list):
-        return any(_any_leaf_unreadable(c, criteria_mod) for c in node)
-    if not isinstance(node, dict):
-        return False
-    for key in ("all", "any"):
-        if key in node:
-            return _any_leaf_unreadable(node[key], criteria_mod)
-    dp = node.get("data_point")
-    if not isinstance(dp, str):
-        return False
-    return bool(criteria_mod.missing_required_params(dp, node.get("params")))
+    return bool(criteria_mod.unreadable_leaves(node))
 
 
 def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
