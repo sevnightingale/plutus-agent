@@ -66,12 +66,15 @@ def _resolve_due(args: Dict[str, Any]) -> str:
     from trading.dispatchers._helpers import session_id_from_context
     from trading.lifecycle import resolver, write
     from trading.lifecycle.db import get_db
-    from trading.integrations.hyperliquid._client import get_info
+    from trading.integrations.hyperliquid._client import merged_all_mids
     from trading.integrations.hyperliquid.outcomes import path_stats
 
     conn = get_db()
     try:
-        raw = get_info().all_mids()
+        # Across every configured dex — the bare call returns main-dex mids
+        # only, leaving builder-dex predictions with no live price to classify
+        # against and no way to resolve short of the horizon backstop.
+        raw = merged_all_mids()
         mids = {k: float(v) for k, v in raw.items()}
     except Exception as exc:
         return tool_error(f"could not fetch prices (all_mids): {exc}")

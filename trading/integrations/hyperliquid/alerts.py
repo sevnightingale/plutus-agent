@@ -30,7 +30,7 @@ from harness.watchers.price_alerts import (
     should_fire,
 )
 
-from ._client import get_info, HLConfigError
+from ._client import merged_all_mids, merged_user_state, HLConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +57,7 @@ def poll_hl_position_status_change(
         return [], state or {}
 
     try:
-        s = get_info().user_state(addr)
+        s = merged_user_state(addr)
     except Exception as exc:
         logger.warning("hl_position_status_change poll failed: %s", exc)
         return [], state or {}
@@ -195,7 +195,9 @@ def poll_hl_prediction_resolution(
             ).fetchone()
             funded_pid = funded["prediction_id"] if funded else None
 
-            raw = get_info().all_mids()
+            # Every dex: a mids map missing the builder symbols leaves
+            # their predictions unresolvable on the live-mid path.
+            raw = merged_all_mids()
             mids = {k: float(v) for k, v in raw.items()}
             res = resolver.resolve_open_predictions(
                 conn, mids=mids, path_stats_fn=path_stats,
@@ -270,7 +272,7 @@ def poll_hl_position_alert(
         if near_px is None and adverse_px is None:
             return [], state or {}
         side, symbol = pos["side"], pos["symbol"]
-        price = float(get_info().all_mids()[symbol])
+        price = float(merged_all_mids()[symbol])
     except Exception as exc:
         logger.warning("hl_position_alert poll failed: %s", exc)
         return [], state or {}
@@ -318,7 +320,7 @@ def poll_hl_price_range(
     is inside its configured range and whose cooldown has elapsed.
     """
     try:
-        mids = get_info().all_mids()
+        mids = merged_all_mids()
     except Exception as exc:
         logger.warning("hl_price_range poll failed: %s", exc)
         return [], state or {}

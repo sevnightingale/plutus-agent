@@ -17,7 +17,7 @@ def _call(name, args):
     return json.loads(tool_registry.get_entry(name).handler(args))
 
 
-def _seed_strategy(name, status, book):
+def _seed_strategy(name, status, book, symbol="BTC"):
     """Insert a strategy with a resolved book + return a fresh OPEN prediction.
 
     book: list of (far, outcome, mae, reached_far[, reached_near]).
@@ -33,7 +33,7 @@ def _seed_strategy(name, status, book):
         pid = write.record_prediction(conn, write.PredictionDraft(
             claim_md="z", horizon_ts=time.time() + 3600, entry_ref_price=100_000.0,
             near_edge_pct=far / 2.0, far_edge_pct=far, conviction=0.72,
-            agent="plutus-predict", symbol="BTC", strategy_name=name, kind="strategy"))
+            agent="plutus-predict", symbol=symbol, strategy_name=name, kind="strategy"))
         write.resolve_prediction(conn, pid, outcome, resolved_by="r",
                                  realized_value={"mae_pct": mae})
         if reached:
@@ -45,7 +45,7 @@ def _seed_strategy(name, status, book):
     open_pid = write.record_prediction(conn, write.PredictionDraft(
         claim_md="live", horizon_ts=time.time() + 3600, entry_ref_price=100_000.0,
         near_edge_pct=1.5, far_edge_pct=3.0, conviction=0.72,
-        agent="plutus-predict", symbol="BTC", strategy_name=name, kind="strategy"))
+        agent="plutus-predict", symbol=symbol, strategy_name=name, kind="strategy"))
     conn.commit()
     return open_pid
 
@@ -525,6 +525,116 @@ class TestBracketVerification:
         r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
         assert r["ok"] is False
         assert "naked_position" in r["aborted_reason"]
+        assert closed
+        assert queries.open_position(get_db()) is None
+
+
+class TestDexAwareNakedGuard:
+    """Position #15 (xyz:GOLD, 2026-08-25) — the guard shot a bracketed trade.
+
+    The stop DID rest: Hyperliquid's own historicalOrders showed the Stop
+    Market at 4654.1 open at 01:13:29. The guard read the main dex, saw an
+    empty book, and force-closed three seconds after the fill. The account
+    read now spans every dex; these tests hold that line, and hold the retry
+    honest so it can never paper over a genuinely absent stop.
+    """
+
+    @staticmethod
+    def _placer(seen):
+        """Stand in for the venue: record the stop it was asked to rest."""
+        def place(**kw):
+            seen["sl"] = kw.get("sl")
+            seen["symbol"] = kw.get("symbol")
+            return {"fill_price": 4678.6, "size": kw["size"], "order_id": "o1",
+                    "fill_id": "f1", "slippage_bp": 4.0, "sl_order_id": None,
+                    "tp_order_id": None, "bracket_warnings": []}
+        return place
+
+    @staticmethod
+    def _resting(seen):
+        """The trigger order as the venue reports it — dex-qualified coin."""
+        return {"coin": seen["symbol"], "isTrigger": True,
+                "triggerPx": str(seen["sl"]), "oid": 9}
+
+    def test_stop_resting_on_builder_dex_opens_clean(self, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK,
+                             symbol="xyz:GOLD")
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+
+        seen = {}
+
+        def state(**k):
+            # What the MERGED read returns: the trigger order carries its
+            # dex-qualified coin name, exactly as the venue reports it.
+            if "sl" not in seen:
+                return {"equity_usd": 1000.0}
+            return {"equity_usd": 1000.0, "open_perp_positions": [],
+                    "open_orders": [self._resting(seen)]}
+
+        monkeypatch.setattr(venue, "hl_place_order", self._placer(seen))
+        monkeypatch.setattr(venue, "hl_account_state", state)
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is True, r
+        # The guard matched a dex-qualified coin name, not a bare one.
+        assert seen["symbol"] == "xyz:GOLD"
+        assert queries.open_position(get_db()) is not None
+
+    def test_retry_clears_a_stop_the_venue_had_not_listed_yet(self, monkeypatch):
+        # A venue that has accepted an order need not list it in the same
+        # second. One empty read is not an absence.
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+        reads = {"n": 0}
+        seen = {}
+
+        def state(**k):
+            if "sl" not in seen:
+                return {"equity_usd": 1000.0}
+            reads["n"] += 1
+            orders = [] if reads["n"] == 1 else [self._resting(seen)]
+            return {"equity_usd": 1000.0, "open_perp_positions": [],
+                    "open_orders": orders}
+
+        monkeypatch.setattr(mod, "_NAKED_VERIFY_BACKOFF_S", 0)
+        monkeypatch.setattr(venue, "hl_place_order", self._placer(seen))
+        monkeypatch.setattr(venue, "hl_account_state", state)
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is True, r
+        assert reads["n"] == 2                      # retried, then cleared
+        assert queries.open_position(get_db()) is not None
+
+    def test_retry_does_not_paper_over_a_real_absence(self, monkeypatch):
+        pid = _seed_strategy("flowS", "active", _TRADEABLE_BOOK)
+        import trading.dispatchers.desk_execution as mod
+        import trading.integrations.hyperliquid.venue as venue
+        closed = {}
+        reads = {"n": 0}
+        seen = {}
+
+        def state(**k):
+            if "sl" not in seen:
+                return {"equity_usd": 1000.0}
+            reads["n"] += 1
+            return {"equity_usd": 1000.0, "open_perp_positions": [],
+                    "open_orders": []}
+
+        def fake_close(**kw):
+            closed.update(kw)
+            return {"fill_price": 4670.0, "size": 0.0167, "cancel_warnings": []}
+
+        monkeypatch.setattr(mod, "_NAKED_VERIFY_BACKOFF_S", 0)
+        monkeypatch.setattr(venue, "hl_place_order", self._placer(seen))
+        monkeypatch.setattr(venue, "hl_close_position", fake_close)
+        monkeypatch.setattr(venue, "hl_account_state", state)
+        monkeypatch.setattr(mod, "_fresh_price", lambda s: 100_000.0)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"] is False
+        assert "naked_position" in r["aborted_reason"]
+        assert reads["n"] == mod._NAKED_VERIFY_ATTEMPTS   # every attempt spent
         assert closed
         assert queries.open_position(get_db()) is None
 

@@ -103,3 +103,83 @@ class TestPanels:
         assert normalize_symbol("xyz:gold") == "xyz:GOLD"
         assert normalize_symbol("XYZ:GOLD") == "xyz:GOLD"
         assert normalize_symbol(" btc ") == "BTC"
+
+
+class TestMergedAccountReads:
+    """Account-WIDE reads must span every configured dex.
+
+    Hyperliquid's ``dex`` parameter defaults to the FIRST perp dex, not all of
+    them, so a bare ``user_state`` / ``frontend_open_orders`` / ``all_mids``
+    answers a narrower question than the caller asked. Measured live
+    2026-08-25: main-dex ``all_mids()`` returned 950 symbols, none of them
+    ``xyz:``; the ``xyz`` dex held 116 including BRENTOIL.
+    """
+
+    @staticmethod
+    def _two_dex(monkeypatch):
+        monkeypatch.setattr(_client, "_configured_perp_dexs", lambda: ["xyz"])
+
+    @staticmethod
+    def _no_dex(monkeypatch):
+        monkeypatch.setattr(_client, "_configured_perp_dexs", lambda: [])
+
+    def test_merged_all_mids_spans_dexs(self, monkeypatch):
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.all_mids.side_effect = [
+            {"BTC": "64900.0"}, {"xyz:BRENTOIL": "87.88"}]
+        with patch.object(_client, "get_info", return_value=fake):
+            mids = _client.merged_all_mids()
+        assert mids == {"BTC": "64900.0", "xyz:BRENTOIL": "87.88"}
+        assert [c.kwargs["dex"] for c in fake.all_mids.call_args_list] == ["", "xyz"]
+
+    def test_no_configured_dex_makes_one_call(self, monkeypatch):
+        self._no_dex(monkeypatch)
+        fake = MagicMock()
+        fake.all_mids.return_value = {"BTC": "64900.0"}
+        with patch.object(_client, "get_info", return_value=fake):
+            mids = _client.merged_all_mids()
+        assert mids == {"BTC": "64900.0"}
+        fake.all_mids.assert_called_once_with(dex="")
+
+    def test_merged_open_orders_concatenates(self, monkeypatch):
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.frontend_open_orders.side_effect = [
+            [{"coin": "BTC", "oid": 1}],
+            [{"coin": "xyz:GOLD", "oid": 2, "triggerPx": "4654.1"}],
+        ]
+        with patch.object(_client, "get_info", return_value=fake):
+            orders = _client.merged_open_orders("0xabc")
+        assert [o["oid"] for o in orders] == [1, 2]
+        assert [c.args[1] for c in fake.frontend_open_orders.call_args_list] == ["", "xyz"]
+
+    def test_merged_user_state_sums_account_value(self, monkeypatch):
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.user_state.side_effect = [
+            {"marginSummary": {"accountValue": "10.0"},
+             "assetPositions": [{"position": {"coin": "BTC", "szi": "0.1"}}]},
+            {"marginSummary": {"accountValue": "68.5"},
+             "assetPositions": [{"position": {"coin": "xyz:GOLD", "szi": "0.01"}}]},
+        ]
+        with patch.object(_client, "get_info", return_value=fake):
+            state = _client.merged_user_state("0xabc")
+        # Each perp dex keeps its own margin — the sum is the account.
+        assert float(state["marginSummary"]["accountValue"]) == 78.5
+        assert state["account_value_by_dex"] == {"main": 10.0, "xyz": 68.5}
+        assert [p["position"]["coin"] for p in state["assetPositions"]] == [
+            "BTC", "xyz:GOLD"]
+
+    def test_dex_failure_raises_rather_than_half_reading(self, monkeypatch):
+        self._two_dex(monkeypatch)
+        fake = MagicMock()
+        fake.user_state.side_effect = [
+            {"marginSummary": {"accountValue": "10.0"}, "assetPositions": []},
+            RuntimeError("dex read failed"),
+        ]
+        # A half-read account is the failure mode that started all this: a
+        # partial map reads as a real absence everywhere downstream.
+        with patch.object(_client, "get_info", return_value=fake):
+            with pytest.raises(RuntimeError):
+                _client.merged_user_state("0xabc")

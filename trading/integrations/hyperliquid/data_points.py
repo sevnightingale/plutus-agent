@@ -27,6 +27,7 @@ from . import _client
 from ._client import (
     get_info,
     interval_to_ms,
+    merged_user_state,
     resolve_account_address,
     HLConfigError,
 )
@@ -364,7 +365,9 @@ def hl_universe() -> Dict[str, Any]:
 def hl_holdings(account_name: str) -> Dict[str, Any]:
     info = get_info()
     addr = resolve_account_address(account_name)
-    state = info.user_state(addr)
+    # Every configured dex — a builder-dex position is a holding like any
+    # other, and the bare call cannot see it. Spot is dex-independent.
+    state = merged_user_state(addr)
     spot = info.spot_user_state(addr)
 
     perp_positions: List[Dict[str, Any]] = []
@@ -469,7 +472,10 @@ def equity_breakdown(addr: str) -> Dict[str, float]:
     hl_drawdown_from_peak, the balance alert, account_state, and sizing.
     """
     info = get_info()
-    state = info.user_state(addr)
+    # accountValue SUMMED across dexes: each perp dex holds its own margin, so
+    # the bare read understates equity exactly while a builder-dex position is
+    # open — and equity is the sizing base.
+    state = merged_user_state(addr)
     spot = info.spot_user_state(addr)
     margin_summary = state.get("marginSummary", {}) or {}
 
