@@ -116,6 +116,12 @@ def record_prediction(
         )
 
     if draft.invalidation_criteria is not None:
+        # Normalise BEFORE validating: a leaf that omits the symbol is bound
+        # to the prediction's own, so what lands in the row is self-describing
+        # and readable at resolution. Anything still missing a required param
+        # after binding is refused here rather than dying silently for weeks.
+        draft.invalidation_criteria = criteria_mod.bind_symbol(
+            draft.invalidation_criteria, draft.symbol)
         problems = criteria_mod.validate(
             draft.invalidation_criteria, known_data_points=known_data_points,
             resolvable_data_points=resolvable_data_points,

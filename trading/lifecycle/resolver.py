@@ -73,10 +73,15 @@ def resolve_open_predictions(
            FROM predictions WHERE resolved_at IS NULL"""
     ).fetchall()
 
-    resolved, marked = [], []
+    resolved, marked, unreadable = [], [], []
     for r in rows:
-        action, outcome, mode, stats, near_ts, far_ts = _decide(
+        action, outcome, mode, stats, near_ts, far_ts, inv_unreadable = _decide(
             r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep)
+        if inv_unreadable:
+            unreadable.append({
+                "prediction_id": r["id"], "symbol": r["symbol"],
+                "strategy_name": r["strategy_name"],
+            })
         if action == "open":
             continue
         if action == "mark_near":
@@ -106,11 +111,17 @@ def resolve_open_predictions(
             sync_strategy_statuses(conn)
         except Exception as exc:
             logger.warning("status sync after resolution failed: %s", exc)
-    return {"resolved": resolved, "marked_near": marked, "open_count": len(rows)}
+    # unresolvable_invalidations is NOT decoration: a thesis-break nothing can
+    # read is a prediction the desk cannot judge, and it looks exactly like a
+    # thesis that is holding. Reported so ops carries it and the
+    # agent_escalations reader can see it.
+    return {"resolved": resolved, "marked_near": marked,
+            "unresolvable_invalidations": unreadable, "open_count": len(rows)}
 
 
 def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep=False):
-    """-> (action, outcome|None, mode|None, stats|None, near_ts|None, far_ts|None).
+    """-> (action, outcome|None, mode|None, stats|None, near_ts|None, far_ts|None,
+    invalidation_unreadable).
 
     ``action`` ∈ {'open', 'mark_near', 'resolve'}. The cheap path (no candle
     fetch) covers 'open' and 'mark_near'; candles are pulled only to resolve.
@@ -126,8 +137,8 @@ def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep=False)
     # Malformed/legacy row with no zone — never crash the sweep; expire at horizon.
     if near is None or far is None or not entry:
         if horizon_passed:
-            return ("resolve", "wrong", "expired", None, None, None)
-        return ("open", None, None, None, None, None)
+            return ("resolve", "wrong", "expired", None, None, None, False)
+        return ("open", None, None, None, None, None, False)
 
     direction = price_zone.direction_of(near, far)
     price = mids.get(symbol) if mids else None
@@ -142,23 +153,42 @@ def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep=False)
 
     # Invalidation matters only BEFORE the near edge and only if nothing else
     # fired — evaluate it lazily (it costs a data-point fetch).
+    unresolvable_inv = False
     if state == "open" and not near_already and not horizon_passed:
         inv_json = r["invalidation_criteria_json"]
         if inv_json and fetch_fn is not None:
             try:
-                if criteria_mod.resolve(
-                        json.loads(inv_json), fetch_fn, fetch_extreme_fn) == "correct":
+                # Bind the prediction's own symbol into any leaf that omits
+                # it — the same binder registration uses, so the 20 legacy
+                # rows written before that check become readable without a
+                # single hand-edited row.
+                criteria = criteria_mod.bind_symbol(json.loads(inv_json), symbol)
+                verdict = criteria_mod.resolve(
+                    criteria, fetch_fn, fetch_extreme_fn)
+                if verdict == "correct":
                     state = "invalidated"
-            except Exception:
-                pass
+                elif verdict == "unresolvable":
+                    # NOT the same as "not met", and the difference is the
+                    # whole defect: an invalidation nothing can read let three
+                    # broken theses ride to horizon unseen (2026-08-25).
+                    unresolvable_inv = True
+                    logger.warning(
+                        "prediction %s: invalidation criteria unresolvable "
+                        "(%s) — thesis-break cannot be evaluated",
+                        r["id"], inv_json[:200])
+            except Exception as exc:
+                unresolvable_inv = True
+                logger.warning(
+                    "prediction %s: invalidation evaluation raised (%s)",
+                    r["id"], exc)
 
     if state == "mark_near":
-        return ("mark_near", None, None, None, now, None)
+        return ("mark_near", None, None, None, now, None, unresolvable_inv)
 
     # Cheap fast path: the live mid shows nothing and this isn't the deep sweep
     # — leave it open (the watcher's per-tick behaviour, no candle pull).
     if state == "open" and not deep:
-        return ("open", None, None, None, None, None)
+        return ("open", None, None, None, None, None, unresolvable_inv)
 
     # Either something is resolving on the live mid, OR this is the ops deep
     # sweep taking a candle look-back over [birth, now] to catch a favorable
@@ -176,12 +206,12 @@ def _decide(r, mids, path_stats_fn, fetch_fn, fetch_extreme_fn, now, deep=False)
     if state in ("target", "horizon"):
         stats["profit_score"] = price_zone.profit_score(near, far, mfe)
         far_ts = now if state == "target" else None
-        return ("resolve", "correct", state, stats, now, far_ts)
+        return ("resolve", "correct", state, stats, now, far_ts, unresolvable_inv)
     if state == "expired":
-        return ("resolve", "wrong", "expired", stats, None, None)
+        return ("resolve", "wrong", "expired", stats, None, None, unresolvable_inv)
     if state == "invalidated":
-        return ("resolve", "wrong", "invalidated", stats, None, None)
+        return ("resolve", "wrong", "invalidated", stats, None, None, unresolvable_inv)
     if state == "mark_near":
         # The precise read says near (not far) — stay open, stamp near.
-        return ("mark_near", None, None, None, now, None)
-    return ("open", None, None, None, None, None)
+        return ("mark_near", None, None, None, now, None, unresolvable_inv)
+    return ("open", None, None, None, None, None, unresolvable_inv)
