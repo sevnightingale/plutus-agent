@@ -12,6 +12,7 @@ indicator present*, so absence is a feature, never a guessed middle).
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from typing import Optional
 
@@ -22,6 +23,8 @@ import pandas as pd
 # rows — n is small (~600), so the tail of rare data points would be pure
 # noise dimensions. Everything still contributes through the aggregates.
 MIN_DP_COVERAGE = 0.10
+
+LOGGER = logging.getLogger(__name__)
 
 _REGIME_DIRECTIONS = ("trending-up", "trending-down", "ranging")
 _REGIME_VOLS = ("normal", "compressed", "elevated")
@@ -92,6 +95,39 @@ def feature_row(p, scores_df, dp_names) -> dict:
     return row
 
 
+def has_unreadable_invalidation(criteria_json: Optional[str]) -> bool:
+    """True when the row's invalidation could never have been evaluated.
+
+    Identified by DERIVATION, not by a stored marker: a leaf that omits a param
+    its data point requires is unreadable, and after write-time binding no new
+    row can be in that state. The predicate therefore selects exactly the
+    legacy cohort and nothing else, needs no history edit and no cutover
+    timestamp, and cannot drift out of sync with what it describes.
+    """
+    if not criteria_json:
+        return False                    # no machine invalidation is not a defect
+    from trading.lifecycle import criteria as criteria_mod
+    try:
+        node = json.loads(criteria_json)
+    except (TypeError, ValueError):
+        return True
+    return _any_leaf_unreadable(node, criteria_mod)
+
+
+def _any_leaf_unreadable(node, criteria_mod) -> bool:
+    if isinstance(node, list):
+        return any(_any_leaf_unreadable(c, criteria_mod) for c in node)
+    if not isinstance(node, dict):
+        return False
+    for key in ("all", "any"):
+        if key in node:
+            return _any_leaf_unreadable(node[key], criteria_mod)
+    dp = node.get("data_point")
+    if not isinstance(dp, str):
+        return False
+    return bool(criteria_mod.missing_required_params(dp, node.get("params")))
+
+
 def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
     """One row per resolved strategy prediction; ``y`` = 1 iff outcome correct.
 
@@ -102,7 +138,8 @@ def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
     preds = pd.read_sql_query(
         """SELECT p.id, p.ts, p.resolved_at, p.strategy_name, p.timescale,
                   p.regime_tag, p.conviction, p.near_edge_pct, p.far_edge_pct,
-                  p.horizon_ts, p.outcome, s.mechanism_family
+                  p.horizon_ts, p.outcome, p.invalidation_criteria_json,
+                  s.mechanism_family
              FROM predictions p
              LEFT JOIN strategies s ON s.name = p.strategy_name
             WHERE p.kind = 'strategy'
@@ -111,6 +148,21 @@ def build_frame(conn: sqlite3.Connection) -> pd.DataFrame:
         conn)
     if preds.empty:
         return preds
+
+    dead = preds["invalidation_criteria_json"].map(has_unreadable_invalidation)
+    if dead.any():
+        # These resolved on price-zone geometry alone: their thesis-break was
+        # never once evaluated, because the leaf lacked a param the fetch
+        # required (see criteria.bind_symbol, 2026-08-25). Several came back
+        # `correct` while the thesis they rested on had broken, so the label
+        # does not mean what the feature row says it means.
+        LOGGER.warning(
+            "calibration: excluding %d prediction(s) whose invalidation was "
+            "unreadable as stored — ids %s", int(dead.sum()),
+            sorted(preds.loc[dead, "id"].tolist()))
+        preds = preds.loc[~dead].reset_index(drop=True)
+        if preds.empty:
+            return preds
 
     scores = pd.read_sql_query(
         "SELECT prediction_id, data_point, score, weight FROM support_scores",

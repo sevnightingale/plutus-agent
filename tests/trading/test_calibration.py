@@ -215,3 +215,51 @@ class TestLiveScoring:
         self._fit_artifact(conn)
         assert live.calibrated_conviction(conn, 10**9) is None
         conn.close()
+
+
+class TestDeadInvalidationCohort:
+    """Rows whose thesis-break was never evaluated must not train the model.
+
+    Twenty predictions carried an invalidation missing a param the fetch
+    required, so it was never once read (2026-08-25). Several resolved
+    `correct` on price-zone geometry while the thesis they rested on had
+    broken — the label does not mean what the feature row says it means.
+    """
+
+    def test_predicate_identifies_only_the_unreadable(self):
+        import trading.integrations.hyperliquid.data_points  # noqa: F401
+        unreadable = json.dumps(
+            {"data_point": "hl_price", "op": "lte", "threshold": 88.9})
+        readable = json.dumps(
+            {"data_point": "hl_price", "op": "lte", "threshold": 88.9,
+             "params": {"symbol": "xyz:BRENTOIL"}})
+        assert F.has_unreadable_invalidation(unreadable)
+        assert not F.has_unreadable_invalidation(readable)
+        # No machine invalidation at all is a prose thesis-break, not a defect.
+        assert not F.has_unreadable_invalidation(None)
+        assert not F.has_unreadable_invalidation("")
+
+    def test_nested_combinator_is_caught(self):
+        import trading.integrations.hyperliquid.data_points  # noqa: F401
+        tree = json.dumps({"any": [
+            {"data_point": "hl_price", "op": "lte", "threshold": 1.0,
+             "params": {"symbol": "BTC"}},
+            {"data_point": "hl_price", "op": "gte", "threshold": 2.0}]})
+        assert F.has_unreadable_invalidation(tree)
+
+    def test_cohort_is_absent_from_the_frame(self, tmp_path):
+        import trading.integrations.hyperliquid.data_points  # noqa: F401
+        conn = get_db(tmp_path / "lifecycle.db")
+        _seed(conn, n=40)
+        ids = [r[0] for r in conn.execute(
+            "SELECT id FROM predictions ORDER BY id LIMIT 5")]
+        conn.execute(
+            "UPDATE predictions SET invalidation_criteria_json=? "
+            "WHERE id IN (%s)" % ",".join("?" * len(ids)),
+            [json.dumps({"data_point": "hl_price", "op": "lte",
+                         "threshold": 1.0})] + ids)
+        conn.commit()
+        frame = F.build_frame(conn)
+        conn.close()
+        assert not set(ids) & set(frame["meta_id"])
+        assert len(frame) == 35
