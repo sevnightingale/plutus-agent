@@ -13,7 +13,11 @@ from typing import Any, Dict
 
 from harness.tools.registry import registry, tool_error, tool_result
 
-# Staleness floors (seconds) — §10/§16; ops enforces, main schedules ahead.
+# Staleness floors (seconds). Since the sustainable-desk rebuild these
+# watchdog CODE paths as much as seats: perception is the ops tick's gated
+# sweep, regime the classifier, predict/generate/reflect the event engine's
+# spawns — each records its action type, so a breach here means the
+# responsible mechanism stopped, and the ops tick wakes main to say so.
 STALENESS_FLOORS = {
     "perception": 4 * 3600,
     "regime": 8 * 3600,
@@ -34,10 +38,11 @@ STALENESS_FLOORS = {
 # deterministically and does not ask.
 #
 # Explicit rather than derived from the floors, so each can be tuned on its
-# own evidence.
+# own evidence. Only predict remains (sustainable-desk rebuild): perception
+# and regime are code on the ops tick and need no unaskable spawn — predict
+# is the one seat the ceiling still backstops, the last net under the event
+# engine's own 6h floor.
 STALENESS_CEILINGS = {
-    "perception": 8 * 3600,
-    "regime": 16 * 3600,
     "predict": 16 * 3600,
 }
 

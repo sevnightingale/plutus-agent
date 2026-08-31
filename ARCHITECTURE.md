@@ -30,10 +30,18 @@ Three design laws shape everything below:
 
 ## The desk
 
-Seven agents in a **star topology**: plutus-main orchestrates; specialists
-never spawn each other (no-nesting is enforced — the `spawn` toolset is
-main-only). Execution is NOT an agent — it is a deterministic tool main calls
-directly (see Execute). Each specialist is defined by an `agents/<name>/AGENT.md`
+**Three thinking seats, one voice, everything else code** (the
+sustainable-desk rebuild, 2026-08-31 — the seven-agent star before it is
+described in docs/legacy/). Cognition is woken by evidence, not clocks:
+the event engine (harness/desk_events.py) spawns the seats from DB
+predicates, because the database already is the event log — resolutions
+stamp `resolved_at`, confirmed regime flips stamp `flipped=1`, closes
+accumulate against the last reflect run, `cell_capacity` knows lit
+under-capacity cells. Floors survive as backstops that say so when they
+fire. Specialists never spawn each other (the `spawn` toolset stays
+main-only at the tool layer; the engine and the ceiling call
+`spawn_agent` as code). Execution is NOT an agent — it is a deterministic
+tool (see Execute). Each seat is defined by an `agents/<name>/AGENT.md`
 recipe:
 frontmatter (model tier, toolsets, `reads:`, output contract) plus a procedure
 the spawned agent follows. The output contract is fulfilled through a
@@ -43,15 +51,23 @@ tool layer, so a malformed report bounces back for the model to retry, and
 the agent's final text message stays human-readable prose. (Final-message
 JSON still parses as a fallback.)
 
-| Agent | Role | Trigger | Tier |
+| Seat | Role | Woken by | Tier |
 |---|---|---|---|
-| **plutus-main** | PM and operator voice — the persistent gateway session | wake queue, operator messages, eod | standard |
-| **plutus-perception** | eyes — refreshes PERCEPTION.md from data points | spawned when stale or pre-decision | light |
-| **plutus-regime** | classifies regime per timescale → REGIME.md | spawned on staleness / perception flips | light |
-| **plutus-predict** | forward brain — evaluates the live book, registers predictions | spawned on beats and escalations | standard |
-| **plutus-generate** | research brain — authors strategies, surveys the evidence space | generation floor (7d) + gap reports | standard |
-| **plutus-ops** | back office + watchdog | cron, every 30 min | light |
-| **plutus-reflect** | backward brain — weights, graduation, lessons, sizing review | staleness floor: weekly or 3 unreflected closes | standard |
+| **plutus-main** | the voice and the judge — the persistent gateway session: forum narrative, escalations, the close at the alert edges | fills, position alerts, escalations, operator messages, eod | standard |
+| **plutus-predict** | forward brain — evaluates the live book, registers predictions | resolutions, confirmed regime flips, calendar prints, a 6h floor | standard |
+| **plutus-generate** | research brain — authors strategies, surveys the evidence space | lit under-capacity cells (rate-limited 6h), a 7d floor | standard |
+| **plutus-reflect** | backward brain — weights, retirement, lessons, calibration, sizing review | 3 unreflected closes, a 7d floor | standard |
+
+**Dissolved into code** (each records its own action type, so the
+staleness floors watchdog the mechanism that replaced the seat):
+
+| Mechanism | Was | Lives at |
+|---|---|---|
+| the ops tick (30 min, in the watchers daemon) | plutus-ops | trading/lifecycle/ops_tick.py |
+| the regime classifier (ADX/ATR/EMA → labels, two-pass hysteresis) | plutus-regime | trading/regime/classifier.py |
+| the board sweep + render (gated 4h on the ops tick) | plutus-perception | trading/dispatchers/perception_sweep.py |
+| the funding pass (selection → desk_open_position, templated thesis) | main's funding step | trading/lifecycle/funding.py |
+| the event engine (predicates → seat spawns → payload consumers) | main's orchestration | harness/desk_events.py |
 
 **Model tiers.** Recipes declare `standard` or `light`, resolved at spawn
 against the *user's* config: `standard` → `model.default`, `light` →
@@ -109,38 +125,43 @@ created at first boot (wizard or gateway) and never overwritten:
   reports any drift between board and database. A strategy's
   `regime_applicability` refers to the regime *at its own timescale*.
 - **PERCEPTION.md** — a readings table (data point, params, value,
-  fetched_at) plus a narrative panel, maintained by plutus-perception. FAILED
+  fetched_at) rendered by code from the sweep, plus a Narrative zone that
+  predict's optional `situational_read` refreshes when it runs. FAILED
   rows stay FAILED.
 
 Staleness floors (doctrine): perception 4h · regime 8h · predict 8h · reflect
-weekly or 3 unreflected closes · generation 7d (plutus-generate). Ops
-enforces the floors.
+weekly or 3 unreflected closes · generation 7d. The ops tick enforces the
+floors; since the rebuild they watchdog the code paths that replaced the
+seats — a breach means the responsible mechanism stopped.
 
 ## The loop
 
 ```
-            every 30 min                    on wake
-┌─────────┐  resolve/evaluate  ┌──────────┐  spawns   ┌────────────┐
-│ plutus- │ ────────────────►  │   wake   │ ───────►  │ plutus-main│
-│   ops   │  staleness/path    │  queue   │           │ (gateway)  │
-└─────────┘  → enqueue_wake    └──────────┘           └─────┬──────┘
-     ▲                              ▲                       │
-     │ cron */30                    │ watchers, operator    ▼
-     │                              │            perception → regime → predict
-   23:55 plutus-eod: journal close; session rolls lazily on the next event
+ watchers daemon (resident code)              gateway (resident code)
+┌──────────────────────────────────┐        ┌──────────────────────────┐
+│ alerts (5s): resolution, position │        │ plutus-main = operator   │
+│ ops tick (30m): books, board,     │ wakes  │ session — the voice and  │
+│   classifier, meters, integrity   │ ─────► │ the judge. No cadence.   │
+│ event engine (60s): predicates →  │ queue  │ Woken by: fills, alerts, │
+│   spawn predict/generate/reflect  │        │ escalations, operator    │
+│ funding pass (60s): selection →   │        └──────────────────────────┘
+│   desk_open_position              │        23:55 plutus-eod: journal
+└──────────────────────────────────┘        close; session rolls lazily
 ```
 
-- **plutus-ops** ticks every 30 minutes on the cheapest model: a safety-net
-  resolution sweep (the live watcher resolves price-zone predictions
-  event-driven; ops catches anything it missed), a conviction re-score of the
-  open predictions due per their timescale (the trajectory reflect mines),
-  evaluates the open position against its thesis, checks staleness floors, and
-  fetches `hl_trade_readiness`. Anything needing judgment becomes an
-  `enqueue_wake(reason=…)` — ops never interprets, trades, or messages.
-- **plutus-main** has *no standing cron*. It wakes when the queue has
-  something (ops staleness/escalations, watcher alerts, your messages),
-  orchestrates the relevant specialists, makes funding decisions, and may
-  self-schedule one-off crons for concrete dated reasons.
+- **The ops tick** (code, every 30 minutes in the watchers daemon —
+  trading/lifecycle/ops_tick.py): a safety-net deep resolution sweep, the
+  conviction re-score of due predictions, the open position's evaluation
+  via `rescore_position`, live state, capital reconcile, the gated board
+  sweep, the regime classifier, staleness floors, `hl_trade_readiness`,
+  ACP auth, the provider meter, hygiene, and the 19-invariant integrity
+  check. Anything needing judgment becomes a keyed wake — ops never
+  interpreted by doctrine, and now it structurally cannot.
+- **plutus-main** has *no standing cron and no funding duty*. It wakes for
+  fills (to write the forum narrative), position alerts (the close
+  decision), escalations, and the operator — and may self-schedule
+  one-off crons for concrete dated reasons. Days without a main spawn are
+  the design working.
 - **plutus-eod** (23:55) closes the day's journal via `record(kind=eod)`;
   the gateway's session-reset policy starts the new day's session lazily on
   the first event after the boundary.

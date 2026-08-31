@@ -563,12 +563,11 @@ def spawn_agent(
     return parsed
 
 
-# Spawned agent → the action type the ops staleness watchdog tracks.
-# (resolution is recorded by ops itself; generation rides on predict's
-# slots.generated.)
+# Spawned agent → the action type the staleness watchdog tracks. Only the
+# three thinking seats remain spawnable (sustainable-desk rebuild):
+# "perception" rows are written by the ops tick's sweep step and "regime"
+# by the classifier — code recording its own clock.
 _ACTION_TYPES = {
-    "plutus-perception": "perception",
-    "plutus-regime": "regime",
     "plutus-predict": "predict",
     "plutus-generate": "generation",
     "plutus-reflect": "reflect",
