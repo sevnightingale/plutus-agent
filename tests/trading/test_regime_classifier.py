@@ -12,6 +12,9 @@ from trading.regime import classifier
 from trading.lifecycle import queries
 from trading.lifecycle.db import get_db
 
+# Captured before any monkeypatching, for the plumbing test below.
+_REAL_ENSURE_FRESH = classifier._ensure_fresh
+
 
 class TestComputeLabels:
     def test_strong_trend_up(self):
@@ -99,6 +102,29 @@ def _seed_board():
 
 
 class TestRun:
+    @pytest.fixture(autouse=True)
+    def no_network_refresh(self, monkeypatch):
+        """The classifier's self-refresh hits the live venue; in tests the
+        seeded cache is the whole world. Unpatched, real BTC readings
+        overwrite the fixtures whenever the network answers — the suite
+        caught exactly that nondeterminism (2026-08-31)."""
+        monkeypatch.setattr(classifier, "_ensure_fresh", lambda symbols: None)
+
+    def test_ensure_fresh_asks_for_the_classifier_panel(self, monkeypatch):
+        calls = []
+        import trading.perception.fetch_core as fc
+        monkeypatch.setattr(fc, "fetch_and_snapshot",
+                            lambda name, params, **kw:
+                            calls.append((name, params.get("symbol"),
+                                          params.get("interval"))) or
+                            {"ok": True, "value": {}})
+        # The module-level capture bypasses this class's autouse no-op.
+        _REAL_ENSURE_FRESH(["BTC"])
+        assert ("ta_adx", "BTC", "1h") in calls
+        assert ("ta_atr", "BTC", "1d") in calls
+        assert ("macro_vix", None, None) in calls
+        assert len(calls) == 10  # 3 DPs × 3 intervals + vix
+
     def test_first_assessment_writes_immediately(self):
         _seed_cache()
         _seed_board()
