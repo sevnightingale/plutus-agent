@@ -214,11 +214,27 @@ def build_readings_body(now: Optional[float] = None) -> Dict[str, Any]:
             "symbols": [s for s in symbols if s != "GLOBAL"]}
 
 
-def write_readings(path: Optional[Path] = None) -> Dict[str, Any]:
-    """Render and section-replace the Readings zone of PERCEPTION.md."""
+def write_readings(path: Optional[Path] = None, *,
+                   by: str = "render_perception") -> Dict[str, Any]:
+    """Render and section-replace the Readings zone of PERCEPTION.md.
+
+    Also stamps the ``updated_at:`` header line — the retired perception
+    seat's last manual duty, now the renderer's (sustainable-desk rebuild).
+    """
+    import re as _re
+    import time as _time
+
     path = Path(path) if path else _hermes_home() / "PERCEPTION.md"
     built = build_readings_body()
     replaced = replace_zone(path, READINGS_ZONE, built["body"])
+    if replaced and path.exists():
+        stamp = _time.strftime("%Y-%m-%d %H:%M", _time.gmtime())
+        text = path.read_text(encoding="utf-8")
+        new_text, n = _re.subn(r"^updated_at:.*$",
+                               f"updated_at: {stamp} UTC    by: {by}",
+                               text, count=1, flags=_re.MULTILINE)
+        if n:
+            path.write_text(new_text, encoding="utf-8")
     narrative_line = None
     if path.exists():
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):

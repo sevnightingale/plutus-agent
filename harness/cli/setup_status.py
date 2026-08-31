@@ -149,13 +149,12 @@ def _check_cron_jobs() -> Tuple[Optional[bool], str]:
         from harness.cron.jobs import list_jobs
         jobs = list_jobs()
         names = {j.get("name") for j in jobs}
-        ops = "plutus-ops-tick" in names
         eod = "plutus-eod" in names
-        if ops and eod:
-            return True, "plutus-ops-tick + plutus-eod"
+        if eod:
+            return True, "plutus-eod (ops runs as code in the watchers daemon)"
         return False, (
-            f"ops-tick={ops}, eod={eod} — run `plutus-agent cron seed-desk` "
-            "(the setup wizard's first boot also seeds these)"
+            "eod missing — run `plutus-agent cron seed-desk` "
+            "(the setup wizard's first boot also seeds it)"
         )
     except Exception as exc:
         return None, str(exc)

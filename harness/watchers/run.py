@@ -90,6 +90,25 @@ def main() -> int:
             except Exception as exc:
                 logger.exception("schedule_wake_session failed: %s", exc)
 
+        # The deterministic back office (the retired plutus-ops seat as
+        # code) rides this loop: self-gating to its 30-min interval, runs on
+        # its own thread so a slow venue read never blocks alert polling.
+        try:
+            from trading.lifecycle.ops_tick import maybe_run_ops_tick
+            maybe_run_ops_tick()
+        except Exception as exc:
+            logger.exception("ops tick kick failed: %s", exc)
+
+        # The event engine — wakes predict/generate/reflect on evidence
+        # (resolutions, lit under-capacity cells, unreflected closes), with
+        # floors as backstops. Self-gates its predicate pass; spawns run on
+        # their own threads.
+        try:
+            from harness import desk_events
+            desk_events.tick()
+        except Exception as exc:
+            logger.exception("desk-events tick failed: %s", exc)
+
         # Heartbeat log every 5 min so operators see the daemon's alive
         if (time.time() - last_tick_log) > 300:
             logger.info("watcher tick (alerts=%d)", len(alerts))

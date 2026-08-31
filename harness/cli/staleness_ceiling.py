@@ -32,9 +32,12 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# perception feeds regime feeds predict. Refresh in this order, never in
-# parallel and never downstream-first.
-REFRESH_ORDER = ("perception", "regime", "predict")
+# Once "perception feeds regime feeds predict", refreshed in dependency
+# order. The sustainable-desk rebuild (2026-08-31) dissolved perception and
+# regime into code on the ops tick (which records their action types
+# itself), leaving predict as the one seat this ceiling still backstops —
+# the last net under the event engine.
+REFRESH_ORDER = ("predict",)
 
 # An attempt is recorded BEFORE the spawn, so a crash mid-refresh cannot
 # produce a spawn storm on restart. Comfortably longer than a perception run.
@@ -127,6 +130,34 @@ def enforce_once(conn=None) -> Dict[str, Any]:
             "deferred": [t["action"] for t in todo[1:]]}
 
 
+# The deterministic ops tick lives in the WATCHERS process (sustainable-desk
+# rebuild); a wedged tick over there cannot report its own death. The
+# gateway's ticker is the other resident process, so it holds the watch:
+# past this age with no ops action_runs row, wake main. 4× the tick
+# interval — late enough to never fire on a slow venue read.
+OPS_TICK_STALL_S = 4 * 30 * 60
+
+
+def _ops_tick_watchdog(conn) -> None:
+    import time as _time
+
+    row = conn.execute(
+        "SELECT MAX(ts) FROM action_runs WHERE action_type = 'ops'"
+    ).fetchone()
+    last = row[0] if row and row[0] is not None else None
+    if last is None:
+        return  # pre-rebuild history, or first boot — the tick will land
+    age = _time.time() - last
+    if age > OPS_TICK_STALL_S:
+        from harness import wake_queue
+        wake_queue.enqueue(
+            "escalation",
+            f"no ops tick recorded for {age / 3600:.1f}h (interval 30min) — "
+            f"the back office in the watchers daemon looks stalled; check "
+            f"`journalctl -u plutus-watchers`",
+            source="staleness-ceiling", key="ops:tick_stalled")
+
+
 def tick(background: bool = True) -> None:
     """Called from the gateway's cron ticker. Cheap and usually a no-op.
 
@@ -150,6 +181,7 @@ def tick(background: bool = True) -> None:
             # watcher for six days, one minute at a time.
             with closing(get_db()) as conn:
                 enforce_once(conn)
+                _ops_tick_watchdog(conn)
         except Exception:
             logger.exception("staleness ceiling tick failed")
         finally:

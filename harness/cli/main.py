@@ -7348,11 +7348,12 @@ For more help on a command:
     # cron tick (mostly for debugging)
     cron_tick = cron_subparsers.add_parser("tick", help="Run due jobs once and exit")
 
-    # cron seed-desk (rebuild R4 — ops tick + EOD journal close)
+    # cron seed-desk (EOD journal close; the ops tick is code in the
+    # watchers daemon since the sustainable-desk rebuild)
     cron_subparsers.add_parser(
         "seed-desk",
         help="Install or replace the desk's standing cron jobs (idempotent): "
-             "plutus-ops-tick (every 30 min) + plutus-eod (23:55 daily)",
+             "plutus-eod (23:55 daily); also removes a legacy plutus-ops-tick",
     )
 
     _add_accept_hooks_flag(cron_tick)

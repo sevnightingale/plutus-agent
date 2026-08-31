@@ -3,6 +3,11 @@
 Regression for 2026-07-26: main believed it was Saturday, declined perception
 thirteen consecutive times over eleven hours, and scheduled its next refresh
 for a day that had already passed. Nothing could contradict it.
+
+Since the sustainable-desk rebuild the ceiling backstops only the predict
+seat (perception and regime dissolved into code on the ops tick, recording
+their own action types), so every case here drives predict — floor 8h,
+ceiling 16h. The module also hosts the cross-process ops-tick watchdog.
 """
 
 import sqlite3
@@ -38,49 +43,44 @@ class TestCeilingsThemselves:
         for action, ceiling in STALENESS_CEILINGS.items():
             assert ceiling > STALENESS_FLOORS[action], action
 
-    def test_refresh_order_is_the_dependency_order(self):
-        assert SC.REFRESH_ORDER == ("perception", "regime", "predict")
+    def test_refresh_order_is_predict_alone(self):
+        # perception and regime left the tuple at the sustainable-desk
+        # rebuild — both are code on the ops tick, not spawnable seats.
+        assert SC.REFRESH_ORDER == ("predict",)
 
 
 class TestBreachDetection:
     def test_within_ceiling_is_not_breached(self, conn):
-        _ran(conn, "perception", 5 * 3600)      # past 4h floor, under 8h ceiling
+        _ran(conn, "predict", 12 * 3600)     # past 8h floor, under 16h ceiling
         assert SC.breached(conn) == []
 
     def test_past_ceiling_is_breached(self, conn):
-        _ran(conn, "perception", 11.4 * 3600)   # the actual 2026-07-26 age
+        _ran(conn, "predict", 18 * 3600)
         out = SC.breached(conn)
-        assert [b["action"] for b in out] == ["perception"]
+        assert [b["action"] for b in out] == ["predict"]
 
     def test_never_run_is_a_cold_start(self, conn):
         assert SC.breached(conn) == []
 
-    def test_breaches_come_back_in_dependency_order(self, conn):
-        _ran(conn, "predict", 30 * 3600)
-        _ran(conn, "perception", 30 * 3600)
-        _ran(conn, "regime", 30 * 3600)
-        assert [b["action"] for b in SC.breached(conn)] == [
-            "perception", "regime", "predict"]
-
     def test_a_recent_attempt_suppresses_a_retry(self, conn):
-        """A perception run takes minutes; the ticker fires every 60s. Without
+        """A seat run takes minutes; the ticker fires every 60s. Without
         this the desk would spawn a stampede."""
-        _ran(conn, "perception", 30 * 3600)
+        _ran(conn, "predict", 30 * 3600)
         conn.execute("INSERT INTO action_runs (action_type, ts, agent, ok, notes_md) "
                      "VALUES (?,?,?,1,?)",
                      (SC._ATTEMPT_ACTION, time.time() - 60, "staleness-ceiling",
-                      "perception"))
+                      "predict"))
         conn.commit()
         assert SC.breached(conn) == []
 
     def test_a_stale_attempt_does_not_suppress_forever(self, conn):
-        _ran(conn, "perception", 30 * 3600)
+        _ran(conn, "predict", 30 * 3600)
         conn.execute("INSERT INTO action_runs (action_type, ts, agent, ok, notes_md) "
                      "VALUES (?,?,?,1,?)",
                      (SC._ATTEMPT_ACTION, time.time() - SC.ATTEMPT_INTERVAL_S - 60,
-                      "staleness-ceiling", "perception"))
+                      "staleness-ceiling", "predict"))
         conn.commit()
-        assert [b["action"] for b in SC.breached(conn)] == ["perception"]
+        assert [b["action"] for b in SC.breached(conn)] == ["predict"]
 
 
 class TestEnforcement:
@@ -88,23 +88,19 @@ class TestEnforcement:
         spawned = []
         monkeypatch.setattr("harness.spawn.spawn_agent",
                             lambda *a, **k: spawned.append(a) or {"ok": True})
-        _ran(conn, "perception", 60)
+        _ran(conn, "predict", 60)
         out = SC.enforce_once(conn)
         assert out["acted"] is False and spawned == []
 
-    def test_refreshes_the_most_upstream_breach_only(self, conn, monkeypatch):
-        """One per pass. Refreshing predict against stale perception produces
-        a run that silently does nothing — predict's freshness gate skips
-        every strategy whose data points are stale."""
+    def test_breach_spawns_the_seat(self, conn, monkeypatch):
         spawned = []
         monkeypatch.setattr(
             "harness.spawn.spawn_agent",
             lambda agent, task, **k: spawned.append(agent) or {"ok": True})
-        _ran(conn, "perception", 30 * 3600)
         _ran(conn, "predict", 30 * 3600)
         out = SC.enforce_once(conn)
-        assert spawned == ["plutus-perception"]
-        assert out["action"] == "perception" and out["deferred"] == ["predict"]
+        assert spawned == ["plutus-predict"]
+        assert out["action"] == "predict" and out["deferred"] == []
 
     def test_attempt_is_recorded_before_the_spawn(self, conn, monkeypatch):
         """A crash mid-refresh must not produce a spawn storm on restart."""
@@ -117,7 +113,7 @@ class TestEnforcement:
             return {"ok": True}
 
         monkeypatch.setattr("harness.spawn.spawn_agent", _spawn)
-        _ran(conn, "perception", 30 * 3600)
+        _ran(conn, "predict", 30 * 3600)
         SC.enforce_once(conn)
         assert seen["attempts_at_spawn_time"] == 1
 
@@ -125,7 +121,27 @@ class TestEnforcement:
         def _boom(*a, **k):
             raise RuntimeError("provider down")
         monkeypatch.setattr("harness.spawn.spawn_agent", _boom)
-        _ran(conn, "perception", 30 * 3600)
+        _ran(conn, "predict", 30 * 3600)
         out = SC.enforce_once(conn)
         assert out["acted"] is True and out["ok"] is False
         assert "provider down" in out["error"]
+
+
+class TestOpsTickWatchdog:
+    def _wakes(self):
+        from harness import wake_queue
+        return wake_queue.drain()
+
+    def test_stalled_tick_wakes_main(self, conn):
+        _ran(conn, "ops", SC.OPS_TICK_STALL_S + 600)
+        SC._ops_tick_watchdog(conn)
+        assert any(w.get("key") == "ops:tick_stalled" for w in self._wakes())
+
+    def test_fresh_tick_is_quiet(self, conn):
+        _ran(conn, "ops", 600)
+        SC._ops_tick_watchdog(conn)
+        assert self._wakes() == []
+
+    def test_no_history_is_quiet(self, conn):
+        SC._ops_tick_watchdog(conn)
+        assert self._wakes() == []

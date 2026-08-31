@@ -700,6 +700,46 @@ def _check_agent_escalations(conn, home: Path) -> List[Dict[str, Any]]:
     return out
 
 
+def _check_position_stop_resting(conn, home: Path) -> List[Dict[str, Any]]:
+    """19th invariant (2026-08-31): the open position's SL must actually be
+    resting on venue. Doctrine calls a naked position a critical failure, yet
+    the only check lived inside ``_desk_open``'s post-entry verify — a stop
+    cancelled, expired, or lost mid-hold had no watcher at all (the gap the
+    retired ops seat's prose nominally covered). An unreadable venue reports
+    UNKNOWN, never clear — the ``watcher_fds`` precedent."""
+    from trading.lifecycle import queries
+
+    pos = queries.open_position(conn)
+    if pos is None:
+        return []
+    try:
+        from trading.dispatchers.desk_execution import _sl_rests_on_venue
+        from trading.integrations.hyperliquid._client import (
+            merged_open_orders, resolve_account_address)
+        from trading.integrations.hyperliquid.venue import (
+            _lookup_bracket_order_ids)
+
+        addr = resolve_account_address("hl_trading")
+        state = {"open_orders": merged_open_orders(addr)}
+        ids = _lookup_bracket_order_ids(pos["id"])
+        sl_price = (pos.get("thesis") or {}).get("sl_price")
+        resting = _sl_rests_on_venue(state, pos["symbol"], ids.get("sl"),
+                                     sl_price)
+    except Exception as exc:
+        return [_violation(
+            "position_stop_unverifiable",
+            f"open position {pos['id']} {pos['symbol']}: venue orders "
+            f"unreadable ({type(exc).__name__}: {exc}) — stop state UNKNOWN, "
+            f"not clear")]
+    if not resting:
+        return [_violation(
+            "position_stop_missing",
+            f"open position {pos['id']} {pos['symbol']} has NO stop resting "
+            f"on venue — a naked position is a critical failure; close or "
+            f"re-bracket immediately", "critical")]
+    return []
+
+
 CHECKS: Dict[str, Callable] = {
     "tool_registry": _check_tool_registry,
     "tool_schema_shape": _check_tool_schema_shape,
@@ -719,6 +759,7 @@ CHECKS: Dict[str, Callable] = {
     "append_only": _check_append_only,
     "watcher_fds": _check_watcher_fds,
     "agent_escalations": _check_agent_escalations,
+    "position_stop_resting": _check_position_stop_resting,
 }
 
 

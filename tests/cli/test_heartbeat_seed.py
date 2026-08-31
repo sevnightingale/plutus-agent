@@ -1,4 +1,9 @@
-"""plutus-agent cron seed-desk — the desk's standing jobs (rebuild R4)."""
+"""plutus-agent cron seed-desk — the desk's standing jobs.
+
+Since the sustainable-desk rebuild (2026-08-31) the seeder installs only
+plutus-eod; the ops tick is code in the watchers daemon. Seeding also
+removes a legacy plutus-ops-tick so older installs converge.
+"""
 
 from __future__ import annotations
 
@@ -25,21 +30,29 @@ def temp_hermes_home(tmp_path, monkeypatch):
     importlib.reload(cron.jobs)
 
 
-def test_seed_desk_creates_both_jobs(temp_hermes_home):
+def test_seed_desk_creates_eod_only(temp_hermes_home):
     from harness.cli.heartbeat import seed_desk_crons
 
     jobs = seed_desk_crons()
 
-    ops = jobs["ops"]
-    assert ops["name"] == "plutus-ops-tick"
-    assert ops["schedule"]["expr"] == "*/30 * * * *"
-    assert ops["agent"] == "plutus-ops"
-
+    assert set(jobs) == {"eod"}
     eod = jobs["eod"]
     assert eod["name"] == "plutus-eod"
     assert eod["schedule"]["expr"] == "55 23 * * *"
     assert eod.get("agent") is None  # synthetic injection into main, not a spawn
     assert "record(kind=eod)" in eod["prompt"]
+
+
+def test_seed_desk_removes_legacy_ops_tick(temp_hermes_home):
+    from harness.cli.heartbeat import seed_desk_crons
+    from harness.cron.jobs import create_job, list_jobs
+
+    create_job(prompt="legacy ops tick", schedule="*/30 * * * *",
+               name="plutus-ops-tick", agent="plutus-ops")
+    seed_desk_crons()
+    names = [j["name"] for j in list_jobs()]
+    assert "plutus-ops-tick" not in names
+    assert names.count("plutus-eod") == 1
 
 
 def test_seed_desk_idempotent(temp_hermes_home):
@@ -49,30 +62,31 @@ def test_seed_desk_idempotent(temp_hermes_home):
     seed_desk_crons()
     seed_desk_crons()
     names = [j["name"] for j in list_jobs()]
-    assert names.count("plutus-ops-tick") == 1
     assert names.count("plutus-eod") == 1
 
 
 def test_desk_agent_job_routes_to_spawn(temp_hermes_home, monkeypatch):
     """run_job dispatches agent-jobs straight to harness.spawn.spawn_agent."""
-    from harness.cli.heartbeat import seed_desk_crons
     from harness.cron import scheduler
+    from harness.cron.jobs import create_job
 
-    jobs = seed_desk_crons()
+    job = create_job(prompt="predict beat vehicle", schedule="*/30 * * * *",
+                     name="test-agent-job", agent="plutus-predict")
     calls = {}
 
     def fake_spawn(name, task, *, session_name, **kw):
         calls["name"] = name
         calls["task"] = task
-        return {"ok": True, "payload": {"resolved": []}, "problems": [],
-                "duration_s": 0.1, "transcript": "/tmp/t.md", "raw": "{}"}
+        return {"ok": True, "payload": {"predictions": [], "actionable": None},
+                "problems": [], "duration_s": 0.1, "transcript": "/tmp/t.md",
+                "raw": "{}"}
 
     import harness.spawn
     monkeypatch.setattr(harness.spawn, "spawn_agent", fake_spawn)
 
-    ok, doc, final, err = scheduler.run_job(jobs["ops"])
+    ok, doc, final, err = scheduler.run_job(job)
     assert ok
-    assert calls["name"] == "plutus-ops"
-    assert "ops tick" in calls["task"]
+    assert calls["name"] == "plutus-predict"
+    assert "predict beat" in calls["task"]
     assert final == scheduler.SILENT_MARKER
     assert err is None

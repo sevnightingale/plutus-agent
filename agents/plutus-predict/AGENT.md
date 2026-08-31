@@ -146,7 +146,11 @@ summary. report =
                 "why_best": ...} | null,
  "population": {"by_cell": [...], "overfull": [cells], "underfull": [cells]},
  "perception_stale": [{"strategy": ..., "stale": [{"name": ..., "age_s": ...}]}],
- "escalation_findings": ["only when spawned for an ops escalation"]}
+ "escalation_findings": ["only when spawned for an ops escalation"],
+ "situational_read": "optional: 2-4 sentences on what the tape looks like
+                      for the symbols you just worked — written for the
+                      operator and the public record, never a signal. The
+                      engine writes it into PERCEPTION.md's Narrative zone."}
 
 `perception_stale` lists strategies you skipped because their stale data could
 not be REFRESHED (fetch failures — plain staleness you refresh yourself in
