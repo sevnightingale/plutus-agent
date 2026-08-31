@@ -215,6 +215,15 @@ def validate_strategy(s: Strategy, *, known_data_points: Optional[set] = None) -
                 f"data_point {dp['name']!r} is not registered and not declared "
                 "in missing_data_points (the self-extension hook)"
             )
+        # event_gate: how a gate-tagged calendar DP is enforced at
+        # registration — "veto" (refuse while in_window) or "catalyst"
+        # (the default: the window is the setup; the reading is scored).
+        gate_mode = dp.get("event_gate")
+        if gate_mode is not None and gate_mode not in ("veto", "catalyst"):
+            problems.append(
+                f"data_point {dp['name']!r}: event_gate must be 'veto' or "
+                f"'catalyst' — got {gate_mode!r}"
+            )
         spec = dp.get("normalizer")
         if spec is not None:
             from trading.conviction import normalizers

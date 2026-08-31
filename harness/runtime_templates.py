@@ -207,6 +207,12 @@ hysteresis) · the **funding pass** (trading/lifecycle/funding.py) · the
 **event engine** (harness/desk_events.py) · the **watchers** (alerts,
 resolution, brackets).
 
+**No seat writes repo code.** A self-extension need (a strategy's
+missing data point, a dead source) is surfaced to the operator as an
+escalation naming what is needed — never fulfilled by the desk writing
+into the codebase. Code changes are the operator's to review before they
+run the desk (boundary set 2026-08-31).
+
 **Staleness floors.** perception 4h · regime 8h · predict 8h · reflect
 weekly or 3 unreflected closes · generation 7d. Since the rebuild the
 floors watchdog CODE as much as seats — each mechanism records its own

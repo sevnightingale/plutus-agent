@@ -151,6 +151,46 @@ def _register_prediction(args: Dict[str, Any]) -> str:
                     f"re-score on the fresh readings before registering — "
                     f"never register a draft authored on the old ones.")
 
+            # Event-window gate (2026-08-31): gate-tagged calendar DPs are
+            # ENFORCED here, not just scored. has_data=false refuses for
+            # every declaring book — a table gap fails CLOSED (an unknowable
+            # calendar is not a licence to fire). in_window=true refuses
+            # only declarations marked event_gate: veto — most declaring
+            # books are CATALYST books whose setup IS the window and score
+            # days_to_next through their normalizers instead.
+            from trading.perception.fetch_core import fetch_and_snapshot
+            for dp in declared:
+                try:
+                    entry = data_point_registry.lookup(dp["name"])
+                except KeyError:
+                    continue
+                if "gate" not in (entry.tags or ()):
+                    continue
+                fetched = fetch_and_snapshot(
+                    dp["name"], dp.get("params") or {},
+                    session_id=session_id_from_context(), tier="dispatch")
+                if not fetched.get("ok"):
+                    return tool_error(
+                        f"gate data point {dp['name']!r} is unreadable "
+                        f"({fetched.get('error')}) — prediction refused (an "
+                        f"event gate fails closed, never open).")
+                reading = fetched.get("value") or {}
+                if not reading.get("has_data"):
+                    return tool_error(
+                        f"gate data point {dp['name']!r} has no calendar for "
+                        f"{symbol} — prediction refused (a table gap fails "
+                        f"closed: extend the curated table or undeclare the "
+                        f"DP; never fire against an unknowable event window).")
+                if (dp.get("event_gate") == "veto"
+                        and reading.get("in_window")):
+                    return tool_error(
+                        f"{dp['name']}: {symbol} is inside its "
+                        f"{reading.get('kind')} window (next event "
+                        f"{reading.get('next_event')}, "
+                        f"{reading.get('days_to_next')}d out) and this book "
+                        f"declares the calendar as a VETO — prediction "
+                        f"refused until the window passes.")
+
     try:
         horizon_hours = float(args["horizon_hours"])
         now = time.time()
