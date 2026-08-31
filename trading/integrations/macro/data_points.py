@@ -23,9 +23,11 @@ from typing import Any, Dict
 from trading.integrations.macro._sources import (
     bls_cpi_yoy,
     classify,
+    eia_wpsr_stocks,
     farside_btc_netflow,
     first_of,
     fred_latest,
+    next_wpsr_release,
     synthetic_dxy,
     yahoo_last,
 )
@@ -306,8 +308,6 @@ def macro_us10y_real() -> Dict[str, Any]:
     tags=["macro", "oil", "inventory", "catalyst", "brent"],
 )
 def oil_inventory_weekly() -> Dict[str, Any]:
-    from trading.integrations.macro._sources import (eia_wpsr_stocks,
-                                                     next_wpsr_release)
     report = eia_wpsr_stocks()
     stocks = report["stocks"]
     crude = stocks["Commercial (Excluding SPR)"]
