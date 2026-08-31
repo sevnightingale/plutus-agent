@@ -162,13 +162,25 @@ def _readings_for(cache_state: Dict[str, Any], symbol: str,
     """Extract (readings, skip_reason) for one symbol × interval."""
     max_age = MAX_AGE_FACTOR * _INTERVAL_S[interval]
     out: Dict[str, Any] = {}
+    # Extraction paths verified against the LIVE cached payloads
+    # (2026-08-31, first dry-run tick): the registered fetchers return a
+    # slimmer rendering than the preprocessor source suggests — ATR's
+    # percentile lives under levels.volatility, and EMA carries no trend
+    # consensus at all, so its corroboration is the sign of price-vs-EMA
+    # distance (price above the EMA agrees with an up-trend).
+    def _ema_dir(v):
+        dist = _dig(v, "current", "price_distance_pct")
+        if not isinstance(dist, (int, float)) or dist == 0:
+            return None
+        return "rising" if dist > 0 else "falling"
+
     for name, extract in (
         ("ta_adx", lambda v: {"adx": _dig(v, "current", "adx"),
                               "adx_bias": _dig(v, "context",
                                                "directional_bias")}),
-        ("ta_ema", lambda v: {"ema_consensus": _dig(v, "context", "trend",
-                                                    "consensus")}),
-        ("ta_atr", lambda v: {"atr_percentile": _dig(v, "volatility_analysis",
+        ("ta_ema", lambda v: {"ema_consensus": _ema_dir(v)}),
+        ("ta_atr", lambda v: {"atr_percentile": _dig(v, "levels",
+                                                     "volatility",
                                                      "percentile_rank")}),
     ):
         entry = _freshest_entry(cache_state, name,

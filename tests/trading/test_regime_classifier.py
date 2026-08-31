@@ -73,8 +73,12 @@ class TestComputeLabels:
 
 def _seed_cache(direction_bias="bullish", consensus="rising",
                 atr_pctl=50.0, intervals=("1h", "4h", "1d")):
+    """Fixtures use the REAL cached payload shapes, verified against the
+    live cache on 2026-08-31 — the first draft used invented shapes and the
+    classifier read None from every real entry on its first live tick."""
     from trading.perception import cache
 
+    ema_dist = 0.8 if consensus == "rising" else -0.8
     for iv in intervals:
         cache.write_data_point(
             "ta_adx", {"current": {"adx": 32.0},
@@ -82,11 +86,11 @@ def _seed_cache(direction_bias="bullish", consensus="rising",
             source="test",
             params={"symbol": "BTC", "interval": iv, "length": 14})
         cache.write_data_point(
-            "ta_ema", {"context": {"trend": {"consensus": consensus}}},
+            "ta_ema", {"current": {"price_distance_pct": ema_dist}},
             source="test",
             params={"symbol": "BTC", "interval": iv, "length": 20})
         cache.write_data_point(
-            "ta_atr", {"volatility_analysis": {"percentile_rank": atr_pctl}},
+            "ta_atr", {"levels": {"volatility": {"percentile_rank": atr_pctl}}},
             source="test",
             params={"symbol": "BTC", "interval": iv, "length": 14})
     cache.write_data_point("macro_vix", {"value": 18.0}, source="test")
