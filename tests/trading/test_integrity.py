@@ -172,17 +172,19 @@ class TestBlackboards:
 
 class TestStalenessCeiling:
     def test_breach_detected(self, conn, home):
-        """Perception sat 11.4h against a 4h floor while main declined it."""
-        conn.execute("UPDATE action_runs SET ts = ? WHERE action_type='perception'",
-                     (time.time() - 11.4 * 3600,))
+        """Predict sat 18h against its 16h ceiling — the one seat the ceiling
+        still backstops since the sustainable-desk rebuild (perception and
+        regime are code and left the ceilings table)."""
+        conn.execute("UPDATE action_runs SET ts = ? WHERE action_type='predict'",
+                     (time.time() - 18 * 3600,))
         conn.commit()
         v = _by_name(integrity.check_integrity(conn, home=home),
                      "staleness_ceiling_breached")
         assert v["severity"] == "critical"
-        assert "perception" in v["detail"]
+        assert "predict" in v["detail"]
 
     def test_never_run_is_a_cold_start_not_a_breach(self, conn, home):
-        conn.execute("DELETE FROM action_runs WHERE action_type='perception'")
+        conn.execute("DELETE FROM action_runs WHERE action_type='predict'")
         conn.commit()
         assert "staleness_ceiling_breached" not in _names(
             integrity.check_integrity(conn, home=home))
@@ -326,7 +328,7 @@ class TestFailureHandling:
         def _boom(*a, **k):
             raise RuntimeError("kaboom")
         monkeypatch.setitem(integrity.CHECKS, "exploding", _boom)
-        conn.execute("UPDATE action_runs SET ts = ? WHERE action_type='perception'",
+        conn.execute("UPDATE action_runs SET ts = ? WHERE action_type='predict'",
                      (time.time() - 20 * 3600,))
         conn.commit()
         names = _names(integrity.check_integrity(conn, home=home))

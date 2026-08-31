@@ -1,4 +1,9 @@
-"""spawn_agent end-to-end dry run — AIAgent mocked, real roster files."""
+"""spawn_agent end-to-end dry run — AIAgent mocked, real roster files.
+
+The vehicle is plutus-predict (contract: prediction_batch). It was
+plutus-perception until the sustainable-desk rebuild retired that seat to
+docs/legacy — predict is now the desk's canonical spawnable seat.
+"""
 
 import json
 
@@ -28,7 +33,7 @@ def mock_agent(monkeypatch):
             captured["prompt"] = prompt
             return {
                 "final_response": json.dumps(
-                    {"updated": ["hl_price"], "failed": [], "notable": []}),
+                    {"predictions": [], "actionable": None}),
                 "messages": [
                     {"role": "user", "content": prompt[:60]},
                     {"role": "assistant", "content": "done"},
@@ -45,40 +50,39 @@ def mock_agent(monkeypatch):
 
 
 def test_real_roster_dry_run(home, mock_agent):
-    """plutus-perception's real AGENT.md spawns: context assembled, toolsets
+    """plutus-predict's real AGENT.md spawns: context assembled, toolsets
     restricted, contract validated, transcript written."""
-    result = spawn.spawn_agent("plutus-perception", "refresh the panel",
+    result = spawn.spawn_agent("plutus-predict", "event-driven beat",
                                session_name="2026-6-15-a")
     assert result["ok"], result
-    assert result["payload"]["updated"] == ["hl_price"]
+    assert result["payload"]["predictions"] == []
 
     init = mock_agent["init"]
-    # Recipe says "light"; in this hermetic env no model.light/default is
+    # Recipe says "standard"; in this hermetic env no model.default is
     # configured, so the sentinel passes through unresolved.
-    assert init["model"] == "light"
+    assert init["model"] == "standard"
     # Recipe toolsets + the mechanically-injected report toolset (returns:).
-    # `search` sat in this declaration from the seven-agent rebuild until
-    # 2026-07-28 and had never been a registered toolset anywhere in the
-    # tree — the agent searches with web + file, which it already holds.
-    assert init["enabled_toolsets"] == ["perception", "web", "file", "report"]
+    assert init["enabled_toolsets"] == [
+        "perception", "prediction-write", "conviction", "lifecycle-read",
+        "report"]
     assert "spawn" in init["disabled_toolsets"]
     assert init["skip_context_files"] is True
 
     prompt = mock_agent["prompt"]
     assert "NORTH-STAR-MARKER" in prompt          # doctrine zone resolved
     assert "# Role" in prompt                     # body included
-    assert "refresh the panel" in prompt          # task last
+    assert "event-driven beat" in prompt          # task last
 
     tpath = result["transcript"]
-    assert tpath and "plutus-perception" in tpath
+    assert tpath and "plutus-predict" in tpath
     text = open(tpath).read()
     assert "## Conversation" in text and "done" in text
 
-    # Staleness accounting: the successful run satisfied the perception floor.
+    # Staleness accounting: the successful run satisfied the predict floor.
     from trading.lifecycle.db import get_db
     from trading.lifecycle.queries import last_action_runs
     runs = last_action_runs(get_db())
-    assert "perception" in runs and runs["perception"] is not None
+    assert "predict" in runs and runs["predict"] is not None
 
 
 def test_contract_violation_reported(home, mock_agent, monkeypatch):
@@ -92,7 +96,7 @@ def test_contract_violation_reported(home, mock_agent, monkeypatch):
 
     import harness.run_agent
     monkeypatch.setattr(harness.run_agent, "AIAgent", BadAgent)
-    result = spawn.spawn_agent("plutus-perception", "x", session_name="s")
+    result = spawn.spawn_agent("plutus-predict", "x", session_name="s")
     assert not result["ok"]
     assert any("not JSON" in p for p in result["problems"])
 
@@ -110,23 +114,25 @@ def test_submit_report_captures_payload(home, mock_agent, monkeypatch):
             # Simulates the tool dispatch inside the child thread — the
             # copied context carries the report channel binding.
             out = submit_report_handler({"report": {
-                "updated": ["hl_price"], "failed": [], "notable": ["x"]}})
+                "predictions": [], "actionable": None,
+                "situational_read": "range grinding on thin flow"}})
             assert json.loads(out).get("ok") is True
-            return {"final_response": "Perception refresh complete — 12 DPs "
-                                      "updated, nothing notable.",
+            return {"final_response": "Beat complete — nothing eligible, "
+                                      "one situational read filed.",
                     "messages": []}
 
     import harness.run_agent
     monkeypatch.setattr(harness.run_agent, "AIAgent", ToolAgent)
-    result = spawn.spawn_agent("plutus-perception", "refresh",
+    result = spawn.spawn_agent("plutus-predict", "beat",
                                session_name="2026-6-15-c")
     assert result["ok"], result
-    assert result["payload"]["notable"] == ["x"]
+    assert result["payload"]["situational_read"] == \
+        "range grinding on thin flow"
     assert result["problems"] == []
 
     from trading.lifecycle.db import get_db
     from trading.lifecycle.queries import last_action_runs
-    assert "perception" in last_action_runs(get_db())
+    assert "predict" in last_action_runs(get_db())
 
 
 def test_submit_report_validates_and_bounces(home, mock_agent, monkeypatch):
@@ -140,13 +146,13 @@ def test_submit_report_validates_and_bounces(home, mock_agent, monkeypatch):
             pass
 
         def run_conversation(self, prompt):
-            out = submit_report_handler({"report": {"updated": []}})
+            out = submit_report_handler({"report": {"predictions": []}})
             assert "missing key" in json.loads(out)["error"]
             return {"final_response": "all done!", "messages": []}
 
     import harness.run_agent
     monkeypatch.setattr(harness.run_agent, "AIAgent", BadToolAgent)
-    result = spawn.spawn_agent("plutus-perception", "refresh",
+    result = spawn.spawn_agent("plutus-predict", "beat",
                                session_name="2026-6-15-d")
     assert not result["ok"]
     assert any("not JSON" in p for p in result["problems"])
@@ -163,9 +169,9 @@ def test_submit_report_outside_spawn_is_refused():
 def test_report_toolset_injected_for_contracted_agents(home, mock_agent):
     """spawn_agent appends the report toolset mechanically — AGENT.md never
     declares it."""
-    spawn.spawn_agent("plutus-perception", "refresh", session_name="2026-6-15-e")
+    spawn.spawn_agent("plutus-predict", "beat", session_name="2026-6-15-e")
     assert "report" in mock_agent["init"]["enabled_toolsets"]
-    spec = spawn.load_agent("plutus-perception")
+    spec = spawn.load_agent("plutus-predict")
     assert "report" not in spec.toolsets
 
 
@@ -178,7 +184,7 @@ def test_failed_spawn_recorded_but_does_not_satisfy_floor(home, mock_agent, monk
     import harness.run_agent
     monkeypatch.setattr(harness.run_agent, "AIAgent", BadAgent)
 
-    result = spawn.spawn_agent("plutus-perception", "refresh",
+    result = spawn.spawn_agent("plutus-predict", "beat",
                                session_name="2026-6-15-b")
     assert not result["ok"]
 
@@ -186,6 +192,6 @@ def test_failed_spawn_recorded_but_does_not_satisfy_floor(home, mock_agent, monk
     from trading.lifecycle.queries import last_action_runs
     db = get_db()
     rows = db.execute(
-        "SELECT ok FROM action_runs WHERE action_type='perception'").fetchall()
+        "SELECT ok FROM action_runs WHERE action_type='predict'").fetchall()
     assert any(r[0] == 0 for r in rows)
-    assert "perception" not in last_action_runs(db)
+    assert "predict" not in last_action_runs(db)
