@@ -60,7 +60,7 @@ def _desk_status(conn) -> Dict[str, Any]:
     from trading.lifecycle import queries
 
     out = queries.desk_gaps(conn)
-    out["halt"] = (get_hermes_home() / "HALT").exists()
+    out["halt"] = queries.halt_reason() is not None
     out["pilot"] = queries.pilot_armed()
     out["open_position"] = queries.open_position(conn)
     try:

@@ -128,16 +128,9 @@ _ATR_INTERVAL = {"intraday": "1h", "swing": "4h", "position": "1d"}
 def _halt_reason():
     """Operator kill-switch, checked IN the money tools (defense in depth
     under the plutus-trade-safety plugin hook, which only sees registered
-    tool calls). None when trading is live; the HALT note ('' if none)
-    when the operator has paused."""
-    from harness.constants import get_hermes_home
-    path = get_hermes_home() / "HALT"
-    if not path.exists():
-        return None
-    try:
-        return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
-    except OSError:
-        return ""
+    tool calls). Delegates to the single owner of the probe."""
+    from trading.lifecycle.queries import halt_reason
+    return halt_reason()
 
 
 # The pilot mandate's sentinel probe lives in trading/lifecycle/queries.py
@@ -226,6 +219,10 @@ def _desk_open(args: Dict[str, Any]) -> str:
     from trading.lifecycle.db import get_db
 
     conn = get_db()
+    # Attribution: main's tool calls default to plutus-main; the code
+    # funding pass passes its own name so a code-made decision never
+    # masquerades as the agent's (sustainable-desk rebuild).
+    caller_agent = str(args.get("agent") or "plutus-main")
     halt = _halt_reason()
     if halt is not None:
         return tool_result({"ok": False,
@@ -463,7 +460,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
 
     thesis_id = write.record_thesis(
         conn, prediction_id=pred["id"], symbol=symbol, text_md=thesis,
-        agent="plutus-main", sl_price=sl, sl_rationale_md=sl_rationale,
+        agent=caller_agent, sl_price=sl, sl_rationale_md=sl_rationale,
         session_name=session)
     # The decision carries the EFFECTIVE conviction — the number that chose
     # the band — so sizing_performance slices by what was actually used; the
@@ -472,7 +469,7 @@ def _desk_open(args: Dict[str, Any]) -> str:
     decision_id = write.record_decision(
         conn, thesis_id=thesis_id,
         action="open_long" if side == "long" else "open_short",
-        agent="plutus-main", conviction=conviction_effective,
+        agent=caller_agent, conviction=conviction_effective,
         params={"sl": sl, "tp": tp, "sl_order_id": fill.get("sl_order_id"),
                 "tp_order_id": fill.get("tp_order_id"),
                 "entry_delta_pct": entry_delta_pct, "sizing": sizing,

@@ -31,6 +31,21 @@ def pilot_armed() -> bool:
     return (get_hermes_home() / "PILOT").exists()
 
 
+def halt_reason() -> Optional[str]:
+    """Operator kill-switch — SINGLE OWNER of the HALT probe, the mirror of
+    ``pilot_armed`` (which earned its consolidation first; HALT was probed
+    inline in three places until the sustainable-desk rebuild). ``None``
+    when trading is live; the HALT note ('' if empty) when paused."""
+    from harness.constants import get_hermes_home
+    path = get_hermes_home() / "HALT"
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+    except OSError:
+        return ""
+
+
 def strategy_fundable(status: Optional[str], *, pilot: Optional[bool] = None) -> bool:
     """The fundability predicate every funded-trade surface shares: ACTIVE
     always; TEST under an armed pilot; nothing else, ever (retired books do

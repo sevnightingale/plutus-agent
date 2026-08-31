@@ -239,36 +239,19 @@ def _register_prediction(args: Dict[str, Any]) -> str:
             resolvable_data_points=resolvable)
     except (ValueError, KeyError) as exc:
         return tool_error(str(exc))
-    # Fundable window: an ACTIVE strategy's prediction is only fundable for
-    # ACTIONABLE_MAX_AGE_S (20 min). predict runs synchronously under main, so
-    # main is awake right now — the wake is the backstop against main deferring
-    # past the window within its own turn: the queue re-nudges it next drain.
-    fundable_wake = False
+    # Fundable window: a fundable prediction is actionable for
+    # ACTIONABLE_MAX_AGE_S (20 min). Registration used to enqueue a wake so
+    # main could fund inside the window; since the sustainable-desk rebuild
+    # the funding pass (trading/lifecycle/funding.py) polls
+    # best_actionable_prediction on the event engine's cadence, well inside
+    # the window — registration is silent and main is woken only to narrate
+    # a fill. The field survives in the response as a plain fact.
+    fundable = False
     if strat_name:
         srow = conn.execute("SELECT status FROM strategies WHERE name=?",
                             (strat_name,)).fetchone()
-        # strategy_fundable, not status == "active": under an armed pilot a
-        # test-book prediction is fundable for the same window, and without
-        # this wake the pilot lane silently starves whenever main is asleep.
         if srow and queries.strategy_fundable(srow["status"]):
-            try:
-                from harness.wake_queue import enqueue
-                # A test-book wake (pilot lane) is a RECURRING condition — a
-                # beat can register ten of them — so it opts into keyed
-                # backoff. An active-book wake stays always-append: rare, and
-                # each one is genuinely novel.
-                enqueue(reason="schedule",
-                        detail=(f"fundable prediction #{prediction_id} registered "
-                                f"(strategy {strat_name}, {srow['status'].upper()})"
-                                f" — actionable "
-                                f"window {int(queries.ACTIONABLE_MAX_AGE_S // 60)} "
-                                f"min from registration"),
-                        source="plutus-predict",
-                        key=("fundable:pilot" if srow["status"] == "test"
-                             else None))
-                fundable_wake = True
-            except Exception as exc:
-                logger.warning("fundable-window wake enqueue failed: %s", exc)
+            fundable = True  # the funding pass will see it within 60s
     # Intrinsic reward:risk from the zone geometry — exists BEFORE any wins
     # (queries.strategy_rr needs realized wins). |far| > |near| is enforced at
     # write, so rr > 1; the v2 conditional-entry gate reads this value.
@@ -282,7 +265,7 @@ def _register_prediction(args: Dict[str, Any]) -> str:
                         "conviction": conviction,
                         "conviction_source": conviction_source,
                         "intrinsic_rr": intrinsic_rr,
-                        "fundable_wake": fundable_wake,
+                        "fundable": fundable,
                         "strategy_capacity": strategy_capacity,
                         "slots": queries.open_slot_counts(conn)})
 

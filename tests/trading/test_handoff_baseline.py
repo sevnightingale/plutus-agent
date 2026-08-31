@@ -95,14 +95,16 @@ class TestFundableWake:
         monkeypatch.setattr(wq, "enqueue", lambda **kw: wakes.append(kw) or kw)
         return wakes
 
-    def test_active_strategy_enqueues_fundable_wake(self, monkeypatch):
+    def test_active_strategy_registers_fundable_and_silent(self, monkeypatch):
+        # Since the sustainable-desk rebuild registration wakes nobody — the
+        # funding pass polls best_actionable_prediction on the engine's
+        # cadence. The response states the fact instead.
         conn = get_db()
         _tradeable(conn, "aw")
         wakes = self._patch(monkeypatch)
         res = _call("register_prediction", {**self._ARGS, "strategy_name": "aw"})
-        assert res["ok"] and res["fundable_wake"] is True
-        assert len(wakes) == 1
-        assert wakes[0]["reason"] == "schedule" and "aw" in wakes[0]["detail"]
+        assert res["ok"] and res["fundable"] is True
+        assert wakes == []
 
     def test_test_strategy_registers_silently(self, monkeypatch):
         conn = get_db()
@@ -113,7 +115,7 @@ class TestFundableWake:
         conn.commit()
         wakes = self._patch(monkeypatch)
         res = _call("register_prediction", {**self._ARGS, "strategy_name": "tw"})
-        assert res["ok"] and res["fundable_wake"] is False
+        assert res["ok"] and res["fundable"] is False
         assert res["strategy_capacity"] == {
             "strategy_name": "tw", "evidence_lane": "base",
             "open_predictions": 1, "open_cap": write.MAX_OPEN_PER_STRATEGY,
@@ -160,7 +162,7 @@ class TestFundableWake:
         r = _call("register_prediction", {**self._ARGS, "strategy_name": "fs"})
         assert r.get("ok"), r
 
-    def test_pilot_test_strategy_enqueues_keyed_wake(self, monkeypatch):
+    def test_pilot_test_strategy_is_fundable_and_silent(self, monkeypatch):
         from tests.trading.conftest import arm_pilot
         arm_pilot()
         conn = get_db()
@@ -171,11 +173,8 @@ class TestFundableWake:
         conn.commit()
         wakes = self._patch(monkeypatch)
         res = _call("register_prediction", {**self._ARGS, "strategy_name": "pw"})
-        assert res["ok"] and res["fundable_wake"] is True
-        assert len(wakes) == 1
-        # the pilot lane's wake opts into keyed backoff — a beat can register
-        # ten of these, and main needs one nudge, not ten
-        assert wakes[0]["key"] == "fundable:pilot"
+        assert res["ok"] and res["fundable"] is True
+        assert wakes == []
 
 
 class TestSupportScoreCanonicalization:

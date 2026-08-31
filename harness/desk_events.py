@@ -98,6 +98,15 @@ def predict_due(conn, now: Optional[float] = None) -> Tuple[bool, str]:
     if row and row[0] is not None and row[0] > last:
         return True, ("a regime flip landed since the last predict run — "
                       "cells re-lit, eligibility changed")
+    try:
+        from trading.integrations.macro.calendar import printed_since
+        ev = printed_since(last, now)
+        if ev is not None:
+            return True, (f"scheduled macro event printed since the last "
+                          f"predict run: {ev['label']} "
+                          f"({ev['ago_s'] / 60:.0f}min ago)")
+    except Exception:
+        logger.exception("macro calendar clause failed")
     if now - last > PREDICT_FLOOR_S:
         return True, (f"floor backstop: no predict run in "
                       f"{(now - last) / 3600:.1f}h (floor "
@@ -261,6 +270,22 @@ def tick(*, background: bool = True) -> Optional[str]:
     if not _in_flight.acquire(blocking=False):
         return None
     _last_pass = time.time()
+
+    # The funding pass rides every engine pass, on its own thread (a fill
+    # holds a venue round-trip and must not stall the caller's loop). Its
+    # own lock keeps one in flight; every guard lives in the pass itself.
+    def _fund() -> None:
+        try:
+            from trading.lifecycle.funding import fund_pass
+            fund_pass()
+        except Exception:
+            logger.exception("funding pass crashed")
+
+    if background:
+        threading.Thread(target=_fund, name="funding-pass",
+                         daemon=True).start()
+    else:
+        _fund()
     chosen: Optional[Dict[str, Any]] = None
     reason = ""
     try:
