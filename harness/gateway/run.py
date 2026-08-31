@@ -4309,10 +4309,43 @@ class GatewayRunner:
                 # but catches runaway growth before it becomes unrecoverable.
                 # (#2153)
                 _HARD_MSG_LIMIT = 400
+
+                # Absolute history ceiling — COST control, not context
+                # safety. The percentage threshold above protects against
+                # API failures, so on a large-window model it never fires:
+                # the Telegram main session replayed a ~185k-token history
+                # on every wake for a day (2026-08-31, ~110 calls) without
+                # ever approaching 85% of context, and every replayed token
+                # was billed. `compression.max_history_tokens` in
+                # config.yaml caps the HISTORY estimate alone (never
+                # last_prompt_tokens, which includes the system prompt —
+                # keying on that would fire every turn once the base
+                # context alone crossed the cap). Unset = no ceiling.
+                _max_hist_tokens = None
+                try:
+                    _mht = (_hyg_data.get("compression", {})
+                            or {}).get("max_history_tokens")
+                    _max_hist_tokens = int(_mht) if _mht else None
+                except (TypeError, ValueError):
+                    pass
+                _hist_tokens_est = estimate_messages_tokens_rough(history)
+                _over_history_cap = bool(
+                    _max_hist_tokens
+                    and _hist_tokens_est >= _max_hist_tokens
+                )
+
                 _needs_compress = (
                     _approx_tokens >= _compress_token_threshold
                     or _msg_count >= _HARD_MSG_LIMIT
+                    or _over_history_cap
                 )
+
+                if _over_history_cap:
+                    logger.info(
+                        "Session hygiene: history ~%s tokens exceeds "
+                        "max_history_tokens=%s — compressing for cost",
+                        f"{_hist_tokens_est:,}", f"{_max_hist_tokens:,}",
+                    )
 
                 if _needs_compress:
                     logger.info(

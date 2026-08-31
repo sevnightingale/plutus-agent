@@ -314,3 +314,54 @@ class TestToolsetResolution:
         with _patch("harness.tools.registry.builtin_discovery_ran",
                     return_value=False):
             spawn.require_resolvable_toolsets("plutus-regime", ["no-such-toolset"])
+
+
+class TestContextDiet:
+    """The 2026-08-31 spawn-context diet: dark-cell strategy rows and
+    claim_md prose were ~140k tokens of freight per predict spawn."""
+
+    def test_strategies_live_is_eligible_only(self, monkeypatch):
+        import trading.strategies.loader as loader_mod
+        seen = {}
+
+        def _fake(base_dir=None, compact=False, eligible_only=False):
+            seen.update(compact=compact, eligible_only=eligible_only)
+            return "## Strategy book\n(fake)"
+
+        monkeypatch.setattr(loader_mod, "strategy_context_block", _fake)
+        out = spawn.resolve_read("strategies:live")
+        assert "(fake)" in out
+        assert seen == {"compact": True, "eligible_only": True}
+
+    def test_strategies_all_is_roster_plus_retired(self, monkeypatch):
+        import trading.strategies.loader as loader_mod
+        monkeypatch.setattr(loader_mod, "roster_context_block",
+                            lambda *a, **k: "ROSTER")
+        monkeypatch.setattr(loader_mod, "retired_context_block",
+                            lambda *a, **k: "GRAVEYARD")
+        out = spawn.resolve_read("strategies:all")
+        assert "ROSTER" in out and "GRAVEYARD" in out
+
+    def test_open_predictions_claims_trimmed_to_headline(self, monkeypatch):
+        import trading.lifecycle.db as db_mod
+        import trading.lifecycle.queries as queries_mod
+        monkeypatch.setattr(db_mod, "get_db", lambda *a, **k: object())
+        long_claim = "HEADLINE up front. " + "drafting prose " * 200
+        monkeypatch.setattr(
+            queries_mod, "open_predictions",
+            lambda conn: [{"id": 1, "strategy_name": "s",
+                           "claim_md": long_claim}])
+        out = spawn.resolve_read("lifecycle:open-predictions")
+        assert "HEADLINE up front." in out
+        assert "\\u2026" in out  # the trim marker, json-escaped
+        assert len(out) < 1000  # the 3k-char claim did not ride along
+
+    def test_short_claims_pass_untrimmed(self, monkeypatch):
+        import trading.lifecycle.db as db_mod
+        import trading.lifecycle.queries as queries_mod
+        monkeypatch.setattr(db_mod, "get_db", lambda *a, **k: object())
+        monkeypatch.setattr(
+            queries_mod, "open_predictions",
+            lambda conn: [{"id": 1, "claim_md": "short claim"}])
+        out = spawn.resolve_read("lifecycle:open-predictions")
+        assert "short claim" in out and "\\u2026" not in out

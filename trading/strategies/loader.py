@@ -50,8 +50,50 @@ def load_strategies(
     return out
 
 
+def _eligible_filter(live: list) -> Optional[tuple]:
+    """Split ``live`` into (eligible, dark) against the lit regime cells.
+
+    Eligibility is code's answer (queries.strategy_cells vs current_regime,
+    per each book's OWN symbol) — the same computation
+    ``strategies_by_timescale`` serves predict through its tools. Returns
+    None when the regime is unknown or the DB is unreachable: the caller
+    then falls back to the full book with the reason stated, because a desk
+    that has never assessed regime must not blind predict.
+    """
+    try:
+        from trading.lifecycle import queries
+        from trading.lifecycle.db import get_db
+
+        conn = get_db()
+        lit_by: dict = {}
+        for sym in {s.symbol for s in live}:
+            reg = queries.current_regime(conn, symbol=sym) or {}
+            lit_by[sym] = {
+                ts: ((ts, v.get("direction"), v.get("volatility"),
+                      v.get("macro")) if v else None)
+                for ts, v in reg.items()
+            }
+        eligible, dark = [], []
+        any_lit = False
+        for s in live:
+            cell = lit_by.get(s.symbol, {}).get(s.timescale)
+            if cell is not None:
+                any_lit = True
+            cells = queries.strategy_cells(
+                s.timescale, json.dumps(s.regime_applicability))
+            (eligible if cell is not None and cell in cells
+             else dark).append(s)
+        if not any_lit:
+            return None  # regime never assessed — don't fake a filter
+        return eligible, dark
+    except Exception:
+        logger.exception("eligibility filter failed — serving the full book")
+        return None
+
+
 def strategy_context_block(base_dir: Optional[Path] = None,
-                           compact: bool = False) -> str:
+                           compact: bool = False,
+                           eligible_only: bool = False) -> str:
     """The prompt-injection summary for predict/main — live strategies only.
 
     Dead strategies never pollute prediction context (locked §14.4).
@@ -62,6 +104,13 @@ def strategy_context_block(base_dir: Optional[Path] = None,
     FILE server-side and feeds Hypothesis/Mechanism/Trigger to the aux call
     itself, so predict's own context never needs the prose, only the
     orientation row (name, symbol, cell, weights, lineage).
+
+    ``eligible_only`` keeps full rows only for books eligible in the lit
+    regime cells and reduces the rest to a count. Measured 2026-08-31: 487
+    live books rode ~146k tokens into every predict spawn at full-miss cache
+    price, while only 46 were eligible — and predict can only author eligible
+    books, so the dark rows were pure freight. The full population (with
+    sampling counters) stays one `strategies_by_timescale` call away.
     """
     live = load_strategies(LIVE_STATUSES, base_dir)
     if not live:
@@ -69,7 +118,29 @@ def strategy_context_block(base_dir: Optional[Path] = None,
             "## Strategy book\n\n(no live strategies — predictions only, NO "
             "trades; generation fills the slots)\n"
         )
+    header = ""
+    if eligible_only:
+        split = _eligible_filter(live)
+        if split is None:
+            header = ("(eligibility unknown — regime unassessed or "
+                      "unreadable; full live book follows)\n")
+        else:
+            eligible, dark = split
+            header = (
+                f"{len(eligible)} of {len(live)} live books are eligible in "
+                f"the lit regime cells and listed below; the other "
+                f"{len(dark)} sit in dark cells (correctly idle — "
+                f"`strategies_by_timescale` has the full population with "
+                f"counters).\n"
+            )
+            if not eligible:
+                return ("## Strategy book\n\n" + header
+                        + "\n(none eligible — population gaps belong in "
+                          "your report, not new registrations)\n")
+            live = eligible
     lines = ["## Strategy book\n"]
+    if header:
+        lines.append(header)
     for s in live:
         regime = json.dumps(s.regime_applicability, sort_keys=True)
         dps = ", ".join(f"{k}:{w:.2f}" for k, w in s.weights.items())
@@ -89,6 +160,38 @@ def strategy_context_block(base_dir: Optional[Path] = None,
         hypothesis = (s.body_section("Hypothesis") or "").strip().replace("\n", " ")
         lines.append(head + f"- hypothesis: {hypothesis}\n")
     return "\n".join(lines)
+
+
+def roster_context_block(base_dir: Optional[Path] = None) -> str:
+    """One orientation line per live book — the population view for
+    generate/reflect, whose job is the book's SHAPE (which mechanisms
+    occupy which cells), not any single book's weights.
+
+    The multi-line compact rows measured ~146k tokens at 487 books
+    (2026-08-31) riding into every generate/reflect spawn; a line each is
+    ~a tenth of that, and both seats read strategy FILES through their
+    tools when they need one book's detail.
+    """
+    live = load_strategies(LIVE_STATUSES, base_dir)
+    if not live:
+        return (
+            "## Strategy book\n\n(no live strategies — the population is "
+            "empty; generation fills the slots)\n"
+        )
+    lines = [
+        "## Strategy book\n",
+        f"{len(live)} live books, one line each (name [status] symbol "
+        f"timescale/family cell, + parent where variant). Read a strategy's "
+        f"FILE for its hypothesis, weights and full declaration.\n",
+    ]
+    for s in live:
+        regime = json.dumps(s.regime_applicability, sort_keys=True)
+        lines.append(
+            f"- {s.name} [{s.status}] {s.symbol} "
+            f"{s.timescale}/{s.mechanism_family} cell={regime}"
+            + (f" parent={s.parent_strategy}" if s.parent_strategy else "")
+        )
+    return "\n".join(lines) + "\n"
 
 
 def retired_context_block(base_dir: Optional[Path] = None) -> str:

@@ -130,17 +130,25 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
         day = time.strftime("%Y-%-m-%-d")
         return _read_zone(home / "ledger" / f"{day}.md", None)
     if entry.startswith("strategies:"):
-        from trading.strategies.loader import load_strategies, strategy_context_block
+        from trading.strategies.loader import strategy_context_block
         which = entry.partition(":")[2]
         if which == "live":
             # Compact: predict's drafting tool loads the strategy file
             # server-side, so hypothesis prose in the spawn context was 60k+
             # tokens of pure redundancy at 194 books (2026-08-09).
-            return strategy_context_block(compact=True)
+            # Eligible-only: predict can only author books whose cell is lit,
+            # so dark-cell rows were ~130k tokens of freight per spawn at 487
+            # books / 46 eligible (2026-08-31) — the full population stays a
+            # strategies_by_timescale call away.
+            return strategy_context_block(compact=True, eligible_only=True)
         if which == "all":
-            from trading.strategies.loader import retired_context_block
-            return (strategy_context_block(compact=True)
-                    + "\n" + retired_context_block())
+            # Population SHAPE for generate/reflect: one line per live book
+            # (the multi-line rows measured ~146k tokens at 487 books,
+            # 2026-08-31); both seats read strategy files via tools for any
+            # single book's detail.
+            from trading.strategies.loader import (retired_context_block,
+                                                   roster_context_block)
+            return roster_context_block() + "\n" + retired_context_block()
         raise ValueError(f"unknown strategies read {entry!r}")
     if entry.startswith("lifecycle:"):
         from trading.lifecycle import queries
@@ -155,8 +163,24 @@ def resolve_read(entry: str, home: Optional[Path] = None) -> str:
         }
         if which not in block:
             raise ValueError(f"unknown lifecycle read {entry!r}")
+        rows = block[which]()
+        if which == "open-predictions" and isinstance(rows, list):
+            # Context diet (2026-08-31): claim_md ran ~1.5k chars per row of
+            # drafting prose (~10k tokens at 29 open) where the spawn only
+            # needs the headline — which book has a claim open. The claims
+            # are single paragraphs (no newline to split on), so cut at the
+            # first sentence-ish boundary; the full text stays one
+            # lifecycle_query away.
+            def _headline(text: str, limit: int = 160) -> str:
+                text = text or ""
+                if len(text) <= limit:
+                    return text
+                return text[:limit].rsplit(" ", 1)[0] + " …"
+
+            rows = [{**r, "claim_md": _headline(r.get("claim_md"))}
+                    for r in rows]
         return f"## lifecycle:{which}\n```json\n" + json.dumps(
-            block[which](), indent=1, default=str
+            rows, indent=1, default=str
         ) + "\n```"
     raise ValueError(f"unknown reads entry {entry!r}")
 

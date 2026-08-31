@@ -462,3 +462,90 @@ def queries_cap():
 def _caps(conn):
     from trading.lifecycle.queries import cell_capacity
     return cell_capacity(conn)
+
+
+class TestEligibleOnlyBlock:
+    """eligible_only keeps full rows for lit-cell books and reduces the rest
+    to a count — 487 live books were riding ~146k tokens into every predict
+    spawn while only 46 were eligible (2026-08-31)."""
+
+    def _seed(self, tmp_path, conn):
+        # One book whose cell is lit, one whose cell is dark. Cells are
+        # keyed by timescale (the one-cell law, 2026-07-27).
+        lit = _strategy(
+            tmp_path, name="lit-book", file_path=tmp_path / "lit-book.md",
+            regime_applicability={"intraday": {
+                "direction": ["ranging"], "volatility": ["elevated"]}})
+        dark = _strategy(
+            tmp_path, name="dark-book", file_path=tmp_path / "dark-book.md",
+            regime_applicability={"intraday": {
+                "direction": ["trending-up"], "volatility": ["compressed"]}})
+        loader.write_strategy(lit, conn)
+        loader.write_strategy(dark, conn)
+
+    def _light(self, conn):
+        from trading.lifecycle import write
+        write.record_regime(conn, timescale="intraday", direction="ranging",
+                            volatility="elevated", symbol="BTC",
+                            session_name="test")
+
+    def test_lit_cell_book_kept_dark_book_counted(
+            self, tmp_path, conn, monkeypatch):
+        self._seed(tmp_path, conn)
+        self._light(conn)
+        import trading.lifecycle.db as db_mod
+        monkeypatch.setattr(db_mod, "get_db", lambda *a, **k: conn)
+        block = loader.strategy_context_block(
+            base_dir=tmp_path, compact=True, eligible_only=True)
+        assert "lit-book" in block
+        assert "dark-book" not in block
+        assert "1 of 2 live books" in block
+
+    def test_unknown_regime_serves_full_book_with_reason(
+            self, tmp_path, conn, monkeypatch):
+        """A desk that has never assessed regime must not blind predict —
+        the fallback is the full book, stated, never a silent empty."""
+        self._seed(tmp_path, conn)  # no regime rows recorded
+        import trading.lifecycle.db as db_mod
+        monkeypatch.setattr(db_mod, "get_db", lambda *a, **k: conn)
+        block = loader.strategy_context_block(
+            base_dir=tmp_path, compact=True, eligible_only=True)
+        assert "eligibility unknown" in block
+        assert "lit-book" in block and "dark-book" in block
+
+    def test_none_eligible_says_so(self, tmp_path, conn, monkeypatch):
+        s = _strategy(
+            tmp_path, name="dark-only", file_path=tmp_path / "dark-only.md",
+            regime_applicability={"intraday": {
+                "direction": ["trending-down"], "volatility": ["compressed"]}})
+        loader.write_strategy(s, conn)
+        self._light(conn)
+        import trading.lifecycle.db as db_mod
+        monkeypatch.setattr(db_mod, "get_db", lambda *a, **k: conn)
+        block = loader.strategy_context_block(
+            base_dir=tmp_path, compact=True, eligible_only=True)
+        assert "none eligible" in block
+        assert "dark-only" not in block
+
+    def test_default_remains_unfiltered(self, tmp_path, conn):
+        """Without the flag the block is the whole live book — other
+        consumers are untouched by the diet."""
+        self._seed(tmp_path, conn)
+        block = loader.strategy_context_block(base_dir=tmp_path, compact=True)
+        assert "lit-book" in block and "dark-book" in block
+
+
+class TestRosterBlock:
+    def test_one_line_per_book_no_weights(self, tmp_path, conn):
+        """generate/reflect orientation is the book's SHAPE: one line each,
+        weights and hypothesis left to the strategy FILE via tools."""
+        loader.write_strategy(_strategy(tmp_path), conn)
+        block = loader.roster_context_block(base_dir=tmp_path)
+        (line,) = [l for l in block.splitlines()
+                   if l.startswith("- funding-flush-reversal")]
+        assert "[test]" in line and "intraday/flow" in line
+        assert "weights" not in line and "hypothesis" not in line
+
+    def test_empty_book_stated(self, tmp_path):
+        block = loader.roster_context_block(base_dir=tmp_path)
+        assert "no live strategies" in block
