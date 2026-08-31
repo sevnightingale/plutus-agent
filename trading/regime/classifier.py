@@ -297,7 +297,5 @@ def run(conn, symbols: Optional[List[str]] = None) -> Dict[str, Any]:
               "board_ok": bool(board.get("ok"))}
     write.record_action_run(
         conn, action_type="regime", agent=SOURCE, ok=written > 0,
-        session_name=SOURCE,
-        notes_md=json.dumps({k: v for k, v in result.items()
-                             if k != "board_ok"} | {"board_ok": result["board_ok"]}))
+        session_name=SOURCE, notes_md=json.dumps(result))
     return result

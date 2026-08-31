@@ -23,8 +23,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Set
 
 from harness import wake_queue
 

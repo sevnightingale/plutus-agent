@@ -29,7 +29,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List
 
 from harness import wake_queue
 
