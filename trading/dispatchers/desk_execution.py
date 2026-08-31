@@ -745,7 +745,12 @@ def _compute_outcome_fields(conn, pos: dict, close: dict, exit_reason: str) -> d
 
     holding_minutes = None
     if row:
-        holding_minutes = round((_time.time() - float(row["ts"])) / 60.0, 1)
+        # A recovered flat close carries the venue's own fill time; measuring
+        # from "now" would charge the gap between the fill and the adoption
+        # (hours, when a bracket fired overnight) to the holding period.
+        closed_ts = (float(close["fill_time_ms"]) / 1000.0
+                     if close.get("fill_time_ms") else _time.time())
+        holding_minutes = round((closed_ts - float(row["ts"])) / 60.0, 1)
 
     return {
         "realized_pnl_usd": round(pnl_usd, 4) if pnl_usd is not None else None,

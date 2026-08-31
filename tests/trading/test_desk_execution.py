@@ -684,6 +684,29 @@ class TestAlreadyFlatClose:
         assert c["venue_already_flat"] is True
         assert queries.open_position(get_db()) is None   # books settled
 
+    def test_recovered_close_measures_holding_to_the_fill(self, mock_venue,
+                                                          monkeypatch):
+        # A recovered fill carries the venue's own timestamp; holding time
+        # must measure open->fill, not open->adoption. A bracket that fired
+        # overnight is not a longer hold because nobody settled the books
+        # until morning.
+        import time as _t
+        pid = _seed_strategy("flowT", "active", _TRADEABLE_BOOK)
+        r = _call("desk_open_position", {"prediction_id": pid, "thesis_md": "t"})
+        assert r["ok"], r
+        fill_ms = (_t.time() + 1800.0) * 1000.0
+        import trading.integrations.hyperliquid.venue as venue
+        monkeypatch.setattr(venue, "hl_close_position",
+                            lambda **kw: {"already_flat": True,
+                                          "fill_price": 101_200.0, "size": 0.035,
+                                          "order_id": "487", "fill_id": "t2",
+                                          "slippage_bp": None,
+                                          "fill_time_ms": fill_ms})
+        c = _call("desk_close_position",
+                  {"position_id": r["position_id"], "exit_reason": "sl_fired"})
+        assert c["ok"] is True
+        assert c["outcome"]["holding_minutes"] == pytest.approx(30.0, abs=1.0)
+
 
 class TestAbortCloseEscalation:
     def test_failed_abort_close_reported_loudly(self, monkeypatch):
