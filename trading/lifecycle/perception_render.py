@@ -99,7 +99,10 @@ def _compact(name: str, value: Any) -> str:
     # 2026-08-22 09:10Z + 10:03Z). Measured live (501-row board): cap 70 ->
     # total file ~79KB, under 80K. Compact_fn already extracted the signal;
     # the tail is JSON furniture. History stays in the cache.
-    return text if len(text) <= 70 else text[:67] + "..."
+    # 45, not 70: the desk's own escalation-override patch of 2026-08-23
+    # (PERCEPTION.md was over budget again at seven symbols); ran live
+    # uncommitted for a week, adopted at the sustainable-desk rebuild.
+    return text if len(text) <= 45 else text[:42] + "..."
 
 
 def _age_label(fetched_at: float, now: Optional[float] = None) -> str:
