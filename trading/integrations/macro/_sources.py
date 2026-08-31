@@ -207,3 +207,86 @@ def classify(value: float, buckets: List[tuple]) -> Dict[str, str]:
             return {"label": label, "narrative": narrative}
     lo, hi, label, narrative = buckets[-1]
     return {"label": label, "narrative": narrative}
+
+
+# ── EIA Weekly Petroleum Status Report (keyless ir.eia.gov CSV) ──────────────
+
+_WPSR_TABLE1_URL = "https://ir.eia.gov/wpsr/table1.csv"
+
+
+def eia_wpsr_stocks() -> Dict[str, Any]:
+    """Stocks section of WPSR Table 1 — the weekly oil-inventory print.
+
+    ir.eia.gov serves the current report's summary tables as keyless CSVs
+    (verified 2026-08-31; the EIA v2 API needs a registered key and FRED
+    dropped the EIA weekly series). Table 1's first block is the petroleum
+    stocks balance in MILLION barrels: column 1 is the latest week-ending
+    date, column 2 the prior week, column 3 the week-over-week difference —
+    the "Commercial (Excluding SPR)" difference IS the headline build/draw
+    the market trades.
+
+    Parsing stops at the second STUB_1 header row (the supply block that
+    follows repeats labels in different units). A missing label or a
+    reshaped header raises — the print is real or absent, never guessed.
+    """
+    import csv as _csv
+    import io as _io
+    from datetime import datetime as _dt
+
+    body = _http_get(_WPSR_TABLE1_URL, timeout=45)
+    rows = list(_csv.reader(_io.StringIO(body)))
+    if not rows or not rows[0] or rows[0][0] != "STUB_1":
+        raise RuntimeError("WPSR table1.csv: unexpected header shape")
+
+    def _iso(mdy: str) -> str:
+        return _dt.strptime(mdy.strip(), "%m/%d/%y").date().isoformat()
+
+    week_ending, prior_week = _iso(rows[0][1]), _iso(rows[0][2])
+
+    stocks: Dict[str, Dict[str, float]] = {}
+    for r in rows[1:]:
+        if not r or not r[0].strip():
+            continue
+        if r[0] == "STUB_1":  # the supply block begins — stocks are done
+            break
+        try:
+            level = float(r[1].replace(",", ""))
+            change = float(r[3].replace(",", ""))
+        except (ValueError, IndexError):
+            continue  # spacer/percent-only rows carry no stock reading
+        stocks[r[0].strip()] = {"level_mbbl": level, "change_mbbl": change}
+
+    required = ("Commercial (Excluding SPR)", "Total Motor Gasoline",
+                "Distillate Fuel Oil", "Strategic Petroleum Reserve (SPR)")
+    missing = [k for k in required if k not in stocks]
+    if missing:
+        raise RuntimeError(f"WPSR table1.csv: rows not found: {missing}")
+
+    return {"week_ending": week_ending, "prior_week_ending": prior_week,
+            "stocks": stocks, "source": _WPSR_TABLE1_URL}
+
+
+def next_wpsr_release() -> Dict[str, Any]:
+    """Next scheduled WPSR release: Wednesdays 10:30 ET (UTC-converted).
+
+    APPROXIMATE by design — federal-holiday weeks slip to Thursday and the
+    schedule note says so rather than pretending otherwise.
+    """
+    from datetime import datetime as _dt, timedelta as _td
+    from zoneinfo import ZoneInfo as _Zi
+
+    et = _Zi("America/New_York")
+    now = _dt.now(et)
+    candidate = now.replace(hour=10, minute=30, second=0, microsecond=0)
+    candidate += _td(days=(2 - candidate.weekday()) % 7)  # next Wednesday
+    if candidate <= now:
+        candidate += _td(days=7)
+    return {
+        "next_release_utc": candidate.astimezone(
+            _Zi("UTC")).isoformat(timespec="minutes"),
+        "days_to_next_release": round(
+            (candidate - now).total_seconds() / 86400.0, 2),
+        "schedule_note": ("Wednesdays 10:30 ET; federal-holiday weeks "
+                          "slip to Thursday — this estimate does not "
+                          "track holidays."),
+    }

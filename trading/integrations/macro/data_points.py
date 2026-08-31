@@ -270,3 +270,56 @@ def macro_us10y_real() -> Dict[str, Any]:
         "narrative": regime["narrative"],
         "source": data.get("source"),
     }
+
+
+@register_data_point(
+    name="oil_inventory_weekly",
+    category="macro",
+    source="eia",
+    description=(
+        "EIA Weekly Petroleum Status Report — the weekly oil-inventory "
+        "print (keyless ir.eia.gov Table 1 CSV). The headline is the "
+        "commercial-crude (ex-SPR) week-over-week change in million "
+        "barrels: negative = draw (bullish oil), positive = build "
+        "(bearish). Carries gasoline/distillate/SPR changes and the next "
+        "release estimate (Wednesdays 10:30 ET, holiday weeks slip). "
+        "HONEST ABSENCE: no free consensus source exists, so there is no "
+        "surprise-vs-expectations field — score the actual build/draw. "
+        "Data lags the tape: the print covers the week ending ~5 days "
+        "before release."
+    ),
+    params_schema={},
+    returns_schema={
+        "week_ending": "iso date the print covers",
+        "prior_week_ending": "iso date",
+        "headline_change_mbbl": "float — commercial crude ex-SPR, week-over-week (the traded number)",
+        "commercial_crude_mbbl": "float — level",
+        "gasoline_change_mbbl": "float",
+        "distillate_change_mbbl": "float",
+        "spr_change_mbbl": "float",
+        "next_release_utc": "iso8601 estimate",
+        "days_to_next_release": "float",
+        "schedule_note": "string",
+        "source": "string",
+    },
+    numeric_path="headline_change_mbbl",
+    tags=["macro", "oil", "inventory", "catalyst", "brent"],
+)
+def oil_inventory_weekly() -> Dict[str, Any]:
+    from trading.integrations.macro._sources import (eia_wpsr_stocks,
+                                                     next_wpsr_release)
+    report = eia_wpsr_stocks()
+    stocks = report["stocks"]
+    crude = stocks["Commercial (Excluding SPR)"]
+    out = {
+        "week_ending": report["week_ending"],
+        "prior_week_ending": report["prior_week_ending"],
+        "headline_change_mbbl": crude["change_mbbl"],
+        "commercial_crude_mbbl": crude["level_mbbl"],
+        "gasoline_change_mbbl": stocks["Total Motor Gasoline"]["change_mbbl"],
+        "distillate_change_mbbl": stocks["Distillate Fuel Oil"]["change_mbbl"],
+        "spr_change_mbbl": stocks["Strategic Petroleum Reserve (SPR)"]["change_mbbl"],
+        "source": report["source"],
+    }
+    out.update(next_wpsr_release())
+    return out

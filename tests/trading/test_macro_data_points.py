@@ -205,3 +205,58 @@ class TestParsers:
         monkeypatch.setattr(src, "_http_get", lambda *a, **k: json.dumps(rates))
         value = src.synthetic_dxy()["value"]
         assert 95.0 < value < 101.0
+
+
+# ── EIA WPSR (oil_inventory_weekly) ─────────────────────────────────────────
+
+# Real table1.csv shape, captured 2026-08-31 (quoted cells, comma thousands,
+# a second STUB_1 header opening the supply block in different units).
+_WPSR_CSV = "\r\n".join([
+    '"STUB_1","8/21/26","8/14/26","Difference","Percent Change","8/22/25","Difference","Percent Change"',
+    '"Crude Oil","718.636","722.241","-3.605","-0.500","800.1","-81.5","-10.2"',
+    '"Commercial (Excluding SPR)","428.910","428.815","0.095","0.000","420.0","8.9","2.1"',
+    '"Strategic Petroleum Reserve (SPR)","289.726","293.426","-3.700","-1.300","380.1","-90.4","-23.8"',
+    '"Total Motor Gasoline","206.842","209.378","-2.536","-1.200","210.0","-3.2","-1.5"',
+    '"Distillate Fuel Oil","103.391","105.619","-2.228","-2.100","100.0","3.4","3.4"',
+    '"Total Stocks (Including SPR)","1,535.088","1,538.728","-3.641","-0.200","1,600.0","-64.9","-4.1"',
+    '"STUB_1","STUB_2","8/21/26","8/14/26","Difference","Percent Change"',
+    '"Crude Oil Supply ","(1)     Domestic Production","13,843","13,830","13","0.1"',
+])
+
+
+class TestEIAWpsr:
+    def test_parses_the_stocks_block(self, monkeypatch):
+        monkeypatch.setattr(src, "_http_get", lambda url, **kw: _WPSR_CSV)
+        report = src.eia_wpsr_stocks()
+        assert report["week_ending"] == "2026-08-21"
+        assert report["prior_week_ending"] == "2026-08-14"
+        crude = report["stocks"]["Commercial (Excluding SPR)"]
+        assert crude == {"level_mbbl": 428.910, "change_mbbl": 0.095}
+        # Comma thousands parse; the supply block (different units) is
+        # NOT read — its Crude Oil Supply rows never reach the dict.
+        assert report["stocks"]["Total Stocks (Including SPR)"][
+            "level_mbbl"] == 1535.088
+        assert "Crude Oil Supply" not in " ".join(report["stocks"])
+
+    def test_missing_headline_row_raises(self, monkeypatch):
+        broken = _WPSR_CSV.replace("Commercial (Excluding SPR)", "Renamed")
+        monkeypatch.setattr(src, "_http_get", lambda url, **kw: broken)
+        with pytest.raises(RuntimeError, match="rows not found"):
+            src.eia_wpsr_stocks()
+
+    def test_reshaped_header_raises(self, monkeypatch):
+        monkeypatch.setattr(src, "_http_get",
+                            lambda url, **kw: "totally,different,csv")
+        with pytest.raises(RuntimeError, match="header shape"):
+            src.eia_wpsr_stocks()
+
+    def test_dp_return_shape(self, monkeypatch):
+        monkeypatch.setattr(src, "_http_get", lambda url, **kw: _WPSR_CSV)
+        out = dp.oil_inventory_weekly()
+        assert out["headline_change_mbbl"] == 0.095
+        assert out["gasoline_change_mbbl"] == -2.536
+        assert out["distillate_change_mbbl"] == -2.228
+        assert out["spr_change_mbbl"] == -3.7
+        # The release estimate is a real forward date, never negative.
+        assert 0 <= out["days_to_next_release"] <= 7.01
+        assert "surprise" not in out  # honest absence: no consensus source
