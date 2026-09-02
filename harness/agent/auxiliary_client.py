@@ -2665,6 +2665,56 @@ def _build_call_kwargs(
     return kwargs
 
 
+def _log_auxiliary_usage(response: Any, task: str = None) -> None:
+    """Emit one usage line per auxiliary call, parallel to the agent loop's.
+
+    Every auxiliary completion in this module returns through
+    ``_validate_llm_response``, so this is the one seam where the whole
+    channel is visible. It was invisible before 2026-09-02, and that blind
+    spot cost a real account: the sustainable desk's ``conviction_score`` and
+    ``predict_draft`` calls ran at ``max`` reasoning effort several hundred
+    times a day, and no instrument in the house could see a token of it —
+    the burn analysis was built from the agent loop's ``API call #`` lines,
+    which cover a fifth of the spend.
+
+    Tokens come from the shared ``normalize_usage``; cost is best-effort and
+    is omitted rather than guessed when the route has no pricing. Metering
+    must never be able to fail a call, hence the bare except.
+    """
+    try:
+        from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
+
+        raw = getattr(response, "usage", None)
+        if not raw:
+            return
+        model = getattr(response, "model", None) or "unknown"
+        usage = normalize_usage(raw)
+        if not usage.total_tokens:
+            return
+
+        cache_part = ""
+        if usage.cache_read_tokens and usage.prompt_tokens:
+            cache_part = (f" cache={usage.cache_read_tokens}/{usage.prompt_tokens}"
+                          f" ({100 * usage.cache_read_tokens / usage.prompt_tokens:.0f}%)")
+        reasoning_part = (f" reasoning={usage.reasoning_tokens}"
+                          if usage.reasoning_tokens else "")
+        cost_part = ""
+        try:
+            cost = estimate_usage_cost(model, usage)
+            if cost.amount_usd is not None:
+                cost_part = f" cost=${float(cost.amount_usd):.4f}"
+        except Exception:
+            pass
+
+        logger.info(
+            "Auxiliary %s usage: model=%s in=%d out=%d total=%d%s%s%s",
+            task or "call", model, usage.prompt_tokens, usage.output_tokens,
+            usage.total_tokens, cache_part, reasoning_part, cost_part,
+        )
+    except Exception:
+        logger.debug("Auxiliary usage metering failed", exc_info=True)
+
+
 def _validate_llm_response(response: Any, task: str = None) -> Any:
     """Validate that an LLM response has the expected .choices[0].message shape.
 
@@ -2693,6 +2743,7 @@ def _validate_llm_response(response: Any, task: str = None) -> Any:
             f"Expected object with .choices[0].message — check provider "
             f"adapter or custom endpoint compatibility."
         ) from exc
+    _log_auxiliary_usage(response, task)
     return response
 
 

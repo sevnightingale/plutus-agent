@@ -611,6 +611,14 @@ def normalize_usage(
     output_details = getattr(response_usage, "output_tokens_details", None)
     if output_details:
         reasoning_tokens = _to_int(getattr(output_details, "reasoning_tokens", 0))
+    if not reasoning_tokens:
+        # OpenAI chat-completions names this bucket completion_tokens_details;
+        # DeepSeek and other reasoning models on that shape report only there.
+        # Cost is unaffected (reasoning is already inside completion_tokens) —
+        # what is affected is whether a deep-effort call is legible as one.
+        completion_details = getattr(response_usage, "completion_tokens_details", None)
+        if completion_details:
+            reasoning_tokens = _to_int(getattr(completion_details, "reasoning_tokens", 0))
 
     return CanonicalUsage(
         input_tokens=input_tokens,

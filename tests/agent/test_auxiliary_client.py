@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
@@ -1203,3 +1204,59 @@ class TestAnthropicCompatImageConversion:
         }]
         result = _convert_openai_images_to_anthropic(messages)
         assert result[0]["content"][0]["source"]["media_type"] == "image/jpeg"
+
+
+class TestAuxiliaryUsageMetering:
+    """The auxiliary channel must be as legible as the agent loop.
+
+    Before 2026-09-02 `call_llm` recorded nothing, so several hundred
+    deep-effort calls a day were invisible to every cost instrument.
+    """
+
+    @staticmethod
+    def _response(*, prompt=10000, completion=2000, cached=8000, reasoning=1800):
+        return SimpleNamespace(
+            model="deepseek-v4-flash",
+            choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))],
+            usage=SimpleNamespace(
+                prompt_tokens=prompt,
+                completion_tokens=completion,
+                prompt_tokens_details=SimpleNamespace(cached_tokens=cached),
+                completion_tokens_details=SimpleNamespace(reasoning_tokens=reasoning),
+            ),
+        )
+
+    def test_validate_emits_a_usage_line(self, caplog):
+        from harness.agent.auxiliary_client import _validate_llm_response
+
+        with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
+            _validate_llm_response(self._response(), "conviction_score")
+
+        line = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
+        assert "Auxiliary conviction_score usage:" in line
+        assert "model=deepseek-v4-flash" in line
+        assert "in=10000" in line
+        assert "out=2000" in line
+        # The reasoning bucket is the one that explains a deep-effort call —
+        # DeepSeek reports it only under completion_tokens_details.
+        assert "reasoning=1800" in line
+        assert "cache=8000/10000" in line
+
+    def test_metering_never_fails_the_call(self, caplog):
+        from harness.agent.auxiliary_client import _validate_llm_response
+
+        broken = SimpleNamespace(
+            model="x",
+            choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))],
+            usage=SimpleNamespace(prompt_tokens="not-a-number"),
+        )
+        assert _validate_llm_response(broken, "predict_draft") is broken
+
+    def test_no_usage_on_the_response_is_silent(self, caplog):
+        from harness.agent.auxiliary_client import _validate_llm_response
+
+        bare = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
+        with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
+            _validate_llm_response(bare, "compression")
+        assert not [r for r in caplog.records if "usage:" in r.getMessage()]
