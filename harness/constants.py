@@ -194,21 +194,31 @@ def parse_reasoning_effort(effort: str) -> dict | None:
     return None
 
 
-def resolve_seat_effort(cfg: dict, seat: str) -> str:
-    """Per-seat reasoning effort from an operator config dict.
+def resolve_seat_effort(cfg: dict, *seats: str) -> str:
+    """Reasoning effort for a seat from an operator config dict.
 
-    Precedence: ``desk_efforts: {<seat>: <effort>}`` wins, then the global
-    ``agent.reasoning_effort``, else "". Returns the raw string — feed it to
-    :func:`parse_reasoning_effort`. One resolver for every consumer (spawn,
-    the gateway's plutus-main session, predict's auxiliary calls) so the
-    precedence cannot drift between them.
+    Precedence: each ``desk_efforts: {<seat>: <effort>}`` key in turn, then
+    the global ``agent.reasoning_effort``, else "". Returns the raw string —
+    feed it to :func:`parse_reasoning_effort`. One resolver for every consumer
+    (spawn, the gateway's plutus-main session, predict's auxiliary calls) so
+    the precedence cannot drift between them.
+
+    Several seats want to be read as a CHAIN rather than a single key: a
+    seat's auxiliary calls may outnumber its own turns by an order of
+    magnitude and want their own pin, while still inheriting the seat's when
+    unpinned. Hence ``resolve_seat_effort(cfg, "plutus-predict-aux",
+    "plutus-predict")``. The chain lives here rather than at the call site
+    because a caller that short-circuits on its own first key silently
+    discards every fallback below it, including the global — which is the
+    drift this function's existence is meant to prevent.
     """
     try:
-        return str(
-            (cfg.get("desk_efforts") or {}).get(seat)
-            or (cfg.get("agent") or {}).get("reasoning_effort", "")
-            or ""
-        ).strip()
+        efforts = cfg.get("desk_efforts") or {}
+        for seat in seats:
+            pinned = efforts.get(seat)
+            if pinned:
+                return str(pinned).strip()
+        return str((cfg.get("agent") or {}).get("reasoning_effort", "") or "").strip()
     except AttributeError:
         return ""
 

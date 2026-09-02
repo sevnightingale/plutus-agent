@@ -154,21 +154,20 @@ def _seat_effort() -> Optional[str]:
     otherwise a seat set to max would still draft and score at provider
     default.
 
-    That inheritance is the right default and was also, on 2026-09-01, the
-    largest line on the bill. These calls run several hundred times a day
-    (one conviction score per strategy per rescore), and at `max` each one
-    buys a 32k-token thinking budget; the seat's own turns run a couple of
-    dozen times. Inheriting one number for both couples a rare deep turn to
-    a very common cheap one. `plutus-predict-aux` in `desk_efforts` breaks
-    that coupling when set; absent, nothing changes.
+    That inheritance is the right default and was also the largest line on
+    the bill that emptied the account on 2026-08-31 (the account of which
+    lives at `PREDICT_RESOLUTIONS_N` in `harness/desk_events.py`). These
+    calls run several hundred times a day, one conviction score per strategy
+    per rescore, against the seat's couple of dozen turns; inheriting one
+    number for both couples a rare deep turn to a very common cheap one.
+    `plutus-predict-aux` in `desk_efforts` breaks that coupling when set;
+    absent, nothing changes.
     """
     try:
         from harness.cli.config import load_config
         from harness.constants import VALID_REASONING_EFFORTS, resolve_seat_effort
-        cfg = load_config()
-        pinned = (cfg.get("desk_efforts") or {}).get(AUX_EFFORT_KEY)
-        eff = str(pinned).strip().lower() if pinned else resolve_seat_effort(
-            cfg, "plutus-predict").lower()
+        eff = resolve_seat_effort(
+            load_config(), AUX_EFFORT_KEY, "plutus-predict").lower()
         return eff if eff in VALID_REASONING_EFFORTS + ("none",) else None
     except Exception:
         return None

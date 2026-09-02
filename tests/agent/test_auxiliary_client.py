@@ -591,7 +591,7 @@ class TestNousAuxiliaryRefresh:
             patch("harness.agent.auxiliary_client._resolve_task_provider_model", return_value=("nous", "nous-model", None, None, None)),
             patch("harness.agent.auxiliary_client._get_cached_client", return_value=(stale_client, "nous-model")),
             patch("harness.agent.auxiliary_client.OpenAI", return_value=fresh_client),
-            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task, _provider=None: resp),
+            patch("harness.agent.auxiliary_client._finalize_llm_response", side_effect=lambda resp, _task, _provider=None, _base=None: resp),
             patch("harness.agent.auxiliary_client._resolve_nous_runtime_api", return_value=("fresh-agent-key", "https://inference-api.nousresearch.com/v1")),
         ):
             result = call_llm(
@@ -620,7 +620,7 @@ class TestNousAuxiliaryRefresh:
             patch("harness.agent.auxiliary_client._resolve_task_provider_model", return_value=("nous", "nous-model", None, None, None)),
             patch("harness.agent.auxiliary_client._get_cached_client", return_value=(stale_client, "nous-model")),
             patch("harness.agent.auxiliary_client._to_async_client", return_value=(fresh_async_client, "nous-model")),
-            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task, _provider=None: resp),
+            patch("harness.agent.auxiliary_client._finalize_llm_response", side_effect=lambda resp, _task, _provider=None, _base=None: resp),
             patch("harness.agent.auxiliary_client._resolve_nous_runtime_api", return_value=("fresh-agent-key", "https://inference-api.nousresearch.com/v1")),
         ):
             result = await async_call_llm(
@@ -1210,7 +1210,8 @@ class TestAuxiliaryUsageMetering:
     """The auxiliary channel must be as legible as the agent loop.
 
     Before 2026-09-02 `call_llm` recorded nothing, so several hundred
-    deep-effort calls a day were invisible to every cost instrument.
+    deep-effort calls a day were invisible to every cost instrument. The
+    account of what that cost lives at `PREDICT_RESOLUTIONS_N`.
     """
 
     @staticmethod
@@ -1227,10 +1228,10 @@ class TestAuxiliaryUsageMetering:
         )
 
     def test_validate_emits_a_usage_line(self, caplog):
-        from harness.agent.auxiliary_client import _validate_llm_response
+        from harness.agent.auxiliary_client import _finalize_llm_response
 
         with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
-            _validate_llm_response(self._response(), "conviction_score",
+            _finalize_llm_response(self._response(), "conviction_score",
                                    "deepseek")
 
         line = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
@@ -1247,35 +1248,35 @@ class TestAuxiliaryUsageMetering:
         # `estimate_usage_cost` cannot resolve a billing route from a model
         # name alone, so without the provider threaded through from the call
         # site the meter reports tokens and a blank where the money goes.
-        from harness.agent.auxiliary_client import _validate_llm_response
+        from harness.agent.auxiliary_client import _finalize_llm_response
 
         with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
-            _validate_llm_response(self._response(), "predict_draft", "deepseek")
+            _finalize_llm_response(self._response(), "predict_draft", "deepseek")
         priced = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
 
         caplog.clear()
         with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
-            _validate_llm_response(self._response(), "predict_draft")
+            _finalize_llm_response(self._response(), "predict_draft")
         unpriced = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
 
         assert "cost=$" in priced
         assert "cost=$" not in unpriced  # omitted, never guessed
 
-    def test_metering_never_fails_the_call(self, caplog):
-        from harness.agent.auxiliary_client import _validate_llm_response
+    def test_metering_never_fails_the_call(self):
+        from harness.agent.auxiliary_client import _finalize_llm_response
 
         broken = SimpleNamespace(
             model="x",
             choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))],
             usage=SimpleNamespace(prompt_tokens="not-a-number"),
         )
-        assert _validate_llm_response(broken, "predict_draft") is broken
+        assert _finalize_llm_response(broken, "predict_draft") is broken
 
     def test_no_usage_on_the_response_is_silent(self, caplog):
-        from harness.agent.auxiliary_client import _validate_llm_response
+        from harness.agent.auxiliary_client import _finalize_llm_response
 
         bare = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content="{}"))])
         with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
-            _validate_llm_response(bare, "compression")
+            _finalize_llm_response(bare, "compression")
         assert not [r for r in caplog.records if "usage:" in r.getMessage()]

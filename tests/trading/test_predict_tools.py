@@ -301,9 +301,8 @@ class TestDeclaredNormalizers:
 class TestAuxEffortPin:
     """The auxiliary calls follow the seat unless pinned separately.
 
-    Inheriting the seat's `max` gave several hundred scoring calls a day a
-    32k-token thinking budget each — the largest line on the bill that
-    emptied the account on 2026-08-31.
+    See `PREDICT_RESOLUTIONS_N` in harness/desk_events.py for why this
+    coupling cost an account.
     """
 
     @staticmethod
@@ -329,11 +328,20 @@ class TestAuxEffortPin:
             predict_tools.AUX_EFFORT_KEY: "ludicrous"}})
         assert predict_tools._seat_effort() is None
 
-    def test_the_pin_governs_the_token_budget(self, monkeypatch):
-        # The effort is not cosmetic: at max it triples the thinking budget.
+    def test_the_aux_pin_does_not_short_circuit_the_global(self, monkeypatch):
+        # The chain is aux -> seat -> agent.reasoning_effort. Reading the aux
+        # key at the call site and returning early on a hit would discard both
+        # fallbacks whenever the aux key were set — which is why the chain
+        # lives in resolve_seat_effort rather than here.
         from trading.dispatchers import predict_tools
-        self._with_config(monkeypatch, {"desk_efforts": {
-            predict_tools.AUX_EFFORT_KEY: "medium"}})
-        assert predict_tools._seat_effort() == "medium"
-        assert (predict_tools.DEEP_EFFORT_MAX_TOKENS_CAP
-                > predict_tools.LIGHT_MAX_TOKENS_CAP)
+        self._with_config(monkeypatch, {
+            "desk_efforts": {},
+            "agent": {"reasoning_effort": "high"}})
+        assert predict_tools._seat_effort() == "high"
+
+    def test_an_unset_aux_pin_still_reaches_the_seat(self, monkeypatch):
+        from trading.dispatchers import predict_tools
+        self._with_config(monkeypatch, {
+            "desk_efforts": {"plutus-predict": "xhigh"},
+            "agent": {"reasoning_effort": "low"}})
+        assert predict_tools._seat_effort() == "xhigh"

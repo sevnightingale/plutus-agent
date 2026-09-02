@@ -66,9 +66,8 @@ class TestPredictDue:
         assert due and "resolved since" in reason
 
     def test_one_resolution_is_not_enough_evidence(self):
-        # A single resolution used to wake a full predict session, which made
-        # the cooldown the de facto cadence and emptied an account on
-        # 2026-08-31. Below the threshold the seat stays asleep.
+        # Below the threshold the seat stays asleep — see
+        # PREDICT_RESOLUTIONS_N for why that matters.
         conn = get_db()
         write.record_action_run(conn, action_type="predict", agent="t", ok=True)
         _seed_prediction(conn, resolved_at=time.time())

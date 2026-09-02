@@ -2665,60 +2665,88 @@ def _build_call_kwargs(
     return kwargs
 
 
+def _cost_suffix(model: str, usage: Any, provider: str, base_url: str) -> str:
+    """The money column for one usage line, or "" when the route has no price.
+
+    Its own try because it has its own failure mode: `estimate_usage_cost`
+    reaches a pricing table that for some routes is fetched rather than
+    compiled in. A pricing hiccup must cost the cost column and nothing else —
+    folded into the caller's guard it would take the token counts with it,
+    which is the blindness this whole seam exists to end.
+    """
+    try:
+        from harness.agent.usage_pricing import estimate_usage_cost
+
+        cost = estimate_usage_cost(model, usage, provider=provider,
+                                   base_url=base_url or None)
+        if cost.amount_usd is None:
+            return ""
+        return f" cost=${float(cost.amount_usd):.4f}"
+    except Exception:
+        return ""
+
+
 def _log_auxiliary_usage(response: Any, task: str = None,
-                         provider: str = None) -> None:
+                         provider: str = None, base_url: str = None) -> None:
     """Emit one usage line per auxiliary call, parallel to the agent loop's.
 
     Every auxiliary completion in this module returns through
-    ``_validate_llm_response``, so this is the one seam where the whole
-    channel is visible. It was invisible before 2026-09-02, and that blind
-    spot cost a real account: the sustainable desk's ``conviction_score`` and
-    ``predict_draft`` calls ran at ``max`` reasoning effort several hundred
-    times a day, and no instrument in the house could see a token of it —
-    the burn analysis was built from the agent loop's ``API call #`` lines,
-    which cover a fifth of the spend.
+    ``_finalize_llm_response``, so this is the one seam where the whole
+    channel is visible. It was invisible before 2026-09-02, and the story of
+    what that cost is told once, at ``PREDICT_RESOLUTIONS_N`` in
+    ``harness/desk_events.py``.
 
-    Tokens come from the shared ``normalize_usage``; cost is best-effort and
-    is omitted rather than guessed when the route has no pricing. Metering
-    must never be able to fail a call, hence the bare except.
+    Note the deliberate absence: ``normalize_usage`` is called WITHOUT a
+    provider. Every adapter in this module (Codex, Anthropic) re-shapes its
+    native usage into ``prompt_tokens``/``completion_tokens`` before the
+    response reaches here, so the OpenAI branch is the correct reading for
+    all of them — passing ``provider="anthropic"`` would take a branch whose
+    fields these responses do not carry and silently report zeros.
+
+    Metering must never be able to fail a call, hence the bare except.
     """
     try:
-        from harness.agent.usage_pricing import estimate_usage_cost, normalize_usage
+        from harness.agent.usage_pricing import normalize_usage
 
         raw = getattr(response, "usage", None)
         if not raw:
             return
-        model = getattr(response, "model", None) or "unknown"
         usage = normalize_usage(raw)
         if not usage.total_tokens:
             return
+        # Pricing can reach the network on some routes; skip the whole line's
+        # construction when nothing will read it.
+        if not logger.isEnabledFor(logging.INFO):
+            return
 
+        model = getattr(response, "model", None) or "unknown"
         cache_part = ""
         if usage.cache_read_tokens and usage.prompt_tokens:
             cache_part = (f" cache={usage.cache_read_tokens}/{usage.prompt_tokens}"
                           f" ({100 * usage.cache_read_tokens / usage.prompt_tokens:.0f}%)")
         reasoning_part = (f" reasoning={usage.reasoning_tokens}"
                           if usage.reasoning_tokens else "")
-        cost_part = ""
-        try:
-            cost = estimate_usage_cost(model, usage, provider=provider or None)
-            if cost.amount_usd is not None:
-                cost_part = f" cost=${float(cost.amount_usd):.4f}"
-        except Exception:
-            pass
 
         logger.info(
             "Auxiliary %s usage: model=%s in=%d out=%d total=%d%s%s%s",
             task or "call", model, usage.prompt_tokens, usage.output_tokens,
-            usage.total_tokens, cache_part, reasoning_part, cost_part,
+            usage.total_tokens, cache_part, reasoning_part,
+            _cost_suffix(model, usage, provider, base_url),
         )
     except Exception:
         logger.debug("Auxiliary usage metering failed", exc_info=True)
 
 
-def _validate_llm_response(response: Any, task: str = None,
-                           provider: str = None) -> Any:
-    """Validate that an LLM response has the expected .choices[0].message shape.
+def _finalize_llm_response(response: Any, task: str = None,
+                           provider: str = None, base_url: str = None) -> Any:
+    """Validate an LLM response, then meter it. Every auxiliary return lands here.
+
+    Named for both jobs on purpose: metering rides this function, and a
+    validator that quietly also accounted for money would be invisible to
+    the next person adding a return path.
+
+    Validation proper: check the response has the expected
+    .choices[0].message shape.
 
     Fails fast with a clear error instead of letting malformed payloads
     propagate to downstream consumers where they crash with misleading
@@ -2745,7 +2773,7 @@ def _validate_llm_response(response: Any, task: str = None,
             f"Expected object with .choices[0].message — check provider "
             f"adapter or custom endpoint compatibility."
         ) from exc
-    _log_auxiliary_usage(response, task, provider)
+    _log_auxiliary_usage(response, task, provider, base_url)
     return response
 
 
@@ -2875,19 +2903,27 @@ def call_llm(
     if _is_anthropic_compat_endpoint(resolved_provider, _client_base):
         kwargs["messages"] = _convert_openai_images_to_anthropic(kwargs["messages"])
 
+    # One binding for the eight returns below. The provider is what prices the
+    # call, and six of the eight serve it from `resolved_provider`; binding the
+    # default here means a return added later is priced correctly by omission
+    # rather than silently unpriced, and leaves the two genuine overrides
+    # (a refreshed Nous client, a fallback provider) visible as exceptions.
+    def _ok(resp: Any, served_by: str = None, via: Any = None) -> Any:
+        src = client if via is None else via
+        return _finalize_llm_response(
+            resp, task, served_by or resolved_provider,
+            str(getattr(src, "base_url", "") or ""))
+
     # Handle max_tokens vs max_completion_tokens retry, then payment fallback.
     try:
-        return _validate_llm_response(
-            client.chat.completions.create(**kwargs), task, resolved_provider)
+        return _ok(client.chat.completions.create(**kwargs))
     except Exception as first_err:
         err_str = str(first_err)
         if "max_tokens" in err_str or "unsupported_parameter" in err_str:
             kwargs.pop("max_tokens", None)
             kwargs["max_completion_tokens"] = max_tokens
             try:
-                return _validate_llm_response(
-                    client.chat.completions.create(**kwargs), task,
-                    resolved_provider)
+                return _ok(client.chat.completions.create(**kwargs))
             except Exception as retry_err:
                 # If the max_tokens retry also hits a payment or connection
                 # error, fall through to the fallback chain below.
@@ -2915,9 +2951,8 @@ def call_llm(
                             task or "call")
                 if refreshed_model and refreshed_model != kwargs.get("model"):
                     kwargs["model"] = refreshed_model
-                return _validate_llm_response(
-                    refreshed_client.chat.completions.create(**kwargs), task,
-                    resolved_provider or "nous")
+                return _ok(refreshed_client.chat.completions.create(**kwargs),
+                           "nous", refreshed_client)
 
         # ── Payment / credit exhaustion fallback ──────────────────────
         # When the resolved provider returns 402 or a credit-related error,
@@ -2949,9 +2984,8 @@ def call_llm(
                     tools=tools, timeout=effective_timeout,
                     extra_body=effective_extra_body,
                     base_url=str(getattr(fb_client, "base_url", "") or ""))
-                return _validate_llm_response(
-                    fb_client.chat.completions.create(**fb_kwargs), task,
-                    fb_label)
+                return _ok(fb_client.chat.completions.create(**fb_kwargs),
+                           fb_label, fb_client)
         raise
 
 
@@ -3100,19 +3134,21 @@ async def async_call_llm(
     if _is_anthropic_compat_endpoint(resolved_provider, _client_base):
         kwargs["messages"] = _convert_openai_images_to_anthropic(kwargs["messages"])
 
+    def _ok(resp: Any, served_by: str = None, via: Any = None) -> Any:
+        src = client if via is None else via
+        return _finalize_llm_response(
+            resp, task, served_by or resolved_provider,
+            str(getattr(src, "base_url", "") or ""))
+
     try:
-        return _validate_llm_response(
-            await client.chat.completions.create(**kwargs), task,
-            resolved_provider)
+        return _ok(await client.chat.completions.create(**kwargs))
     except Exception as first_err:
         err_str = str(first_err)
         if "max_tokens" in err_str or "unsupported_parameter" in err_str:
             kwargs.pop("max_tokens", None)
             kwargs["max_completion_tokens"] = max_tokens
             try:
-                return _validate_llm_response(
-                    await client.chat.completions.create(**kwargs), task,
-                    resolved_provider)
+                return _ok(await client.chat.completions.create(**kwargs))
             except Exception as retry_err:
                 # If the max_tokens retry also hits a payment or connection
                 # error, fall through to the fallback chain below.
@@ -3139,9 +3175,8 @@ async def async_call_llm(
                             task or "call")
                 if refreshed_model and refreshed_model != kwargs.get("model"):
                     kwargs["model"] = refreshed_model
-                return _validate_llm_response(
-                    await refreshed_client.chat.completions.create(**kwargs),
-                    task, resolved_provider or "nous")
+                return _ok(await refreshed_client.chat.completions.create(**kwargs),
+                           "nous", refreshed_client)
 
         # ── Payment / connection fallback (mirrors sync call_llm) ─────
         should_fallback = _is_payment_error(first_err) or _is_connection_error(first_err)
@@ -3163,7 +3198,6 @@ async def async_call_llm(
                 async_fb, async_fb_model = _to_async_client(fb_client, fb_model or "")
                 if async_fb_model and async_fb_model != fb_kwargs.get("model"):
                     fb_kwargs["model"] = async_fb_model
-                return _validate_llm_response(
-                    await async_fb.chat.completions.create(**fb_kwargs), task,
-                    fb_label)
+                return _ok(await async_fb.chat.completions.create(**fb_kwargs),
+                           fb_label, async_fb)
         raise
