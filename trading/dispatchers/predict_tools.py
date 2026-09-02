@@ -141,18 +141,34 @@ DEEP_EFFORT_MAX_TOKENS_CAP = 32768
 DEEP_EFFORT_TIMEOUT_S = 600.0
 
 
+#: `desk_efforts` key that pins the auxiliary calls independently of the seat.
+AUX_EFFORT_KEY = "plutus-predict-aux"
+
+
 def _seat_effort() -> Optional[str]:
     """Reasoning effort for predict's own auxiliary calls.
 
     predict_draft/conviction_score are where the seat's heavy reasoning
-    actually happens — they must follow the plutus-predict pin in
-    `desk_efforts` (falling back to the global agent.reasoning_effort),
-    or a seat set to max would still draft and score at provider default.
+    actually happens, so by default they follow the plutus-predict pin in
+    `desk_efforts` (falling back to the global agent.reasoning_effort) —
+    otherwise a seat set to max would still draft and score at provider
+    default.
+
+    That inheritance is the right default and was also, on 2026-09-01, the
+    largest line on the bill. These calls run several hundred times a day
+    (one conviction score per strategy per rescore), and at `max` each one
+    buys a 32k-token thinking budget; the seat's own turns run a couple of
+    dozen times. Inheriting one number for both couples a rare deep turn to
+    a very common cheap one. `plutus-predict-aux` in `desk_efforts` breaks
+    that coupling when set; absent, nothing changes.
     """
     try:
         from harness.cli.config import load_config
         from harness.constants import VALID_REASONING_EFFORTS, resolve_seat_effort
-        eff = resolve_seat_effort(load_config(), "plutus-predict").lower()
+        cfg = load_config()
+        pinned = (cfg.get("desk_efforts") or {}).get(AUX_EFFORT_KEY)
+        eff = str(pinned).strip().lower() if pinned else resolve_seat_effort(
+            cfg, "plutus-predict").lower()
         return eff if eff in VALID_REASONING_EFFORTS + ("none",) else None
     except Exception:
         return None

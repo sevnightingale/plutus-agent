@@ -8,8 +8,9 @@ log: resolutions stamp ``predictions.resolved_at``, seat runs stamp
 
 Due-ness per seat:
 
-* **predict** — a resolution has landed since the last successful predict
-  run (evidence arrived: a slot freed, an outcome accrued), or the floor
+* **predict** — ``PREDICT_RESOLUTIONS_N`` resolutions have landed since the
+  last successful predict run (evidence arrived: slots freed, outcomes
+  accrued), a regime flip or macro print landed, or the floor
   backstop expired (``PREDICT_FLOOR_S``). The floor exists because a pure
   event loop can starve from a cold start — nothing open, nothing
   resolves, nothing wakes — and its firing is logged as a signal that the
@@ -48,6 +49,15 @@ SOURCE = "desk-events"
 
 PREDICT_FLOOR_S = 6 * 3600
 PREDICT_COOLDOWN_S = 30 * 60
+#: Resolutions that must have landed before evidence alone wakes predict.
+#: One resolution is not worth a session. A predict spawn is a 15-20 turn
+#: conversation carrying several hundred auxiliary scoring calls behind it,
+#: and with resolutions arriving steadily a threshold of one made the
+#: cooldown the de facto cadence — 14 spawns in the 9.5 hours that emptied
+#: the account on 2026-08-31. Three mirrors REFLECT_CLOSES_N: enough
+#: evidence to be worth reading. The floor backstop below still guarantees
+#: a run every PREDICT_FLOOR_S regardless of how quiet the evidence is.
+PREDICT_RESOLUTIONS_N = 3
 GENERATE_FLOOR_S = 7 * 24 * 3600
 GENERATE_COOLDOWN_S = 6 * 3600
 REFLECT_FLOOR_S = 7 * 24 * 3600
@@ -90,8 +100,9 @@ def predict_due(conn, now: Optional[float] = None) -> Tuple[bool, str]:
         n = conn.execute(
             "SELECT COUNT(*) FROM predictions WHERE resolved_at > ?",
             (last,)).fetchone()[0]
-        return True, (f"{n} prediction(s) resolved since the last predict "
-                      f"run — evidence arrived, slots may be free")
+        if n >= PREDICT_RESOLUTIONS_N:
+            return True, (f"{n} prediction(s) resolved since the last predict "
+                          f"run — evidence arrived, slots may be free")
     row = conn.execute(
         "SELECT MAX(ts) FROM regime_observations WHERE flipped = 1"
     ).fetchone()
@@ -110,9 +121,10 @@ def predict_due(conn, now: Optional[float] = None) -> Tuple[bool, str]:
     if now - last > PREDICT_FLOOR_S:
         return True, (f"floor backstop: no predict run in "
                       f"{(now - last) / 3600:.1f}h (floor "
-                      f"{PREDICT_FLOOR_S / 3600:.0f}h) and no resolution "
-                      f"woke one — if this fires often, the event path is "
-                      f"quiet for a reason worth reading")
+                      f"{PREDICT_FLOOR_S / 3600:.0f}h) and fewer than "
+                      f"{PREDICT_RESOLUTIONS_N} resolutions woke one — if this "
+                      f"fires often, the event path is quiet for a reason "
+                      f"worth reading")
     return False, ""
 
 

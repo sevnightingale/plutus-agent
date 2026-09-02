@@ -57,12 +57,33 @@ class TestPredictDue:
         due, _ = desk_events.predict_due(conn)
         assert not due
 
-    def test_a_resolution_wakes_it(self):
+    def test_enough_resolutions_wake_it(self):
+        conn = get_db()
+        write.record_action_run(conn, action_type="predict", agent="t", ok=True)
+        for _ in range(desk_events.PREDICT_RESOLUTIONS_N):
+            _seed_prediction(conn, resolved_at=time.time())
+        due, reason = desk_events.predict_due(conn)
+        assert due and "resolved since" in reason
+
+    def test_one_resolution_is_not_enough_evidence(self):
+        # A single resolution used to wake a full predict session, which made
+        # the cooldown the de facto cadence and emptied an account on
+        # 2026-08-31. Below the threshold the seat stays asleep.
         conn = get_db()
         write.record_action_run(conn, action_type="predict", agent="t", ok=True)
         _seed_prediction(conn, resolved_at=time.time())
+        due, _ = desk_events.predict_due(conn)
+        assert not due
+
+    def test_a_sub_threshold_trickle_still_reaches_the_floor(self):
+        # The threshold must not be able to starve the seat: one resolution
+        # forever still gets a run every PREDICT_FLOOR_S.
+        conn = get_db()
+        write.record_action_run(conn, action_type="predict", agent="t", ok=True,
+                                ts=time.time() - desk_events.PREDICT_FLOOR_S - 60)
+        _seed_prediction(conn, resolved_at=time.time())
         due, reason = desk_events.predict_due(conn)
-        assert due and "resolved since" in reason
+        assert due and "floor backstop" in reason
 
     def test_floor_backstop_fires_and_says_so(self):
         conn = get_db()

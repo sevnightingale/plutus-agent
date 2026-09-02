@@ -296,3 +296,44 @@ class TestDeclaredNormalizers:
         res = json.loads(predict_tools._conviction_score({"strategy_name": "norm-mix"}))
         assert res["conviction"] == pytest.approx(0.7)
         assert res["missing"] == []
+
+
+class TestAuxEffortPin:
+    """The auxiliary calls follow the seat unless pinned separately.
+
+    Inheriting the seat's `max` gave several hundred scoring calls a day a
+    32k-token thinking budget each — the largest line on the bill that
+    emptied the account on 2026-08-31.
+    """
+
+    @staticmethod
+    def _with_config(monkeypatch, cfg):
+        import harness.cli.config as harness_config
+        monkeypatch.setattr(harness_config, "load_config", lambda *a, **k: cfg)
+
+    def test_defaults_to_the_seat_pin(self, monkeypatch):
+        from trading.dispatchers import predict_tools
+        self._with_config(monkeypatch, {"desk_efforts": {"plutus-predict": "max"}})
+        assert predict_tools._seat_effort() == "max"
+
+    def test_aux_key_overrides_the_seat(self, monkeypatch):
+        from trading.dispatchers import predict_tools
+        self._with_config(monkeypatch, {"desk_efforts": {
+            "plutus-predict": "max",
+            predict_tools.AUX_EFFORT_KEY: "medium"}})
+        assert predict_tools._seat_effort() == "medium"
+
+    def test_a_nonsense_pin_falls_back_to_provider_default(self, monkeypatch):
+        from trading.dispatchers import predict_tools
+        self._with_config(monkeypatch, {"desk_efforts": {
+            predict_tools.AUX_EFFORT_KEY: "ludicrous"}})
+        assert predict_tools._seat_effort() is None
+
+    def test_the_pin_governs_the_token_budget(self, monkeypatch):
+        # The effort is not cosmetic: at max it triples the thinking budget.
+        from trading.dispatchers import predict_tools
+        self._with_config(monkeypatch, {"desk_efforts": {
+            predict_tools.AUX_EFFORT_KEY: "medium"}})
+        assert predict_tools._seat_effort() == "medium"
+        assert (predict_tools.DEEP_EFFORT_MAX_TOKENS_CAP
+                > predict_tools.LIGHT_MAX_TOKENS_CAP)
