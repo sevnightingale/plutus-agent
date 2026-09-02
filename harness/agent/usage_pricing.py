@@ -256,6 +256,17 @@ _OFFICIAL_DOCS_PRICING: Dict[tuple[str, str], PricingEntry] = {
     # 2026-08-17 came out at a flat 0.85x of these rates across all 24 hours
     # with no 2x band anywhere, so the standard column is what this account
     # actually pays. Cache writes are not billed separately.
+    #
+    # UNDER REVIEW 2026-09-02 — that measurement may have decayed. Reconciling
+    # the 02:58:31-03:07:16 window (inside the published 01:00-04:00 UTC
+    # weekday peak) against balance snapshots: 68,469 miss + 344,320 cached +
+    # 226,058 output modelled $0.167 at these rates against $0.38 observed —
+    # 2.3x out — while the doubled column gives $0.333, which is 1.14x and
+    # within boundary error. One nine-minute window is not enough to rewrite a
+    # billing table, so the numbers below are unchanged; the test is the same
+    # reconciliation run wholly outside 01:00-04:00 and 06:00-10:00 UTC. If the
+    # band is real the lever is scheduling, not pricing: the desk's heavy
+    # predict sessions are free to move. Tracked on manor board #788.
     (
         "deepseek",
         "deepseek-v4-flash",

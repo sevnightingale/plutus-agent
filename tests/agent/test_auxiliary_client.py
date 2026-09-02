@@ -591,7 +591,7 @@ class TestNousAuxiliaryRefresh:
             patch("harness.agent.auxiliary_client._resolve_task_provider_model", return_value=("nous", "nous-model", None, None, None)),
             patch("harness.agent.auxiliary_client._get_cached_client", return_value=(stale_client, "nous-model")),
             patch("harness.agent.auxiliary_client.OpenAI", return_value=fresh_client),
-            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task: resp),
+            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task, _provider=None: resp),
             patch("harness.agent.auxiliary_client._resolve_nous_runtime_api", return_value=("fresh-agent-key", "https://inference-api.nousresearch.com/v1")),
         ):
             result = call_llm(
@@ -620,7 +620,7 @@ class TestNousAuxiliaryRefresh:
             patch("harness.agent.auxiliary_client._resolve_task_provider_model", return_value=("nous", "nous-model", None, None, None)),
             patch("harness.agent.auxiliary_client._get_cached_client", return_value=(stale_client, "nous-model")),
             patch("harness.agent.auxiliary_client._to_async_client", return_value=(fresh_async_client, "nous-model")),
-            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task: resp),
+            patch("harness.agent.auxiliary_client._validate_llm_response", side_effect=lambda resp, _task, _provider=None: resp),
             patch("harness.agent.auxiliary_client._resolve_nous_runtime_api", return_value=("fresh-agent-key", "https://inference-api.nousresearch.com/v1")),
         ):
             result = await async_call_llm(
@@ -1230,7 +1230,8 @@ class TestAuxiliaryUsageMetering:
         from harness.agent.auxiliary_client import _validate_llm_response
 
         with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
-            _validate_llm_response(self._response(), "conviction_score")
+            _validate_llm_response(self._response(), "conviction_score",
+                                   "deepseek")
 
         line = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
         assert "Auxiliary conviction_score usage:" in line
@@ -1241,6 +1242,24 @@ class TestAuxiliaryUsageMetering:
         # DeepSeek reports it only under completion_tokens_details.
         assert "reasoning=1800" in line
         assert "cache=8000/10000" in line
+
+    def test_the_provider_makes_the_cost_column_real(self, caplog):
+        # `estimate_usage_cost` cannot resolve a billing route from a model
+        # name alone, so without the provider threaded through from the call
+        # site the meter reports tokens and a blank where the money goes.
+        from harness.agent.auxiliary_client import _validate_llm_response
+
+        with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
+            _validate_llm_response(self._response(), "predict_draft", "deepseek")
+        priced = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
+
+        caplog.clear()
+        with caplog.at_level(logging.INFO, logger="harness.agent.auxiliary_client"):
+            _validate_llm_response(self._response(), "predict_draft")
+        unpriced = next(r.getMessage() for r in caplog.records if "usage:" in r.getMessage())
+
+        assert "cost=$" in priced
+        assert "cost=$" not in unpriced  # omitted, never guessed
 
     def test_metering_never_fails_the_call(self, caplog):
         from harness.agent.auxiliary_client import _validate_llm_response

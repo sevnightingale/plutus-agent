@@ -2665,7 +2665,8 @@ def _build_call_kwargs(
     return kwargs
 
 
-def _log_auxiliary_usage(response: Any, task: str = None) -> None:
+def _log_auxiliary_usage(response: Any, task: str = None,
+                         provider: str = None) -> None:
     """Emit one usage line per auxiliary call, parallel to the agent loop's.
 
     Every auxiliary completion in this module returns through
@@ -2700,7 +2701,7 @@ def _log_auxiliary_usage(response: Any, task: str = None) -> None:
                           if usage.reasoning_tokens else "")
         cost_part = ""
         try:
-            cost = estimate_usage_cost(model, usage)
+            cost = estimate_usage_cost(model, usage, provider=provider or None)
             if cost.amount_usd is not None:
                 cost_part = f" cost=${float(cost.amount_usd):.4f}"
         except Exception:
@@ -2715,7 +2716,8 @@ def _log_auxiliary_usage(response: Any, task: str = None) -> None:
         logger.debug("Auxiliary usage metering failed", exc_info=True)
 
 
-def _validate_llm_response(response: Any, task: str = None) -> Any:
+def _validate_llm_response(response: Any, task: str = None,
+                           provider: str = None) -> Any:
     """Validate that an LLM response has the expected .choices[0].message shape.
 
     Fails fast with a clear error instead of letting malformed payloads
@@ -2743,7 +2745,7 @@ def _validate_llm_response(response: Any, task: str = None) -> Any:
             f"Expected object with .choices[0].message — check provider "
             f"adapter or custom endpoint compatibility."
         ) from exc
-    _log_auxiliary_usage(response, task)
+    _log_auxiliary_usage(response, task, provider)
     return response
 
 
@@ -2876,7 +2878,7 @@ def call_llm(
     # Handle max_tokens vs max_completion_tokens retry, then payment fallback.
     try:
         return _validate_llm_response(
-            client.chat.completions.create(**kwargs), task)
+            client.chat.completions.create(**kwargs), task, resolved_provider)
     except Exception as first_err:
         err_str = str(first_err)
         if "max_tokens" in err_str or "unsupported_parameter" in err_str:
@@ -2884,7 +2886,8 @@ def call_llm(
             kwargs["max_completion_tokens"] = max_tokens
             try:
                 return _validate_llm_response(
-                    client.chat.completions.create(**kwargs), task)
+                    client.chat.completions.create(**kwargs), task,
+                    resolved_provider)
             except Exception as retry_err:
                 # If the max_tokens retry also hits a payment or connection
                 # error, fall through to the fallback chain below.
@@ -2913,7 +2916,8 @@ def call_llm(
                 if refreshed_model and refreshed_model != kwargs.get("model"):
                     kwargs["model"] = refreshed_model
                 return _validate_llm_response(
-                    refreshed_client.chat.completions.create(**kwargs), task)
+                    refreshed_client.chat.completions.create(**kwargs), task,
+                    resolved_provider or "nous")
 
         # ── Payment / credit exhaustion fallback ──────────────────────
         # When the resolved provider returns 402 or a credit-related error,
@@ -2946,7 +2950,8 @@ def call_llm(
                     extra_body=effective_extra_body,
                     base_url=str(getattr(fb_client, "base_url", "") or ""))
                 return _validate_llm_response(
-                    fb_client.chat.completions.create(**fb_kwargs), task)
+                    fb_client.chat.completions.create(**fb_kwargs), task,
+                    fb_label)
         raise
 
 
@@ -3097,7 +3102,8 @@ async def async_call_llm(
 
     try:
         return _validate_llm_response(
-            await client.chat.completions.create(**kwargs), task)
+            await client.chat.completions.create(**kwargs), task,
+            resolved_provider)
     except Exception as first_err:
         err_str = str(first_err)
         if "max_tokens" in err_str or "unsupported_parameter" in err_str:
@@ -3105,7 +3111,8 @@ async def async_call_llm(
             kwargs["max_completion_tokens"] = max_tokens
             try:
                 return _validate_llm_response(
-                    await client.chat.completions.create(**kwargs), task)
+                    await client.chat.completions.create(**kwargs), task,
+                    resolved_provider)
             except Exception as retry_err:
                 # If the max_tokens retry also hits a payment or connection
                 # error, fall through to the fallback chain below.
@@ -3133,7 +3140,8 @@ async def async_call_llm(
                 if refreshed_model and refreshed_model != kwargs.get("model"):
                     kwargs["model"] = refreshed_model
                 return _validate_llm_response(
-                    await refreshed_client.chat.completions.create(**kwargs), task)
+                    await refreshed_client.chat.completions.create(**kwargs),
+                    task, resolved_provider or "nous")
 
         # ── Payment / connection fallback (mirrors sync call_llm) ─────
         should_fallback = _is_payment_error(first_err) or _is_connection_error(first_err)
@@ -3156,5 +3164,6 @@ async def async_call_llm(
                 if async_fb_model and async_fb_model != fb_kwargs.get("model"):
                     fb_kwargs["model"] = async_fb_model
                 return _validate_llm_response(
-                    await async_fb.chat.completions.create(**fb_kwargs), task)
+                    await async_fb.chat.completions.create(**fb_kwargs), task,
+                    fb_label)
         raise
